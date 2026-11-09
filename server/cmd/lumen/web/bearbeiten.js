@@ -48,7 +48,14 @@ export async function bearbeitenOeffnen(itemId, nachher) {
   const d = fenster({ titel: tr('Bearbeiten'), breit: true, zu: () => { if (geaendert && nachher) nachher(); } });
   d.inhalt.innerHTML = ladeHinweis(tr('Metadaten werden geladen …'));
   let stand;
-  try { stand = await api.call(pfad(itemId) + '/metadata'); }
+  try {
+    // Die Dateien dazu: Verwalter sehen hier den vollen Pfad — so findet
+    // man heraus, woher eine falsch erkannte Folge stammt, ohne auf die NAS
+    // zu müssen.
+    const [m, t] = await Promise.all([api.call(pfad(itemId) + '/metadata'), api.item(itemId).catch(() => null)]);
+    stand = m;
+    stand.dateien = (t && t.files || []).map(f => f.path).filter(Boolean);
+  }
   catch (err) {
     d.inhalt.innerHTML = `<div class="fenster-meldung fenster-meldung--fehler" role="alert">${escH(fehlerText(err))}</div>`;
     return;
@@ -298,6 +305,8 @@ function formular(stand) {
           ? tr('TMDb kennt diesen Titel nicht. Was du hier einträgst, bleibt so — der Titel steht danach nicht mehr unter „nicht erkannt“.')
           : tr('Für diesen Titel wurden noch keine Metadaten geholt. Titel oder Jahr von Hand zu setzen heisst: Lumen sucht nicht mehr selbst.')}</div>` : ''}
     <p class="ff-hinweis" style="margin:4px 0 0;font-size:13px">${tr('Was du änderst, wird gesperrt: „Metadaten neu laden“ und NFO-Dateien überschreiben es nicht mehr. Ein Klick auf das Schloss hebt die Sperre wieder auf.')}</p>
+    ${(stand.dateien || []).length ? `<div class="ff-hinweis" style="margin:8px 0 0;font-size:12px">${tr('Datei')}:
+      ${stand.dateien.map(x => `<div class="mono" style="overflow-wrap:anywhere">${escH(x)}</div>`).join('')}</div>` : ''}
     ${bilder(stand)}
     ${oben.map(f => feldHtml(stand, f)).join('')}
     ${kurz.length ? `<div class="ff-reihe">${kurz.map(f => feldHtml(stand, f)).join('')}</div>` : ''}

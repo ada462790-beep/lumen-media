@@ -1576,7 +1576,7 @@ function viewDetail() {
       <span class="c-2" style="flex:1;min-width:0">${inhalt}</span></div>` : '';
     return `
     <div class="datei-info" style="padding:12px 16px;display:flex;flex-direction:column;gap:5px">
-      <span class="mono c-2" style="overflow-wrap:anywhere">${esc(f.path.split('/').pop())}${f.missing ? ' · ' + tr('fehlt') : ''}</span>
+      <span class="mono c-2" style="overflow-wrap:anywhere">${/* Verwalter bekommen vom Server den vollen Pfad, alle anderen nur den Dateinamen */ ''}${esc(f.path)}${f.missing ? ' · ' + tr('fehlt') : ''}</span>
       <div class="t-caption" style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
         ${zeile(tr('Bild'), [f.width && f.height ? `${f.width}×${f.height}` : (f.height ? f.height + 'p' : ''), codecN(f.videoCodec), f.hdr].filter(Boolean).join(' · '))}
         ${zeile(tr('Ton'), ton.map(t => esc(spur(t))).join('<br>'))}
