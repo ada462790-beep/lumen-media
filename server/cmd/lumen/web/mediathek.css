@@ -1,0 +1,317 @@
+/*
+ Lumen — eigener Streaming-Server fürs Heimnetz.
+ Copyright (C) 2026 Die Lumen-Autoren
+
+ Veröffentlicht unter der GNU Affero General Public License v3.0.
+ Der vollständige Text steht in der Datei LICENSE.
+ SPDX-License-Identifier: AGPL-3.0-only
+*/
+
+/* Musik und Fotos. Eigene Datei, damit app.css übersichtlich bleibt —
+   dieselben Farben und Abstände aus ds-shared.css. */
+
+/* ---------------------------------------------------------------- Gerüst */
+.mu-reiter { display:flex; gap:4px; overflow-x:auto; margin:0 0 22px; padding-bottom:2px; scrollbar-width:none }
+.mu-reiter::-webkit-scrollbar { display:none }
+.mu-reiter .tab-pill { flex:none }
+.mu-segment { display:inline-flex; padding:3px; border-radius:999px; background:var(--fill); gap:2px; flex-wrap:nowrap; overflow-x:auto; max-width:100%; scrollbar-width:none }
+.mu-segment::-webkit-scrollbar { display:none }
+.mu-segment .tab-pill { height:30px; font-size:14px; flex:none }
+.mu-leiste-oben { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px }
+.mu-zurueck { height:32px; font-size:13px; gap:6px }
+.mu-leer { display:flex; flex-direction:column; align-items:flex-start; gap:6px; padding:40px 0; color:var(--label-2) }
+.mu-zahlen { margin-top:-8px }
+.mu-link { color:var(--accent); font-size:inherit; padding:0; margin-left:4px; text-decoration:underline; text-underline-offset:2px }
+body.mu-an .wrap { padding-bottom:150px }
+
+/* ---------------------------------------------------------------- Cover */
+.mu-cover { position:relative; width:100%; aspect-ratio:1; border-radius:10px; overflow:hidden;
+            background:linear-gradient(145deg,#2a2a31,#17171b) }
+.mu-cover img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1 }
+.mu-cover-leer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--label-3) }
+.lumen.light .mu-cover { background:linear-gradient(145deg,#e5e5ea,#d1d1d6) }
+.mu-listenbild { display:flex; align-items:center; justify-content:center; color:var(--label-2);
+                 background:linear-gradient(145deg,#3a2f55,#1e1b2b) }
+.mu-mosaik { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr }
+.mu-mosaik img { position:static; width:100%; height:100%; object-fit:cover }
+
+.mu-albumkarte { width:172px }
+.mu-albumkarte--klein { width:140px }
+.mu-raster { display:grid; grid-template-columns:repeat(auto-fill, minmax(172px,1fr)); gap:26px 20px }
+.mu-raster .mu-albumkarte { width:auto }
+.mu-albumkarte:hover .mu-cover { transform:scale(1.02) }
+.mu-cover.thumb { transition:transform .35s var(--ease) }
+
+.mu-interpretkarte { width:150px }
+.mu-interpretenraster { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:26px 20px }
+.mu-interpretenraster .mu-interpretkarte { width:auto }
+.mu-rund { position:relative; width:100%; aspect-ratio:1; border-radius:50%; overflow:hidden;
+           display:flex; align-items:center; justify-content:center;
+           background:linear-gradient(160deg,#5b5b66,#2c2c33); color:#fff; font-size:44px; font-weight:600 }
+.mu-rund img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1 }
+.mu-rund--gross { width:200px; flex:none; font-size:80px; box-shadow:0 18px 50px rgba(0,0,0,.45) }
+
+/* ---------------------------------------------------------------- Album und Interpret */
+.mu-albumkopf { display:flex; gap:34px; align-items:flex-end; margin-top:22px }
+.mu-albumcover { width:270px; flex:none; border-radius:14px; box-shadow:0 22px 60px rgba(0,0,0,.5) }
+.mu-albumtext { min-width:0 }
+.mu-albumtext h1 { margin:0 }
+.mu-akzent, .mu-akzent a { color:var(--accent) }
+.mu-knoepfe { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; align-items:center }
+.mu-knoepfe .btn-round { width:44px; height:44px }
+.mu-interpretkopf { display:flex; gap:30px; align-items:center; margin-top:22px }
+.mu-interpretkopf h1 { margin:0 0 4px }
+
+/* ---------------------------------------------------------------- Titelzeilen */
+.mu-titelliste { display:flex; flex-direction:column }
+.mu-zeile { display:flex; align-items:center; gap:6px; min-height:54px; padding:0 6px 0 2px; border-radius:10px; position:relative }
+.mu-zeile + .mu-zeile::before { content:""; position:absolute; left:48px; right:6px; top:0; height:.5px; background:var(--hair) }
+.mu-zeile:hover { background:var(--fill) }
+.mu-zeile:hover::before, .mu-zeile:hover + .mu-zeile::before { opacity:0 }
+.mu-zeile-start { flex:1; min-width:0; display:flex; align-items:center; gap:12px; background:none; border:0; color:inherit;
+                  font:inherit; text-align:left; cursor:pointer; padding:7px 4px; border-radius:10px }
+.mu-zeile-start:focus-visible { outline:2px solid var(--accent) }
+.mu-nr { width:30px; flex:none; text-align:right; color:var(--label-2); font-size:15px }
+.mu-zeile-cover { width:42px; height:42px; flex:none; border-radius:6px; overflow:hidden; background:var(--fill-2);
+                  display:flex; align-items:center; justify-content:center; color:var(--label-3) }
+.mu-zeile-cover img { width:100%; height:100%; object-fit:cover }
+.mu-zeile-text { min-width:0; display:flex; flex-direction:column }
+.mu-dauer { width:46px; text-align:right; flex:none }
+.mu-spalte-jahr { width:44px; text-align:right; flex:none }
+.mu-mehr, .mu-herz { width:34px; height:34px; border-radius:50%; color:var(--label-2); flex:none }
+.mu-mehr:hover, .mu-herz:hover { background:var(--fill-2); color:var(--label) }
+.mu-herz--an, .mu-herz--an:hover { color:#ff375f }
+.mu-herz--an svg path { fill:currentColor }
+.mu-zeile .mu-herz:not(.mu-herz--an) { opacity:0 }
+.mu-zeile:hover .mu-herz, .mu-zeile .mu-herz:focus-visible { opacity:1 }
+.mu-zeile--laeuft .t-body { color:var(--accent); font-weight:600 }
+.mu-zeile--laeuft .mu-nr { color:transparent; position:relative }
+.mu-zeile--laeuft .mu-nr::after { content:""; position:absolute; right:2px; top:50%; width:14px; height:14px; margin-top:-7px;
+  background:linear-gradient(var(--accent),var(--accent)) 0 100%/3px 60% no-repeat,
+             linear-gradient(var(--accent),var(--accent)) 5px 100%/3px 100% no-repeat,
+             linear-gradient(var(--accent),var(--accent)) 10px 100%/3px 40% no-repeat;
+  animation:mu-eq 1s ease-in-out infinite alternate }
+.mu-zeile--pause .mu-nr::after { animation:none }
+@keyframes mu-eq { from { background-size:3px 60%,3px 100%,3px 40% } to { background-size:3px 100%,3px 35%,3px 90% } }
+.mu-disc { padding:18px 6px 6px }
+.mu-griff { color:var(--label-3); cursor:grab; display:flex; padding:0 2px }
+.mu-zieht { opacity:.45 }
+.badge { vertical-align:1px }
+.mu-titelliste--kompakt .mu-zeile { min-height:50px }
+@media (hover:none) { .mu-zeile .mu-herz:not(.mu-herz--an) { display:none } }
+
+/* ---------------------------------------------------------------- Genres */
+.mu-genres { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:16px }
+.mu-genre { position:relative; height:120px; border-radius:14px; overflow:hidden; padding:14px 16px;
+            display:flex; flex-direction:column; justify-content:flex-end; color:#fff; text-align:left }
+.mu-genre img { position:absolute; right:-14px; bottom:-14px; width:96px; height:96px; object-fit:cover; border-radius:8px;
+                transform:rotate(18deg); box-shadow:0 8px 20px rgba(0,0,0,.4) }
+.mu-genre span { position:relative; z-index:1; text-shadow:0 1px 4px rgba(0,0,0,.3) }
+.mu-genre--0 { background:linear-gradient(135deg,#e8475f,#9a1b4a) } .mu-genre--1 { background:linear-gradient(135deg,#3d7bfd,#1b3a9a) }
+.mu-genre--2 { background:linear-gradient(135deg,#f59e3b,#b4501b) } .mu-genre--3 { background:linear-gradient(135deg,#2bb673,#10664a) }
+.mu-genre--4 { background:linear-gradient(135deg,#9b5cf6,#4c1d95) } .mu-genre--5 { background:linear-gradient(135deg,#5b6472,#262b33) }
+
+/* ---------------------------------------------------------------- Mini-Player */
+.mu-mini { position:fixed; z-index:30; left:96px; right:24px; bottom:16px; margin:0 auto; max-width:760px; height:64px;
+           border-radius:20px; display:flex; align-items:center; gap:8px; padding:0 10px 0 8px;
+           font-family:var(--font); color:var(--label); -webkit-font-smoothing:antialiased; letter-spacing:-.01em }
+.mu-mini[hidden], .mu-gross[hidden], .fo-betrachter[hidden] { display:none }
+.mu-mini * { box-sizing:border-box }
+.mu-mini-bar { position:absolute; left:18px; right:18px; top:0; height:3px; border-radius:2px; background:rgba(255,255,255,.12); cursor:pointer }
+.mu-mini-bar::after { content:""; position:absolute; inset:-8px 0 }
+.mu-mini-bar > i { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:var(--label) }
+.mu-mini-info { flex:1; min-width:0; display:flex; align-items:center; gap:12px; background:none; border:0; color:inherit;
+                font:inherit; text-align:left; cursor:pointer; padding:6px; border-radius:14px }
+.mu-mini-cover { width:46px; height:46px; flex:none; border-radius:8px; overflow:hidden; background:rgba(255,255,255,.1);
+                 display:flex; align-items:center; justify-content:center; color:var(--label-2); box-shadow:0 4px 12px rgba(0,0,0,.3) }
+.mu-mini-cover img { width:100%; height:100%; object-fit:cover }
+.mu-mini-text { min-width:0; display:flex; flex-direction:column }
+.mu-mini-knoepfe { display:flex; align-items:center; gap:2px; flex:none }
+.mu-k { width:44px; height:44px; border-radius:50%; color:inherit; position:relative }
+.mu-k:hover { background:rgba(255,255,255,.08) }
+.mu-k:disabled { opacity:.3 }
+.mu-k--klein { width:36px; height:36px; opacity:.75 }
+.mu-k--an { opacity:1; color:var(--accent) }
+.mu-eins { position:absolute; right:3px; bottom:3px; font-size:9px; font-weight:700 }
+.mu-laut { display:inline-flex; align-items:center; gap:6px; margin-left:8px; color:var(--label-2) }
+.mu-laut input, .mu-gross-laut input { width:96px; accent-color:var(--label) }
+.mu-mini.mu-hell { --label:rgba(0,0,0,.88); --label-2:rgba(60,60,67,.74); background:rgba(255,255,255,.78) }
+.mu-mini.mu-hell .mu-mini-bar { background:rgba(0,0,0,.1) }
+@media (max-width: 860px) { .mu-mini { left:92px } }
+@media (max-width: 600px) {
+  .mu-mini { left:10px; right:10px; bottom:calc(80px + env(safe-area-inset-bottom)); height:58px; border-radius:16px;
+             background:rgba(36,36,40,.94) }
+  .mu-mini.mu-hell { background:rgba(250,250,252,.95) }
+  .mu-mini-cover { width:42px; height:42px }
+  .mu-nur-breit { display:none !important }
+  .mu-mini-bar { left:14px; right:14px; top:auto; bottom:0 }
+  body.mu-an .wrap { padding-bottom:calc(170px + env(safe-area-inset-bottom)) }
+}
+
+/* ---------------------------------------------------------------- Grosser Player */
+.mu-gross { position:fixed; inset:0; z-index:40; overflow:hidden; font-family:var(--font); color:#fff;
+            -webkit-font-smoothing:antialiased; letter-spacing:-.01em; background:#111;
+            transform:translateY(100%); transition:transform .38s var(--ease) }
+.mu-gross--auf { transform:none }
+.mu-gross * { box-sizing:border-box }
+.mu-gross-grund { position:absolute; inset:-60px; z-index:0; background:#222 }
+.mu-gross-grund img { width:100%; height:100%; object-fit:cover; filter:blur(60px) saturate(1.5) brightness(.55); transform:scale(1.2) }
+.mu-gross-innen { position:relative; z-index:1; height:100%; display:flex; flex-direction:column;
+                  padding:calc(18px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom)) }
+.mu-gross-oben { display:flex; align-items:center; gap:10px }
+.mu-gross-oben .btn-round { color:#fff }
+.mu-an-knopf { background:rgba(255,255,255,.3) !important }
+.mu-gross-haupt { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; gap:56px }
+.mu-gross-links { width:min(440px, 100%); display:flex; flex-direction:column }
+.mu-gross-cover { width:100%; aspect-ratio:1; border-radius:14px; overflow:hidden; background:rgba(255,255,255,.08);
+                  box-shadow:0 30px 70px rgba(0,0,0,.5); transition:transform .45s var(--ease);
+                  display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,.5) }
+.mu-gross-cover--pause { transform:scale(.86) }
+.mu-gross-cover img { width:100%; height:100%; object-fit:cover }
+.mu-gross-titel { display:flex; align-items:center; gap:12px; margin-top:28px }
+.mu-gross-titel .mu-herz { color:rgba(255,255,255,.85); background:rgba(255,255,255,.14) }
+.mu-gross-titel .mu-herz--an { color:#ff375f }
+.mu-link-hell { color:rgba(255,255,255,.72); font-size:17px; padding:0; display:block; max-width:100%; text-align:left }
+.mu-link-hell:hover { color:#fff }
+.mu-link-leise { font-size:14px; color:rgba(255,255,255,.5) }
+.mu-gross-bar { position:relative; height:6px; border-radius:3px; background:rgba(255,255,255,.22); margin-top:22px; cursor:pointer; touch-action:none }
+.mu-gross-bar::after { content:""; position:absolute; inset:-10px 0 }
+.mu-gross-bar > i { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:rgba(255,255,255,.9) }
+.mu-gross-zeiten { display:flex; justify-content:space-between; margin-top:8px; color:rgba(255,255,255,.6) }
+.mu-gross-knoepfe { display:flex; align-items:center; justify-content:space-between; margin-top:14px }
+.mu-gross-knoepfe .mu-k { width:58px; height:58px; color:#fff }
+.mu-gross-knoepfe .mu-k--klein { width:40px; height:40px }
+.mu-gross-knoepfe .mu-k--an { color:#fff; background:rgba(255,255,255,.22) }
+.mu-k--gross { width:76px !important; height:76px !important }
+.mu-gross-laut { display:flex; align-items:center; gap:12px; margin-top:20px; color:rgba(255,255,255,.6) }
+.mu-gross-laut input { flex:1; width:auto; accent-color:#fff }
+.mu-schlange { width:min(420px, 100%); max-height:100%; overflow-y:auto; padding:6px; border-radius:18px; background:rgba(0,0,0,.22) }
+.mu-schlange-zeile { display:flex; align-items:center; gap:4px; border-radius:10px }
+.mu-schlange-zeile:hover { background:rgba(255,255,255,.08) }
+.mu-schlange-start { flex:1; min-width:0; display:flex; align-items:center; gap:10px; background:none; border:0; color:#fff;
+                     font:inherit; text-align:left; cursor:pointer; padding:6px }
+.mu-schlange .t-sub { color:rgba(255,255,255,.6) }
+.mu-schlange .mu-k { color:#fff }
+.mu-schlange .mu-griff { color:rgba(255,255,255,.4) }
+body.mu-gross-auf .mu-mini { visibility:hidden }
+@media (max-width: 900px) {
+  /* Schmal: die Warteschlange oben, darunter bleiben Leiste und Knöpfe
+     (Zufall, Wiederholen, Weiter) erreichbar – nur Cover, Titel und
+     Lautstärke weichen. */
+  .mu-gross-haupt--schlange { flex-direction:column; align-items:stretch; justify-content:flex-start; gap:18px; margin-top:12px }
+  .mu-gross-haupt--schlange .mu-schlange { order:1; width:100%; flex:1 1 auto; min-height:0 }
+  .mu-gross-haupt--schlange .mu-gross-links { order:2; width:100%; flex:none }
+  .mu-gross-haupt--schlange :is(.mu-gross-cover, .mu-gross-titel, .mu-gross-laut) { display:none }
+  .mu-gross-haupt--schlange .mu-gross-bar { margin-top:0 }
+}
+@media (max-width: 600px) {
+  .mu-gross-innen { padding-left:22px; padding-right:22px }
+  .mu-gross-haupt { align-items:stretch; flex-direction:column; justify-content:center }
+  .mu-gross-links { width:100% }
+  .mu-gross-cover { width:min(100%, 46vh); margin:0 auto }
+}
+
+/* ---------------------------------------------------------------- Menü */
+.mu-menue { position:fixed; z-index:70; min-width:230px; max-width:300px; max-height:60vh; overflow-y:auto; padding:6px;
+            border-radius:14px; font-family:var(--font); display:flex; flex-direction:column; color:var(--label) }
+.mu-menue button { background:none; border:0; color:inherit; font:inherit; font-size:15px; text-align:left; padding:10px 12px;
+                   border-radius:9px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.mu-menue button:hover, .mu-menue button:focus-visible { background:var(--fill-2); outline:none }
+.mu-menue hr { border:0; height:.5px; background:var(--hair); margin:4px 8px }
+
+/* ---------------------------------------------------------------- Handy */
+@media (max-width: 600px) {
+  .mu-raster { grid-template-columns:repeat(2, minmax(0,1fr)); gap:22px 14px }
+  .rail .mu-albumkarte { width:140px }
+  .mu-interpretenraster { grid-template-columns:repeat(3, minmax(0,1fr)); gap:20px 12px }
+  .mu-interpretkarte .t-body { font-size:13px }
+  .mu-albumkopf, .mu-interpretkopf { flex-direction:column; align-items:center; text-align:center; gap:18px }
+  .mu-albumcover { width:min(72vw, 300px) }
+  .mu-rund--gross { width:170px }
+  .mu-knoepfe { justify-content:center }
+  .mu-albumkopf .mu-knoepfe .btn-primary, .mu-albumkopf .mu-knoepfe .btn-pill--fill:first-of-type { flex:1; min-width:130px }
+  .mu-spalte-jahr { display:none }
+  .mu-zeile + .mu-zeile::before { left:44px }
+  .mu-genres { grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px }
+  .mu-genre { height:100px }
+}
+
+/* ================================================================ Fotos */
+.fo-kopf { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:16px }
+.fo-leiste { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 18px }
+.fo-raster { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:3px }
+.fo-raster--dicht { grid-template-columns:repeat(auto-fill, minmax(110px,1fr)) }
+.fo-kachel { position:relative; display:block; padding:0; border:0; aspect-ratio:1; overflow:hidden; cursor:zoom-in;
+             background:var(--fill); border-radius:2px }
+.fo-kachel img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .3s var(--ease), filter .2s }
+.fo-kachel:hover img { filter:brightness(1.08) }
+.fo-kachel:focus-visible { outline:3px solid var(--accent); outline-offset:-3px }
+.fo-videozeit { position:absolute; right:6px; bottom:5px; display:inline-flex; align-items:center; gap:3px; color:#fff;
+                font-size:12px; font-weight:600; text-shadow:0 1px 3px rgba(0,0,0,.7) }
+.fo-tag { margin-bottom:22px }
+.fo-tag-kopf { position:sticky; top:0; z-index:2; margin:0 -6px 8px; padding:12px 6px 8px;
+               background:linear-gradient(var(--bg) 70%, transparent) }
+.fo-jahre { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(420px,100%),1fr)); gap:18px }
+.fo-jahr { position:relative; aspect-ratio:16/10; border:0; padding:0; border-radius:16px; overflow:hidden; cursor:pointer; background:var(--fill) }
+.fo-jahr img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .5s var(--ease) }
+.fo-jahr:hover img { transform:scale(1.03) }
+.fo-jahr-text { position:absolute; left:0; right:0; bottom:0; padding:40px 20px 16px; color:#fff; text-align:left;
+                display:flex; flex-direction:column; background:linear-gradient(transparent, rgba(0,0,0,.65)) }
+.fo-monate { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:24px 18px }
+.fo-monat { border:0; padding:0; background:none; color:var(--label); text-align:left; cursor:pointer; font:inherit }
+.fo-monat-bilder { display:grid; aspect-ratio:1; border-radius:14px; overflow:hidden; gap:2px; background:var(--fill) }
+.fo-monat-bilder img { width:100%; height:100%; object-fit:cover; display:block; min-height:0 }
+.fo-monat-bilder--2, .fo-monat-bilder--4 { grid-template-columns:1fr 1fr }
+.fo-monat-bilder--3 { grid-template-columns:2fr 1fr; grid-template-rows:1fr 1fr }
+.fo-monat-bilder--3 img:first-child { grid-row:span 2 }
+.fo-alben { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px,1fr)); gap:26px 18px }
+.fo-album-bild { position:relative; display:block; aspect-ratio:1; border-radius:12px; overflow:hidden; background:var(--fill) }
+.fo-album-bild img { width:100%; height:100%; object-fit:cover; display:block }
+.fo-mehr { display:flex; justify-content:center; padding:24px }
+
+/* ---------------------------------------------------------------- Betrachter */
+.fo-betrachter { position:fixed; inset:0; z-index:50; background:#000; color:#fff; font-family:var(--font);
+                 -webkit-font-smoothing:antialiased; touch-action:none; user-select:none }
+.fo-betrachter * { box-sizing:border-box }
+.fo-oben { position:absolute; z-index:3; left:0; right:0; top:0; display:flex; align-items:center; gap:10px;
+           padding:calc(14px + env(safe-area-inset-top)) 16px 30px; background:linear-gradient(rgba(0,0,0,.6), transparent) }
+.fo-oben .btn-round { color:#fff; flex:none }
+.fo-oben .btn-round[aria-pressed=true] { background:rgba(255,255,255,.3) }
+.fo-titel { min-width:0 }
+.fo-titel .t-caption { color:rgba(255,255,255,.65) }
+.fo-tempo { background:rgba(255,255,255,.12) }
+.fo-tempo .tab-pill { color:rgba(255,255,255,.7) }
+.fo-tempo .tab-pill[aria-pressed=true] { background:rgba(255,255,255,.25); color:#fff }
+.fo-buehne { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; overflow:hidden }
+.fo-bild { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transition:transform .25s var(--ease), opacity .25s }
+.fo-bild--weich { animation:fo-ein .35s var(--ease) }
+@keyframes fo-ein { from { opacity:.2 } to { opacity:1 } }
+.fo-bild img { max-width:100%; max-height:100%; object-fit:contain; transform-origin:center; transition:transform .2s var(--ease); cursor:zoom-in; -webkit-user-drag:none }
+.fo-video { max-width:100%; max-height:100%; touch-action:auto }
+.fo-pfeil { position:absolute; z-index:2; top:50%; margin-top:-28px; width:56px; height:56px; border-radius:50%; border:0;
+            display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;
+            background:rgba(40,40,44,.45); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+            opacity:0; transition:opacity .25s }
+.fo-pfeil--l { left:18px } .fo-pfeil--r { right:18px }
+.fo-betrachter:hover .fo-pfeil, .fo-pfeil:focus-visible { opacity:1 }
+.fo-info { position:absolute; z-index:3; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); width:min(340px, calc(100% - 32px));
+           padding:16px 18px; border-radius:18px; color:var(--label) }
+.fo-info .c-2 { color:var(--label-2) }
+body.fo-offen .mu-mini { visibility:hidden }
+@media (hover:none) { .fo-pfeil { display:none } }
+@media (max-width: 600px) {
+  .fo-raster { grid-template-columns:repeat(4, minmax(0,1fr)); gap:2px }
+  .fo-raster--dicht { grid-template-columns:repeat(5, minmax(0,1fr)) }
+  .fo-tag-kopf { margin:0 -16px 6px; padding:10px 16px 6px }
+  .fo-monate { grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px 12px }
+  .fo-alben { grid-template-columns:repeat(2, minmax(0,1fr)); gap:20px 12px }
+  .fo-nur-breit { display:none !important }
+  .fo-oben { gap:6px; padding-left:10px; padding-right:10px }
+  .fo-oben .btn-round { width:38px; height:38px }
+  .fo-titel .t-headline { font-size:14px }
+  /* Das Tempo der Diashow eine Zeile tiefer, mittig – neben Datum,
+     Zähler und vier Knöpfen ist auf dem iPhone kein Platz. */
+  .fo-titel { flex:1 }
+  .fo-oben > span[style*="flex:1"] { display:none }
+  .fo-tempo { position:absolute; left:50%; top:calc(100% - 26px); transform:translateX(-50%) }
+}

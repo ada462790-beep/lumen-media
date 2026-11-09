@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumen — eigener Streaming-Server fürs Heimnetz. AGPL-3.0-only.
+     Deutsch (Schweiz): Abschrift von values/sprache.xml, erzeugt mit
+     tools/sprache_android_pruefen.py mit dem Schalter „schreiben“.
+     Nicht von Hand ändern. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="Typos">
+    <string name="sprache_titel">Sprache</string>
+    <string name="sprache_wie_server">Wie der Server</string>
+    <string name="sprache_wie_server_mit">Wie der Server (%1$s)</string>
+    <string name="sprache_hinweis">Gilt für dein Profil — im Browser und in den Apps.</string>
+</resources>

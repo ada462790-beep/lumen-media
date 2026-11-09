@@ -1,0 +1,189 @@
+{
+ "Für {n} Dateien vorbereitet.": {
+  "one": "Für {n} Datei vorbereitet.",
+  "other": "Für {n} Dateien vorbereitet."
+ },
+ "Hier und in den Unterordnern liegen {n} Videodateien.": {
+  "one": "Hier und in den Unterordnern liegt eine Videodatei.",
+  "other": "Hier und in den Unterordnern liegen {n} Videodateien."
+ },
+ "Höchstens {n} Umwandlungen laufen gleichzeitig.": {
+  "one": "Höchstens {n} Umwandlung läuft gleichzeitig.",
+  "other": "Höchstens {n} Umwandlungen laufen gleichzeitig."
+ },
+ "Musik|{n} Titel": {
+  "one": "{n} Titel",
+  "other": "{n} Titel"
+ },
+ "Musik|{n} Titel kommen als Nächstes": {
+  "one": "{n} Titel kommt als Nächstes",
+  "other": "{n} Titel kommen als Nächstes"
+ },
+ "Musik|{n} Titel kommen später": {
+  "one": "{n} Titel kommt später",
+  "other": "{n} Titel kommen später"
+ },
+ "{name}, {n} Filme": {
+  "one": "{name}, {n} Film",
+  "other": "{name}, {n} Filme"
+ },
+ "{n} Alben": {
+  "one": "{n} Album",
+  "other": "{n} Alben"
+ },
+ "{n} Bewertungen": {
+  "one": "{n} Bewertung",
+  "other": "{n} Bewertungen"
+ },
+ "{n} Bibliotheken": {
+  "one": "{n} Bibliothek",
+  "other": "{n} Bibliotheken"
+ },
+ "{n} Downloads": {
+  "one": "{n} Download",
+  "other": "{n} Downloads"
+ },
+ "{n} Einträge sind schon so in Lumen.": {
+  "one": "{n} Eintrag ist schon so in Lumen.",
+  "other": "{n} Einträge sind schon so in Lumen."
+ },
+ "{n} Favoriten": {
+  "one": "{n} Favorit",
+  "other": "{n} Favoriten"
+ },
+ "{n} Filme": {
+  "one": "{n} Film",
+  "other": "{n} Filme"
+ },
+ "{n} Geräte": {
+  "one": "{n} Gerät",
+  "other": "{n} Geräte"
+ },
+ "{n} Gruppen": {
+  "one": "{n} Gruppe",
+  "other": "{n} Gruppen"
+ },
+ "{n} Kanäle": {
+  "one": "{n} Kanal",
+  "other": "{n} Kanäle"
+ },
+ "{n} Objekte": {
+  "one": "{n} Objekt",
+  "other": "{n} Objekte"
+ },
+ "{n} Personen": {
+  "one": "{n} Person",
+  "other": "{n} Personen"
+ },
+ "{n} Reihen · Lumen stellt sie selbst zusammen": {
+  "one": "{n} Reihe · Lumen stellt sie selbst zusammen",
+  "other": "{n} Reihen · Lumen stellt sie selbst zusammen"
+ },
+ "{n} Sammlungen": {
+  "one": "{n} Sammlung",
+  "other": "{n} Sammlungen"
+ },
+ "{n} Sekunden": {
+  "one": "{n} Sekunde",
+  "other": "{n} Sekunden"
+ },
+ "{n} Untertitelspuren liegen bereit.": {
+  "one": "{n} Untertitelspur liegt bereit.",
+  "other": "{n} Untertitelspuren liegen bereit."
+ },
+ "{n} Videos": {
+  "one": "{n} Video",
+  "other": "{n} Videos"
+ },
+ "{n} Wiedergaben": {
+  "one": "{n} Wiedergabe",
+  "other": "{n} Wiedergaben"
+ },
+ "{n} Wiedergaben laufen": {
+  "one": "{n} Wiedergabe läuft",
+  "other": "{n} Wiedergaben laufen"
+ },
+ "{n} Wiedergaben laufen gerade": {
+  "one": "{n} Wiedergabe läuft gerade",
+  "other": "{n} Wiedergaben laufen gerade"
+ },
+ "{n} fehlen": {
+  "one": "{n} fehlt",
+  "other": "{n} fehlen"
+ },
+ "{n} laufen": {
+  "one": "{n} läuft",
+  "other": "{n} laufen"
+ },
+ "{n} neue Folgen": {
+  "one": "Neue Folge",
+  "other": "{n} neue Folgen"
+ },
+ "{n} Änderungen speichern": {
+  "one": "{n} Änderung speichern",
+  "other": "{n} Änderungen speichern"
+ },
+ "· {n} Fassungen": {
+  "one": "· {n} Fassung",
+  "other": "· {n} Fassungen"
+ },
+ "· {n} Qualitäten": {
+  "one": "· {n} Qualität",
+  "other": "· {n} Qualitäten"
+ },
+ "{folgen} Folgen": {
+  "one": "{folgen} Folge",
+  "other": "{folgen} Folgen"
+ },
+ ", {gesehen} von {folgen} Folgen gesehen": {
+  "zahl": "folgen",
+  "one": ", {gesehen} von {folgen} Folge gesehen",
+  "other": ", {gesehen} von {folgen} Folgen gesehen"
+ },
+ "alle {folgen} Folgen gesehen": {
+  "one": "die einzige Folge gesehen",
+  "other": "alle {folgen} Folgen gesehen"
+ },
+ "{gesehen} von {folgen} Folgen": {
+  "zahl": "folgen",
+  "one": "{gesehen} von {folgen} Folge",
+  "other": "{gesehen} von {folgen} Folgen"
+ },
+ "{min} Minuten": {
+  "one": "{min} Minute",
+  "other": "{min} Minuten"
+ },
+ "läuft seit {min} Minuten": {
+  "one": "läuft seit {min} Minute",
+  "other": "läuft seit {min} Minuten"
+ },
+ "läuft seit {std} Stunden": {
+  "one": "läuft seit {std} Stunde",
+  "other": "läuft seit {std} Stunden"
+ },
+ "läuft seit {tage} Tagen": {
+  "one": "läuft seit {tage} Tag",
+  "other": "läuft seit {tage} Tagen"
+ },
+ "Heute noch {rest} Downloads bei OpenSubtitles.": {
+  "one": "Heute noch {rest} Download bei OpenSubtitles.",
+  "other": "Heute noch {rest} Downloads bei OpenSubtitles."
+ },
+ "Gespeichert. OpenSubtitles antwortet — heute noch {rest} Downloads.": {
+  "one": "Gespeichert. OpenSubtitles antwortet — heute noch {rest} Download.",
+  "other": "Gespeichert. OpenSubtitles antwortet — heute noch {rest} Downloads."
+ },
+ "{doppel} Doppel · {fehlen} fehlen": {
+  "zahl": "fehlen",
+  "one": "{doppel} Doppel · {fehlen} fehlt",
+  "other": "{doppel} Doppel · {fehlen} fehlen"
+ },
+ "{n} Fotos · {geprueft}": {
+  "one": "{n} Foto · {geprueft}",
+  "other": "{n} Fotos · {geprueft}"
+ },
+ "Musik|{n} Titel · {geprueft}": {
+  "one": "{n} Titel · {geprueft}",
+  "other": "{n} Titel · {geprueft}"
+ }
+}

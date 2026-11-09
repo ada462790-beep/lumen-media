@@ -1,0 +1,322 @@
+# Baut Lumen für alle Plattformen und hängt die Dateien an eine
+# Veröffentlichung. Ausgelöst durch einen Versions-Tag:
+#
+#     git tag v0.1.0 && git push --tags
+#
+# Warum hier und nicht auf dem eigenen Rechner: Lumen bindet SQLite über C
+# ein. Für jede Zielplattform braucht es darum deren C-Übersetzer — und die
+# stehen auf den Maschinen von GitHub ohnehin bereit.
+
+name: Veröffentlichung
+
+on:
+  push:
+    tags: ['v*']
+
+  # Auch von Hand auslösbar, mit einer Fassungsnummer. Das ist nicht nur
+  # Bequemlichkeit: ein Tag zu setzen verlangt Schreibrechte, die nicht
+  # jeder hat, der sonst alles bauen darf. Mit einer Nummer hier entsteht
+  # die Veröffentlichung samt Tag; ohne läuft nur der Bau, damit man
+  # sehen kann, ob alles durchgeht, ohne gleich etwas zu veröffentlichen.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Fassung, etwa v0.1.0 — leer lassen = nur bauen'
+        required: false
+        default: ''
+      # Wenn GitHub keine Mac-Rechner frei hat (das kam vor: Stunden in
+      # der Schlange), lässt sich ohne die macOS-Pakete veröffentlichen.
+      # Die macOS-Ziele laufen dann auf einem Linux-Rechner und tun nichts.
+      # Sind nur die arm64-Macs ausgelastet, geht es oft auf einem Intel-Mac
+      # (macos-15-intel). Der übersetzt beide macOS-Bauarten.
+      mac:
+        description: 'Mac-Rechner (macos-latest oder macos-15-intel)'
+        type: choice
+        options: [macos-latest, macos-15-intel]
+        required: false
+        default: macos-latest
+      ohne_mac:
+        description: 'Ohne macOS-Pakete veröffentlichen'
+        type: boolean
+        required: false
+        default: false
+
+# Grundsätzlich nur lesen. Schreiben darf allein der Schritt, der die
+# Veröffentlichung anlegt (siehe unten). Docker-Abbilder entstehen in
+# abbilder.yml — darum hier kein packages: write.
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    name: Tests
+    runs-on: ubuntu-latest
+    outputs:
+      fassung: ${{ steps.fassung.outputs.fassung }}
+    steps:
+      # Die Fassung kommt aus dem Tag oder aus der Eingabe von Hand. Sie
+      # gelangt nur über die Umgebung in ein Skript, nie als Ausdruck
+      # direkt in den Text — sonst liesse sich über die Eingabe Code
+      # einschleusen. Und sie muss genau so aussehen: v1.2.3.
+      - name: Fassung prüfen
+        id: fassung
+        env:
+          EINGABE: ${{ inputs.version }}
+          EREIGNIS: ${{ github.event_name }}
+          REF_TYP: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EREIGNIS" = "push" ] && [ "$REF_TYP" = "tag" ]; then
+            V="$REF_NAME"
+          else
+            V="$EINGABE"
+          fi
+          if [ -z "$V" ]; then
+            echo "Keine Fassung — es wird nur gebaut, nichts veröffentlicht."
+            echo "fassung=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! printf '%s' "$V" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Die Fassung muss so aussehen: v1.2.3"
+            exit 1
+          fi
+          echo "fassung=$V" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with: { go-version: '1.24' }
+      - name: FFmpeg installieren
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Tests
+        working-directory: server
+        run: go test -mod=vendor ./...
+
+      - name: App und Server gegeneinander halten
+        run: python3 tools/schnittstelle_pruefen.py
+
+  apple:
+    name: LumenKit
+    if: ${{ !inputs.ohne_mac }}
+    # Nur diese zwei Rechner — was sonst in der Eingabe steht, zählt nicht.
+    runs-on: ${{ inputs.mac == 'macos-15-intel' && 'macos-15-intel' || 'macos-latest' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Tests
+        working-directory: apple/LumenKit
+        run: swift test
+
+  bauen:
+    name: ${{ matrix.ziel }}
+    needs: pruefen
+    runs-on: ${{ (inputs.ohne_mac && matrix.goos == 'darwin') && 'ubuntu-latest' || (matrix.goos == 'darwin' && inputs.mac == 'macos-15-intel') && 'macos-15-intel' || matrix.laeuft_auf }}
+    env:
+      AUSLASSEN: ${{ (inputs.ohne_mac && matrix.goos == 'darwin') && '1' || '' }}
+      # Schon geprüft (v1.2.3) oder leer; trotzdem nur über die Umgebung.
+      FASSUNG: ${{ needs.pruefen.outputs.fassung }}
+      ZIEL: ${{ matrix.ziel }}
+      ENDUNG: ${{ matrix.endung }}
+      PAKETE: ${{ matrix.pakete }}
+    strategy:
+      matrix:
+        include:
+          - { ziel: linux-amd64,   laeuft_auf: ubuntu-latest, goos: linux,   goarch: amd64 }
+          - { ziel: linux-arm64,   laeuft_auf: ubuntu-latest, goos: linux,   goarch: arm64,
+              cc: aarch64-linux-gnu-gcc, pakete: gcc-aarch64-linux-gnu }
+          - { ziel: linux-arm,     laeuft_auf: ubuntu-latest, goos: linux,   goarch: arm,
+              cc: arm-linux-gnueabihf-gcc, pakete: gcc-arm-linux-gnueabihf }
+          - { ziel: macos-arm64,   laeuft_auf: macos-latest,  goos: darwin,  goarch: arm64,
+              cc: "clang -arch arm64" }
+          # macOS für Intel wird vom Apple-Silicon-Rechner aus übersetzt,
+          # nicht auf einem Intel-Mac. Die sind bei GitHub knapp — der
+          # erste Versuch wartete über eine Stunde in der Schlange und
+          # hielt die ganze Veröffentlichung auf. Der Übersetzer auf
+          # macOS kann beide Bauarten; -arch x86_64 genügt, auch für den
+          # C-Teil, den SQLite braucht.
+          - { ziel: macos-amd64,   laeuft_auf: macos-latest,  goos: darwin,  goarch: amd64,
+              cc: "clang -arch x86_64" }
+          - { ziel: windows-amd64, laeuft_auf: windows-latest, goos: windows, goarch: amd64, endung: .exe }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: env.AUSLASSEN != '1'
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        if: env.AUSLASSEN != '1'
+        with: { go-version: '1.24' }
+
+      - name: Cross-Übersetzer
+        if: matrix.pakete != '' && env.AUSLASSEN != '1'
+        run: sudo apt-get update && sudo apt-get install -y $PAKETE
+
+      - name: Bauen
+        if: env.AUSLASSEN != '1'
+        working-directory: server
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '1'
+          CC: ${{ matrix.cc }}
+          # Beim Übersetzen für eine andere Bauart muss auch der C-Teil
+          # wissen, wofür — sonst baut clang stillschweigend fürs eigene
+          # Gerät weiter, und am Ende liegt eine Datei da, die auf dem
+          # Zielrechner nicht startet.
+          CGO_CFLAGS: ${{ matrix.goos == 'darwin' && (matrix.goarch == 'amd64' && '-arch x86_64' || '-arch arm64') || '' }}
+          CGO_LDFLAGS: ${{ matrix.goos == 'darwin' && (matrix.goarch == 'amd64' && '-arch x86_64' || '-arch arm64') || '' }}
+        run: |
+          VERSION="${FASSUNG#v}"
+          go build -mod=vendor -trimpath \
+            -ldflags "-s -w -X main.version=${VERSION:-dev}" \
+            -o "lumen${ENDUNG}" ./cmd/lumen
+          # Der Vermittler für den Fernzugriff. Ohne cgo, weil er weder
+          # SQLite noch FFmpeg braucht.
+          CGO_ENABLED=0 go build -mod=vendor -trimpath \
+            -ldflags "-s -w -X main.version=${VERSION:-dev}" \
+            -o "lumen-relay${ENDUNG}" ./cmd/lumen-relay
+
+      # Nicht die nackte Binärdatei hochladen: die AGPL verlangt, dass der
+      # Lizenztext jede Kopie begleitet. Wer hier etwas herunterlädt, soll
+      # im selben Paket sehen, was er darf.
+      - name: Paket schnüren
+        if: env.AUSLASSEN != '1'
+        shell: bash
+        run: |
+          PAKET="lumen-${ZIEL}"
+          mkdir "$PAKET"
+          mv "server/lumen${ENDUNG}" "$PAKET/"
+          mv "server/lumen-relay${ENDUNG}" "$PAKET/"
+          cp LICENSE README.md "$PAKET/"
+          if [ "$ENDUNG" = ".exe" ]; then
+            7z a -tzip "$PAKET.zip" "$PAKET" > /dev/null
+          else
+            tar czf "$PAKET.tar.gz" "$PAKET"
+          fi
+          ls -lh "$PAKET".*
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: env.AUSLASSEN != '1'
+        with:
+          name: lumen-${{ matrix.ziel }}
+          path: |
+            lumen-${{ matrix.ziel }}.tar.gz
+            lumen-${{ matrix.ziel }}.zip
+          if-no-files-found: error
+          # Die Pakete holt der letzte Schritt gleich ab; danach liegen
+          # sie an der Veröffentlichung. Länger aufbewahren füllt nur den
+          # Artefakt-Speicher (der ist schon einmal voll gelaufen).
+          retention-days: 3
+
+  # Die Android-Apps gehören mit an die Veröffentlichung — sonst lädt
+  # jemand ein Paket herunter und hat nur den Server.
+  #
+  # Gebaut wird die Debug-Fassung. Nicht aus Bequemlichkeit: eine
+  # Release-Fassung muss mit einem Schlüssel signiert werden, und dieser
+  # Schlüssel gehört dem, der die App herausgibt, nicht diesem Ablauf.
+  # Eine Debug-APK lässt sich installieren, wenn „Unbekannte Quellen"
+  # einmal erlaubt ist — für den Hausgebrauch genau richtig.
+  apps:
+    name: Android-Apps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      # Kein android-actions/setup-android: die Aktion ist im Ablauf
+      # „Apps übersetzen" zweimal kommentarlos gescheitert. Das SDK liegt
+      # auf ubuntu-latest ohnehin im Abbild.
+      - name: Android-SDK
+        run: |
+          test -n "$ANDROID_HOME" || { echo "Kein Android-SDK im Abbild."; exit 1; }
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          gradle-version: '8.11.1'
+
+      - name: lumen-core prüfen
+        working-directory: android
+        run: gradle :lumen-core:pruefen --no-daemon
+
+      - name: Bauen
+        working-directory: android
+        run: gradle :app:assembleDebug :tv:assembleDebug --no-daemon
+
+      - name: Umbenennen
+        run: |
+          mkdir -p dateien
+          cp android/app/build/outputs/apk/debug/*.apk dateien/lumen-handy.apk
+          cp android/tv/build/outputs/apk/debug/*.apk dateien/lumen-fernseher.apk
+          ls -lh dateien
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lumen-android
+          path: dateien/*.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  veroeffentlichen:
+    name: Veröffentlichung anlegen
+    # Auch die Apple-Tests müssen durch sein. Fehlen dürfen sie nur, wenn
+    # ausdrücklich ohne Mac veröffentlicht wird.
+    needs: [pruefen, bauen, apps, apple]
+    runs-on: ubuntu-latest
+    # Entweder ein Versions-Tag wurde geschoben, oder jemand hat den
+    # Ablauf von Hand mit einer Fassungsnummer gestartet. Ohne beides
+    # wird nur gebaut und nichts veröffentlicht.
+    if: >-
+      ${{ !cancelled()
+          && needs.pruefen.outputs.fassung != ''
+          && needs.pruefen.result == 'success'
+          && needs.bauen.result == 'success'
+          && needs.apps.result == 'success'
+          && (needs.apple.result == 'success'
+              || (needs.apple.result == 'skipped' && inputs.ohne_mac)) }}
+    # Das einzige Schreibrecht in diesem Ablauf: Veröffentlichung und Tag
+    # anlegen.
+    permissions:
+      contents: write
+    env:
+      FASSUNG: ${{ needs.pruefen.outputs.fassung }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.24'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { path: dateien, merge-multiple: true }
+      # Die erste Zeile nennt die Fassung. Sie steht damit unter der
+      # Unterschrift: eine ältere Veröffentlichung lässt sich nicht unter
+      # neuem Tag wieder einspielen (internal/update, PruefeSummen).
+      # Ältere Lumen-Fassungen überlesen die Zeile.
+      - name: Prüfsummen
+        run: |
+          cd dateien
+          sha256sum -- * > "$RUNNER_TEMP/summen.txt"
+          { echo "# lumen-version: $FASSUNG"; cat "$RUNNER_TEMP/summen.txt"; } > pruefsummen.txt
+          cat pruefsummen.txt && ls -lh
+      # Die Unterschrift ist, woran ein Lumen-Server beim Selbst-Update
+      # erkennt, dass das Paket von hier stammt. Ohne Schlüssel keine
+      # Veröffentlichung — ein Server würde sie ohnehin nicht einsetzen.
+      - name: Unterschreiben
+        env:
+          LUMEN_SIGNIER_SCHLUESSEL: ${{ secrets.LUMEN_SIGNIER_SCHLUESSEL }}
+        run: |
+          if [ -z "$LUMEN_SIGNIER_SCHLUESSEL" ]; then
+            echo "::error::Das Geheimnis LUMEN_SIGNIER_SCHLUESSEL fehlt (Settings → Secrets → Actions)."
+            exit 1
+          fi
+          cd server && go run -mod=vendor ./cmd/lumen-signieren ../dateien/pruefsummen.txt
+      # Gegenprobe wie ein Server: mit dem öffentlichen Schlüssel, der in
+      # internal/update eingebaut ist, und mit der Fassung. Passt das
+      # Geheimnis nicht zum eingebauten Schlüssel, endet es hier — und
+      # nicht still auf jedem Server, der das Update ablehnt.
+      - name: Unterschrift prüfen
+        run: cd server && go run -mod=vendor ./cmd/lumen-signieren -pruefen ../dateien/pruefsummen.txt "$FASSUNG"
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          # Beim Tag-Weg steht die Fassung schon im Tag; beim Weg von
+          # Hand kommt sie aus der Eingabe, und der Tag wird dabei
+          # angelegt. In beiden Fällen geprüft (v1.2.3).
+          tag_name: ${{ needs.pruefen.outputs.fassung }}
+          files: dateien/*
+          generate_release_notes: true

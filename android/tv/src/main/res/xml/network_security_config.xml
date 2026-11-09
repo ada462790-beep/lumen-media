@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lumen läuft zu Hause: ein Server im eigenen Netz, meist unter einer
+  IP-Adresse und ohne Zertifikat. Android verbietet unverschlüsseltes HTTP
+  seit Fassung 9 — und zwar wortlos, die Verbindung schlägt einfach fehl.
+
+  Die naheliegende Lösung, nur private Adressbereiche zu erlauben, geht
+  nicht: <domain> vergleicht Rechnernamen, keine Adressbereiche. Ein Eintrag
+  „192.168.0.0" trifft auf 192.168.1.20 nicht zu. Wer das so schreibt, baut
+  eine Regel, die nach Sicherheit aussieht und nichts tut, ausser die
+  Verbindung zum eigenen Server zu verhindern.
+
+  Also ehrlich: unverschlüsseltes HTTP ist erlaubt. Das ist eine bewusste
+  Abwägung für einen Dienst, der im eigenen Netz steht. Wer Lumen von
+  aussen erreichbar macht, sollte HTTPS davorsetzen — dann greift das
+  System-Zertifikatsverzeichnis wie gewohnt.
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- Lint warnt hier zu Recht im Allgemeinen. Für einen Dienst, der im
+         eigenen Netz steht, ist es die Abwägung oben — und eine Warnung,
+         die bei jedem Lauf angeht, übertönt nur die echten. -->
+    <base-config cleartextTrafficPermitted="true"
+                 tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

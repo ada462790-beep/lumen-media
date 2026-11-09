@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Nur was das System braucht, bevor Compose läuft. Die Farben
+         der Oberfläche stehen in Design.kt. -->
+    <color name="lumen_background">#050507</color>
+</resources>

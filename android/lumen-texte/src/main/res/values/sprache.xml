@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumen — eigener Streaming-Server fürs Heimnetz. AGPL-3.0-only.
+     Die Einstellung „Sprache", gleich auf Telefon und Fernseher. -->
+<resources>
+    <string name="sprache_titel">Sprache</string>
+    <string name="sprache_wie_server">Wie der Server</string>
+    <string name="sprache_wie_server_mit">Wie der Server (%1$s)</string>
+    <string name="sprache_hinweis">Gilt für dein Profil — im Browser und in den Apps.</string>
+</resources>

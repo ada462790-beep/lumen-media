@@ -1,0 +1,66 @@
+# Lumen — eigener Streaming-Server fürs Heimnetz.
+# Copyright (C) 2026 Die Lumen-Autoren
+#
+# Veröffentlicht unter der GNU Affero General Public License v3.0.
+# Der vollständige Text steht in der Datei LICENSE.
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Der Vermittler als Container.
+#
+# Er läuft nicht zu Hause, sondern auf einer Maschine mit öffentlicher
+# Adresse — der billigste Mietserver genügt. Gebaut wird vom
+# Wurzelverzeichnis aus, damit die Lizenz mit ins Abbild kommt:
+#
+#   docker build -f server/Dockerfile.relay -t lumen-relay .
+#
+# Anders als Lumen selbst braucht er kein FFmpeg, keine Datenbank und kein
+# C: er reicht Bytes durch. Darum ohne cgo und auf einem leeren Abbild.
+
+FROM golang:1.24-alpine AS bau
+
+WORKDIR /quelle
+COPY server/go.mod server/go.sum ./
+COPY server/vendor ./vendor
+COPY server/ .
+
+ARG VERSION=0.1.0
+RUN CGO_ENABLED=0 go build -mod=vendor -trimpath \
+      -ldflags "-s -w -X main.version=${VERSION}" \
+      -o /lumen-relay ./cmd/lumen-relay \
+ && mkdir -p /daten-leer
+
+# ---------------------------------------------------------------- ausliefern
+
+# scratch, nicht alpine: der Vermittler öffnet keine Dateien ausser seinem
+# Zertifikat und ruft nichts auf. Was nicht im Abbild ist, kann auch nicht
+# angegriffen werden.
+FROM scratch
+
+COPY --from=bau /lumen-relay /lumen-relay
+# Der Datenordner gehört gleich dem Benutzer, unter dem der Vermittler
+# läuft. Legte erst VOLUME ihn an, gehörte er root, und der Vermittler
+# konnte sein Zertifikat nicht speichern.
+COPY --from=bau --chown=65532:65532 /daten-leer /daten
+COPY LICENSE /LICENSE
+
+# Die Zeitzonen fürs Protokoll stecken in der Binärdatei (time/tzdata).
+# Hier stand erst ein COPY aus dem Bau-Abbild — nur führt Alpine das
+# Zeitzonenverzeichnis gar nicht mit, und das Bauen scheiterte an einer
+# Datei, die es nie gab.
+
+LABEL org.opencontainers.image.title="Lumen Relay" \
+      org.opencontainers.image.description="Macht einen Lumen-Server von aussen erreichbar, ohne Portfreigabe" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/ada462790-beep/lumen-media"
+
+# /daten hält nur das selbst ausgestellte Zertifikat.
+VOLUME ["/daten"]
+ENV LUMEN_RELAY_DATA=/daten \
+    LUMEN_RELAY_ADDR=:8443 \
+    LUMEN_RELAY_TUNNEL=:8444
+EXPOSE 8443 8444
+
+# Kein Benutzer 0: scratch hat keine /etc/passwd, darum die blosse Nummer.
+USER 65532:65532
+
+ENTRYPOINT ["/lumen-relay"]

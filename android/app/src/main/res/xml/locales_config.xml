@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumen — eigener Streaming-Server fürs Heimnetz. AGPL-3.0-only.
+     Die Sprachen für Einstellungen › Apps › Sprache (ab Android 13).
+     Dieselben fünf wie org.lumen.core.Sprachen.UNTERSTUETZT; die Wahl
+     gilt fürs Profil und wird beim nächsten Abgleich zum Server geschickt. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="de-CH" />
+    <locale android:name="de-DE" />
+    <locale android:name="de-AT" />
+    <locale android:name="en-US" />
+    <locale android:name="en-GB" />
+</locale-config>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumen — eigener Streaming-Server fürs Heimnetz. AGPL-3.0-only.
+     English (United Kingdom): nur, was vom amerikanischen Englisch
+     (values-en) abweicht — Schreibung, Anführungszeichen, Datum. -->
+<resources>
+    <string name="aus_x_x_von_x">from ‘%1$s’ · %2$s of %3$s</string>
+    <string name="die_filme_selbst_bleiben">The films themselves stay.</string>
+    <string name="die_liste_verschwindet_auch_bei">The playlist will also disappear for everyone you shared it with. The films themselves stay.</string>
+    <string name="eine_farbe_oder_eine_figur">A colour or a character. Upload your own picture on your phone or in the browser.</string>
+    <string name="favorit">Favourite</string>
+    <string name="favoriten">Favourites</string>
+    <string name="filme">Films</string>
+    <string name="filme_ansehen">Browse Films</string>
+    <string name="lizenz">Licence</string>
+    <string name="neue_folgen_deiner_serien_neue">New episodes of your shows, new films in your collections, recent additions — just for you.</string>
+    <string name="nichts_gefunden_fuer_x">Nothing found for ‘%1$s’.</string>
+    <string name="noch_keine_lieblingsfilme_auf_einer">No favourite films yet. Tap the heart on a title page.</string>
+    <string name="noch_keine_lieblingsserien_auf_einer">No favourite shows yet. Tap the heart on a title page.</string>
+    <string name="noch_keine_reihen_lumen_erkennt">No collections yet. Lumen detects them on its own as soon as two films of a collection are there — by title or, with a TMDb key, reliably via TMDb.</string>
+    <string name="noch_leer_auf_der_seite">Still empty. Every title page has ‘Add to Playlist’.</string>
+    <string name="noch_nichts_da_sobald_filme">Nothing here yet. As soon as there are films in a library, they’ll appear here.</string>
+    <string name="nur_du_siehst_deine_favoriten">Only you can see your favourites</string>
+    <string name="tippe_los_auch_komoedie_2019">Start typing — even ‘comedy 2019’, ‘films with Tom Hanks’ or ‘thriller 80s’.</string>
+    <string name="x_aus_x_nehmen">Remove ‘%1$s’ from ‘%2$s’?</string>
+    <string name="x_entfernen">Remove ‘%1$s’?</string>
+    <string name="x_loeschen">Delete ‘%1$s’?</string>
+    <string name="x_wuenschen">Request ‘%1$s’</string>
+    <string name="zu_den_favoriten">Add to Favourites</string>
+</resources>

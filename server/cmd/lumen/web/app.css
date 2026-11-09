@@ -1,0 +1,673 @@
+/*
+ Lumen — eigener Streaming-Server fürs Heimnetz.
+ Copyright (C) 2026 Die Lumen-Autoren
+
+ Veröffentlicht unter der GNU Affero General Public License v3.0.
+ Der vollständige Text steht in der Datei LICENSE.
+ SPDX-License-Identifier: AGPL-3.0-only
+*/
+
+/* Nur Demo-Ergänzungen. Das Designsystem selbst steht in ds-shared.css. */
+
+html, body { margin:0; height:100%; background:#050507; }
+html.hell, html.hell body { background:#f2f2f7 }
+.lumen { position:fixed; inset:0; width:auto; height:auto; }
+
+/* Scrollbereich rechts neben der Seitenleiste */
+.page { overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; }
+.page::-webkit-scrollbar { width:10px }
+.page::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:5px; border:3px solid transparent; background-clip:content-box }
+.page::-webkit-scrollbar-track { background:transparent }
+
+/* Inhalt im Scrollbereich: nicht absolut, sondern im Fluss */
+.wrap { padding:0 40px 64px calc(120px + var(--verschub, 0px)); transition:padding-left .35s var(--ease) }
+.wrap--flat { padding-top:48px; }
+
+/* Held */
+.hero { position:relative; margin:0 -40px 0 -120px; height:min(62vh, 620px); min-height:420px; }
+.hero > .art { position:absolute; inset:0; }
+.hero-text { position:absolute; left:120px; right:40px; bottom:48px; max-width:620px; }
+
+/* Reihen */
+.rail { display:flex; gap:20px; overflow-x:auto; overflow-y:hidden; padding:2px 40px 8px 0; scroll-snap-type:x proximity; }
+.rail::-webkit-scrollbar { height:0 }
+/* Pfeile an den Reihen (nur mit Maus, siehe reihenPfeile) */
+.rail-huelle { position:relative }
+.rail-pfeil { position:absolute; top:0; bottom:8px; width:56px; display:flex; align-items:center; justify-content:center;
+              border:0; padding:0; cursor:pointer; color:#fff; opacity:0; transition:opacity .25s var(--ease);
+              background:linear-gradient(90deg, rgba(0,0,0,0), var(--bg) 70%) }
+.rail-pfeil--r { right:0 }
+.rail-pfeil--l { left:0; background:linear-gradient(270deg, rgba(0,0,0,0), var(--bg) 70%) }
+.rail-pfeil > svg { padding:10px; border-radius:50%; background:rgba(120,120,128,.35); backdrop-filter:blur(12px); box-sizing:content-box }
+.rail-pfeil:hover > svg { background:rgba(120,120,128,.6) }
+.rail-huelle:hover .rail-pfeil, .rail-pfeil:focus-visible { opacity:1 }
+.rail-huelle.am-anfang .rail-pfeil--l, .rail-huelle.am-ende .rail-pfeil--r, .rail-huelle.passt .rail-pfeil { opacity:0; pointer-events:none }
+.rail > * { scroll-snap-align:start; flex:none }
+.sec { margin-top:34px }
+.sec > h2 { margin:0 0 14px }
+
+/* Karten */
+.card { display:block; color:inherit; text-decoration:none; cursor:pointer; background:none; border:0; padding:0; text-align:left; font:inherit }
+.card:focus-visible { outline:none }
+.poster { width:168px }
+.widecard { width:300px }
+
+/* Raster */
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(168px,1fr)); gap:28px 20px; }
+
+/* Profilwahl */
+.pwrap { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:40px; }
+.pgrid { display:flex; gap:40px; flex-wrap:wrap; justify-content:center; }
+.pcard { display:flex; flex-direction:column; align-items:center; gap:14px; background:none; border:0; cursor:pointer; font:inherit; color:var(--label); }
+.pcard .avatar { transition:transform .25s var(--ease), box-shadow .25s var(--ease) }
+.pcard:hover .avatar, .pcard:focus-visible .avatar { transform:scale(1.06); box-shadow:0 0 0 4px rgba(255,255,255,.9) }
+.pcard:focus-visible { outline:none }
+
+/* Player */
+.player { position:absolute; inset:0; background:#000; overflow:hidden }
+.pl-art { position:absolute; inset:0 }
+/* Der Abdunkler muss über das Bild, sonst steht die Zeit auf einer hellen
+   Szene unlesbar da. z-index:1 hält ihn über dem Video und unter der
+   Steuerung; pointer-events:none, damit er keine Klicks abfängt. */
+.pl-scrim { position:absolute; inset:0; z-index:1; pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.28) 14%, rgba(0,0,0,0) 30%),
+    linear-gradient(0deg,  rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 12%, rgba(0,0,0,0) 32%) }
+.pl-top { position:absolute; left:max(40px, calc(env(safe-area-inset-left) + 16px)); right:max(40px, calc(env(safe-area-inset-right) + 16px));
+          top:max(28px, calc(env(safe-area-inset-top) + 12px)); display:flex; align-items:center; gap:16px; z-index:3 }
+.pl-mid { position:absolute; left:env(safe-area-inset-left); right:env(safe-area-inset-right); top:50%; transform:translateY(-50%); display:flex; align-items:center; justify-content:center; gap:56px; z-index:3 }
+.pl-bot { position:absolute; left:max(40px, calc(env(safe-area-inset-left) + 16px)); right:max(40px, calc(env(safe-area-inset-right) + 16px));
+          bottom:max(34px, calc(env(safe-area-inset-bottom) + 12px)); z-index:3 }
+.pl-bar { position:relative; height:6px; border-radius:3px; background:var(--spur); cursor:pointer }
+.pl-bar > i { position:absolute; left:0; top:0; height:6px; border-radius:3px; background:#fff }
+.pl-bar > b { position:absolute; top:-5px; width:16px; height:16px; margin-left:-8px; border-radius:50%; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.6) }
+/* Die Leiste ist 6 px hoch, die Fläche zum Greifen 30 px — für Finger. */
+.pl-bar { touch-action:none }
+.pl-bar::before { content:''; position:absolute; left:0; right:0; top:-12px; bottom:-12px }
+.pl-bar:focus-visible { outline:2px solid #fff; outline-offset:6px }
+.pl-vorschau { position:absolute; bottom:22px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; z-index:2 }
+.pl-vorschau[hidden], .pl-vorschau-bild[hidden] { display:none }
+.pl-vorschau-bild { display:block; border-radius:8px; border:2px solid #fff; background-color:#000; background-repeat:no-repeat; box-shadow:0 6px 20px rgba(0,0,0,.6) }
+.pl-vorschau-zeit { padding:3px 8px; border-radius:6px; background:rgba(0,0,0,.72); color:#fff; font-size:13px; font-weight:600 }
+/* Schliessen: mindestens 44 px, wie Apple es für Finger verlangt. */
+.pl-zu { width:44px !important; height:44px !important; flex:none }
+/* „wird umgewandelt" bricht nicht um; eher wird der Titel gekürzt. */
+.pl-umw { flex:none; white-space:nowrap; border:0; background:rgba(10,132,255,.18); color:#4aa3ff }
+@media (max-width: 600px) { .pl-umw { font-size:10px; height:16px; padding:0 5px } }
+.pl-laut-gruppe { display:inline-flex; align-items:center; gap:8px }
+.pl-laut { width:96px; accent-color:#fff }
+.pl-knopf--tempo { width:auto; min-width:44px; height:44px; padding:0 12px; font-size:14px; font-weight:600; color:#fff; border-radius:22px }
+@media (max-width: 600px) { .pl-knoepfe { gap:8px } .pl-laut { display:none } }
+/* „Schaust du noch?" */
+.nochda { position:absolute; inset:0; z-index:9; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.55); padding:24px }
+.nochda-karte { max-width:420px; width:100%; padding:24px; border-radius:22px; color:#fff }
+/* Weiterschauen: Abspielen auf der Karte, Info daneben */
+.widecard-huelle { flex:none }
+.widecard:hover .folge-play, .widecard:focus-visible .folge-play { opacity:1 }
+.widecard-info { position:absolute; top:6px; right:6px; width:44px; height:44px; z-index:2; color:#fff }
+/* Haken je Folge und Rückfrage „auch die davor?" */
+.folge-haken.btn-round { width:44px; height:44px; color:var(--label-3); background:var(--fill) }
+.folge-haken.folge-haken--an { color:#000; background:#fff }
+/* Auf dem Handy liegen Vorspann-Knopf und „Als Nächstes" über der
+   Knopfzeile, nicht auf ihr. */
+@media (max-width: 600px) {
+  .player .nextpill.btn { bottom:calc(150px + env(safe-area-inset-bottom)) }
+  .player .naechster { bottom:calc(150px + env(safe-area-inset-bottom)) }
+}
+.vorher-frage { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:14px; padding:12px 16px; border-radius:14px }
+.pl-top, .pl-mid, .pl-bot, .pl-scrim, .nextpill { transition:opacity .45s var(--ease) }
+.pl-hide { opacity:0; pointer-events:none }
+/* Ausgeblendet heisst auch: nicht per Tab erreichbar, nicht vorgelesen.
+   visibility springt erst nach dem Ausblenden um, damit es weich bleibt;
+   beim Einblenden sofort. */
+.pl-top, .pl-mid, .pl-bot, .pl-scrim { visibility:visible; transition:opacity .45s var(--ease), visibility 0s linear 0s }
+.pl-top.pl-hide, .pl-mid.pl-hide, .pl-bot.pl-hide, .pl-scrim.pl-hide { visibility:hidden; transition:opacity .45s var(--ease), visibility 0s linear .45s }
+.pl-nocursor { cursor:none }
+.player { cursor:default }
+
+/* Nächste-Folge-Pille */
+.nextpill { position:absolute; left:40px; bottom:104px; display:inline-flex; align-items:center; gap:10px; height:44px; padding:0 8px 0 6px; border-radius:22px; z-index:4; max-width:340px }
+
+/* Suche */
+.sfield { display:flex; align-items:center; gap:12px; height:52px; padding:0 18px; border-radius:16px; background:var(--fill); color:var(--label-2); max-width:560px }
+.sfield input { flex:1; border:0; outline:0; background:none; color:var(--label); font:inherit; font-size:17px }
+
+/* Kleinigkeiten */
+.chipbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+/* Die Meldung hängt am body, nicht in .lumen — darum braucht sie die Schrift eigens. */
+/* Oben in der Mitte: unten liegen „Ansehen", die Leiste des Players, die
+   Tab-Leiste und der Mini-Player – dort verdeckte die Meldung genau das,
+   worauf man als Nächstes tippt. */
+.toast { position:fixed; left:50%; top:calc(18px + env(safe-area-inset-top)); bottom:auto; transform:translateX(-50%); z-index:60; padding:12px 20px; border-radius:999px; font-family:var(--font); font-size:14px; font-weight:600; letter-spacing:-.01em;
+         max-width:min(560px, calc(100vw - 32px)); text-align:center;
+         background:rgba(34,34,38,.96); color:#fff; box-shadow:0 20px 50px rgba(0,0,0,.5); animation:toast .3s var(--ease) both; transition:opacity .3s var(--ease) }
+.toast--fehler { box-shadow:inset 0 0 0 1.5px #ff6961, 0 20px 50px rgba(0,0,0,.5) }
+.toast--weg { opacity:0 }
+@keyframes toast { from{opacity:0;transform:translate(-50%,-12px)} to{opacity:1;transform:translate(-50%,0)} }
+
+@media (max-width: 860px) {
+  .wrap { padding-left:calc(92px + var(--verschub, 0px)) }
+  .hero { margin-left:-92px }
+  .hero-text { left:92px }
+}
+
+/* Zeilen in Besitzer- und Einstellungslisten (aus dem Entwurf übernommen) */
+.orow { display:flex; align-items:center; gap:14px; min-height:60px; padding:0 16px; color:var(--label) }
+.orow + .orow { box-shadow:inset 0 .5px 0 var(--hair) }
+.orow-link { background:none; border:0; font:inherit; color:inherit; cursor:pointer; display:flex; align-items:center; gap:14px }
+.orow-link:hover { background:rgba(255,255,255,.04) }
+button.row { background:none; border:0; font:inherit; cursor:pointer; text-align:left; color:var(--label) }
+button.row:hover, .orow-link:focus-visible { background:rgba(255,255,255,.05) }
+.group--inset > .orow:first-child, .group--inset > .row:first-child { box-shadow:none }
+.group--inset .orow + .row, .group--inset .row + .orow { box-shadow:inset 0 .5px 0 var(--hair) }
+
+/* ---- Echte Bilder statt Platzhalter-Verläufe ---------------------------- */
+.art-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block }
+.art-none { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+            padding:10px; text-align:center; font-size:13px; font-weight:600; line-height:1.25;
+            color:rgba(235,235,245,.5);
+            background:linear-gradient(145deg,#1d1d22,#121216 60%,#0d0d10) }
+.art-none span { display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden }
+/* Bild aus dem Film, wo das Poster fehlt. Im Hochformat etwas gedämpft,
+   damit eine helle Szene nicht aus der Reihe springt. */
+.art-frame--poster { filter:brightness(.82) saturate(.92) }
+
+/* ---- Einrichtung und Anmeldung ----------------------------------------- */
+.center { position:absolute; inset:0; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; gap:28px; padding:40px }
+.panel { width:min(460px, 100%); display:flex; flex-direction:column; gap:16px }
+.field { display:flex; flex-direction:column; gap:7px }
+.field > label { font-size:13px; color:var(--label-2) }
+/* Auch Felder, die mit einem Knopf zusammen in einer Zeile stehen — etwa
+   der Pfad neben „Durchsuchen" —, sehen aus wie alle anderen. Vorher
+   galt die Gestaltung nur für Felder direkt unter .field, und das
+   Pfadfeld blieb ein grauer Kasten aus dem Browser. */
+.field input:not([type=checkbox]):not([type=radio]), .field select {
+  height:46px; padding:0 15px; border-radius:12px; border:0; outline:0;
+  background:var(--fill); color:var(--label); font:inherit; font-size:16px }
+.field input.mono { font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:14px }
+
+/* Der Fokus zeigt sich am Feld selbst — ein blauer Rand innen —, nicht als
+   weisser Kasten daneben. Der weisse Ring ist für Knöpfe und Karten da,
+   wo es sonst nichts gibt, das den Fokus zeigt; in einem Textfeld steht
+   ohnehin der Cursor. */
+.lumen :is(input,select,textarea,[contenteditable]):focus-visible { outline:none }
+.field :is(input,select):focus-visible { box-shadow:0 0 0 2px var(--accent) inset }
+.sfield:focus-within { box-shadow:0 0 0 2px var(--accent) inset }
+/* Der Platzhalter steht normal da; gesperrt wird nur, was getippt ist. */
+#secret::placeholder { letter-spacing:normal }
+.err { color:#ff6961; font-size:14px; min-height:20px }
+.hint { color:var(--label-2); font-size:13px; line-height:1.45 }
+
+/* ---- Laden -------------------------------------------------------------- */
+.spin { width:22px; height:22px; border-radius:50%; border:2px solid rgba(255,255,255,.18);
+        border-top-color:rgba(255,255,255,.75); animation:spin .8s linear infinite }
+@keyframes spin { to { transform:rotate(360deg) } }
+.spin--s { width:13px; height:13px; border-width:2px }
+/* Solange nicht bekannt ist, wie viele Dateien es gibt, zeigt der Balken
+   nur, dass etwas geschieht — nicht, wie weit es ist. */
+@keyframes pulse { 0%,100% { opacity:.3 } 50% { opacity:1 } }
+.loading { display:flex; align-items:center; gap:12px; color:var(--label-2);
+           padding:60px 0; justify-content:center }
+
+/* ---- Tabellen in der Verwaltung ---------------------------------------- */
+.mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px }
+
+
+/* Steuerung über dem Abdunkler und über der Klickfläche */
+.pl-top, .pl-mid, .pl-bot, .nextpill { z-index:3 }
+/* Die Zeitangaben bekommen zusätzlich einen weichen Schatten — auf einer
+   hellen Szene reicht der Verlauf allein nicht immer. */
+.pl-bot .tnum, .pl-top .t-body, .pl-top .t-caption {
+  text-shadow:0 1px 3px rgba(0,0,0,.75) }
+.pl-bar { box-shadow:0 1px 4px rgba(0,0,0,.45) }
+
+/* ---- Navigation auf- und zuklappen ------------------------------------ */
+/* Die Leiste klappte bisher nur auf, wenn die Maus darüber fuhr — auf dem
+   Schreibtisch wusste niemand, dass sie das kann, und beim Zeigen auf
+   einen Film klappte sie unverlangt auf. Darum ein Pfeil, der sagt,
+   was er tut, und sich merkt, wie man es wollte. */
+.sidebar-top { display:flex; align-items:center; gap:2px }
+.nav-zu { flex:none; width:38px; height:38px; display:flex; align-items:center;
+          justify-content:center; border:0; border-radius:12px; background:none;
+          color:var(--label-2); cursor:pointer;
+          transition:background-color .2s var(--ease), color .2s var(--ease) }
+.nav-zu:hover { background:var(--fill); color:var(--label) }
+.nav-zu:focus-visible { box-shadow:0 0 0 2px #0a84ff }
+.nav-zu svg { transition:transform .35s var(--ease) }
+.sidebar--zu .sidebar-mark { display:none }
+.sidebar--zu .nav-zu { margin:0 auto }
+.sidebar--zu .nav-zu svg { transform:rotate(180deg) }
+@media (prefers-reduced-motion:reduce) { .nav-zu svg { transition:none } }
+
+/* ---- Detailseite: Text links, Bewertung und Dateien rechts ------------- */
+.detail-spalten { display:grid; grid-template-columns:minmax(0,2fr) minmax(280px,1fr); gap:0 44px }
+.nur-handy, .tabbar { display:none }
+
+/* ---- Filmreihen: ein Stapel Poster, der erste Film vorn ------------------ */
+.reihen-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(210px,100%),1fr)); gap:30px 22px }
+.reihe-karte { width:210px }
+.reihen-grid .reihe-karte { width:auto }
+.reihe-stapel { position:relative; width:100%; aspect-ratio:210/236 }
+.reihe-blatt { position:absolute; top:0; width:72%; aspect-ratio:2/3; border-radius:12px; overflow:hidden;
+               background:#141418; box-shadow:0 10px 26px rgba(0,0,0,.45);
+               transition:transform .35s var(--ease) }
+.reihe-blatt--0 { left:0; z-index:3 }
+.reihe-blatt--1 { left:14%; z-index:2; transform:scale(.94); transform-origin:left center; filter:brightness(.62) }
+.reihe-blatt--2 { left:28%; z-index:1; transform:scale(.88); transform-origin:left center; filter:brightness(.42) }
+.reihe-karte:hover .reihe-blatt--1, .reihe-karte:focus-visible .reihe-blatt--1 { transform:translateX(6%) scale(.94) }
+.reihe-karte:hover .reihe-blatt--2, .reihe-karte:focus-visible .reihe-blatt--2 { transform:translateX(12%) scale(.88) }
+.reihe-karte:focus-visible .reihe-blatt--0 { box-shadow:0 0 0 3px #fff, 0 10px 26px rgba(0,0,0,.45) }
+
+/* ---- Listen ------------------------------------------------------------- */
+.listen-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(240px,100%),1fr)); gap:26px 20px }
+.liste-karte { width:auto }
+.liste-bild { position:relative; width:100%; aspect-ratio:16/9; border-radius:12px; overflow:hidden; background:var(--fill) }
+.liste-mosaik { position:absolute; inset:0; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px }
+.liste-mosaik > div { position:relative; overflow:hidden }
+.listen-panel { margin-top:18px; max-width:520px }
+.haken { width:22px; height:22px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+         box-shadow:inset 0 0 0 1.5px var(--label-3); color:#fff }
+.haken--an { background:var(--accent); box-shadow:none }
+
+/* Überschriften, die zu einer Seite führen */
+.titel-link { color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:4px }
+.titel-link svg { color:var(--label-3) }
+.titel-link:hover svg { color:var(--label) }
+/* Umbenennen an Ort und Stelle */
+.titel-feld { font:inherit; font-size:inherit; font-weight:inherit; color:var(--label); background:var(--fill);
+              border:0; outline:0; border-radius:12px; padding:2px 12px; width:min(560px, 100%) }
+.titel-feld:focus-visible { box-shadow:0 0 0 2px var(--accent) inset }
+/* Der Film, auf dessen Seite man gerade ist, in der Reihe darunter */
+.poster--hier .thumb { box-shadow:0 0 0 2px var(--accent) }
+
+/* ---- Handy ---------------------------------------------------------------
+   Unter 600 Pixeln wird aus der Seitenleiste eine Leiste am unteren Rand,
+   wie bei jeder App auf dem iPhone. Die Seite bekommt dafür ihre ganze
+   Breite zurück: vorher fraß die Symbolspalte ein Viertel davon, und
+   Formulare und Dateilisten liefen rechts aus dem Bild. */
+@media (max-width: 600px) {
+  .sidebar { display:none }
+  .lumen .page, .lumen:has(.sidebar) .page { left:0 !important }
+  .nur-handy { display:block }
+
+  /* Dichter als das übrige Glas: darunter läuft die Seite durch, und
+     durchscheinende Schrift unter den Beschriftungen liest sich wirr. */
+  .tabbar.glass--regular { background:rgba(22,22,26,.96);
+            -webkit-backdrop-filter:blur(40px) saturate(150%); backdrop-filter:blur(40px) saturate(150%) }
+  .lumen.light .tabbar.glass--regular { background:rgba(250,250,252,.92) }
+  .tabbar { display:flex; position:fixed; z-index:20;
+            left:10px; right:10px; bottom:calc(10px + env(safe-area-inset-bottom));
+            height:62px; padding:0 6px; border-radius:24px; align-items:stretch }
+  .tab { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center;
+         justify-content:center; gap:3px; color:var(--label-2); text-decoration:none;
+         font-size:10px; font-weight:600; letter-spacing:.01em; border-radius:18px;
+         -webkit-tap-highlight-color:transparent }
+  .tab span:last-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100% }
+  .tab[aria-current=page] { color:var(--accent) }
+  .tab[aria-current=page] .avatar { box-shadow:0 0 0 2px var(--accent) }
+  .tab:active { background:var(--fill) }
+
+  .wrap { padding:0 16px calc(96px + env(safe-area-inset-bottom)) 16px }
+  .wrap--flat { padding-top:calc(24px + env(safe-area-inset-top)) }
+  .hero { margin:0 -16px; height:62vh; min-height:360px }
+  .hero-text { left:16px; right:16px; bottom:28px }
+  .rail { padding-right:16px; gap:12px }
+  .rail .poster { width:128px }
+  .rail .thumb--poster { width:128px !important; height:192px !important }
+  .rail .widecard { width:240px }
+
+  /* Zwei Poster nebeneinander statt eines über die ganze Breite. */
+  .grid { grid-template-columns:repeat(2, minmax(0,1fr)); gap:22px 12px }
+  .grid .poster { width:auto }
+  .grid .thumb--poster { width:100% !important; height:auto !important; aspect-ratio:2/3 }
+
+  .hero > [data-back] { left:16px !important; top:calc(16px + env(safe-area-inset-top)) !important }
+  .reihen-grid { grid-template-columns:repeat(2, minmax(0,1fr)); gap:24px 14px }
+  .rail .reihe-karte { width:150px }
+  .listen-grid { grid-template-columns:minmax(0,1fr) }
+  .detail-spalten { grid-template-columns:minmax(0,1fr) }
+  .detail-spalten > * + * { margin-top:26px }
+  .t-large { font-size:30px; line-height:36px }
+}
+
+/* „Als Nächstes" am Ende eines Films in einer Liste oder einer Folge */
+.naechster { position:absolute; z-index:6; right:40px; bottom:96px; display:flex; align-items:center;
+             gap:12px; width:min(460px, calc(100% - 32px)); padding:14px 14px 14px 18px; border-radius:20px }
+@media (max-width: 600px) { .naechster { right:16px; left:16px; width:auto; bottom:84px } }
+
+/* ---- Folgen einer Staffel ---------------------------------------------- */
+.folge-bild { position:relative; flex:none }
+.folge-play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+              color:#fff; background:rgba(0,0,0,.28); opacity:0; transition:opacity .2s var(--ease) }
+.folge-bild:hover .folge-play, .folge-bild:focus-visible .folge-play { opacity:1 }
+.chips::-webkit-scrollbar { height:0 }
+@media (max-width: 600px) {
+  .folge { flex-wrap:wrap }
+  .folge .thumb { width:120px !important; height:68px !important }
+  .nur-breit { display:none }
+}
+
+/* ---- Besetzung ----------------------------------------------------------- */
+.person { width:96px; flex:none; text-align:center }
+.person-bild { position:relative; width:72px; height:72px; margin:0 auto; border-radius:50%; overflow:hidden;
+               background:var(--fill-2); display:flex; align-items:center; justify-content:center;
+               font-size:24px; font-weight:600; color:var(--label-2) }
+.person-bild img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover }
+.takt { font:inherit; font-size:12px; color:var(--label); background:var(--fill); border:0; border-radius:8px; padding:4px 8px }
+
+/* ---- Ton, Untertitel, Vorspann im Player ------------------------------- */
+/* Wie auf dem Apple TV: zwei Symbole rechts über der Leiste, ein dunkles
+   Feld am rechten Rand, Abschnitte in Grossbuchstaben, Haken rechts, der
+   gewählte Eintrag als heller Balken. */
+.pl-knoepfe { display:flex; justify-content:flex-end; gap:12px; margin-bottom:14px; min-height:44px }
+.pl-knopf { width:44px; height:44px }
+.pl-knopf--an { background:#fff !important; color:#000 !important }
+.spuren { position:absolute; z-index:7; right:40px; bottom:150px; width:min(380px, calc(100% - 32px));
+          max-height:calc(100% - 220px); overflow:auto; padding:10px; border-radius:22px;
+          background:rgba(28,28,30,.78); backdrop-filter:blur(30px) saturate(1.4); -webkit-backdrop-filter:blur(30px) saturate(1.4) }
+.spuren-abschnitt + .spuren-abschnitt { margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.1) }
+.spuren-titel { padding:10px 18px 6px; font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.55) }
+.spuren-hinweis { padding:4px 18px 8px; font-size:13px; color:rgba(255,255,255,.55) }
+.spur { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:50px; padding:0 18px;
+        border:0; border-radius:14px; background:transparent; color:#fff; font:inherit; font-size:17px; text-align:left; cursor:pointer }
+.spur-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.spur:hover, .spur:focus-visible { background:#fff; color:#000; outline:0 }
+.spur--aktiv { font-weight:500 }
+.nextpill.btn { color:var(--label); font:inherit; border:0; cursor:pointer; left:auto; right:40px; bottom:150px }
+.naechster { bottom:150px }
+/* Solange ein Feld offen ist, tritt der Vorspann-Knopf zurück. */
+.player:has(.spuren) .nextpill { opacity:0; pointer-events:none }
+.naechster-bild { width:96px; height:54px; object-fit:cover; border-radius:8px; flex:none; background:#000 }
+video::cue { background:rgba(0,0,0,.55); color:#fff; font-family:inherit; font-size:clamp(16px, 2.6vh, 30px); line-height:1.35 }
+@media (max-width: 600px) {
+  .pl-knoepfe { margin-bottom:8px }
+  .spuren { right:16px; left:16px; width:auto; bottom:130px }
+  .nextpill.btn { right:16px; bottom:92px }
+  .naechster-bild { display:none }
+}
+
+/* ---- Abzeichen auf Karten ---------------------------------------------- */
+.abzeichen { position:absolute; left:8px; right:8px; top:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:6px; pointer-events:none }
+.abz { display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:6px; font-size:11px; font-weight:700; letter-spacing:.03em;
+       background:rgba(0,0,0,.6); color:#fff; backdrop-filter:blur(8px); white-space:nowrap }
+.abz--neu { background:#ff453a; color:#fff }
+.abz-rechts { display:flex; flex-direction:column; gap:4px; align-items:flex-end }
+
+/* ---- Profilbilder --------------------------------------------------------- */
+.avatar--bild { overflow:hidden; background:var(--fill-2) }
+.avatar--bild img { width:100%; height:100%; object-fit:cover; display:block }
+.avatar--figur svg { width:62%; height:62% }
+.avatar-wahl { display:flex; flex-wrap:wrap; gap:10px; padding:14px 16px }
+.avatar-wahl .avatar { cursor:pointer; box-shadow:0 0 0 2px transparent; transition:transform .15s var(--ease) }
+.avatar-wahl .avatar:hover { transform:scale(1.08) }
+.avatar-wahl .avatar.gewaehlt { box-shadow:0 0 0 2.5px var(--accent) }
+
+/* ---- Neuigkeiten --------------------------------------------------------- */
+.punkt { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; margin-left:auto;
+         border-radius:9px; background:#ff453a; color:#fff; font-size:11px; font-weight:700; flex:none }
+.punkt--tab { position:absolute; top:4px; right:calc(50% - 18px); min-width:8px; height:8px; padding:0 }
+/* ---- Untertitel-Darstellung ----------------------------------------------- */
+.ut-klein video::cue { font-size:clamp(13px, 1.9vh, 22px) }
+.ut-gross video::cue { font-size:clamp(20px, 3.6vh, 42px) }
+.ut-ohne video::cue { background:transparent; text-shadow:0 0 4px #000, 0 1px 2px #000, 0 0 10px rgba(0,0,0,.8) }
+
+/* ---- Bewegte Vorschau ----------------------------------------------------- */
+.hero-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .6s var(--ease) }
+.hero--laeuft .hero-video { opacity:1 }
+.hero-ton { position:absolute; right:40px; bottom:48px; width:40px; height:40px; z-index:3 }
+.hero-ton.an, .hk-ton.an { background:#fff !important; color:#000 !important }
+.hoverkarte { position:fixed; z-index:40; font-family:var(--font); color:var(--label); letter-spacing:-.01em; -webkit-font-smoothing:antialiased; border-radius:16px; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,.6); animation:hk .18s var(--ease) }
+@keyframes hk { from { opacity:0; transform:scale(.96) } to { opacity:1; transform:none } }
+.hoverkarte-bild { position:relative; height:180px; background:#000; overflow:hidden }
+.hoverkarte-bild .art, .hoverkarte-bild img, .hoverkarte-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover }
+.hoverkarte-video { opacity:0; transition:opacity .5s var(--ease) }
+.hoverkarte-video:not([hidden]) { opacity:1 }
+.hk-ton { position:absolute; right:10px; bottom:10px; width:34px; height:34px }
+.hoverkarte-text { padding:12px 14px 14px }
+.hoverkarte-titel { display:block; width:100%; border:0; background:none; color:var(--label); font:inherit; font-size:15px; font-weight:600; text-align:left; cursor:pointer; padding:0 0 2px }
+/* ---- Technik-Zeile -------------------------------------------------------- */
+.technik { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px }
+.tech { display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 9px; border-radius:6px; border:1px solid var(--hair); font-size:12px; font-weight:600; letter-spacing:.03em; color:var(--label) }
+.tech--gut { border-color:transparent; background:rgba(48,209,88,.16); color:#30d158 }
+.tech--blau { border-color:transparent; background:rgba(10,132,255,.18); color:#4aa3ff }
+
+/* ---- Folgen im Player ----------------------------------------------------- */
+.pl-knopf--text { width:auto; height:44px; padding:0 18px 0 14px; gap:8px; font-size:15px; font-weight:500; color:#fff; border-radius:22px }
+.spuren--folgen { width:min(460px, calc(100% - 32px)); top:84px; bottom:150px; max-height:none; display:flex; flex-direction:column }
+.spuren-kopf { display:flex; align-items:center; gap:10px; padding:8px 14px 10px 18px; flex:none }
+.folgen-liste { overflow:auto; display:flex; flex-direction:column; gap:4px; min-height:0 }
+.folge-zeile { display:flex; gap:12px; align-items:center; width:100%; padding:8px 10px; border:0; border-radius:14px; background:transparent; color:#fff; font:inherit; text-align:left; cursor:pointer }
+.folge-zeile:hover, .folge-zeile:focus-visible { background:rgba(255,255,255,.14); outline:0 }
+.folge-zeile--aktuell, .folge-zeile--aktuell:hover { background:#fff; color:#000 }
+.folge-thumb { position:relative; width:120px; height:68px; border-radius:8px; overflow:hidden; flex:none; background:#111; display:block }
+.folge-thumb .art, .folge-thumb img { width:100%; height:100%; object-fit:cover }
+@media (max-width: 600px) { .spuren--folgen { left:12px; right:12px; width:auto; top:70px; bottom:130px } .pl-knopf--text span { display:none } }
+/* Nur für Bildschirmleser */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0 }
+
+/* Offene Seitenleiste: Die Seite rückt um 156 px nach rechts, das grosse
+   Bild oben aber soll weiter bis an den linken Rand reichen — sonst steht
+   die Leiste auf einem schwarzen Streifen, und das Bild beginnt mitten
+   unter ihr. Das Bild rückt darum um denselben Betrag nach links, der
+   Text darauf bleibt, wo er war. */
+.lumen { --verschub: 0px }
+.lumen:has(.sidebar:is(.is-open,:hover,:focus-within):not(.sidebar--zu)) { --verschub: 156px }
+.hero { margin-left:calc(-120px - var(--verschub)); transition:margin-left .35s var(--ease) }
+.hero-text { left:calc(120px + var(--verschub)); transition:left .35s var(--ease) }
+@media (max-width: 860px) {
+  .hero { margin-left:calc(-92px - var(--verschub)) }
+  .hero-text { left:calc(92px + var(--verschub)) }
+}
+@media (max-width: 600px) {
+  .lumen, .lumen:has(.sidebar) { --verschub: 0px }
+  .hero { margin-left:-16px }
+  .hero-text { left:16px }
+}
+@media (prefers-reduced-motion:reduce) { .hero, .hero-text { transition:none } }
+.hero > [data-heldzurueck] { left:calc(120px + var(--verschub)); transition:left .35s var(--ease) }
+@media (max-width: 860px) { .hero > [data-heldzurueck] { left:calc(92px + var(--verschub)) } }
+/* Unter der offenen Leiste nicht abdunkeln: Dort soll das Bild durch das
+   Glas scheinen. Abgedunkelt wird erst, wo der Text steht. */
+.hero-scrim { background:
+  linear-gradient(90deg, rgba(5,5,7,.55), rgba(5,5,7,.5) calc(var(--verschub, 0px) + 120px), rgba(5,5,7,0) 65%),
+  linear-gradient(180deg, rgba(5,5,7,0) 45%, var(--bg)) }
+/* Vorher wurde unter der offenen Leiste nicht abgedunkelt, daneben aber
+   schon — das ergab einen dunklen Streifen neben der Leiste. Jetzt fällt
+   die Abdunklung von links nach rechts gleichmässig ab. */
+/* Feld mit Knopf (Wünsche, Listen): Auf dem Handy schrumpft das Feld, nicht
+   der Knopf und nicht das Plus — vorher ragte „Wünschen" aus dem Bild. */
+.sfield input { min-width:0 }
+.sfield > svg, .sfield > .btn { flex:none }
+@media (max-width: 600px) { .sfield { padding:0 8px 0 14px; gap:8px } }
+/* Karten sind Knöpfe; Knöpfe zentrieren ihren Inhalt senkrecht. Ohne
+   Jahreszeile (Serien) rutschte das Poster sonst 9 px tiefer als daneben. */
+.card { align-self:start; vertical-align:top }
+/* Die Knopfzeile (Ansehen, Merken, Favorit, Liste, Gesehen) soll auf dem
+   Desktop in eine Zeile passen; der Beschreibungstext bleibt schmal. */
+@media (min-width: 1200px) { .hero-text { max-width:860px } .hero-text .t-body { max-width:620px } }
+/* Navigation: Einträge sind Links; die allgemeine Link-Farbe beim Zeigen
+   (a:hover, blau) färbte sie ein. Hier bleibt die Schrift weiss, der
+   Hintergrund zeigt das Zeigen. */
+a.nav, a.nav:hover, a.nav:focus, a.nav:visited { color:var(--label) }
+/* … ausser in der zugeklappten Leiste: dort bleibt die Beschriftung
+   unsichtbar, auch mit Fokus — sonst schaute „Fi" unter dem Symbol hervor. */
+.lumen .sidebar--zu a.nav, .lumen .sidebar--zu a.nav:is(:hover,:focus,:visited),
+.lumen .sidebar:not(.is-open):not(:hover):not(:focus-within) a.nav { color:transparent }
+a.nav:hover:not([aria-current=page]) { background:var(--fill) }
+.datei-info + .datei-info { border-top:.5px solid var(--hair) }
+
+/* ======================================================================
+   Barrierefreiheit, Leerzustände, Segmente, heller Modus, Berührung
+   ====================================================================== */
+
+/* Zum Inhalt springen: unsichtbar, bis man mit Tab hinkommt. */
+.skip-link { position:absolute; left:16px; top:-60px; z-index:100; padding:10px 16px; border-radius:12px;
+             background:var(--bg); color:var(--label) !important; font-weight:600; font-size:15px; box-shadow:0 8px 24px rgba(0,0,0,.4) }
+.skip-link:focus { top:16px }
+.lumen h1[tabindex="-1"]:focus-visible, .lumen h1[tabindex="-1"]:focus, main:focus { outline:none }
+
+/* Hinweis über der Profilauswahl, etwa nach abgelaufener Anmeldung */
+.anmelde-hinweis { position:absolute; z-index:30; left:50%; transform:translateX(-50%);
+  top:calc(20px + env(safe-area-inset-top)); max-width:calc(100% - 32px); padding:12px 18px; border-radius:14px;
+  background:rgba(255,159,10,.16); color:var(--label); font-size:15px; text-align:center;
+  box-shadow:inset 0 0 0 1px rgba(255,159,10,.5) }
+
+/* Zurück auf der Anmeldeseite: nicht unter Notch und Statusleiste. */
+.center > [data-go="profiles"][aria-label="Zurück"] {
+  left:calc(16px + env(safe-area-inset-left)) !important; top:calc(16px + env(safe-area-inset-top)) !important }
+@media (min-width: 601px) { .center > [data-go="profiles"][aria-label="Zurück"] {
+  left:calc(32px + env(safe-area-inset-left)) !important; top:calc(32px + env(safe-area-inset-top)) !important } }
+
+/* Segmented Control: eine Spur, das gewählte Feld hell und leicht erhaben. */
+.segment { display:inline-flex; gap:2px; padding:2px; border-radius:9px; background:var(--fill); margin:10px 0 14px;
+           max-width:100%; overflow-x:auto; scrollbar-width:none }
+.segment::-webkit-scrollbar { display:none }
+.segment-knopf { flex:none; min-height:30px; padding:0 14px; border:0; border-radius:7px; background:none; cursor:pointer;
+                 font:inherit; font-size:14px; font-weight:500; color:var(--label); white-space:nowrap }
+.segment-knopf[aria-pressed=true], .segment-knopf[aria-current=page] { background:rgba(255,255,255,.2); font-weight:600;
+                 box-shadow:0 1px 3px rgba(0,0,0,.25) }
+.lumen.light .segment-knopf[aria-pressed=true], .lumen.light .segment-knopf[aria-current=page] { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04) }
+.segment-knopf:hover:not([aria-pressed=true]):not([aria-current=page]) { background:var(--fill) }
+.row .segment { margin:0 }
+
+/* Genre-Knöpfe: eine Zeile, waagerecht zu wischen — kein Umbruch. */
+.chips--rollen { display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; margin:0 0 14px; padding:2px 0; scrollbar-width:none }
+.chips--rollen .tab-pill { flex:none; white-space:nowrap; background:var(--fill) }
+.chips--rollen .tab-pill[aria-pressed=true] { background:var(--label); color:var(--bg) }
+.az-leiste { display:flex; flex-wrap:wrap; gap:2px; margin:0 0 22px }
+
+/* Leerer Zustand, wie ContentUnavailableView */
+.leer { display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px;
+        max-width:440px; margin:0 auto; padding:56px 16px }
+.leer-symbol { color:var(--label-3); margin-bottom:6px }
+.leer-titel { margin:0 }
+.leer-text { margin:0 }
+.leer-aktion { margin-top:14px; display:flex; flex-direction:column; align-items:center }
+
+/* Kacheln der Verwaltung: ohne Löcher — die letzte Zeile füllt sich. */
+.kacheln { display:flex; flex-wrap:wrap; gap:20px }
+.kacheln > * { flex:1 1 220px }
+
+/* Titelseite: Sterne gross genug zum Treffen, der Klecks für „faul" */
+.stern { width:44px !important; height:44px !important; font-size:26px; line-height:1; border-radius:12px }
+.stern:hover { background:var(--fill) }
+.rt { white-space:nowrap }
+.rt-faul { color:#a0703c; vertical-align:-2px }
+.tech--leise { color:var(--label-2) }
+.herz-knopf[aria-pressed=true] { color:#ff375f }
+.lumen.light .hero .herz-knopf[aria-pressed=true] { color:#ff6482 }
+/* Ohne linke Spalte (keine Beschreibung, keine Besetzung) rückt die
+   rechte nach links — bei 1920 px stand sie sonst allein am Rand. */
+.detail-spalten { max-width:1400px }
+.detail-spalten--schmal { grid-template-columns:minmax(0, 560px) }
+.detail-spalten--schmal > :first-child:empty { display:none }
+.technik-klapp > summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px; padding-bottom:6px }
+.technik-klapp > summary::-webkit-details-marker { display:none }
+.technik-klapp > summary::before { content:""; width:7px; height:7px; border-right:2px solid currentColor; border-bottom:2px solid currentColor;
+  transform:rotate(-45deg); transition:transform .2s var(--ease); margin-right:2px }
+.technik-klapp[open] > summary::before { transform:rotate(45deg) }
+
+/* „…"-Menü der Verwaltung auf der Titelseite */
+.mehr-huelle { position:relative }
+.mehr-menue { position:absolute; z-index:30; left:0; top:calc(100% + 6px); min-width:240px; padding:6px; border-radius:14px;
+              display:flex; flex-direction:column }
+.mehr-menue[hidden] { display:none }
+.mehr-eintrag { text-align:left; border:0; background:none; color:var(--label); font:inherit; font-size:15px;
+                padding:10px 12px; border-radius:9px; cursor:pointer; min-height:40px }
+.mehr-eintrag:hover, .mehr-eintrag:focus-visible { background:var(--fill-2); outline:none }
+
+/* Knopf, der aussieht wie ein Link („Meintest du …?") */
+.link-knopf { border:0; background:none; padding:0; font:inherit; color:var(--accent); cursor:pointer; font-weight:600 }
+.link-knopf:hover { text-decoration:underline }
+
+/* Geräte unter „Ich" */
+.dieses-geraet { font-size:11px; font-weight:600; padding:2px 7px; border-radius:6px; background:var(--fill-2); color:var(--label-2) }
+
+/* Rückfrage-Dialog. .lumen setzt position:fixed und inset:0 — hier
+   zurück auf ein Feld in der Mitte. */
+dialog.lumen.rueckfrage { position:fixed; inset:0; margin:auto; width:min(380px, calc(100vw - 32px)); height:fit-content;
+  border:0; border-radius:22px; padding:22px; background:rgba(28,28,32,.98); color:var(--label); box-shadow:0 20px 60px rgba(0,0,0,.5) }
+dialog.lumen.rueckfrage.light { background:#fff }
+dialog.rueckfrage::backdrop { background:rgba(0,0,0,.45) }
+/* Dialoge mit eigener Karte (Rechte bestätigen, PIN setzen): Farbe nach
+   Darstellung und eine Abdunklung dahinter wie bei den anderen. */
+dialog.lumen.dialog-karte { background:rgba(28,28,32,.96); box-shadow:0 20px 60px rgba(0,0,0,.5) }
+dialog.lumen.dialog-karte.light { background:#fff; box-shadow:0 20px 60px rgba(0,0,0,.2) }
+dialog.dialog-karte::backdrop { background:rgba(0,0,0,.45) }
+/* Eingebaute Bedienelemente folgen der Darstellung. */
+:root { color-scheme:dark }
+html.hell, .lumen.light, dialog.lumen.light { color-scheme:light }
+.rueckfrage-knoepfe { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap }
+.btn-pill--rot { background:var(--rot); color:#fff }
+/* Konten: PIN zurücksetzen und Rechte rechts, gemeinsam umbrechend. */
+.konto-knoepfe { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; margin-left:auto; flex:none; max-width:100% }
+.btn-pill--stark { background:var(--label); color:var(--bg) }
+
+/* Abzeichen „Neu": dezent und einfarbig, kein Rot auf jedem Poster. */
+.abz--neu { background:rgba(0,0,0,.6); color:#fff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.35) }
+
+/* Startseite: das grosse Bild führt zum Film. Ohne Bild kein leerer Riese. */
+.hero[data-vorschau-hero] { cursor:pointer }
+.hero--ohnebild { height:auto !important; min-height:300px !important }
+
+/* Raster mit tausenden Karten: was ausserhalb des Bildes liegt, zeichnet
+   der Browser nicht — die Karten bleiben im DOM, kosten aber kaum etwas. */
+.grid > .card { content-visibility:auto; contain-intrinsic-size:auto 168px auto 310px }
+
+/* Tab „Ich": Profilbild so gross wie die Symbole daneben, damit die
+   Beschriftung auf derselben Höhe steht. */
+.tab .avatar { --av:22px !important; font-size:9px }
+
+/* ---- Heller Modus ------------------------------------------------------ */
+/* Gruppierte Listen wie auf dem iPhone: weisse Zellen auf #f2f2f7. */
+.lumen.light .group, .lumen.light .surface { background:#fff }
+.lumen.light .group .group, .lumen.light .group .surface { background:var(--fill) }
+/* Im grossen Bild bleibt alles hell auf dunkel — wie beim Apple TV —,
+   auch im hellen Modus. Darum gelten dort die dunklen Farben. */
+.lumen.light .hero { --label:rgba(255,255,255,.96); --label-2:rgba(235,235,245,.82); --label-3:rgba(235,235,245,.62);
+  --fill:rgba(255,255,255,.16); --fill-2:rgba(255,255,255,.24); --hair:rgba(255,255,255,.28); --accent:#4aa3ff; --fokus:#fff; color:var(--label) }
+.lumen.light .hero .btn-primary { background:#fff; color:#000 }
+.lumen.light .hero .btn-pill--fill { -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px) }
+.lumen.light .hero-scrim { background:
+  linear-gradient(90deg, rgba(0,0,0,.6), rgba(0,0,0,.45) calc(var(--verschub, 0px) + 120px), rgba(0,0,0,0) 70%),
+  linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.6)) }
+/* Statt einer harten Kante läuft das Bild unten weich in den Hintergrund aus. */
+.lumen.light .hero > :is(.art-img, .art-none, .hero-scrim, .hero-video) {
+  -webkit-mask-image:linear-gradient(180deg, #000 calc(100% - 40px), transparent);
+          mask-image:linear-gradient(180deg, #000 calc(100% - 40px), transparent) }
+.lumen.light .hero--ohnebild { --label:rgba(0,0,0,.88); --label-2:rgba(60,60,67,.84); --fill:rgba(120,120,128,.12); color:var(--label) }
+.lumen.light .hero--ohnebild .hero-scrim { display:none }
+.lumen.light .hero--ohnebild .btn-primary { background:#1d1d1f; color:#fff }
+.lumen.light .orow-link:hover, .lumen.light button.row:hover { background:rgba(0,0,0,.04) }
+
+/* ---- Finger statt Maus: Tippflächen mindestens 44 px ------------------- */
+@media (pointer: coarse) {
+  .tab-pill, .segment-knopf, .btn-pill, .mehr-eintrag { min-height:44px }
+  .btn-round.sm { width:44px; height:44px }
+  .az-leiste { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; margin-right:-16px; padding-right:16px }
+  .az-leiste::-webkit-scrollbar { display:none }
+  .az-leiste .tab-pill { flex:none; min-width:44px !important }
+  .switch::after { inset:-8px -6px }
+  .hero-ton, .hk-ton { width:44px !important; height:44px !important }
+  .chips .tab-pill { min-height:44px }
+}
+.lumen.light .pcard:hover .avatar, .lumen.light .pcard:focus-visible .avatar { box-shadow:0 0 0 4px var(--fokus) }
+.reihe-karte:focus-visible .reihe-blatt--0 { box-shadow:0 0 0 3px var(--fokus), 0 10px 26px rgba(0,0,0,.45) }
+/* Der Filmtitel im grossen Bild der Startseite ist h2 (die Seite heisst
+   „Startseite"), soll aber aussehen wie der Titel auf der Titelseite. */
+h2.t-hero { font-size:2em; font-weight:700; margin:.67em 0 }
+/* Hinweise mit Schloss vor dem Text: das Symbol schrumpft nicht und
+   steht auf Höhe der ersten Zeile. */
+p.t-sub > svg:first-child, p.t-caption > svg:first-child { flex:none }
+p.t-sub[style*="flex-start"] > svg:first-child { margin-top:.2em }
+/* Waagerecht scrollende Leisten: Verlauf am Rand, wo es weitergeht
+   (data-rand setzt app.js). */
+:is(.segment, .chips--rollen, .mu-reiter, .az-leiste)[data-rand="rechts"] {
+  -webkit-mask-image:linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(to right, #000 calc(100% - 36px), transparent) }
+:is(.segment, .chips--rollen, .mu-reiter, .az-leiste)[data-rand="links"] {
+  -webkit-mask-image:linear-gradient(to left, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(to left, #000 calc(100% - 36px), transparent) }
+:is(.segment, .chips--rollen, .mu-reiter, .az-leiste)[data-rand="beide"] {
+  -webkit-mask-image:linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image:linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent) }
+.field[hidden] { display:none }

@@ -1,0 +1,381 @@
+// Lumen — eigener Streaming-Server fürs Heimnetz.
+// Copyright (C) 2026 Die Lumen-Autoren
+//
+// Veröffentlicht unter der GNU Affero General Public License v3.0.
+// Der vollständige Text steht in der Datei LICENSE.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+package api
+
+// Arbeit im Hintergrund: Vorschaubilder beim Spulen (Trickplay) und
+// Untertitel, die schon fertig daliegen, bevor jemand auf Play drückt.
+//
+// Beides liest eine Datei einmal ganz — bei einer Bibliothek von einigen
+// Terabyte ist das viel Arbeit. Darum:
+//
+//   - immer nur eine Datei zugleich, mit niedrigster Rechen- und
+//     Plattenpriorität (stream.Niedrig);
+//   - Wiedergabe hat Vorrang: Wird gerade umgewandelt, wartet der
+//     Durchgang;
+//   - es gibt kein „Vorziehen" der Datei, die gerade jemand abspielt:
+//     Früher kam sie beim ersten Abruf der Vorschaubilder sofort dran —
+//     und der Zeitstempel des neu angelegten Ordners (ctime, auch nach
+//     zeitlos) verriet, wann jemand welchen Film angefangen hat. Jetzt
+//     entsteht alles nur im Durchgang über die ganze Mediathek, in fester
+//     Reihenfolge, unabhängig davon, was jemand schaut;
+//   - was fertig ist, liegt auf der Platte und wird nie neu gemacht;
+//   - was zu einer Datei gehört, die es nicht mehr gibt, wird weggeräumt.
+//
+// Datenschutz: Die Dateien tragen keine Zeit (zeitlos) und Namen ohne
+// Titel, nur die Kennung der Datei. Untertitel, die erst beim Abspielen
+// entstehen, kommen nicht auf die Platte, sondern in den Arbeitsspeicher
+// (spuren.go) — sonst hielte ihr Anlegen fest, wann jemand den Film
+// angefangen hat.
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"lumen/internal/store"
+	"lumen/internal/stream"
+)
+
+type hintergrundZustand struct {
+	mu        sync.Mutex
+	wecken    chan struct{}
+	fehl      map[string]time.Time // wo es nicht ging: eine Weile nicht wieder
+	gestartet bool
+}
+
+var hg = &hintergrundZustand{wecken: make(chan struct{}, 1), fehl: map[string]time.Time{}}
+
+// hintergrundAnstossen weckt den Durchgang (nach einem Scan, nach dem
+// Einschalten in der Verwaltung).
+func (s *Server) hintergrundAnstossen() {
+	select {
+	case hg.wecken <- struct{}{}:
+	default:
+	}
+}
+
+// hintergrundArbeit läuft, bis ctx endet.
+func (s *Server) hintergrundArbeit(ctx context.Context) {
+	hg.mu.Lock()
+	if hg.gestartet {
+		hg.mu.Unlock()
+		return
+	}
+	hg.gestartet = true
+	hg.mu.Unlock()
+
+	// Nicht gleich beim Start: erst soll der Server erreichbar sein, und
+	// ein Scan kommt womöglich ohnehin gleich.
+	select {
+	case <-time.After(2 * time.Minute):
+	case <-hg.wecken:
+	case <-ctx.Done():
+		return
+	}
+	tick := time.NewTicker(6 * time.Hour)
+	defer tick.Stop()
+	for {
+		s.hintergrundDurchgang(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		case <-hg.wecken:
+		}
+	}
+}
+
+// hintergrundDurchgang geht einmal über alle Dateien.
+func (s *Server) hintergrundDurchgang(ctx context.Context) {
+	s.vorratAufraeumen(ctx)
+	ids, err := s.st.VorhandeneDateien(ctx)
+	if err != nil {
+		return
+	}
+	for i := 0; ; {
+		if ctx.Err() != nil {
+			return
+		}
+		if i >= len(ids) {
+			return
+		}
+		// Wiedergabe hat Vorrang: warten, bis keine Umwandlung mehr läuft.
+		if s.live != nil && s.live.Load().Transcodes > 0 {
+			select {
+			case <-time.After(30 * time.Second):
+			case <-hg.wecken:
+			case <-ctx.Done():
+				return
+			}
+			continue
+		}
+		s.dateiVorbereiten(ctx, ids[i])
+		i++
+	}
+}
+
+// dateiVorbereiten macht, was für eine Datei noch fehlt.
+func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
+	hg.mu.Lock()
+	if wann, ok := hg.fehl[fileID]; ok && time.Since(wann) < 24*time.Hour {
+		hg.mu.Unlock()
+		return
+	}
+	hg.mu.Unlock()
+	f, err := s.st.File(ctx, fileID)
+	if err != nil || f.Missing || f.DurationMS <= 0 {
+		return
+	}
+	if _, err := os.Stat(f.Path); err != nil {
+		return
+	}
+	var fehler []string
+	if s.trickplayAn(ctx) && !trickplayFertig(s.trickplayOrdner(fileID)) {
+		d, _ := s.ff.Feinmessung(ctx, f.Path)
+		if _, err := s.ff.TrickplayErzeugen(ctx, f.Path, f.DurationMS, d, s.trickplayOrdner(fileID)); err != nil {
+			if ctx.Err() == nil {
+				fehler = append(fehler, "Vorschaubilder: "+stream.Bereinigt(err.Error()))
+			}
+		} else {
+			zeitlosAlles(s.trickplayOrdner(fileID))
+			zeitlos(s.trickplayWurzel())
+		}
+	}
+	if s.untertitelVorbereitenAn(ctx) {
+		if err := s.untertitelVorbereiten(ctx, f); err != nil && ctx.Err() == nil {
+			fehler = append(fehler, "Untertitel: "+stream.Bereinigt(err.Error()))
+		}
+	}
+	if len(fehler) > 0 {
+		hg.mu.Lock()
+		hg.fehl[fileID] = time.Now()
+		hg.mu.Unlock()
+		// Ins Protokoll: dass es nicht ging, nicht bei welchem Film.
+		s.st.Log(ctx, "warn", "vorbereiten", "Eine Datei liess sich nicht vorbereiten — "+strings.Join(fehler, "; "))
+	}
+}
+
+func zeitlosAlles(ordner string) {
+	eintraege, _ := os.ReadDir(ordner)
+	for _, e := range eintraege {
+		zeitlos(filepath.Join(ordner, e.Name()))
+	}
+	zeitlos(ordner)
+}
+
+// ---------------------------------------------------------------- Trickplay
+
+func (s *Server) trickplayWurzel() string { return filepath.Join(s.dataDir, "trickplay") }
+
+func (s *Server) trickplayOrdner(fileID string) string {
+	return filepath.Join(s.trickplayWurzel(), fileID)
+}
+
+func trickplayFertig(ordner string) bool {
+	_, err := os.Stat(filepath.Join(ordner, "info.json"))
+	return err == nil
+}
+
+// gueltigeKennung: Kennungen landen in Pfaden — nur Buchstaben, Ziffern,
+// Unterstrich und Bindestrich.
+func gueltigeKennung(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// trickplay: GET /stream/{fileId}/trickplay.
+//
+//	200 — fertig: Masse und die Adressen der Blätter
+//	202 {"code":"wird_erstellt"} — angestossen, später noch einmal fragen
+//	404 — gibt es nicht (ausgeschaltet, kein FFmpeg, ging nicht)
+func (s *Server) trickplay(w http.ResponseWriter, r *http.Request) {
+	f, _, err := s.fileForRequest(r)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	if !gueltigeKennung(f.ID) {
+		fail(w, http.StatusNotFound, "nicht gefunden")
+		return
+	}
+	if !s.trickplayAn(r.Context()) {
+		streamFehler(w, http.StatusNotFound, "trickplay_aus", "vorschaubilder sind ausgeschaltet")
+		return
+	}
+	if info, err := stream.TrickplayLesen(s.trickplayOrdner(f.ID)); err == nil {
+		blaetter := make([]string, info.Blaetter)
+		for i := range blaetter {
+			blaetter[i] = fmt.Sprintf("/api/v1/stream/%s/trickplay/%d.jpg", f.ID, i)
+		}
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		ok(w, map[string]any{"intervall": info.Intervall, "breite": info.Breite, "hoehe": info.Hoehe,
+			"spalten": info.Spalten, "zeilen": info.Zeilen, "bilder": info.Bilder, "blaetter": blaetter})
+		return
+	}
+	if s.ff == nil || !s.ff.Available() || f.Missing || f.DurationMS <= 0 {
+		streamFehler(w, http.StatusNotFound, "keine_vorschaubilder", "für diese datei gibt es keine vorschaubilder")
+		return
+	}
+	hg.mu.Lock()
+	wann, gescheitert := hg.fehl[f.ID]
+	hg.mu.Unlock()
+	if gescheitert && time.Since(wann) < 24*time.Hour {
+		streamFehler(w, http.StatusNotFound, "keine_vorschaubilder", "für diese datei gibt es keine vorschaubilder")
+		return
+	}
+	// Noch nicht fertig: Der Durchgang im Hintergrund kommt von selbst
+	// dazu (siehe oben — kein Vorziehen). Die Apps fragen später noch
+	// einmal, wie bisher.
+	w.Header().Set("Retry-After", "60")
+	writeJSON(w, http.StatusAccepted, map[string]string{"code": "wird_erstellt"})
+}
+
+// trickplayBlatt: GET /stream/{fileId}/trickplay/{blatt} — ein Blatt.
+func (s *Server) trickplayBlatt(w http.ResponseWriter, r *http.Request) {
+	f, _, err := s.fileForRequest(r)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	name := r.PathValue("blatt")
+	n, err := strconv.Atoi(strings.TrimSuffix(name, ".jpg"))
+	if err != nil || n < 0 || !strings.HasSuffix(name, ".jpg") || !gueltigeKennung(f.ID) {
+		fail(w, http.StatusNotFound, "nicht gefunden")
+		return
+	}
+	pfad := filepath.Join(s.trickplayOrdner(f.ID), strconv.Itoa(n)+".jpg")
+	fh, err := os.Open(pfad)
+	if err != nil {
+		fail(w, http.StatusNotFound, "nicht gefunden")
+		return
+	}
+	defer fh.Close()
+	info, err := fh.Stat()
+	if err != nil {
+		fail(w, http.StatusNotFound, "nicht gefunden")
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	http.ServeContent(w, r, "", info.ModTime(), fh)
+}
+
+// ---------------------------------------------------------------- Untertitel
+
+func (s *Server) untertitelVorrat() string { return filepath.Join(s.dataDir, "untertitel-vorrat") }
+
+func (s *Server) vorratPfad(fileID string, idx int) string {
+	return filepath.Join(s.untertitelVorrat(), fmt.Sprintf("%s-%d.vtt", fileID, idx))
+}
+
+// untertitelVorbereiten zieht alle eingebetteten Text-Untertitel einer
+// Datei in einem Durchgang heraus und legt sie ab.
+func (s *Server) untertitelVorbereiten(ctx context.Context, f *store.MediaFile) error {
+	if !s.st.SpurenGelesen(ctx, f.ID) {
+		s.spurenNachmessen(ctx, f)
+	}
+	spuren, err := s.st.Spuren(ctx, f.ID)
+	if err != nil {
+		return err
+	}
+	var fehlt []store.Track
+	for _, t := range spuren {
+		if t.Kind == "subtitle" && !t.Bitmap && !t.External {
+			if _, err := os.Stat(s.vorratPfad(f.ID, t.Index)); err != nil {
+				fehlt = append(fehlt, t)
+			}
+		}
+	}
+	if len(fehlt) == 0 || !gueltigeKennung(f.ID) {
+		return nil
+	}
+	inhalte, err := s.textUntertitelZiehen(ctx, f, fehlt, true, nil)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.untertitelVorrat(), 0o700); err != nil {
+		return err
+	}
+	for idx, b := range inhalte {
+		ziel := s.vorratPfad(f.ID, idx)
+		tmp := ziel + ".tmp"
+		if err := os.WriteFile(tmp, b, 0o600); err != nil {
+			return err
+		}
+		zeitlos(tmp)
+		if err := os.Rename(tmp, ziel); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// vorratAufraeumen wirft weg, was zu Dateien gehört, die es nicht mehr gibt.
+func (s *Server) vorratAufraeumen(ctx context.Context) {
+	if eintraege, err := os.ReadDir(s.trickplayWurzel()); err == nil {
+		for _, e := range eintraege {
+			name := e.Name()
+			if strings.HasPrefix(name, ".entsteht-") {
+				_ = os.RemoveAll(filepath.Join(s.trickplayWurzel(), name))
+				continue
+			}
+			if !s.st.DateiGibtEs(ctx, name) {
+				_ = os.RemoveAll(filepath.Join(s.trickplayWurzel(), name))
+			}
+		}
+	}
+	// Geholte Untertitel (<datei>.<sprache>….srt) zu verschwundenen Dateien.
+	if eintraege, err := os.ReadDir(s.geholtOrdner()); err == nil {
+		weg := false
+		for _, e := range eintraege {
+			name := e.Name()
+			datei, _, _ := strings.Cut(name, ".")
+			if datei == "" || !s.st.DateiGibtEs(ctx, datei) {
+				_ = os.Remove(filepath.Join(s.geholtOrdner(), name))
+				weg = true
+			}
+		}
+		if weg {
+			zeitlos(s.geholtOrdner())
+		}
+	}
+	if eintraege, err := os.ReadDir(s.untertitelVorrat()); err == nil {
+		for _, e := range eintraege {
+			name := e.Name()
+			i := strings.LastIndex(name, "-")
+			if strings.HasSuffix(name, ".tmp") || i <= 0 || !s.st.DateiGibtEs(ctx, name[:i]) {
+				_ = os.Remove(filepath.Join(s.untertitelVorrat(), name))
+			}
+		}
+	}
+}
+
+// vorratZaehlen: wie viel vorbereitet daliegt — für die Verwaltung.
+func (s *Server) vorratZaehlen() map[string]int {
+	n := func(ordner string) int {
+		e, err := os.ReadDir(ordner)
+		if err != nil {
+			return 0
+		}
+		return len(e)
+	}
+	return map[string]int{"trickplay": n(s.trickplayWurzel()), "untertitel": n(s.untertitelVorrat())}
+}

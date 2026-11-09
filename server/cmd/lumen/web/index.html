@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  Lumen — eigener Streaming-Server fürs Heimnetz.
+  Copyright (C) 2026 Die Lumen-Autoren
+
+  Veröffentlicht unter der GNU Affero General Public License v3.0.
+  Der vollständige Text steht in der Datei LICENSE.
+  SPDX-License-Identifier: AGPL-3.0-only
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050507">
+<title>Lumen</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="lumen.webmanifest">
+<link rel="stylesheet" href="ds-shared.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="mediathek.css">
+</head>
+<body>
+  <!-- Kein aria-live auf #app: sonst läse der Bildschirmleser jede neue
+       Seite ganz vor. Meldungen haben ihre eigene, kleine Live-Region. -->
+  <div class="lumen" id="app"></div>
+  <div id="meldungen" aria-live="polite"></div>
+  <!-- Ohne JavaScript gibt es keine Übersetzung – darum hier beide
+       Sprachen nebeneinander (sprache: fest). -->
+  <noscript>
+    <p style="color:#fff;font-family:system-ui;padding:40px">
+      Lumen braucht JavaScript. Bitte im Browser einschalten.<br>
+      <span lang="en">Lumen needs JavaScript. Please turn it on in your browser.</span></p>
+  </noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

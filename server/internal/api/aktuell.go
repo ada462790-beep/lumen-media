@@ -1,0 +1,168 @@
+// Lumen — eigener Streaming-Server fürs Heimnetz.
+// Copyright (C) 2026 Die Lumen-Autoren
+//
+// Veröffentlicht unter der GNU Affero General Public License v3.0.
+// Der vollständige Text steht in der Datei LICENSE.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+package api
+
+import (
+	"context"
+	"net/http"
+	"strings"
+
+	"lumen/internal/meta"
+	"lumen/internal/store"
+)
+
+// Was der Besitzer braucht, um die Mediathek aktuell zu halten: das
+// Intervall je Bibliothek, Metadaten neu holen — für alles, für eine
+// Bibliothek, für einen Titel —, und einem Titel von Hand den richtigen
+// Eintrag der Quelle zuweisen, wenn Lumen danebenlag.
+
+func (s *Server) adminLibrarySetzen(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		IntervalMin *int   `json:"intervalMin"`
+		ScanAt      string `json:"scanAt"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if in.IntervalMin != nil {
+		if err := s.st.SetScanInterval(r.Context(), r.PathValue("id"), *in.IntervalMin, strings.TrimSpace(in.ScanAt)); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// adminMetadatenNeu stellt die Titel einer Bibliothek (oder aller) auf
+// „ausstehend" und holt sie neu. Von Hand zugewiesene bleiben.
+func (s *Server) adminMetadatenNeu(w http.ResponseWriter, r *http.Request) {
+	if s.meta == nil || !s.meta.Ready() {
+		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		return
+	}
+	lib := r.URL.Query().Get("library")
+	n, err := s.st.MetadatenZuruecksetzen(r.Context(), lib, "")
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	ctx := s.hintergrund()
+	go func() {
+		// In Häppchen zu 50: Dazwischen kommt ein „Prüfen" dran. Vorher
+		// hielt das Neuladen von ein paar tausend Titeln die Sperre eine
+		// Stunde lang, und jeder Scan wartete still.
+		for ctx.Err() == nil {
+			var res *meta.Result
+			var err error
+			s.Nacheinander(ctx, func(ctx context.Context) {
+				res, err = s.meta.ResolvePending(ctx, lib, 50)
+			})
+			if err != nil {
+				s.log.Error("metadaten", "err", err)
+				break
+			}
+			if res == nil || res.Matched+res.Unmatched == 0 {
+				break
+			}
+		}
+		s.Nacheinander(ctx, s.ReihenBilden)
+	}()
+	ok(w, map[string]any{"status": "läuft", "titel": n})
+}
+
+// adminTitelNeu holt die Metadaten eines Titels noch einmal.
+func (s *Server) adminTitelNeu(w http.ResponseWriter, r *http.Request) {
+	if s.meta == nil || !s.meta.Ready() {
+		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		return
+	}
+	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	if err := s.meta.NeuLaden(r.Context(), it); err != nil {
+		failErr(w, err)
+		return
+	}
+	s.ReihenBilden(r.Context())
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// adminTitelSuchen nennt, was die Quelle zu einem Suchwort findet.
+func (s *Server) adminTitelSuchen(w http.ResponseWriter, r *http.Request) {
+	if s.meta == nil || !s.meta.Ready() {
+		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		return
+	}
+	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	suche := suchEingabe(r)
+	if suche == "" {
+		suche = it.Title
+	}
+	jahr := qInt(r, "year", 0)
+	cands, err := s.meta.Kandidaten(r.Context(), it.Kind, suche, jahr)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	type treffer struct {
+		SourceID string `json:"sourceId"`
+		Title    string `json:"title"`
+		Original string `json:"original,omitempty"`
+		Year     int    `json:"year,omitempty"`
+		Overview string `json:"overview,omitempty"`
+		Poster   string `json:"poster,omitempty"`
+	}
+	out := []treffer{}
+	for _, c := range cands {
+		out = append(out, treffer{c.SourceID, c.Title, c.Original, c.Year, c.Overview, c.PosterURL})
+	}
+	ok(w, out)
+}
+
+// adminTitelZuweisen hängt einen Titel an den gewählten Eintrag.
+func (s *Server) adminTitelZuweisen(w http.ResponseWriter, r *http.Request) {
+	if s.meta == nil || !s.meta.Ready() {
+		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		return
+	}
+	var in struct {
+		SourceID string `json:"sourceId"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if strings.TrimSpace(in.SourceID) == "" {
+		fail(w, http.StatusBadRequest, "welcher eintrag? die kennung fehlt")
+		return
+	}
+	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	if it.Kind != "movie" && it.Kind != "series" {
+		fail(w, http.StatusBadRequest, "zuweisen geht für filme und serien")
+		return
+	}
+	if err := s.meta.Zuweisen(r.Context(), it, in.SourceID); err != nil {
+		failErr(w, err)
+		return
+	}
+	s.ReihenBilden(r.Context())
+	neu, _ := s.st.Item(r.Context(), it.ID)
+	if neu == nil {
+		neu = &store.Item{}
+	}
+	ok(w, neu)
+}

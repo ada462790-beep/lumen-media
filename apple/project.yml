@@ -1,0 +1,118 @@
+# Erzeugt das Xcode-Projekt aus diesem Ordner.
+#
+#     brew install xcodegen
+#     cd apple && xcodegen && open Lumen.xcodeproj
+#
+# Warum nicht gleich ein fertiges .xcodeproj: dessen Innenleben ist eine
+# lange Liste zufälliger Kennungen, die sich von Hand kaum fehlerfrei
+# schreiben lässt. Diese Datei hier kann man lesen und ändern.
+
+name: Lumen
+options:
+  bundleIdPrefix: org.lumen
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+    tvOS: "17.0"
+  createIntermediateGroups: true
+  # Die Texte im Code sind Schweizer Hochdeutsch („ss"). Die übrigen
+  # Sprachen — Deutschland (ß), Österreich (ß, „Jänner"), Englisch USA und
+  # Grossbritannien — stehen in Sprache/Localizable.xcstrings. Welche
+  # davon gilt, entscheidet das Profil auf dem Server (siehe LumenKit/Sprache).
+  developmentLanguage: de-CH
+
+packages:
+  LumenKit:
+    path: LumenKit
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""        # eigene Team-Kennung eintragen
+    CODE_SIGN_STYLE: Automatic
+    # „targeted" statt „complete": AVFoundation und UIKit sind noch nicht
+    # vollständig auf die strenge Prüfung umgestellt, und eine Flut von
+    # Meldungen aus fremdem Code hilft niemandem.
+    SWIFT_STRICT_CONCURRENCY: targeted
+
+targets:
+
+  # iPhone, iPad und Mac aus einem Ziel.
+  Lumen:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - Lumen
+      # Die String-Kataloge teilen sich App und Apple TV. Ausdrücklich als
+      # Ressourcen, damit XcodeGen sie nicht zu übersetzen versucht.
+      - path: Sprache
+        buildPhase: resources
+    dependencies:
+      - package: LumenKit
+    settings:
+      base:
+        PRODUCT_NAME: Lumen
+        # Die Symbole liegen in Lumen/Assets.xcassets und entstehen aus
+        # tools/symbol_bauen.py — nicht von Hand bearbeiten, sondern das
+        # Programm ändern und neu laufen lassen.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PRODUCT_BUNDLE_IDENTIFIER: org.lumen.app
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: >-
+          UIInterfaceOrientationPortrait
+          UIInterfaceOrientationLandscapeLeft
+          UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        # Lumen läuft zu Hause, oft ohne Zertifikat. Ohne diese Ausnahme
+        # verweigert iOS die Verbindung zum eigenen Server im Heimnetz.
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+    info:
+      path: Lumen/Info.plist
+      properties:
+        CFBundleDisplayName: Lumen
+        CFBundleDevelopmentRegion: de-CH
+        # Die Sprachen der App. Deutschland und die USA heissen „de" und
+        # „en", wie Apple es hält; die Schweiz ist die Quellsprache.
+        CFBundleLocalizations: [de-CH, de, de-AT, en, en-GB]
+        # Kein fest eingestelltes „Dark" mehr: die App wählt selbst —
+        # dunkel, hell oder wie das Gerät (Einstellungen → Darstellung).
+        NSLocalNetworkUsageDescription: >-
+          Lumen sucht deinen Server im Heimnetz.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UIBackgroundModes: [audio]
+        CFBundleURLTypes:
+          - CFBundleURLName: org.lumen.invite
+            CFBundleURLSchemes: [lumen]
+
+  # Apple TV.
+  LumenTV:
+    type: application
+    supportedDestinations: [tvOS]
+    sources:
+      - LumenTV
+      - path: Lumen/Design
+      - path: Sprache
+        buildPhase: resources
+    dependencies:
+      - package: LumenKit
+    settings:
+      base:
+        PRODUCT_NAME: Lumen
+        PRODUCT_BUNDLE_IDENTIFIER: org.lumen.app.tv
+        # Auf dem Fernseher heisst das Symbol anders: es ist ein Bündel aus
+        # Ebenen, die sich beim Darüberfahren gegeneinander verschieben,
+        # plus den breiten Streifen für ganz oben.
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+    info:
+      path: LumenTV/Info.plist
+      properties:
+        CFBundleDisplayName: Lumen
+        CFBundleDevelopmentRegion: de-CH
+        CFBundleLocalizations: [de-CH, de, de-AT, en, en-GB]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UIBackgroundModes: [audio]

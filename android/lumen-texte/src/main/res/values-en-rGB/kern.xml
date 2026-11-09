@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumen — eigener Streaming-Server fürs Heimnetz. AGPL-3.0-only.
+     English (United Kingdom): nur, was vom amerikanischen Englisch
+     (values-en) abweicht — Schreibung, Anführungszeichen, Datum. -->
+<resources>
+    <string name="kern_muster_tag_monat">d MMM</string>
+    <string name="kern_muster_datum">dd/MM/yyyy</string>
+    <string name="kern_zitat">‘%1$s’</string>
+    <string name="kern_zertifikat_unbekannt">This server identifies itself with a certificate this device doesn’t know — normal if the server issued it itself. Enter the fingerprint the server shows under ‘Remote Access’.</string>
+    <string name="kern_reihe_lumen">recognised by Lumen from the titles</string>
+    <string name="kern_sort_neueste_filme">Newest Films</string>
+    <string name="kern_sort_aelteste_filme">Oldest Films</string>
+    <plurals name="kern_filme_anzahl">
+        <item quantity="one">%1$d film</item>
+        <item quantity="other">%1$d films</item>
+    </plurals>
+</resources>

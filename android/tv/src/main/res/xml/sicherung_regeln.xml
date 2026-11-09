@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Was Android sichern oder auf ein neues Gerät mitnehmen darf: nichts aus
+  den Einstellungen. Dort liegen die Geräte-Tokens — verschlüsselt mit einem
+  Schlüssel, der im Keystore dieses Geräts bleibt. Auf einem anderen Gerät
+  wäre die Datei unlesbar (und früher, im Notfall-Klartext, ein offener
+  Schlüssel zum Server). Heruntergeladene Filme gehören auch nicht in eine
+  Sicherung: zu gross, und sie sind jederzeit neu zu holen.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

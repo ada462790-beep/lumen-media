@@ -1,0 +1,15 @@
+# Der Bauplan liegt in server/, gebaut wird aber von hier aus — damit LICENSE
+# mit ins Abbild kommt. Darum stehen die Ausnahmen hier und tragen den
+# Pfad server/ davor.
+server/dist/
+server/lumen
+server/lumen-data/
+server/*.db
+server/*.db-wal
+server/*.db-shm
+
+# Die Apps gehören nicht ins Server-Abbild.
+apple/
+android/
+tools/
+.github/

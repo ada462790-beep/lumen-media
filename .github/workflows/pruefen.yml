@@ -1,0 +1,138 @@
+# Bei jedem Hochschieben prüfen, nicht erst bei einer Veröffentlichung.
+#
+# Der Ablauf in release.yml läuft nur bei einem Versions-Tag. Das ist zu
+# spät: ein Fehler, der erst beim Veröffentlichen auffällt, steckt dann
+# schon seit Wochen drin. Dieser hier läuft bei jedem Stand.
+
+name: Prüfen
+
+on:
+  # Nur main und Pull-Requests: Jeder Arbeitszweig einzeln kostete
+  # Actions-Minuten, und die sind bei einem privaten Repo begrenzt.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Hier wird nur gelesen und geprüft.
+permissions:
+  contents: read
+
+jobs:
+
+  server:
+    name: Server — bauen, prüfen, testen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with: { go-version: '1.24' }
+
+      # Ohne FFmpeg fallen die Tests zum Umwandeln stillschweigend aus —
+      # und genau die sind die aufwendigsten.
+      - name: FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      # Lumen hört auf 8097. 8096 gehört Emby und Jellyfin; wer Lumen
+      # daneben betreibt, bekäme sonst einen Container, der nicht startet.
+      # Diese Prüfung hält jede Stelle auf 8097 — Server, Abbild, Apps,
+      # Beispiele —, damit es nicht irgendwo wieder hineinrutscht.
+      - name: Anschluss 8097
+        working-directory: .
+        run: |
+          treffer=$(grep -rnI '8096' --exclude-dir=vendor --exclude-dir=.git . \
+                    | grep -v '1809[0-9]' | grep -v 'pruefen.yml' || true)
+          if [ -n "$treffer" ]; then
+            echo "Hier steht noch 8096 — Lumen hört auf 8097:"; echo "$treffer"
+            exit 1
+          fi
+
+      - name: Formatierung
+        working-directory: server
+        run: |
+          nicht_formatiert=$(gofmt -l . | grep -v '^vendor/' || true)
+          if [ -n "$nicht_formatiert" ]; then
+            echo "Diese Dateien sind nicht formatiert:"; echo "$nicht_formatiert"
+            exit 1
+          fi
+
+      - name: Bauen
+        working-directory: server
+        run: go build -mod=vendor ./...
+
+      - name: Prüfen
+        working-directory: server
+        run: go vet -mod=vendor ./...
+
+      - name: Tests
+        working-directory: server
+        run: go test -mod=vendor ./...
+
+      # Beide Programme müssen sich auch ohne C bauen lassen — der
+      # Vermittler läuft auf fremden Maschinen, und dort will man keine
+      # Abhängigkeit von deren Bibliotheken.
+      - name: Vermittler ohne cgo
+        working-directory: server
+        run: CGO_ENABLED=0 go build -mod=vendor -o /tmp/lumen-relay ./cmd/lumen-relay
+
+  schnittstelle:
+    name: App und Server gegeneinander halten
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Prüfer
+        run: python3 tools/schnittstelle_pruefen.py
+
+      # Jeder Text der Web-App steht in allen Sprachen, nichts Deutsches
+      # ist mehr fest verdrahtet, und jedes ß-Wort hat seinen Eintrag für
+      # Deutschland und Österreich (server/cmd/lumen/web/sprachen/BEGRIFFE.md).
+      - name: Übersetzungen
+        run: python3 tools/sprache_pruefen.py
+
+      # Jede Ansicht der Web-App hat eine Adresse (F5, Lesezeichen).
+      - name: Adressen
+        run: python3 tools/adressen_pruefen.py
+
+  lizenz:
+    name: Lizenz vollständig
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Die AGPL verlangt, dass der Lizenztext jede Kopie begleitet und
+      # dass erkennbar ist, unter welcher Lizenz eine Datei steht. Eine
+      # neue Datei ohne Kopfzeile rutscht sonst unbemerkt durch.
+      - name: Kopfzeilen
+        run: |
+          python3 - <<'PY'
+          import os, sys
+          exts = {'.go', '.swift', '.kt', '.kts', '.js', '.css', '.html',
+                  '.py', '.sql'}
+          ohne = []
+          gesamt = 0
+          for wurzel, ordner, dateien in os.walk('.'):
+              ordner[:] = [o for o in ordner
+                           if o not in ('vendor', '.git', 'build', '.gradle',
+                                        'node_modules')]
+              for d in dateien:
+                  if os.path.splitext(d)[1] in exts:
+                      pfad = os.path.join(wurzel, d)
+                      gesamt += 1
+                      kopf = open(pfad, encoding='utf-8', errors='replace').read(900)
+                      if 'SPDX-License-Identifier' not in kopf:
+                          ohne.append(pfad)
+          print(f"{gesamt - len(ohne)} von {gesamt} Quelldateien tragen die Kopfzeile")
+          if ohne:
+              print("Ohne Kopfzeile:")
+              for p in ohne:
+                  print(" ", p)
+              sys.exit(1)
+          PY
+
+      - name: LICENSE vorhanden und vollständig
+        run: |
+          test -f LICENSE || { echo "LICENSE fehlt"; exit 1; }
+          grep -q "GNU AFFERO GENERAL PUBLIC LICENSE" LICENSE \
+            || { echo "LICENSE ist nicht die AGPL"; exit 1; }
+          grep -q "Remote Network Interaction" LICENSE \
+            || { echo "§13 fehlt — das ist der Paragraph, wegen dem wir die AGPL haben"; exit 1; }

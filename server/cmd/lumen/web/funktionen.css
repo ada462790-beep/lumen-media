@@ -1,0 +1,129 @@
+/*
+  Lumen — eigener Streaming-Server fürs Heimnetz.
+  Copyright (C) 2026 Die Lumen-Autoren
+
+  Veröffentlicht unter der GNU Affero General Public License v3.0.
+  Der vollständige Text steht in der Datei LICENSE.
+  SPDX-License-Identifier: AGPL-3.0-only
+
+  Fenster für Handbearbeitung, Sammlungen, Übernahme und Untertitel
+  (fenster.js). Farben und Masse aus ds-shared.css; hier nur, was die
+  Fenster selbst brauchen.
+*/
+
+dialog.fenster {
+  /* .lumen setzt position:relative — für einen Dialog in der Mitte
+     zurückholen. */
+  position: fixed; inset: 0; margin: auto; height: fit-content;
+  max-height: calc(100vh - 48px); width: min(560px, calc(100vw - 32px));
+  box-sizing: border-box; padding: 0; border: 0; border-radius: 22px;
+  color: var(--label); background: rgba(28, 28, 32, .97);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+dialog.fenster:not([open]) { display: none }
+dialog.fenster [hidden] { display: none !important }
+dialog.fenster.light { background: rgba(250, 250, 252, .98) }
+dialog.fenster--breit { width: min(860px, calc(100vw - 32px)) }
+dialog.fenster::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px) }
+
+.fenster-kopf { display: flex; align-items: center; gap: 12px; padding: 18px 18px 10px 24px; flex: none }
+.fenster-titel { margin: 0; flex: 1; min-width: 0; font-size: 20px; font-weight: 700; letter-spacing: -.02em }
+.fenster-zu { width: 36px; height: 36px; border-radius: 50%; background: var(--fill); color: var(--label-2) }
+.fenster-zu:hover { color: var(--label) }
+.fenster-inhalt { padding: 6px 24px 22px; overflow-y: auto; flex: 1; min-height: 0 }
+.fenster-fuss { display: flex; gap: 10px; justify-content: flex-end; align-items: center; flex-wrap: wrap;
+  margin: 18px -24px 0; position: sticky; bottom: -22px; padding: 14px 24px 22px;
+  background: rgb(28, 28, 32); box-shadow: 0 -.5px 0 var(--hair) }
+dialog.fenster.light .fenster-fuss { background: rgb(250, 250, 252) }
+.fenster-laden { display: flex; align-items: center; gap: 12px; padding: 30px 0; color: var(--label-2) }
+.fenster-meldung { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.45 }
+.fenster-meldung--fehler { background: rgba(255, 69, 58, .14); color: #ff7b72 }
+.fenster-meldung--gut { background: rgba(48, 209, 88, .14); color: #4cd964 }
+.fenster-meldung--info { background: var(--fill); color: var(--label-2) }
+
+/* Auf dem Handy füllt das Fenster den Bildschirm. */
+@media (max-width: 640px) {
+  dialog.fenster, dialog.fenster--breit { width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0 }
+}
+
+/* Felder */
+.ff { display: flex; flex-direction: column; gap: 6px; margin-top: 14px }
+.ff-kopf { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--label-2) }
+.ff-kopf label { flex: 1 }
+.ff :is(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea) {
+  width: 100%; box-sizing: border-box; border: 0; outline: 0; border-radius: 12px;
+  background: var(--fill); color: var(--label); font: inherit; font-size: 15px; padding: 10px 12px;
+}
+.ff textarea { min-height: 120px; resize: vertical; line-height: 1.5 }
+.ff :is(input, select, textarea):focus-visible { box-shadow: 0 0 0 2px var(--accent) inset }
+.ff-reihe { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 14px }
+.ff-hinweis { font-size: 12px; color: var(--label-3); line-height: 1.4 }
+.ff--geaendert :is(input, textarea, select) { box-shadow: 0 0 0 1.5px rgba(10, 132, 255, .55) inset }
+
+/* Schloss: gesperrtes Feld. Ein Knopf — Klick hebt die Sperre auf. */
+.schloss { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px;
+  border: 0; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  background: rgba(255, 159, 10, .16); color: #ffb340 }
+.schloss:hover, .schloss:focus-visible { background: rgba(255, 159, 10, .28); outline: none }
+.schloss[aria-busy=true] { opacity: .6 }
+
+/* Genres als Marken */
+.marken { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px; border-radius: 12px; background: var(--fill); min-height: 44px; box-sizing: border-box }
+.marke { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px 0 10px; border-radius: 999px; background: var(--fill-2); font-size: 13px }
+.marke button { border: 0; background: none; color: var(--label-2); cursor: pointer; padding: 2px; display: flex; border-radius: 50% }
+.marke button:hover { color: var(--label) }
+.marken input { flex: 1; min-width: 120px; border: 0 !important; background: none !important; padding: 4px 6px !important; box-shadow: none !important }
+
+/* Bilder im Editor */
+.bilder { display: grid; grid-template-columns: 150px minmax(0, 320px); gap: 18px; margin-top: 16px; align-items: stretch }
+.bilder--breit { grid-template-columns: minmax(0, 320px) }
+.bild-feld { display: flex; flex-direction: column; gap: 8px }
+.bild-vorschau { position: relative; border-radius: 10px; overflow: hidden; background: var(--fill); display: flex; align-items: center; justify-content: center; color: var(--label-3); font-size: 12px }
+.bild-vorschau img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover }
+.bild-vorschau--hoch { aspect-ratio: 2/3 }
+.bild-vorschau--quer { aspect-ratio: 16/9 }
+/* Unter Poster und Hintergrund gleich: untereinander, unten bündig. */
+.bild-knoepfe { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: auto }
+.bild-knoepfe .btn { height: 30px; font-size: 13px; white-space: nowrap; padding: 0 12px }
+.datei-wahl { position: relative; overflow: hidden }
+.datei-wahl input { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+
+/* Besetzung */
+.leute { display: flex; flex-direction: column; gap: 6px }
+.leute-zeile { display: grid; grid-template-columns: 1fr 1fr 32px; gap: 6px; align-items: center }
+.leute-zeile button { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--fill); color: var(--label-2); cursor: pointer; display: flex; align-items: center; justify-content: center }
+
+/* Wahl-Listen (Sammlungen, Treffer) */
+.wahl { display: flex; flex-direction: column; border-radius: 14px; background: var(--fill); overflow: hidden }
+.wahl-zeile { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border: 0; background: none;
+  color: var(--label); font: inherit; text-align: left; cursor: pointer; width: 100% }
+.wahl-zeile + .wahl-zeile { box-shadow: inset 0 .5px 0 var(--hair) }
+.wahl-zeile:hover, .wahl-zeile:focus-visible { background: rgba(255, 255, 255, .05); outline: none }
+.wahl-zeile[disabled] { cursor: default; opacity: .6 }
+.wahl-leer { padding: 16px; color: var(--label-2); font-size: 14px }
+.abz-klein { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--fill-2); color: var(--label-2) }
+.abz-klein--gut { background: rgba(48, 209, 88, .16); color: #4cd964 }
+.abz-klein--warn { background: rgba(255, 159, 10, .16); color: #ffb340 }
+
+/* Sprachen als Pillen zum An- und Abwählen */
+.pillen { display: flex; gap: 6px; flex-wrap: wrap }
+.pillen .tab-pill { height: 30px; font-size: 13px; background: var(--fill) }
+
+/* Übernahme: Zahlen der Vorschau */
+.zahlen { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 16px }
+.zahl { padding: 14px; border-radius: 14px; background: var(--fill) }
+.zahl b { display: block; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums }
+.zahl span { font-size: 13px; color: var(--label-2) }
+.wahl-check { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 15px; cursor: pointer }
+.wahl-check input { width: 18px; height: 18px; accent-color: var(--accent) }
+.fehlend { max-height: 180px; overflow: auto; margin: 8px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--fill); font-size: 13px; color: var(--label-2); line-height: 1.6 }
+.schritte { display: flex; gap: 6px; margin: 2px 0 10px }
+.schritte span { flex: 1; height: 3px; border-radius: 2px; background: var(--fill-2) }
+.schritte span.an { background: var(--accent) }
+
+/* Reiter „Filmreihen | Sammlungen" */
+.sammlung-stapel-bild { position: absolute; inset: 0; border-radius: 12px; overflow: hidden }
+.sammlung-zeile-knoepfe { display: flex; gap: 4px; flex: none }
+.sammlung-zeile-knoepfe .btn { width: 30px; height: 30px; border-radius: 50%; background: var(--fill) }
+.durch-regel { font-size: 11px; color: var(--label-3) }

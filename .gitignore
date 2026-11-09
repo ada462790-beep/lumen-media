@@ -1,0 +1,37 @@
+# Gebautes
+server/lumen
+server/lumen-relay
+server/dist/
+server/lumen-data/
+*.apk
+*.aab
+
+# Abhängigkeiten, die beim Bauen geholt werden
+#
+# server/vendor/ steht hier bewusst NICHT: der Server baut mit
+# `-mod=vendor`, damit ein Bau ohne Netz auskommt und niemand darauf
+# angewiesen ist, dass eine fremde Stelle in zehn Jahren noch antwortet.
+# Dann muss der Ordner aber mitkommen — sonst scheitert jeder Bau, der
+# nicht auf diesem einen Rechner läuft. Genau das ist passiert.
+android/.gradle/
+android/build/
+android/*/build/
+android/local.properties
+apple/Lumen.xcodeproj/
+apple/.build/
+apple/**/.swiftpm/
+
+# Daten und Zwischenspeicher
+*.db
+*.db-wal
+*.db-shm
+eigenes-zertifikat.pem
+eigener-schluessel.pem
+
+# Betriebssystem und Werkzeuge
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.idea/
+.vscode/

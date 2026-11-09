@@ -1,0 +1,26 @@
+{
+  "der server wandelt gerade schon {n} filme um — mehr schafft er nicht gleichzeitig. versuch es gleich nochmal, oder schau auf einem gerät, das die datei direkt abspielen kann": {
+    "one": "der server wandelt gerade schon {n} film um — mehr schafft er nicht gleichzeitig. versuch es gleich nochmal, oder schau auf einem gerät, das die datei direkt abspielen kann",
+    "other": "der server wandelt gerade schon {n} filme um — mehr schafft er nicht gleichzeitig. versuch es gleich nochmal, oder schau auf einem gerät, das die datei direkt abspielen kann"
+  },
+  "du schaust schon auf {n} Geräten — in spätestens 2 Minuten ist wieder ein Platz frei, oder beende eine Wiedergabe unter Ich → Geräte": {
+    "one": "du schaust schon auf {n} Gerät — in spätestens 2 Minuten ist wieder ein Platz frei, oder beende eine Wiedergabe unter Ich → Geräte",
+    "other": "du schaust schon auf {n} Geräten — in spätestens 2 Minuten ist wieder ein Platz frei, oder beende eine Wiedergabe unter Ich → Geräte"
+  },
+  "zu viele Versuche — bitte {n} Minuten warten": {
+    "one": "zu viele Versuche — bitte {n} Minute warten",
+    "other": "zu viele Versuche — bitte {n} Minuten warten"
+  },
+  "zu viele Versuche — bitte {n} Sekunden warten": {
+    "one": "zu viele Versuche — bitte {n} Sekunde warten",
+    "other": "zu viele Versuche — bitte {n} Sekunden warten"
+  },
+  "{n} neue Folgen": {
+    "one": "{n} neue Folge",
+    "other": "{n} neue Folgen"
+  },
+  "{n} neue Titel": {
+    "one": "{n} neuer Titel",
+    "other": "{n} neue Titel"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumen — eigener Streaming-Server fürs Heimnetz. AGPL-3.0-only.
+     Deutsch (Österreich): nur, was von values-de abweicht. Monatsnamen
+     („Jänner") kommen aus der Locale, nicht von hier. -->
+<resources>
+    <string name="kern_tausenderzeichen">\u00A0</string>
+</resources>

@@ -1,0 +1,43 @@
+{
+  "sourceLanguage" : "de-CH",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "shouldTranslate" : false
+    },
+    "NSLocalNetworkUsageDescription" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen sucht deinen Server im Heimnetz."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen sucht deinen Server im Heimnetz."
+          }
+        },
+        "de-CH" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen sucht deinen Server im Heimnetz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen looks for your server on your home network."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen looks for your server on your home network."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

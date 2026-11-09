@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumen — eigener Streaming-Server fürs Heimnetz. AGPL-3.0-only.
+     English (United States). Gilt auch für jedes andere Englisch ausser
+     dem britischen (values-en-rGB). -->
+<resources>
+    <string name="sprache_titel">Language</string>
+    <string name="sprache_wie_server">Same as Server</string>
+    <string name="sprache_wie_server_mit">Same as Server (%1$s)</string>
+    <string name="sprache_hinweis">Applies to your profile — in the browser and in the apps.</string>
+</resources>

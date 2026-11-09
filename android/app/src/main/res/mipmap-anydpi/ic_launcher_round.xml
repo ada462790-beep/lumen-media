@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Das adaptive Symbol: Vordergrund und Hintergrund getrennt, damit
+     Android es rund, eckig oder tropfenförmig beschneiden kann, je
+     nachdem, was der Startbildschirm vorgibt.
+
+     Beide Ebenen liegen als PNG in den mipmap-Ordnern; erzeugt von
+     tools/symbol_bauen.py. Der Vordergrund hat ringsum Luft, weil davon
+     je nach Gerät fast ein Drittel weggeschnitten wird. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

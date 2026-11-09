@@ -1,0 +1,53 @@
+# Der Vermittler für den Fernzugriff.
+#
+# Diese Datei gehört NICHT auf das Gerät, auf dem Lumen läuft, sondern auf
+# eine Maschine mit öffentlicher Adresse — der billigste Mietserver genügt.
+# Der Vermittler braucht weder Platz noch Rechenleistung: er reicht Bytes
+# durch, mehr nicht.
+#
+#   1. Ein Geheimnis erzeugen:  head -c 32 /dev/urandom | base64
+#   2. In eine Datei .env daneben schreiben: LUMEN_RELAY_SECRET=…
+#   3. Anmelden, solange das Abbild privat ist (Token classic, nur
+#      „read:packages"):  docker login ghcr.io -u <github-name>
+#   4. docker compose -f docker-compose.relay.yml up -d
+#   5. docker compose -f docker-compose.relay.yml logs
+#      Dort steht der Fingerabdruck.
+#   6. Geheimnis und Fingerabdruck in die Einstellungen des Heimservers
+#
+# Was dieser Dienst nicht kann: hineinsehen. Lumen verschlüsselt selbst,
+# der Schlüssel bleibt zu Hause. Wer den Vermittler betreibt, sieht, dass
+# jemand da war und wie viele Bytes es waren — nicht wer, und nicht was.
+
+services:
+  lumen-relay:
+    # Das fertige Abbild — dafür genügt diese eine Datei auf dem
+    # Mietserver, kein Quelltext. Statt „latest" geht auch eine feste
+    # Fassung wie „0.1.20"; am besten dieselbe wie zu Hause.
+    image: ghcr.io/ada462790-beep/lumen-media-relay:latest
+    pull_policy: always
+    # Oder selbst bauen (braucht den Quelltext, also Zugriff auf das
+    # Repository; dann image und pull_policy oben weglassen):
+    # build:
+    #   context: .
+    #   dockerfile: server/Dockerfile.relay
+    container_name: lumen-relay
+    restart: unless-stopped
+    ports:
+      # Hier kommen die Besucher an. Diese Adresse gibst du weiter.
+      - "8443:8443"
+      # Hier meldet sich dein Heimserver an.
+      - "8444:8444"
+    volumes:
+      # Nur das Zertifikat. Geht es verloren, ändert sich der
+      # Fingerabdruck — und der Heimserver verbindet sich nicht mehr,
+      # bis der neue eingetragen ist. Genau so soll es sein.
+      - lumen-relay-daten:/daten
+    environment:
+      - TZ=Europe/Zurich
+      - LUMEN_RELAY_SECRET=${LUMEN_RELAY_SECRET:?Bitte ein Geheimnis setzen}
+      # Eine kleine Statusseite, nur im Container-Netz erreichbar.
+      # Von aussen sichtbar machen nur, wenn du das wirklich willst.
+      # - LUMEN_RELAY_STATUS=:8445
+
+volumes:
+  lumen-relay-daten:
