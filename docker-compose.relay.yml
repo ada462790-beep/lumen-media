@@ -7,12 +7,11 @@
 #
 #   1. Ein Geheimnis erzeugen:  head -c 32 /dev/urandom | base64
 #   2. In eine Datei .env daneben schreiben: LUMEN_RELAY_SECRET=…
-#   3. Anmelden, solange das Abbild privat ist (Token classic, nur
-#      „read:packages"):  docker login ghcr.io -u <github-name>
-#   4. docker compose -f docker-compose.relay.yml up -d
-#   5. docker compose -f docker-compose.relay.yml logs
+#   3. docker compose -f docker-compose.relay.yml up -d
+#      (das Abbild ist öffentlich, eine Anmeldung bei ghcr.io braucht es nicht)
+#   4. docker compose -f docker-compose.relay.yml logs
 #      Dort steht der Fingerabdruck.
-#   6. Geheimnis und Fingerabdruck in die Einstellungen des Heimservers
+#   5. Geheimnis und Fingerabdruck in die Einstellungen des Heimservers
 #
 # Was dieser Dienst nicht kann: hineinsehen. Lumen verschlüsselt selbst,
 # der Schlüssel bleibt zu Hause. Wer den Vermittler betreibt, sieht, dass

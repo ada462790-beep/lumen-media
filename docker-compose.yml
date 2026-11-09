@@ -4,13 +4,13 @@
 # der README.md, Abschnitt „Synology Schritt für Schritt":
 #
 #   1. In der File Station den Ordner /volume1/docker/lumen/daten anlegen
-#   2. Container Manager › Registry: ghcr.io mit einem GitHub-Token
-#      eintragen (das Abbild ist privat, siehe unten bei „image")
-#   3. Container Manager › Projekt › Erstellen: Pfad /volume1/docker/lumen,
+#   2. Container Manager › Projekt › Erstellen: Pfad /volume1/docker/lumen,
 #      „docker-compose.yml erstellen" und diesen Text einfügen
-#   4. Unten bei „volumes" den Pfad zu deinen Filmen und bei PUID/PGID
+#   3. Unten bei „volumes" den Pfad zu deinen Filmen und bei PUID/PGID
 #      deinen Benutzer prüfen, dann „Fertig"
-#   5. Im Browser http://<adresse-des-nas>:8097 öffnen
+#   4. Im Browser http://<adresse-des-nas>:8097 öffnen
+#
+# Das Abbild ist öffentlich — keine Anmeldung bei ghcr.io, kein Token.
 #
 # Anderswo (Linux, Unraid …): diese Datei in einen Ordner legen, die Pfade
 # anpassen und dort „docker compose up -d".
@@ -30,11 +30,9 @@ services:
     # Das fertige Abbild. Statt „latest" geht auch eine feste Fassung,
     # etwa „0.1.4" oder „v0.1.4" — beide Schreibweisen gibt es.
     #
-    # Das Abbild liegt (noch) privat auf ghcr.io. Ohne Anmeldung meldet
-    # Docker „denied" oder „unauthorized". Nötig ist ein GitHub-Token
-    # (classic) mit nur dem Bereich „read:packages" — eingetragen im
-    # Container Manager unter Registry oder einmal per
-    # „docker login ghcr.io". Siehe README.md.
+    # Wer noch „ghcr.io/ada462790-beep/lumen" (ohne „-media") stehen hat:
+    # diese Zeile übernehmen, die Daten bleiben. Siehe README.md,
+    # „Umzug vom alten Abbild".
     image: ghcr.io/ada462790-beep/lumen-media:latest
     # Bei jedem Start/Erstellen nachsehen, ob es ein neueres Abbild gibt.
     # Ohne das nimmt Docker (und der Container Manager auf dem NAS) das
@@ -128,10 +126,9 @@ services:
       # Fassung liegt — Lumen zeigt die Adresse dann in den Einstellungen an.
       # - LUMEN_SOURCE_URL=https://git.example.org/meine-lumen-fassung
 
-      # Damit die Verwaltung sagen kann, ob es eine neue Fassung gibt —
-      # nur nötig, solange das Repository auf GitHub privat ist. (Ein
-      # anderes Token als das für ghcr.io: es muss die Veröffentlichungen
-      # lesen dürfen, siehe README.md.)
+      # Optional: Die Verwaltung fragt GitHub ohne Token, ob es eine neue
+      # Fassung gibt. Ein Token braucht es nur, wenn die Updates aus einem
+      # privaten Repository kommen (etwa einem eigenen privaten Fork).
       # - LUMEN_GITHUB_TOKEN=github_pat_…
 
       # Zusätzlich verschlüsselt (HTTPS) auf 8920 hören — oben den Port
@@ -182,28 +179,21 @@ services:
   # einkommentieren. Läuft gerade eine Wiedergabe, bricht sie ab — darum
   # nachts um 4.
   #
-  # Wichtig, solange das Abbild privat ist: Watchtower braucht eigene
-  # Zugangsdaten für ghcr.io. Ohne sie scheitert das nächtliche Update
-  # still — es steht nur im Protokoll von Watchtower. Zwei Wege:
-  #   a) REPO_USER und REPO_PASS (GitHub-Name und Token mit
-  #      „read:packages") unten einkommentieren, oder
-  #   b) nach einem „docker login ghcr.io" die Datei config.json
-  #      einhängen (auf einem Synology liegt sie nach dem Login als root
-  #      unter /root/.docker/config.json).
+  # Das Abbild ist öffentlich, Watchtower braucht keine Zugangsdaten. Nur
+  # wer ein eigenes, privates Abbild nutzt, trägt unten REPO_USER und
+  # REPO_PASS (GitHub-Name und Token mit „read:packages") ein.
   # watchtower:
   #   image: containrrr/watchtower
   #   container_name: lumen-watchtower
   #   restart: unless-stopped
   #   volumes:
   #     - /var/run/docker.sock:/var/run/docker.sock
-  #     # Weg b):
-  #     # - /root/.docker/config.json:/config.json:ro
   #   environment:
   #     - TZ=Europe/Zurich
   #     - WATCHTOWER_SCHEDULE=0 0 4 * * *
   #     - WATCHTOWER_LABEL_ENABLE=true
   #     - WATCHTOWER_CLEANUP=true
-  #     # Weg a):
+  #     # Nur für ein privates Abbild:
   #     # - REPO_USER=dein-github-name
   #     # - REPO_PASS=ghp_…
 

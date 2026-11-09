@@ -1,10 +1,28 @@
 # Lumen
 
-Dein eigener Streaming-Dienst für zu Hause. Filme und Serien von der eigenen
-Platte, auf jedem Gerät im Haus — mit einer Oberfläche, die aussieht, als
-hätte Apple sie gebaut.
+*[English summary](README.en.md)*
 
-**Der Unterschied zu allen anderen: Lumen zeigt dir nicht, wer was schaut.**
+Dein eigener Streaming-Dienst für zu Hause. Filme, Serien, Musik und Fotos
+von der eigenen Platte, auf jedem Gerät im Haus — ruhig, aufgeräumt, mit
+einer Oberfläche, die aussieht, als hätte Apple sie gebaut. Lumen ist
+freie Software (AGPL-3.0), läuft als ein einziger Docker-Container auf dem
+NAS und braucht weder Konto noch Abo noch Cloud.
+
+- **Ein Server, alle Geräte:** Browser, iPhone, iPad, Mac, Apple TV,
+  Android, Android TV und Fire TV.
+- **Erkennt deine Sammlung:** Filme, Serien, Filmreihen, mehrere Fassungen
+  eines Films, Filme in Teilen, NFO-Dateien und lokale Poster.
+- **Spielt alles ab:** direkt, wenn das Gerät die Datei kann, sonst
+  umgewandelt — auf Wunsch mit Hardware-Beschleunigung. Untertitel,
+  Tonspuren, Vorspann überspringen, Weiterschauen, Downloads.
+- **Für jede Person:** eigene Profile, Merkliste, Bewertungen, geteilte
+  Listen, Kinderprofile mit Altersgrenze.
+- **Von unterwegs ohne Portfreigabe:** über einen kleinen Vermittler, der
+  selbst nicht hineinsehen kann.
+- **Umzug aus Emby oder Jellyfin:** Gesehen-Haken, Fortschritte und
+  Favoriten kommen mit.
+
+**Das Versprechen: Die Verwaltung sieht nie, wer was schaut.**
 Du betreibst den Server, du bestimmst, wer dazugehört und was er sehen darf.
 Aber wann jemand etwas anschaut, wie lange und was — das bleibt bei ihm.
 Lumen speichert keinen Verlauf, die Verwaltung zeigt es nicht, und es gibt
@@ -24,9 +42,10 @@ Lumen läuft am einfachsten als Docker-Container. Das fertige Abbild gibt es
 für **amd64** (Intel/AMD) und **arm64** (64-Bit-ARM) — siehe
 [Welches NAS passt](#welches-nas-passt).
 
-> **Das Abbild ist zurzeit privat.** Wer es herunterladen will, meldet
-> sich bei `ghcr.io` mit einem GitHub-Token an — wie, steht in Schritt 2.
-> Ohne Anmeldung meldet Docker `denied` oder `unauthorized`.
+Das Abbild ist öffentlich: **`ghcr.io/ada462790-beep/lumen-media`**. Keine
+Anmeldung bei ghcr.io, kein Token — die mitgelieferte
+[`docker-compose.yml`](docker-compose.yml) genügt. Wer Lumen schon mit dem
+alten Abbild betreibt: siehe [Umzug vom alten Abbild](#umzug-vom-alten-abbild).
 
 ### Synology Schritt für Schritt (Container Manager, ohne SSH)
 
@@ -42,22 +61,7 @@ anlegen) den Ordner `lumen` und darin `daten` anlegen:
 /volume1/docker/lumen/daten    Datenbank, Poster, tägliche Sicherung
 ```
 
-**2. Bei ghcr.io anmelden.** Zuerst ein Token holen: auf GitHub unter
-*Settings › Developer settings › Personal access tokens › Tokens (classic)
-› Generate new token (classic)*. Als Bereich **nur `read:packages`**
-ankreuzen, sonst nichts; ein Ablaufdatum ist eine gute Idee. Das Token
-gehört in keine Datei, die du weitergibst.
-
-Dann im **Container Manager › Registry › Einstellungen › Hinzufügen**:
-
-| Feld | Eintrag |
-|---|---|
-| Registry-Name | `ghcr` |
-| Registry-URL | `https://ghcr.io` |
-| Benutzername | dein GitHub-Name |
-| Passwort | das Token |
-
-**3. Projekt erstellen.** *Container Manager › Projekt › Erstellen*:
+**2. Projekt erstellen.** *Container Manager › Projekt › Erstellen*:
 Projektname `lumen`, Pfad `/docker/lumen`, Quelle *docker-compose.yml
 erstellen*, und den Inhalt der [`docker-compose.yml`](docker-compose.yml)
 aus diesem Repository hineinkopieren. Darin prüfen:
@@ -71,13 +75,13 @@ aus diesem Repository hineinkopieren. Darin prüfen:
 Ein Webportal über Web Station braucht es nicht. *Fertig* — der Container
 Manager lädt das Abbild und startet Lumen.
 
-**4. Firewall.** Ist die Firewall des NAS an (*Systemsteuerung › Sicherheit
+**3. Firewall.** Ist die Firewall des NAS an (*Systemsteuerung › Sicherheit
 › Firewall*), unter *Regeln bearbeiten* eine Regel anlegen: Port
 **8097/TCP**, Quelle **nur dein Heimnetz** (etwa `192.168.1.0/24`),
 *Zulassen*. Wer HTTPS auf 8920 nutzt, gibt diesen Port genauso frei — auch
 nur fürs Heimnetz.
 
-**5. Öffnen.** `http://<adresse-des-nas>:8097` im Browser. Beim ersten Start
+**4. Öffnen.** `http://<adresse-des-nas>:8097` im Browser. Beim ersten Start
 legst du dich als Besitzer an und sagst Lumen, wo die Filme liegen: unter
 „Durchsuchen" stehen die Ordner, die in der `docker-compose.yml` bei
 `volumes` freigegeben sind, ganz oben.
@@ -88,39 +92,25 @@ neue Abbild; die Daten im Ordner `daten` bleiben. Alte, nicht mehr
 benutzte Abbilder kann man unter *Image* löschen. Von selbst, jede Nacht:
 siehe [Watchtower](#updates-von-selbst-watchtower).
 
-#### Wenn „denied" oder „unauthorized" erscheint
+#### Wenn das Abbild nicht lädt
 
-Dann darf Docker das Abbild nicht laden. Der Reihe nach:
-
-1. **Token prüfen:** Bereich `read:packages` angekreuzt? Nicht abgelaufen?
-   Benutzername = GitHub-Name (nicht die E-Mail)? Ein *fine-grained* Token
-   geht für ghcr.io nicht — es muss *classic* sein.
-2. **Zugriff aufs Paket:** Wer nicht selbst Besitzer ist, braucht Zugriff
-   auf das Paket `lumen` — den gibt der Besitzer auf GitHub unter
-   *Packages › lumen › Package settings › Manage access*.
-3. **Anmeldung direkt beim Docker des NAS.** Manche Fassungen des Container
-   Managers nehmen die Registry-Einstellung beim Erstellen eines Projekts
-   nicht mit. Dann einmal so anmelden — ohne SSH über *Systemsteuerung ›
-   Aufgabenplaner › Erstellen › Geplante Aufgabe › Benutzerdefiniertes
-   Skript*, Benutzer **root**, Skript:
-
-   ```bash
-   echo "DEIN_TOKEN" | /usr/local/bin/docker login ghcr.io -u DEIN_GITHUB_NAME --password-stdin
-   ```
-
-   Aufgabe einmal ausführen (*Ausführen*), danach **die Aufgabe löschen**,
-   damit das Token nicht in der Aufgabenliste stehen bleibt. Mit SSH geht
-   dasselbe direkt: `sudo docker login ghcr.io -u DEIN_GITHUB_NAME`.
-   Die Anmeldung landet in `/root/.docker/config.json` und gilt dann auch
-   für Watchtower (siehe unten).
-4. Dann im Projekt erneut *Erstellen*.
+- **Name prüfen:** Es heisst `ghcr.io/ada462790-beep/lumen-media:latest` —
+  mit `-media`. Das alte Abbild ohne `-media` gibt es nicht öffentlich
+  (siehe [Umzug](#umzug-vom-alten-abbild)).
+- **„denied" oder „unauthorized"** heisst bei einem öffentlichen Abbild
+  meist: Der Name ist falsch geschrieben, oder im Container Manager ist
+  unter *Registry* noch eine alte Anmeldung mit abgelaufenem Token für
+  `ghcr.io` eingetragen. Die Anmeldung entfernen, dann neu *Erstellen*.
+- **Eigenes, privates Abbild** (etwa aus einem privaten Fork): Dann braucht
+  Docker eine Anmeldung bei ghcr.io mit einem Token (classic) mit nur dem
+  Bereich `read:packages` — im Container Manager unter *Registry* oder per
+  `sudo docker login ghcr.io -u DEIN_GITHUB_NAME`.
 
 ### Kurzweg per SSH (Synology, Linux, jedes NAS)
 
 ```bash
 sudo mkdir -p /volume1/docker/lumen/daten && cd /volume1/docker/lumen
 # docker-compose.yml aus diesem Repository hierher kopieren, Pfade anpassen
-sudo docker login ghcr.io -u DEIN_GITHUB_NAME     # Token als Passwort
 sudo docker compose up -d
 ```
 
@@ -134,10 +124,51 @@ Aktualisieren: `sudo docker compose pull && sudo docker compose up -d`.
 - **Unraid:** über das Plugin *Docker Compose Manager* mit derselben Datei,
   oder im Terminal wie beim Kurzweg. Üblich sind `PUID=99`, `PGID=100`,
   Daten unter `/mnt/user/appdata/lumen:/data`, Medien etwa
-  `/mnt/user/Filme:/mnt/user/Filme:rw`. Anmelden bei ghcr.io im Terminal
-  mit `docker login ghcr.io`.
+  `/mnt/user/Filme:/mnt/user/Filme:rw`.
 - **Ohne Docker:** siehe [unten](#ohne-docker) — eine Datei, auch für
   32-Bit-ARM.
+
+### Umzug vom alten Abbild
+
+Lumen lag früher unter `ghcr.io/ada462790-beep/lumen` und war privat. Neue
+Fassungen erscheinen nur noch unter dem öffentlichen
+`ghcr.io/ada462790-beep/lumen-media`. Für eine bestehende Installation ist
+das eine einzige Zeile — **die Daten bleiben erhalten**, denn sie liegen im
+Datenordner (oder im Volume), nicht im Abbild.
+
+1. In der `docker-compose.yml` die Zeile
+
+   ```yaml
+   image: ghcr.io/ada462790-beep/lumen:latest
+   ```
+
+   ersetzen durch
+
+   ```yaml
+   image: ghcr.io/ada462790-beep/lumen-media:latest
+   ```
+
+   Sonst nichts ändern — vor allem nicht die Zeilen bei `volumes`. Auf
+   einem Synology: *Container Manager › Projekt › lumen › Stoppen*, dann
+   *YAML-Konfiguration* bearbeiten (oder die Datei in der File Station
+   unter `/docker/lumen` öffnen).
+2. Neu starten: im Container Manager *Projekt › lumen › Aktion ›
+   Erstellen*; per SSH `sudo docker compose pull && sudo docker compose up -d`.
+3. Aufräumen, wenn alles läuft: Die Anmeldung bei ghcr.io (Container
+   Manager › *Registry*, oder `sudo docker logout ghcr.io`), die
+   Zugangsdaten bei Watchtower (`REPO_USER`/`REPO_PASS` oder die
+   eingehängte `config.json`) und `LUMEN_GITHUB_TOKEN` braucht es nicht
+   mehr. Das alte Abbild kann unter *Image* weg.
+
+**Vermittler:** auf dem Mietserver in der `docker-compose.relay.yml`
+genauso `ghcr.io/ada462790-beep/lumen-relay` durch
+`ghcr.io/ada462790-beep/lumen-media-relay` ersetzen und neu starten. Das
+Zertifikat und damit der Fingerabdruck bleiben.
+
+**Ohne Docker:** einmal das Paket von der
+[Veröffentlichungsseite](https://github.com/ada462790-beep/lumen-media/releases)
+holen und wie gewohnt einsetzen. Ab dann sieht die Verwaltung dort nach
+neuen Fassungen — ohne Token.
 
 ### Welches NAS passt
 
@@ -212,15 +243,10 @@ nimmt den auskommentierten Dienst `watchtower` aus der
 `docker-compose.yml` (und bei `lumen` die zwei `labels`-Zeilen). Läuft
 gerade eine Wiedergabe, bricht sie ab — darum nachts um 4.
 
-**Solange das Abbild privat ist, braucht Watchtower eigene Zugangsdaten
-für ghcr.io.** Ohne sie scheitert das Update jede Nacht still — es steht
-nur im Protokoll von Watchtower, Lumen bleibt auf dem alten Stand. Zwei
-Wege, beide in der Datei vorbereitet:
-
-- `REPO_USER` (GitHub-Name) und `REPO_PASS` (Token mit `read:packages`)
-  bei `watchtower` eintragen, oder
-- nach `docker login ghcr.io` (siehe oben) die Datei
-  `/root/.docker/config.json` nach `/config.json` einhängen.
+Weil das Abbild öffentlich ist, braucht Watchtower keine Zugangsdaten.
+Nur wer ein eigenes, privates Abbild nutzt, trägt bei `watchtower`
+`REPO_USER` (GitHub-Name) und `REPO_PASS` (Token mit `read:packages`) ein —
+sonst scheitert das Update dort jede Nacht still.
 
 ### Ohne Docker
 
@@ -244,10 +270,11 @@ nach, ob es eine neue Fassung gibt, und setzt sie auf Knopfdruck oder von
 selbst in einem Zeitfenster (etwa 03:00–05:00) ein — aber nie, während
 jemand schaut. Eingesetzt wird nur, was mit dem Schlüssel der
 Veröffentlichung unterschrieben ist: `pruefsummen.txt` samt der Fassung,
-für die sie gilt. Die alte Datei bleibt als `lumen.alt` liegen. Solange das
-Repository privat ist, braucht Lumen dafür ein GitHub-Token, das die
-Veröffentlichungen lesen darf (klassisch mit Bereich `repo`, oder
-fein-granular mit Lesezugriff auf *Contents* dieses Repositorys) — in der
+für die sie gilt. Die alte Datei bleibt als `lumen.alt` liegen. Ein
+GitHub-Token braucht es dafür nicht — das Repository ist öffentlich.
+*Optional*, nur falls die Updates aus einem privaten Repository kommen
+sollen: ein Token, das die Veröffentlichungen lesen darf (klassisch mit
+Bereich `repo`, oder fein-granular mit Lesezugriff auf *Contents*), in der
 Verwaltung eintragen oder `LUMEN_GITHUB_TOKEN` setzen. Im Container geht
 das Einsetzen nicht: dort heisst Aktualisieren, das Abbild neu zu holen
 (siehe oben).
@@ -402,7 +429,7 @@ Im Container stehen sie bei `environment`, ohne Docker gehen sie genauso
 | `LUMEN_RELAY` | `--relay` | aus | Adresse des Vermittlers für den Fernzugriff, etwa `meinserver.example:8444` |
 | `LUMEN_RELAY_SECRET` | `--relay-secret` | — | Gemeinsames Geheimnis mit dem Vermittler |
 | `LUMEN_RELAY_FINGERPRINT` | `--relay-fingerprint` | — | Fingerabdruck des Vermittler-Zertifikats (gibt der Vermittler beim Start aus) |
-| `LUMEN_GITHUB_TOKEN` | — | — | Token für die Update-Prüfung, solange das Repository privat ist (siehe „Aktuell bleiben"). Ein Token aus der Verwaltung hat Vorrang |
+| `LUMEN_GITHUB_TOKEN` | — | — | *Optional.* Die Update-Prüfung braucht kein Token; nur für Updates aus einem privaten Repository (siehe „Aktuell bleiben"). Ein Token aus der Verwaltung hat Vorrang |
 | `LUMEN_SOURCE_URL` | — | dieses Repository | Wo der Quelltext deiner Fassung liegt (AGPL, siehe [Lizenz](#lizenz)) |
 | `LUMEN_TMDB_URL`, `LUMEN_TMDB_IMG_URL`, `LUMEN_OMDB_URL` | — | die echten Dienste | Andere Adressen für die Metadaten-Quellen — nur für Tests oder einen eigenen Spiegel. Absichtlich nicht in der Verwaltung einstellbar |
 | `LUMEN_UPDATE_API` | — | `https://api.github.com` | Nur für Tests |
@@ -551,9 +578,9 @@ Danach ist Lumen unter `https://meinserver.example:8443` erreichbar.
 
 **Mit Docker:** Auf dem Mietserver genügt die Datei
 [`docker-compose.relay.yml`](docker-compose.relay.yml) — sie nimmt das
-fertige Abbild `ghcr.io/ada462790-beep/lumen-media-relay`, ein Quelltext ist dort
-nicht nötig. Solange das Abbild privat ist, vorher `docker login ghcr.io`
-(Token mit `read:packages`, wie oben). Das Geheimnis kommt in eine Datei
+fertige, öffentliche Abbild `ghcr.io/ada462790-beep/lumen-media-relay`;
+ein Quelltext und eine Anmeldung bei ghcr.io sind dort nicht nötig. Das
+Geheimnis kommt in eine Datei
 `.env` daneben (`LUMEN_RELAY_SECRET=…`), der Fingerabdruck steht nach dem
 Start in `docker compose -f docker-compose.relay.yml logs`. Zu Hause die
 drei Zeilen `LUMEN_RELAY`, `LUMEN_RELAY_SECRET` und
@@ -731,12 +758,39 @@ ein — sonst zeigt Lumen auf diese hier:
 LUMEN_SOURCE_URL=https://git.example.org/meine-lumen-fassung
 ```
 
-Das Urheberrecht bleibt bei den Verfassern; die AGPL gibt Rechte dazu, sie
-nimmt keine weg. Ohne Gewährleistung — wie bei jeder freien Software.
+Das Urheberrecht liegt bei den Lumen-Autoren — so steht es in jeder
+Kopfzeile: „Copyright (C) 2026 Die Lumen-Autoren". Die AGPL gibt Rechte
+dazu, sie nimmt keine weg. Ohne Gewährleistung — wie bei jeder freien
+Software. Wer etwas beiträgt, behält das Urheberrecht an seinem Beitrag
+und stimmt der [CLA](CLA.md) zu (siehe [Mitmachen](#mitmachen)).
 
 FFmpeg wird nur aufgerufen, nicht eingebaut, und bleibt unter seiner eigenen
 Lizenz. Eingebaute Fremdbibliotheken: `go-sqlite3` (MIT) und `go-qrcode`
 (MIT, für den QR-Code der Authenticator-App).
+
+---
+
+## Mitmachen
+
+Fehler melden und Wünsche äussern geht über die
+[Issues](https://github.com/ada462790-beep/lumen-media/issues) — mit den
+Vorlagen dort. **Sicherheitslücken bitte nicht als Issue**, sondern
+vertraulich über *Security › Report a vulnerability*, siehe
+[SECURITY.md](SECURITY.md).
+
+Beiträge sind willkommen. Wie man beiträgt, welche Prüfskripte vor einem
+Pull-Request laufen und welche Regeln gelten (deutsche Bezeichner, Port
+8097, Übersetzungen in allen fünf Sprachen, die Datenschutzregeln), steht
+in [CONTRIBUTING.md](CONTRIBUTING.md). Für jeden Pull-Request gilt die
+[CLA](CLA.md): Du behältst dein Urheberrecht und erlaubst den
+Lumen-Autoren, deinen Beitrag auch unter anderen Lizenzen weiterzugeben.
+Im Pull-Request setzt du dafür ein Häkchen; ein kleiner Ablauf prüft es.
+Es gilt der [Verhaltenskodex](CODE_OF_CONDUCT.md).
+
+**Was in einem Pull-Request läuft:** „Prüfen" (Server, Tests, Übersetzungen,
+Lizenzköpfe), „Apps übersetzen" (Android und Apple, wenn sich dort etwas
+ändert) und „CLA". Alle drei nur mit Leserechten und ohne Geheimnisse —
+ein Pull-Request aus einem Fork braucht nichts weiter.
 
 ---
 
@@ -788,6 +842,12 @@ eintragen (etwa `v0.1.0`) und starten. Das legt den Tag mit an. Lässt man
 das Feld leer, wird nur gebaut und nichts veröffentlicht — praktisch, um
 vorher zu sehen, ob alles durchgeht. Die Fassung muss genau so aussehen:
 `v` und drei Zahlen; alles andere lehnt der Ablauf ab.
+
+Veröffentlichen kann nur der Besitzer des Repositorys: Der Ablauf braucht
+das Geheimnis `LUMEN_SIGNIER_SCHLUESSEL` (*Settings › Secrets and
+variables › Actions*). In einem Fork fehlt es, und der Ablauf bricht an
+dieser Stelle mit einer klaren Meldung ab — der Rest (bauen, testen) läuft
+trotzdem.
 
 Veröffentlicht wird erst, wenn alles durch ist: Tests, alle Plattformen,
 die Android-Apps und die Apple-Tests (die nur dann nicht, wenn ausdrücklich

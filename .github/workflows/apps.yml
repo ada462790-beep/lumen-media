@@ -26,8 +26,10 @@ permissions:
   contents: read
 
 on:
-  # Nur main: Die Mac-Minuten zählen bei GitHub zehnfach, und jeder
-  # Arbeitszweig einzeln hat das Kontingent schnell aufgebraucht.
+  # Nur main und Pull-Requests, und nur, wenn sich an den Apps etwas
+  # ändert: Ein Mac-Lauf dauert, und GitHub hat nicht beliebig viele Macs
+  # frei. Pull-Requests aus Forks laufen genauso — nur mit Leserechten und
+  # ohne Geheimnisse (die braucht hier kein Schritt).
   push:
     branches: [main]
     paths:
@@ -35,6 +37,10 @@ on:
       - 'apple/**'
       - '.github/workflows/apps.yml'
   pull_request:
+    paths:
+      - 'android/**'
+      - 'apple/**'
+      - '.github/workflows/apps.yml'
   workflow_dispatch:
     inputs:
       mac:
