@@ -334,7 +334,7 @@ func (p *Pruefer) ladenKlein(ctx context.Context, a asset) ([]byte, error) {
 // signierSchluessel ist der öffentliche Teil des Schlüssels, mit dem jede
 // Veröffentlichung unterschrieben wird (cmd/lumen-signieren).
 // (Eine Variable nur, damit Tests einen eigenen Schlüssel einsetzen können.)
-var signierSchluessel = "nLOMgtDP0ZbnX9VULBUqU1S9rv5r3mpj7cD8huHJZrY="
+var signierSchluessel = "YqAofSZ1cBwbDGujXUZ4I7ufwml5UKphGbgawreXiHM="
 
 // FassungsPraefix leitet die Zeile in pruefsummen.txt ein, die sagt, zu
 // welcher Fassung die Datei gehört:

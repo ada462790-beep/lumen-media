@@ -45,6 +45,10 @@ APPLE = WURZEL / "apple"
 
 SPRACHEN = ["de-CH", "de", "de-AT", "en", "en-GB"]
 QUELLE = "de-CH"
+# Im Katalog steht „en" als Quellsprache: Xcode legt für die Quellsprache
+# keinen eigenen Ordner mit Mehrzahlregeln an, Schweizer Deutsch braucht ihn
+# aber („1 Film", nicht „1 Filme"). Die Schlüssel bleiben Schweizer Text.
+KATALOG_QUELLE = "en"
 
 # Wo die Texte liegen und in welchen Katalog sie gehören.
 BEREICHE = {
@@ -631,9 +635,9 @@ def pruefen(liste: bool = False) -> int:
         if problem:
             fehler.append(problem)
             katalog = {"strings": {}}
-        if katalog.get("sourceLanguage") not in (QUELLE, None):
+        if katalog.get("sourceLanguage") not in (KATALOG_QUELLE, None):
             fehler.append(f"{name}: Quellsprache ist {katalog.get('sourceLanguage')}, "
-                          f"erwartet {QUELLE}")
+                          f"erwartet {KATALOG_QUELLE}")
         eintraege = katalog.get("strings", {})
         benutzt = {}
         fest = []

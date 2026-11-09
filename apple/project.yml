@@ -19,7 +19,7 @@ options:
   # Sprachen — Deutschland (ß), Österreich (ß, „Jänner"), Englisch USA und
   # Grossbritannien — stehen in Sprache/Localizable.xcstrings. Welche
   # davon gilt, entscheidet das Profil auf dem Server (siehe LumenKit/Sprache).
-  developmentLanguage: de-CH
+  developmentLanguage: en
 
 packages:
   LumenKit:
@@ -73,9 +73,10 @@ targets:
       path: Lumen/Info.plist
       properties:
         CFBundleDisplayName: Lumen
-        CFBundleDevelopmentRegion: de-CH
+        CFBundleDevelopmentRegion: en
         # Die Sprachen der App. Deutschland und die USA heissen „de" und
-        # „en", wie Apple es hält; die Schweiz ist die Quellsprache.
+        # „en", wie Apple es hält. Quellsprache des Katalogs ist „en", damit auch
+        # Schweizer Deutsch einen eigenen Ordner mit Mehrzahlregeln bekommt.
         CFBundleLocalizations: [de-CH, de, de-AT, en, en-GB]
         # Kein fest eingestelltes „Dark" mehr: die App wählt selbst —
         # dunkel, hell oder wie das Gerät (Einstellungen → Darstellung).
@@ -111,7 +112,7 @@ targets:
       path: LumenTV/Info.plist
       properties:
         CFBundleDisplayName: Lumen
-        CFBundleDevelopmentRegion: de-CH
+        CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [de-CH, de, de-AT, en, en-GB]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

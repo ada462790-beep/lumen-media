@@ -24,9 +24,11 @@ import PackageDescription
 
 let package = Package(
     name: "LumenKit",
-    // Die Texte im Code sind Schweizer Hochdeutsch („ss"); die übrigen
-    // Sprachen stehen im Katalog Resources/Localizable.xcstrings.
-    defaultLocalization: "de-CH",
+    // Die Texte im Code sind Schweizer Hochdeutsch („ss"); alle fünf
+    // Sprachen stehen im Katalog Resources/Localizable.xcstrings. „en" als
+    // Quellsprache, weil Xcode nur Übersetzungen (nicht die Quellsprache) mit
+    // eigenen Mehrzahlregeln ablegt — sonst hiesse es „1 Filme".
+    defaultLocalization: "en",
     platforms: [.iOS(.v17), .macOS(.v14), .tvOS(.v17)],
     products: [
         .library(name: "LumenKit", targets: ["LumenKit"]),
