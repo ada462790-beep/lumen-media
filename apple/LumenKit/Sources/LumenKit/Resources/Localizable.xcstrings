@@ -1,299 +1,177 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "%@ verfügbar" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ verfügbar"
+  "sourceLanguage": "en",
+  "strings": {
+    "%@ verfügbar": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ verfügbar"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ verfügbar"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ verfügbar"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ available"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ available"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ available"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ available"
           }
         }
       }
     },
-    "%@ · S%lld F%lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · S%lld F%lld"
+    "%@ · S%lld F%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · S%lld F%lld"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · S%lld F%lld"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · S%lld F%lld"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · S%lld E%lld"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · S%lld E%lld"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · S%lld E%lld"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · S%lld E%lld"
           }
         }
       }
     },
-    "%@ · aktuell" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · aktuell"
+    "%@ · aktuell": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · aktuell"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · aktuell"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · aktuell"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · up to date"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · up to date"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · up to date"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · up to date"
           }
         }
       }
     },
-    "%@, %lld Titel" : {
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld Titel"
+    "%@, %lld Titel": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld Titel"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld Titel"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld Titel"
                 }
               }
             }
           }
         },
-        "de-AT" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld Titel"
+        "de-AT": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld Titel"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld Titel"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld Titel"
                 }
               }
             }
           }
         },
-        "de-CH" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld Titel"
+        "de-CH": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld Titel"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld Titel"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld Titel"
                 }
               }
             }
           }
         },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld title"
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld title"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld titles"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld titles"
                 }
               }
             }
           }
         },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld title"
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld title"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%@, %lld titles"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "%lld %% Rotten Tomatoes" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld %% Rotten Tomatoes"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld %% Rotten Tomatoes"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld%% Rotten Tomatoes"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld%% Rotten Tomatoes"
-          }
-        }
-      }
-    },
-    "%lld Bibliotheken" : {
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Bibliothek"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Bibliotheken"
-                }
-              }
-            }
-          }
-        },
-        "de-AT" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Bibliothek"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Bibliotheken"
-                }
-              }
-            }
-          }
-        },
-        "de-CH" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Bibliothek"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Bibliotheken"
-                }
-              }
-            }
-          }
-        },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld library"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld libraries"
-                }
-              }
-            }
-          }
-        },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld library"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld libraries"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@, %lld titles"
                 }
               }
             }
@@ -301,215 +179,121 @@
         }
       }
     },
-    "%lld Filme" : {
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Film"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Filme"
-                }
-              }
-            }
+    "%lld %% Rotten Tomatoes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% Rotten Tomatoes"
           }
         },
-        "de-AT" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Film"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Filme"
-                }
-              }
-            }
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld %% Rotten Tomatoes"
           }
         },
-        "de-CH" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Film"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Filme"
-                }
-              }
-            }
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% Rotten Tomatoes"
           }
         },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld movie"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld movies"
-                }
-              }
-            }
-          }
-        },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld film"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld films"
-                }
-              }
-            }
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% Rotten Tomatoes"
           }
         }
       }
     },
-    "%lld Min." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Min."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Min."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld min"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld min"
-          }
-        }
-      }
-    },
-    "%lld Personen" : {
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Person"
+    "%lld Bibliotheken": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bibliothek"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Personen"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bibliotheken"
                 }
               }
             }
           }
         },
-        "de-AT" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Person"
+        "de-AT": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bibliothek"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Personen"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bibliotheken"
                 }
               }
             }
           }
         },
-        "de-CH" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Person"
+        "de-CH": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bibliothek"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Personen"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Bibliotheken"
                 }
               }
             }
           }
         },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld person"
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld library"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld people"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld libraries"
                 }
               }
             }
           }
         },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld person"
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld library"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld people"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld libraries"
                 }
               }
             }
@@ -517,131 +301,93 @@
         }
       }
     },
-    "%lld Std. %lld Min." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Std. %lld Min."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Std. %lld Min."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld hr %lld min"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld hr %lld min"
-          }
-        }
-      }
-    },
-    "%lld Titel" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Titel"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Titel"
-          }
-        },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld title"
+    "%lld Filme": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Film"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld titles"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Filme"
                 }
               }
             }
           }
         },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld title"
+        "de-AT": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Film"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld titles"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "%lld Treffer" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Treffer"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Treffer"
-          }
-        },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld result"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld results"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Filme"
                 }
               }
             }
           }
         },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld result"
+        "de-CH": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Film"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld results"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Filme"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld movie"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld movies"
+                }
+              }
+            }
+          }
+        },
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld film"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld films"
                 }
               }
             }
@@ -649,271 +395,121 @@
         }
       }
     },
-    "%lld fehlen" : {
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fehlt"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fehlen"
-                }
-              }
-            }
+    "%lld Min.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Min."
           }
         },
-        "de-AT" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fehlt"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fehlen"
-                }
-              }
-            }
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Min."
           }
         },
-        "de-CH" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fehlt"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld fehlen"
-                }
-              }
-            }
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min"
           }
         },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld missing"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld missing"
-                }
-              }
-            }
-          }
-        },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld missing"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld missing"
-                }
-              }
-            }
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min"
           }
         }
       }
     },
-    "%lld gesehen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld gesehen"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld gesehen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld watched"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld watched"
-          }
-        }
-      }
-    },
-    "%lld geändert" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld geändert"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld geändert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld changed"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld changed"
-          }
-        }
-      }
-    },
-    "%lld neu" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld neu"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld neu"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld new"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld new"
-          }
-        }
-      }
-    },
-    "%lld neue Folgen" : {
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Neue Folge"
+    "%lld Personen": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Person"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld neue Folgen"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Personen"
                 }
               }
             }
           }
         },
-        "de-AT" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Neue Folge"
+        "de-AT": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Person"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld neue Folgen"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Personen"
                 }
               }
             }
           }
         },
-        "de-CH" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Neue Folge"
+        "de-CH": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Person"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld neue Folgen"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Personen"
                 }
               }
             }
           }
         },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "New Episode"
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld person"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld new episodes"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld people"
                 }
               }
             }
           }
         },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "New Episode"
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld person"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld new episodes"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld people"
                 }
               }
             }
@@ -921,2165 +517,79 @@
         }
       }
     },
-    "%lld nicht erkannt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld nicht erkannt"
+    "%lld Std. %lld Min.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Std. %lld Min."
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld nicht erkannt"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Std. %lld Min."
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld not recognized"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld hr %lld min"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld not recognised"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld hr %lld min"
           }
         }
       }
     },
-    "%lld von %lld Folgen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld von %lld Folgen"
+    "%lld Titel": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Titel"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld von %lld Folgen"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Titel"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld of %lld episodes"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld of %lld episodes"
-          }
-        }
-      }
-    },
-    "Abgebrochen." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abgebrochen."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abgebrochen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Canceled."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancelled."
-          }
-        }
-      }
-    },
-    "Ansehen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ansehen"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ansehen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Watch"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Watch"
-          }
-        }
-      }
-    },
-    "Auf diesem Gerät ist nicht genug Platz frei." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auf diesem Gerät ist nicht genug Platz frei."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auf diesem Gerät ist nicht genug Platz frei."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There isn’t enough free space on this device."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There isn’t enough free space on this device."
-          }
-        }
-      }
-    },
-    "Aus" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aus"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aus"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Off"
-          }
-        }
-      }
-    },
-    "Authenticator-App" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Authenticator-App"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Authenticator-App"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Authenticator App"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Authenticator App"
-          }
-        }
-      }
-    },
-    "A–Z" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A–Z"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A–Z"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A–Z"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A–Z"
-          }
-        }
-      }
-    },
-    "Buchstabe %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buchstabe %@"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buchstabe %@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Letter %@"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Letter %@"
-          }
-        }
-      }
-    },
-    "Chinesisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chinesisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chinesisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chinese"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chinese"
-          }
-        }
-      }
-    },
-    "Das hat nicht geklappt." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das hat nicht geklappt."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das hat nicht geklappt."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That didn’t work."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That didn’t work."
-          }
-        }
-      }
-    },
-    "Das sieht nicht nach einer Adresse aus." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das sieht nicht nach einer Adresse aus."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das sieht nicht nach einer Adresse aus."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That doesn’t look like an address."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That doesn’t look like an address."
-          }
-        }
-      }
-    },
-    "Das stimmt nicht." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das stimmt nicht."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das stimmt nicht."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That’s not right."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That’s not right."
-          }
-        }
-      }
-    },
-    "Datei" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datei"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datei"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "file"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "file"
-          }
-        }
-      }
-    },
-    "Davor" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Davor"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Davor"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Previous"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Previous"
-          }
-        }
-      }
-    },
-    "Deine Anmeldung gilt nicht mehr. Bitte melde dich neu an." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deine Anmeldung gilt nicht mehr. Bitte melde dich neu an."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deine Anmeldung gilt nicht mehr. Bitte melde dich neu an."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ve been signed out. Please sign in again."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ve been signed out. Please sign in again."
-          }
-        }
-      }
-    },
-    "Der Download hat nicht geklappt." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Download hat nicht geklappt."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Download hat nicht geklappt."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The download didn’t work."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The download didn’t work."
-          }
-        }
-      }
-    },
-    "Der Server ist nicht erreichbar. Läuft er, und ist dieses Gerät im gleichen Netz?" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Server ist nicht erreichbar. Läuft er, und ist dieses Gerät im gleichen Netz?"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Server ist nicht erreichbar. Läuft er, und ist dieses Gerät im gleichen Netz?"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can’t reach the server. Is it running, and is this device on the same network?"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can’t reach the server. Is it running, and is this device on the same network?"
-          }
-        }
-      }
-    },
-    "Deutsch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deutsch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deutsch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "German"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "German"
-          }
-        }
-      }
-    },
-    "Die Anmeldung gilt nicht mehr." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Anmeldung gilt nicht mehr."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Anmeldung gilt nicht mehr."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ve been signed out."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ve been signed out."
-          }
-        }
-      }
-    },
-    "Die Antwort von %@ war nicht lesbar. Vermutlich passen App und Server nicht zusammen." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Antwort von %@ war nicht lesbar. Vermutlich passen App und Server nicht zusammen."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Antwort von %@ war nicht lesbar. Vermutlich passen App und Server nicht zusammen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The response from %@ couldn’t be read. The app and server probably don’t match."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The response from %@ couldn’t be read. The app and server probably don’t match."
-          }
-        }
-      }
-    },
-    "Die Datei fehlt auf diesem Gerät." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Datei fehlt auf diesem Gerät."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Datei fehlt auf diesem Gerät."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The file is missing on this device."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The file is missing on this device."
-          }
-        }
-      }
-    },
-    "Die Verwaltung ist gesperrt." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Verwaltung ist gesperrt."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Verwaltung ist gesperrt."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Admin is locked."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Admin is locked."
-          }
-        }
-      }
-    },
-    "Diese Untertitel lassen sich nicht lesen." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diese Untertitel lassen sich nicht lesen."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diese Untertitel lassen sich nicht lesen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These subtitles can’t be read."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These subtitles can’t be read."
-          }
-        }
-      }
-    },
-    "Direkt abspielbar" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Direkt abspielbar"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Direkt abspielbar"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plays directly"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Plays directly"
-          }
-        }
-      }
-    },
-    "Du hast schon so viele Titel heruntergeladen, wie dein Profil darf. Lösche zuerst einen." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Du hast schon so viele Titel heruntergeladen, wie dein Profil darf. Lösche zuerst einen."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Du hast schon so viele Titel heruntergeladen, wie dein Profil darf. Lösche zuerst einen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ve already downloaded as many titles as your profile allows. Delete one first."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ve already downloaded as many titles as your profile allows. Delete one first."
-          }
-        }
-      }
-    },
-    "Dänisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dänisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dänisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Danish"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Danish"
-          }
-        }
-      }
-    },
-    "Englisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Englisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Englisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "English"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "English"
-          }
-        }
-      }
-    },
-    "Französisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Französisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Französisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "French"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "French"
-          }
-        }
-      }
-    },
-    "Für dein Profil sind Downloads ausgeschaltet." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Für dein Profil sind Downloads ausgeschaltet."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Für dein Profil sind Downloads ausgeschaltet."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloads are turned off for your profile."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloads are turned off for your profile."
-          }
-        }
-      }
-    },
-    "Gross" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Groß"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Groß"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Large"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Large"
-          }
-        }
-      }
-    },
-    "In dieser Liste ist nichts, was sich abspielen lässt." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In dieser Liste ist nichts, was sich abspielen lässt."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In dieser Liste ist nichts, was sich abspielen lässt."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There’s nothing in this list that can be played."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There’s nothing in this list that can be played."
-          }
-        }
-      }
-    },
-    "Italienisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Italienisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Italienisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Italian"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Italian"
-          }
-        }
-      }
-    },
-    "Japanisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Japanisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Japanisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Japanese"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Japanese"
-          }
-        }
-      }
-    },
-    "Klein" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Klein"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Klein"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Small"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Small"
-          }
-        }
-      }
-    },
-    "Koreanisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Koreanisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Koreanisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Korean"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Korean"
-          }
-        }
-      }
-    },
-    "Neu" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neu"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neu"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New"
-          }
-        }
-      }
-    },
-    "Neu hinzugefügt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neu hinzugefügt"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neu hinzugefügt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recently Added"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recently Added"
-          }
-        }
-      }
-    },
-    "Neueste" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neueste"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neueste"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Latest"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Latest"
-          }
-        }
-      }
-    },
-    "Neueste Filme" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neueste Filme"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neueste Filme"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Newest Movies"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Newest Films"
-          }
-        }
-      }
-    },
-    "Neueste Serien" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neueste Serien"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neueste Serien"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Newest Shows"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Newest Programmes"
-          }
-        }
-      }
-    },
-    "Niederländisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Niederländisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Niederländisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dutch"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dutch"
-          }
-        }
-      }
-    },
-    "Normal" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Normal"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Normal"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Normal"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Normal"
-          }
-        }
-      }
-    },
-    "PIN" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PIN"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PIN"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PIN"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PIN"
-          }
-        }
-      }
-    },
-    "Passwort" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Passwort"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Passwort"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Password"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Password"
-          }
-        }
-      }
-    },
-    "Polnisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Polnisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Polnisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Polish"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Polish"
-          }
-        }
-      }
-    },
-    "Portugiesisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Portugiesisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Portugiesisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Portuguese"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Portuguese"
-          }
-        }
-      }
-    },
-    "Prüfen klappte nicht" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prüfen klappte nicht"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prüfen klappte nicht"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check failed"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check failed"
-          }
-        }
-      }
-    },
-    "Russisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Russisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Russisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Russian"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Russian"
-          }
-        }
-      }
-    },
-    "S%lld F%lld · %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%lld F%lld · %@"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%lld F%lld · %@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%lld E%lld · %@"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "S%lld E%lld · %@"
-          }
-        }
-      }
-    },
-    "Schwedisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schwedisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Schwedisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Swedish"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Swedish"
-          }
-        }
-      }
-    },
-    "Sicherung %lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sicherung %lld"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sicherung %lld"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup %lld"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup %lld"
-          }
-        }
-      }
-    },
-    "Spanisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spanisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spanisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spanish"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spanish"
-          }
-        }
-      }
-    },
-    "Specials" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Specials"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Specials"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Specials"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Specials"
-          }
-        }
-      }
-    },
-    "Stereo" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stereo"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stereo"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stereo"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stereo"
-          }
-        }
-      }
-    },
-    "Teil %lld von %lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Teil %lld von %lld"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Teil %lld von %lld"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Part %lld of %lld"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Part %lld of %lld"
-          }
-        }
-      }
-    },
-    "Türkisch" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Türkisch"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Türkisch"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turkish"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turkish"
-          }
-        }
-      }
-    },
-    "Unbekannt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unbekannt"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unbekannt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unknown"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unknown"
-          }
-        }
-      }
-    },
-    "Unerwartete Antwort." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unerwartete Antwort."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unerwartete Antwort."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unexpected response."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unexpected response."
-          }
-        }
-      }
-    },
-    "Untertitel" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Untertitel"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Untertitel"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subtitles"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subtitles"
-          }
-        }
-      }
-    },
-    "Untertitel %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Untertitel %@"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Untertitel %@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subtitles %@"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subtitles %@"
-          }
-        }
-      }
-    },
-    "Weiter" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiter"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiter"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resume"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resume"
-          }
-        }
-      }
-    },
-    "Weiter bei %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiter bei %@"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiter bei %@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resume at %@"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Resume at %@"
-          }
-        }
-      }
-    },
-    "Weiter mit %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiter mit %@"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiter mit %@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue with %@"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue with %@"
-          }
-        }
-      }
-    },
-    "Weiterschauen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiterschauen"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiterschauen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue Watching"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue Watching"
-          }
-        }
-      }
-    },
-    "Wer verwalten darf, braucht einen PIN oder ein Passwort. Ohne geht es bei diesem Profil nicht." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wer verwalten darf, braucht einen PIN oder ein Passwort. Ohne geht es bei diesem Profil nicht."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wer verwalten darf, braucht einen PIN oder ein Passwort. Ohne geht es bei diesem Profil nicht."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anyone who can manage the server needs a PIN or password. This profile can’t do without one."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anyone who can manage the server needs a PIN or password. This profile can’t do without one."
-          }
-        }
-      }
-    },
-    "Wie in der Datei" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wie in der Datei"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wie in der Datei"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As in File"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As in File"
-          }
-        }
-      }
-    },
-    "Wird umgewandelt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wird umgewandelt"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wird umgewandelt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Will be converted"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Will be converted"
-          }
-        }
-      }
-    },
-    "Zahlen und Zeichen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zahlen und Zeichen"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zahlen und Zeichen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Numbers and symbols"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Numbers and symbols"
-          }
-        }
-      }
-    },
-    "Zu diesem Titel gibt es keine Datei." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zu diesem Titel gibt es keine Datei."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zu diesem Titel gibt es keine Datei."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There’s no file for this title."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There’s no file for this title."
-          }
-        }
-      }
-    },
-    "Zu diesem Titel gibt es keine Folge." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zu diesem Titel gibt es keine Folge."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zu diesem Titel gibt es keine Folge."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There are no episodes for this title."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There are no episodes for this title."
-          }
-        }
-      }
-    },
-    "Zur Sicherheit braucht es noch einmal deinen PIN, dein Passwort oder den Code aus der Authenticator-App." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zur Sicherheit braucht es noch einmal deinen PIN, dein Passwort oder den Code aus der Authenticator-App."
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zur Sicherheit braucht es noch einmal deinen PIN, dein Passwort oder den Code aus der Authenticator-App."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "For security, enter your PIN, your password or the code from your authenticator app again."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "For security, enter your PIN, your password or the code from your authenticator app again."
-          }
-        }
-      }
-    },
-    "ab %lld" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ab %lld"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ab %lld"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld+"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld+"
-          }
-        }
-      }
-    },
-    "abgelehnt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "abgelehnt"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "abgelehnt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "declined"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "declined"
-          }
-        }
-      }
-    },
-    "alle %lld Folgen gesehen" : {
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Folge gesehen"
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld title"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "alle %lld Folgen gesehen"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld titles"
                 }
               }
             }
           }
         },
-        "de-AT" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Folge gesehen"
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld title"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "alle %lld Folgen gesehen"
-                }
-              }
-            }
-          }
-        },
-        "de-CH" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Folge gesehen"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "alle %lld Folgen gesehen"
-                }
-              }
-            }
-          }
-        },
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "episode watched"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "all %lld episodes watched"
-                }
-              }
-            }
-          }
-        },
-        "en-GB" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "episode watched"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "all %lld episodes watched"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld titles"
                 }
               }
             }
@@ -3087,734 +597,3394 @@
         }
       }
     },
-    "auf Knopfdruck: %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "auf Knopfdruck: %@"
+    "%lld Treffer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Treffer"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "auf Knopfdruck: %@"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Treffer"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "manual: %@"
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld result"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld results"
+                }
+              }
+            }
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "manual: %@"
-          }
-        }
-      }
-    },
-    "direkt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "direkt"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "direkt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "direct"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "direct"
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld result"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld results"
+                }
+              }
+            }
           }
         }
       }
     },
-    "eingesetzt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "eingesetzt"
+    "%lld fehlen": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlen"
+                }
+              }
+            }
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "eingesetzt"
+        "de-AT": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlen"
+                }
+              }
+            }
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "installed"
+        "de-CH": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlen"
+                }
+              }
+            }
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "installed"
-          }
-        }
-      }
-    },
-    "erfüllt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "erfüllt"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "erfüllt"
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld missing"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld missing"
+                }
+              }
+            }
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "fulfilled"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "fulfilled"
-          }
-        }
-      }
-    },
-    "erzwungen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "erzwungen"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "erzwungen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "forced"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "forced"
-          }
-        }
-      }
-    },
-    "fehlgeschlagen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "fehlgeschlagen"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "fehlgeschlagen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "failed"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "failed"
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld missing"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld missing"
+                }
+              }
+            }
           }
         }
       }
     },
-    "für Hörgeschädigte" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "für Hörgeschädigte"
+    "%lld gesehen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld gesehen"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "für Hörgeschädigte"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld gesehen"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SDH"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld watched"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SDH"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld watched"
           }
         }
       }
     },
-    "geboren %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "geboren %@"
+    "%lld geändert": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld geändert"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "geboren %@"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld geändert"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "born %@"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld changed"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "born %@"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld changed"
           }
         }
       }
     },
-    "geboren %@ in %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "geboren %@ in %@"
+    "%lld neu": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld neu"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "geboren %@ in %@"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld neu"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "born %@ in %@"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld new"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "born %@ in %@"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld new"
           }
         }
       }
     },
-    "gestorben %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "gestorben %@"
+    "%lld neue Folgen": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Neue Folge"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld neue Folgen"
+                }
+              }
+            }
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "gestorben %@"
+        "de-AT": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Neue Folge"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld neue Folgen"
+                }
+              }
+            }
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "died %@"
+        "de-CH": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Neue Folge"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld neue Folgen"
+                }
+              }
+            }
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "died %@"
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "New Episode"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld new episodes"
+                }
+              }
+            }
+          }
+        },
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "New Episode"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld new episodes"
+                }
+              }
+            }
           }
         }
       }
     },
-    "heute" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "heute"
+    "%lld nicht erkannt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld nicht erkannt"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "heute"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld nicht erkannt"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "today"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld not recognized"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "today"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld not recognised"
           }
         }
       }
     },
-    "höchstens %lld gleichzeitig" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "höchstens %lld gleichzeitig"
+    "%lld von %lld Folgen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Folgen"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "höchstens %lld gleichzeitig"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Folgen"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "up to %lld at once"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld of %lld episodes"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "up to %lld at once"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld of %lld episodes"
           }
         }
       }
     },
-    "in Arbeit" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "in Arbeit"
+    "1 Bibliothek": {
+      "localizations": {
+        "de-CH": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Bibliothek"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "in Arbeit"
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Bibliothek"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "in progress"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Bibliothek"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "in progress"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 library"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 library"
           }
         }
       }
     },
-    "keine" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "keine"
+    "1 Film": {
+      "localizations": {
+        "de-CH": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Film"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "keine"
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Film"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "none"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Film"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "none"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 movie"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 film"
           }
         }
       }
     },
-    "mit %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mit %@"
+    "1 Person": {
+      "localizations": {
+        "de-CH": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Person"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mit %@"
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Person"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "with %@"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Person"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "with %@"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 person"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 person"
           }
         }
       }
     },
-    "nichts Neues" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nichts Neues"
+    "1 fehlt": {
+      "localizations": {
+        "de-CH": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 fehlt"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nichts Neues"
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 fehlt"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nothing new"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 fehlt"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nothing new"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 missing"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 missing"
           }
         }
       }
     },
-    "offen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "offen"
+    "Abgebrochen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abgebrochen."
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "offen"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abgebrochen."
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "open"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canceled."
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "open"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelled."
           }
         }
       }
     },
-    "seit %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "seit %@"
+    "Ansehen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ansehen"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "seit %@"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ansehen"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "since %@"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "since %@"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch"
           }
         }
       }
     },
-    "unter 1 MB" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unter 1 MB"
+    "Auf diesem Gerät ist nicht genug Platz frei.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät ist nicht genug Platz frei."
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unter 1 MB"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät ist nicht genug Platz frei."
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "under 1 MB"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There isn’t enough free space on this device."
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "under 1 MB"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There isn’t enough free space on this device."
           }
         }
       }
     },
-    "verschoben" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "verschoben"
+    "Aus": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "verschoben"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "postponed"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "postponed"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
           }
         }
       }
     },
-    "von Lumen am Titel erkannt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "von Lumen am Titel erkannt"
+    "Authenticator-App": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticator-App"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "von Lumen am Titel erkannt"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticator-App"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "recognized by Lumen from the title"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticator App"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "recognised by Lumen from the title"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticator App"
           }
         }
       }
     },
-    "von selbst: %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "von selbst: %@"
+    "A–Z": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A–Z"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "von selbst: %@"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A–Z"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "automatic: %@"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A–Z"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "automatic: %@"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A–Z"
           }
         }
       }
     },
-    "wird umgewandelt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wird umgewandelt"
+    "Buchstabe %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buchstabe %@"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wird umgewandelt"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buchstabe %@"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "converting"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letter %@"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "converting"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letter %@"
           }
         }
       }
     },
-    "zusammengestellt nach TMDb" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "zusammengestellt nach TMDb"
+    "Chinesisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chinesisch"
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "zusammengestellt nach TMDb"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chinesisch"
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "compiled from TMDb"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chinese"
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "compiled from TMDb"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chinese"
           }
         }
       }
     },
-    "Älteste Filme" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Älteste Filme"
+    "Das hat nicht geklappt.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das hat nicht geklappt."
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Älteste Filme"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das hat nicht geklappt."
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oldest Movies"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That didn’t work."
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oldest Films"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That didn’t work."
           }
         }
       }
     },
-    "Älteste Serien" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Älteste Serien"
+    "Das sieht nicht nach einer Adresse aus.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sieht nicht nach einer Adresse aus."
           }
         },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Älteste Serien"
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sieht nicht nach einer Adresse aus."
           }
         },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oldest Shows"
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That doesn’t look like an address."
           }
         },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oldest Programmes"
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That doesn’t look like an address."
+          }
+        }
+      }
+    },
+    "Das stimmt nicht.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das stimmt nicht."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das stimmt nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That’s not right."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That’s not right."
+          }
+        }
+      }
+    },
+    "Datei": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datei"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datei"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "file"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "file"
+          }
+        }
+      }
+    },
+    "Davor": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Davor"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Davor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous"
+          }
+        }
+      }
+    },
+    "Deine Anmeldung gilt nicht mehr. Bitte melde dich neu an.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Anmeldung gilt nicht mehr. Bitte melde dich neu an."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Anmeldung gilt nicht mehr. Bitte melde dich neu an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’ve been signed out. Please sign in again."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’ve been signed out. Please sign in again."
+          }
+        }
+      }
+    },
+    "Der Download hat nicht geklappt.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Download hat nicht geklappt."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Download hat nicht geklappt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download didn’t work."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download didn’t work."
+          }
+        }
+      }
+    },
+    "Der Server ist nicht erreichbar. Läuft er, und ist dieses Gerät im gleichen Netz?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server ist nicht erreichbar. Läuft er, und ist dieses Gerät im gleichen Netz?"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server ist nicht erreichbar. Läuft er, und ist dieses Gerät im gleichen Netz?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t reach the server. Is it running, and is this device on the same network?"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t reach the server. Is it running, and is this device on the same network?"
+          }
+        }
+      }
+    },
+    "Deutsch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deutsch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deutsch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "German"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "German"
+          }
+        }
+      }
+    },
+    "Die Anmeldung gilt nicht mehr.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anmeldung gilt nicht mehr."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anmeldung gilt nicht mehr."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’ve been signed out."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’ve been signed out."
+          }
+        }
+      }
+    },
+    "Die Antwort von %@ war nicht lesbar. Vermutlich passen App und Server nicht zusammen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Antwort von %@ war nicht lesbar. Vermutlich passen App und Server nicht zusammen."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Antwort von %@ war nicht lesbar. Vermutlich passen App und Server nicht zusammen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The response from %@ couldn’t be read. The app and server probably don’t match."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The response from %@ couldn’t be read. The app and server probably don’t match."
+          }
+        }
+      }
+    },
+    "Die Datei fehlt auf diesem Gerät.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datei fehlt auf diesem Gerät."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datei fehlt auf diesem Gerät."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is missing on this device."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is missing on this device."
+          }
+        }
+      }
+    },
+    "Die Verwaltung ist gesperrt.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Verwaltung ist gesperrt."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Verwaltung ist gesperrt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin is locked."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin is locked."
+          }
+        }
+      }
+    },
+    "Diese Untertitel lassen sich nicht lesen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Untertitel lassen sich nicht lesen."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Untertitel lassen sich nicht lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These subtitles can’t be read."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These subtitles can’t be read."
+          }
+        }
+      }
+    },
+    "Direkt abspielbar": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direkt abspielbar"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direkt abspielbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plays directly"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plays directly"
+          }
+        }
+      }
+    },
+    "Du hast schon so viele Titel heruntergeladen, wie dein Profil darf. Lösche zuerst einen.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast schon so viele Titel heruntergeladen, wie dein Profil darf. Lösche zuerst einen."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast schon so viele Titel heruntergeladen, wie dein Profil darf. Lösche zuerst einen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’ve already downloaded as many titles as your profile allows. Delete one first."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’ve already downloaded as many titles as your profile allows. Delete one first."
+          }
+        }
+      }
+    },
+    "Dänisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dänisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dänisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danish"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danish"
+          }
+        }
+      }
+    },
+    "Englisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Englisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Englisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "English"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "English"
+          }
+        }
+      }
+    },
+    "Französisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Französisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Französisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "French"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "French"
+          }
+        }
+      }
+    },
+    "Für dein Profil sind Downloads ausgeschaltet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für dein Profil sind Downloads ausgeschaltet."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für dein Profil sind Downloads ausgeschaltet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads are turned off for your profile."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads are turned off for your profile."
+          }
+        }
+      }
+    },
+    "Gross": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groß"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groß"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large"
+          }
+        }
+      }
+    },
+    "In dieser Liste ist nichts, was sich abspielen lässt.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In dieser Liste ist nichts, was sich abspielen lässt."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In dieser Liste ist nichts, was sich abspielen lässt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There’s nothing in this list that can be played."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There’s nothing in this list that can be played."
+          }
+        }
+      }
+    },
+    "Italienisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Italienisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Italienisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Italian"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Italian"
+          }
+        }
+      }
+    },
+    "Japanisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanese"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanese"
+          }
+        }
+      }
+    },
+    "Klein": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klein"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klein"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Small"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Small"
+          }
+        }
+      }
+    },
+    "Koreanisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koreanisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koreanisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Korean"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Korean"
+          }
+        }
+      }
+    },
+    "Neu": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New"
+          }
+        }
+      }
+    },
+    "Neu hinzugefügt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu hinzugefügt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu hinzugefügt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recently Added"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recently Added"
+          }
+        }
+      }
+    },
+    "Neue Folge": {
+      "localizations": {
+        "de-CH": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Folge"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Folge"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Folge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Episode"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Episode"
+          }
+        }
+      }
+    },
+    "Neueste": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neueste"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neueste"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest"
+          }
+        }
+      }
+    },
+    "Neueste Filme": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neueste Filme"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neueste Filme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newest Movies"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newest Films"
+          }
+        }
+      }
+    },
+    "Neueste Serien": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neueste Serien"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neueste Serien"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newest Shows"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newest Programmes"
+          }
+        }
+      }
+    },
+    "Niederländisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niederländisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niederländisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dutch"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dutch"
+          }
+        }
+      }
+    },
+    "Normal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        }
+      }
+    },
+    "PIN": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PIN"
+          }
+        }
+      }
+    },
+    "Passwort": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwort"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password"
+          }
+        }
+      }
+    },
+    "Polnisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polnisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polnisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polish"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Polish"
+          }
+        }
+      }
+    },
+    "Portugiesisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portugiesisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portugiesisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portuguese"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portuguese"
+          }
+        }
+      }
+    },
+    "Prüfen klappte nicht": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüfen klappte nicht"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prüfen klappte nicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check failed"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check failed"
+          }
+        }
+      }
+    },
+    "Russisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Russisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Russisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Russian"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Russian"
+          }
+        }
+      }
+    },
+    "S%lld F%lld · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld F%lld · %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld F%lld · %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld E%lld · %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld E%lld · %@"
+          }
+        }
+      }
+    },
+    "Schwedisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwedisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwedisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swedish"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swedish"
+          }
+        }
+      }
+    },
+    "Sicherung %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sicherung %lld"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sicherung %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup %lld"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backup %lld"
+          }
+        }
+      }
+    },
+    "Spanisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spanisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spanisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spanish"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spanish"
+          }
+        }
+      }
+    },
+    "Specials": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Specials"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Specials"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Specials"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Specials"
+          }
+        }
+      }
+    },
+    "Stereo": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stereo"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stereo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stereo"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stereo"
+          }
+        }
+      }
+    },
+    "Teil %lld von %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teil %lld von %lld"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teil %lld von %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Part %lld of %lld"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Part %lld of %lld"
+          }
+        }
+      }
+    },
+    "Türkisch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Türkisch"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Türkisch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turkish"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turkish"
+          }
+        }
+      }
+    },
+    "Unbekannt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        }
+      }
+    },
+    "Unerwartete Antwort.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unerwartete Antwort."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unerwartete Antwort."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unexpected response."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unexpected response."
+          }
+        }
+      }
+    },
+    "Untertitel": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtitles"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtitles"
+          }
+        }
+      }
+    },
+    "Untertitel %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtitles %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtitles %@"
+          }
+        }
+      }
+    },
+    "Weiter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume"
+          }
+        }
+      }
+    },
+    "Weiter bei %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter bei %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter bei %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume at %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume at %@"
+          }
+        }
+      }
+    },
+    "Weiter mit %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter mit %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter mit %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue with %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue with %@"
+          }
+        }
+      }
+    },
+    "Weiterschauen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiterschauen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiterschauen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue Watching"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue Watching"
+          }
+        }
+      }
+    },
+    "Wer verwalten darf, braucht einen PIN oder ein Passwort. Ohne geht es bei diesem Profil nicht.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer verwalten darf, braucht einen PIN oder ein Passwort. Ohne geht es bei diesem Profil nicht."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer verwalten darf, braucht einen PIN oder ein Passwort. Ohne geht es bei diesem Profil nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anyone who can manage the server needs a PIN or password. This profile can’t do without one."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anyone who can manage the server needs a PIN or password. This profile can’t do without one."
+          }
+        }
+      }
+    },
+    "Wie in der Datei": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie in der Datei"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie in der Datei"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As in File"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As in File"
+          }
+        }
+      }
+    },
+    "Wird umgewandelt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird umgewandelt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird umgewandelt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Will be converted"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Will be converted"
+          }
+        }
+      }
+    },
+    "Zahlen und Zeichen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zahlen und Zeichen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zahlen und Zeichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numbers and symbols"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numbers and symbols"
+          }
+        }
+      }
+    },
+    "Zu diesem Titel gibt es keine Datei.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu diesem Titel gibt es keine Datei."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu diesem Titel gibt es keine Datei."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There’s no file for this title."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There’s no file for this title."
+          }
+        }
+      }
+    },
+    "Zu diesem Titel gibt es keine Folge.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu diesem Titel gibt es keine Folge."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu diesem Titel gibt es keine Folge."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There are no episodes for this title."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There are no episodes for this title."
+          }
+        }
+      }
+    },
+    "Zur Sicherheit braucht es noch einmal deinen PIN, dein Passwort oder den Code aus der Authenticator-App.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Sicherheit braucht es noch einmal deinen PIN, dein Passwort oder den Code aus der Authenticator-App."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Sicherheit braucht es noch einmal deinen PIN, dein Passwort oder den Code aus der Authenticator-App."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For security, enter your PIN, your password or the code from your authenticator app again."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For security, enter your PIN, your password or the code from your authenticator app again."
+          }
+        }
+      }
+    },
+    "ab %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ab %lld"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ab %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld+"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld+"
+          }
+        }
+      }
+    },
+    "abgelehnt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abgelehnt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abgelehnt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "declined"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "declined"
+          }
+        }
+      }
+    },
+    "alle %lld Folgen gesehen": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Folge gesehen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "alle %lld Folgen gesehen"
+                }
+              }
+            }
+          }
+        },
+        "de-AT": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Folge gesehen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "alle %lld Folgen gesehen"
+                }
+              }
+            }
+          }
+        },
+        "de-CH": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Folge gesehen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "alle %lld Folgen gesehen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "episode watched"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "all %lld episodes watched"
+                }
+              }
+            }
+          }
+        },
+        "en-GB": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "episode watched"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "all %lld episodes watched"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "auf Knopfdruck: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "auf Knopfdruck: %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "auf Knopfdruck: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "manual: %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "manual: %@"
+          }
+        }
+      }
+    },
+    "direkt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "direkt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "direkt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "direct"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "direct"
+          }
+        }
+      }
+    },
+    "eingesetzt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eingesetzt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eingesetzt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "installed"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "installed"
+          }
+        }
+      }
+    },
+    "erfüllt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erfüllt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erfüllt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fulfilled"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fulfilled"
+          }
+        }
+      }
+    },
+    "erzwungen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erzwungen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erzwungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "forced"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "forced"
+          }
+        }
+      }
+    },
+    "fehlgeschlagen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fehlgeschlagen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fehlgeschlagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "failed"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "failed"
+          }
+        }
+      }
+    },
+    "für Hörgeschädigte": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "für Hörgeschädigte"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "für Hörgeschädigte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SDH"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SDH"
+          }
+        }
+      }
+    },
+    "geboren %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geboren %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geboren %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "born %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "born %@"
+          }
+        }
+      }
+    },
+    "geboren %@ in %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geboren %@ in %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geboren %@ in %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "born %@ in %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "born %@ in %@"
+          }
+        }
+      }
+    },
+    "gestorben %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gestorben %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gestorben %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "died %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "died %@"
+          }
+        }
+      }
+    },
+    "heute": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "heute"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "heute"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "today"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "today"
+          }
+        }
+      }
+    },
+    "höchstens %lld gleichzeitig": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "höchstens %lld gleichzeitig"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "höchstens %lld gleichzeitig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "up to %lld at once"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "up to %lld at once"
+          }
+        }
+      }
+    },
+    "in Arbeit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in Arbeit"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in Arbeit"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in progress"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in progress"
+          }
+        }
+      }
+    },
+    "keine": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keine"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keine"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none"
+          }
+        }
+      }
+    },
+    "mit %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mit %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mit %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "with %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "with %@"
+          }
+        }
+      }
+    },
+    "nichts Neues": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nichts Neues"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nichts Neues"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nothing new"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nothing new"
+          }
+        }
+      }
+    },
+    "offen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "offen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "offen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "open"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "open"
+          }
+        }
+      }
+    },
+    "seit %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "seit %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "seit %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "since %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "since %@"
+          }
+        }
+      }
+    },
+    "unter 1 MB": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unter 1 MB"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unter 1 MB"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "under 1 MB"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "under 1 MB"
+          }
+        }
+      }
+    },
+    "verschoben": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verschoben"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verschoben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "postponed"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "postponed"
+          }
+        }
+      }
+    },
+    "von Lumen am Titel erkannt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von Lumen am Titel erkannt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von Lumen am Titel erkannt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "recognized by Lumen from the title"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "recognised by Lumen from the title"
+          }
+        }
+      }
+    },
+    "von selbst: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von selbst: %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von selbst: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "automatic: %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "automatic: %@"
+          }
+        }
+      }
+    },
+    "wird umgewandelt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wird umgewandelt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wird umgewandelt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "converting"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "converting"
+          }
+        }
+      }
+    },
+    "zusammengestellt nach TMDb": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zusammengestellt nach TMDb"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zusammengestellt nach TMDb"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compiled from TMDb"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "compiled from TMDb"
+          }
+        }
+      }
+    },
+    "Älteste Filme": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Älteste Filme"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Älteste Filme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oldest Movies"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oldest Films"
+          }
+        }
+      }
+    },
+    "Älteste Serien": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Älteste Serien"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Älteste Serien"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oldest Shows"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oldest Programmes"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

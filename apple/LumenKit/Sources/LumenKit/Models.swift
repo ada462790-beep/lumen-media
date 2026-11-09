@@ -261,7 +261,12 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public var abzeichenNeu: String? {
         if neu == true { return String(localized: "Neu", bundle: .lumenKit, locale: .lumen) }
         // Einzahl und Mehrzahl („Neue Folge") stehen im Katalog.
-        if let n = neueFolgen, n > 0 { return String(localized: "\(n) neue Folgen", bundle: .lumenKit, locale: .lumen) }
+        if let n = neueFolgen, n > 0 {
+            // Einzahl im Code, nicht nur im Katalog: ohne übersetzten Katalog
+            // (swift test, Quellsprache) stünde sonst „1 neue Folgen".
+            return n == 1 ? String(localized: "Neue Folge", bundle: .lumenKit, locale: .lumen)
+                : String(localized: "\(n) neue Folgen", bundle: .lumenKit, locale: .lumen)
+        }
         return nil
     }
 
@@ -768,7 +773,10 @@ public struct Reihe: Codable, Identifiable, Hashable, Sendable {
     public var isHidden: Bool { hidden == true }
 
     /// „3 Filme" — gezählt wird, was dieses Profil sehen darf.
-    public var anzahlText: String { String(localized: "\(anzahl) Filme", bundle: .lumenKit, locale: .lumen) }
+    public var anzahlText: String {
+        anzahl == 1 ? String(localized: "1 Film", bundle: .lumenKit, locale: .lumen)
+            : String(localized: "\(anzahl) Filme", bundle: .lumenKit, locale: .lumen)
+    }
 }
 
 // MARK: - Listen
@@ -966,7 +974,10 @@ public struct ScanErgebnis: Codable, Hashable, Sendable {
         var teile: [String] = []
         if added > 0 { teile.append(String(localized: "\(added) neu", bundle: .lumenKit, locale: .lumen)) }
         if updated > 0 { teile.append(String(localized: "\(updated) geändert", bundle: .lumenKit, locale: .lumen)) }
-        if missing > 0 { teile.append(String(localized: "\(missing) fehlen", bundle: .lumenKit, locale: .lumen)) }
+        if missing > 0 {
+            teile.append(missing == 1 ? String(localized: "1 fehlt", bundle: .lumenKit, locale: .lumen)
+                : String(localized: "\(missing) fehlen", bundle: .lumenKit, locale: .lumen))
+        }
         if unmatched > 0 { teile.append(String(localized: "\(unmatched) nicht erkannt", bundle: .lumenKit, locale: .lumen)) }
         let was = teile.isEmpty ? String(localized: "nichts Neues", bundle: .lumenKit, locale: .lumen) : teile.joined(separator: ", ")
         return auto ? String(localized: "von selbst: \(was)", bundle: .lumenKit, locale: .lumen) : String(localized: "auf Knopfdruck: \(was)", bundle: .lumenKit, locale: .lumen)
@@ -1432,8 +1443,10 @@ public struct Gruppe: Codable, Identifiable, Hashable, Sendable {
     /// „2 Personen · 3 Bibliotheken · höchstens 2 gleichzeitig"
     public var zeile: String {
         let n = bibliotheken.count
-        return String(localized: "\(mitglieder) Personen", bundle: .lumenKit, locale: .lumen) + " · "
-            + String(localized: "\(n) Bibliotheken", bundle: .lumenKit, locale: .lumen)
+        return (mitglieder == 1 ? String(localized: "1 Person", bundle: .lumenKit, locale: .lumen)
+                : String(localized: "\(mitglieder) Personen", bundle: .lumenKit, locale: .lumen)) + " · "
+            + (n == 1 ? String(localized: "1 Bibliothek", bundle: .lumenKit, locale: .lumen)
+                : String(localized: "\(n) Bibliotheken", bundle: .lumenKit, locale: .lumen))
             + " · " + String(localized: "höchstens \(limits.maxStreams) gleichzeitig", bundle: .lumenKit, locale: .lumen)
     }
 }
