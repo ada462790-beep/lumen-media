@@ -68,6 +68,16 @@ type Optionen struct {
 }
 
 func main() {
+	// Unterbefehl: PIN oder Passwort eines Profils von der Kommandozeile
+	// neu setzen (zuruecksetzen.go), etwa per SSH:
+	//   docker exec -it lumen lumen zuruecksetzen
+	if len(os.Args) > 1 && os.Args[1] == "zuruecksetzen" {
+		if err := zuruecksetzenBefehl(os.Args[2:], os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "Fehler:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	var (
 		// 8097 — eins neben dem Anschluss von Emby und Jellyfin. Wer Lumen
 		// ausprobiert, hat meist einen davon schon laufen; anfangs lag

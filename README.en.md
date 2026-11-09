@@ -78,6 +78,13 @@ Without Docker: download the package for your platform from the
 it and run `./lumen` (FFmpeg should be installed). The admin pages check
 for new versions and install signed updates — no GitHub token required.
 
+**Forgot the owner PIN?** Reset it over SSH on the server:
+`sudo docker exec -it lumen lumen zuruecksetzen` lists the profiles,
+`... zuruecksetzen --konto NAME` sets a new PIN (`--art password` for a
+password, `--verwaltung` also clears the admin PIN). The owner keeps all
+history; resetting someone else's profile this way deletes their history,
+watchlist and ratings, just like in the app.
+
 ## Contributing
 
 Bug reports and feature requests go to the

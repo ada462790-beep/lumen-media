@@ -519,6 +519,25 @@ die alte Datei behalten.
 Geht etwas schief: Zeile zurück auf `lumen-daten:/data`, neu erstellen —
 das Volume ist unberührt.
 
+### PIN vergessen
+
+Hat ein Profil seinen PIN vergessen, setzt die Verwaltung ihn in der App
+zurück (*Verwaltung › Konten*). Hat der Besitzer seinen eigenen vergessen,
+geht es über SSH auf dem Server:
+
+```sh
+sudo docker exec -it lumen lumen zuruecksetzen                 # Profile auflisten
+sudo docker exec -it lumen lumen zuruecksetzen --konto Alex    # neuen PIN setzen
+```
+
+`--art password` setzt ein Passwort statt eines PINs, `--verwaltung` hebt
+zusätzlich den Verwaltungs-PIN auf. Ohne Docker:
+`lumen zuruecksetzen --data /pfad/zu/lumen-daten --konto Alex`.
+
+Beim Besitzer bleibt alles erhalten; alle seine Geräte werden abgemeldet.
+Setzt man so das Profil von jemand anderem zurück, werden dessen Verlauf,
+Merkliste und Bewertungen gelöscht — genau wie in der App.
+
 ---
 
 ## Von unterwegs schauen
