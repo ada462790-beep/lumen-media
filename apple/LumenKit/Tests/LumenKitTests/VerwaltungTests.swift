@@ -128,7 +128,7 @@ final class VerwaltungDecodingTests: XCTestCase {
         """
         let lib = try JSONDecoder.lumen.decode(Library.self, from: Data(json.utf8))
         XCTAssertEqual(lib.taktWahl, "zeit")
-        XCTAssertEqual(lib.lastResult?.text, "von selbst: 3 neu, 1 fehlen")
+        XCTAssertEqual(lib.lastResult?.text, "von selbst: 3 neu, 1 fehlt")
         XCTAssertEqual(lib.metadaten?.anteil ?? 0, 0.25, accuracy: 0.001)
         XCTAssertTrue(lib.beschaeftigt)
     }
