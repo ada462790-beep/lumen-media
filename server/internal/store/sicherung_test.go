@@ -68,7 +68,7 @@ func TestSicherungZweiGenerationenUndWiederherstellen(t *testing.T) {
 }
 
 // Ein leeres Doppel einer Serie geht in der Serie mit den Dateien auf, und
-// der Stand der Person wandert mit (Issue #7).
+// der Stand der Person wandert mit.
 func TestLeereSerieGehtAuf(t *testing.T) {
 	st, err := Open(filepath.Join(t.TempDir(), "lumen.db"))
 	if err != nil {

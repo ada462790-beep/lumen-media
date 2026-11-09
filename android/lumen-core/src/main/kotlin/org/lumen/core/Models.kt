@@ -25,7 +25,7 @@ data class Account(
     val lockKind: String,
     val disabled: Boolean,
     // Darf in die Verwaltung: der Besitzer immer, sonst über eine Gruppe
-    // mit „Verwaltung" (Issue #6). Ein älterer Server kennt das Feld noch
+    // mit „Verwaltung". Ein älterer Server kennt das Feld noch
     // nicht — dann gilt, was vorher galt: nur der Besitzer.
     val isAdmin: Boolean = isOwner,
     // Womit diese Person ihre Verwaltung schützt: none, pin, password,
@@ -219,12 +219,12 @@ data class Item(
     // Erstausstrahlung einer Folge, wie die Metadaten-Quelle sie nennt
     // („2019-04-14"). Steht in der Folgenliste der Titelseite.
     val premiered: String? = null,
-    // Nur bei Serien: das Jahr der letzten Staffel und ob noch neue kommen
-    // (Issue #13). Fehlt laeuftNoch, weiss der Server es nicht — dann steht
+    // Nur bei Serien: das Jahr der letzten Staffel und ob noch neue kommen.
+    // Fehlt laeuftNoch, weiss der Server es nicht — dann steht
     // nur das Startjahr da, wie bisher.
     val endYear: Int? = null,
     val laeuftNoch: Boolean? = null,
-    // Das Herz (Issue #10): nur das eigene, wie die Merkliste.
+    // Das Herz: nur das eigene, wie die Merkliste.
     val favorite: Boolean = false,
 ) {
     /**
@@ -352,7 +352,7 @@ data class MediaFile(
     val tracks: List<Track> = emptyList(),
     val chapters: List<Chapter> = emptyList(),
     // Welcher Teil eines Films die Datei ist („… a.avi", „… b.avi"): 1, 2, 3 …
-    // Mehrere Dateien mit Teil 1 sind Fassungen desselben Films (Issue #8).
+    // Mehrere Dateien mit Teil 1 sind Fassungen desselben Films.
     // Ein älterer Server schickt das Feld nicht — dann ist jede Datei Teil 1.
     val partNo: Int = 1,
     // Die Fassung, die der Besitzer für den Titel als Standard gewählt hat.
@@ -543,7 +543,7 @@ data class Quelle(val name: String, val url: String) {
 }
 
 /**
- * Die Personenseite (Issue #9) — GET /persons/{name}: Foto, Lebensdaten,
+ * Die Personenseite — GET /persons/{name}: Foto, Lebensdaten,
  * Biografie und Quellen. Kennt der Server die Person nicht, gibt es keine;
  * dann zeigt die Seite nur, worin sie mitspielt.
  */

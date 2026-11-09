@@ -17,7 +17,7 @@ import Observation
 
 // MARK: - Raster
 
-/// Wie das Raster sortiert ist (Issue #11) — dieselben vier Wege wie im
+/// Wie das Raster sortiert ist — dieselben vier Wege wie im
 /// Browser (app.js: SORTIERUNGEN). Der Rohwert ist, was der Server als
 /// `sort` versteht.
 public enum Sortierung: String, CaseIterable, Identifiable, Sendable {
@@ -51,7 +51,7 @@ public enum Sortierung: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// Die Leiste „# A B C …" über dem Raster (Issue #11).
+/// Die Leiste „# A B C …" über dem Raster.
 public enum Buchstaben {
     /// Die Raute steht für alles, was nicht mit einem Buchstaben anfängt — Zahlen
     /// und Zeichen, wie „2001" oder „…und dann kam Polly".
@@ -78,7 +78,7 @@ public enum Buchstaben {
 /// Raster wie der Browser seitenweise (`APIClient.seite`), und der Server
 /// nennt die Genres über alle Titel der Art.
 ///
-/// Dazu kommen Sortierung und Buchstabe (Issue #11). Die Leiste der
+/// Dazu kommen Sortierung und Buchstabe. Die Leiste der
 /// Buchstaben gibt es nur bei A–Z: nach „Neu hinzugefügt" sortiert,
 /// spränge ein Buchstabe ins Leere.
 @MainActor
@@ -324,7 +324,7 @@ public struct Abspielstart: Identifiable, Sendable {
     public let id = UUID()
     public let item: Item
     public let vonVorn: Bool
-    /// Die gewählte Fassung (Issue #8) — aus „In welcher Qualität?". nil
+    /// Die gewählte Fassung — aus „In welcher Qualität?". nil
     /// heisst: die erste, so wie der Server sie ordnet.
     public let datei: String?
 

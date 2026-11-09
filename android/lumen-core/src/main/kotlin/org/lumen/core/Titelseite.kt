@@ -29,7 +29,7 @@ object Titelseite {
     fun tomaten(prozent: Int): String = (if (prozent >= 60) "🍅" else "🟢") + " " + Texte.t(Tx.TOMATEN, prozent)
 
     fun metaZeile(item: Item): String = buildList {
-        // Bei Serien der Zeitraum: „seit 2014", „2014–2020" (Issue #13).
+        // Bei Serien der Zeitraum: „seit 2014", „2014–2020".
         item.jahresText?.let { add(it) }
         item.ageYears?.let { add(Texte.t(Tx.AB_ALTER, it)) }
         item.runtimeMs?.takeIf { it > 0 }?.let { add(Item.duration(it)) }

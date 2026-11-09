@@ -13,7 +13,7 @@ import UIKit
 import AppKit
 #endif
 
-// Die Verwaltungssperre (GitHub-Issue #6), soweit sie auf allen Geräten
+// Die Verwaltungssperre, soweit sie auf allen Geräten
 // gleich aussieht. Diese Datei liegt in Design/, weil project.yml genau
 // diesen Ordner in beide Ziele einbindet — iPhone, iPad, Mac und Apple TV
 // zeigen denselben Dialog, nur in anderer Grösse.

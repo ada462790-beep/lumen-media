@@ -8,7 +8,7 @@
 import SwiftUI
 import LumenKit
 
-/// Verwaltung — für den Besitzer und für Mitverwalter (Issue #6), also
+/// Verwaltung — für den Besitzer und für Mitverwalter, also
 /// alle, bei denen der Server `isAdmin` setzt.
 ///
 /// Was hier zu sehen ist, reicht, um den Server zu betreiben: Bibliotheken

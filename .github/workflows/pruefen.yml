@@ -7,8 +7,9 @@
 name: Prüfen
 
 on:
-  # Nur main und Pull-Requests: Jeder Arbeitszweig einzeln kostete
-  # Actions-Minuten, und die sind bei einem privaten Repo begrenzt.
+  # Nur main und Pull-Requests (auch aus Forks): Jeder Arbeitszweig
+  # einzeln liefe sonst doppelt — einmal beim Hochschieben, einmal im
+  # Pull-Request. Hier wird nur gelesen; Geheimnisse braucht es keine.
   push:
     branches: [main]
   pull_request:

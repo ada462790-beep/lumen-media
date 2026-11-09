@@ -206,7 +206,7 @@ struct PersonBild: View {
     }
 }
 
-/// Die Personenseite (Issue #9): oben Foto, Lebensdaten, Biografie und
+/// Die Personenseite: oben Foto, Lebensdaten, Biografie und
 /// Quellen, darunter die Titel, in denen die Person mitspielt — soweit das
 /// Profil sie sehen darf. Wie im Browser (app.js: viewPerson).
 ///

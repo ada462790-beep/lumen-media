@@ -577,7 +577,7 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 	// schief, sobald die Metadaten den Titel geändert hatten („9-1-1" im
 	// Ordner, „9-1-1 Notruf L.A." von TMDb): Jeder Durchlauf fand die
 	// Serie nicht und legte sie neu an — bei stündlichem Scan nach zwei
-	// Tagen fünfzigmal (Issue #7).
+	// Tagen fünfzigmal.
 	series := s.serieZuDateien(ctx, lib.ID, hits, title, jahr, land)
 
 	if series == nil {
@@ -815,7 +815,7 @@ func (s *Scanner) alleDateienSind(ctx context.Context, lib store.Library, itemID
 // nach ihrem eigenen Namen derselbe Film sind. Der Titel des Eintrags
 // allein reicht nicht: TMDb kann ihn geändert haben, und dann landete
 // „Bibi & Tina – Der Film" (2014) als zweite Fassung bei einem ganz
-// anderen Film, der zufällig jetzt „Bibi & Tina" heisst (Issue #8).
+// anderen Film, der zufällig jetzt „Bibi & Tina" heisst.
 func (s *Scanner) dateienPassen(ctx context.Context, lib store.Library, itemID, title string) bool {
 	dateien, err := s.st.FilesFor(ctx, itemID)
 	if err != nil || len(dateien) == 0 {
@@ -885,7 +885,7 @@ func alleNurNummer(hits []episodeHit) bool {
 // zog alle anderen mit. Eine Serie, die nie erkannt wurde und anders
 // heisst als jetzt geraten, ist ein alter Fehlgriff (aus „The German"
 // wurde einmal „The") — an ihr hält Lumen nicht fest. Erkannte Serien
-// dagegen dürfen anders heissen: TMDb hat sie umbenannt (Issue #7).
+// dagegen dürfen anders heissen: TMDb hat sie umbenannt.
 func (s *Scanner) serieZuDateien(ctx context.Context, libID string, hits []episodeHit, titel string, jahr int, land string) *store.Item {
 	zaehler := map[string]int{}
 	serien := map[string]*store.Item{}

@@ -178,7 +178,7 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, "du schaust schon auf 2 Geräten")
     }
 
-    /// Ein Mitverwalter (Issue #6): nicht Besitzer, aber `isAdmin`, mit
+    /// Ein Mitverwalter: nicht Besitzer, aber `isAdmin`, mit
     /// Gruppe und eigener Verwaltungssperre. Und ein Konto von einem
     /// älteren Server, der die Felder noch nicht kennt — dann zählt wie
     /// früher nur `isOwner`.

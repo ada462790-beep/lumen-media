@@ -463,15 +463,15 @@ func nachruesten(db *sql.DB) error {
 		`ALTER TABLE library ADD COLUMN scan_at TEXT NOT NULL DEFAULT ''`,
 		// Ob Spuren und Kapitel dieser Datei schon gemessen wurden.
 		`ALTER TABLE media_file ADD COLUMN spuren_gelesen INTEGER NOT NULL DEFAULT 0`,
-		// Gruppen und Verwaltungssperre (Issue #6).
+		// Gruppen und Verwaltungssperre.
 		`ALTER TABLE account ADD COLUMN group_id TEXT`,
 		`ALTER TABLE account ADD COLUMN admin_lock_kind TEXT NOT NULL DEFAULT 'none'`,
 		`ALTER TABLE account ADD COLUMN admin_hash BLOB`,
 		`ALTER TABLE account ADD COLUMN admin_salt BLOB`,
 		`ALTER TABLE account ADD COLUMN admin_totp TEXT`,
-		// Die Fassung, die der Besitzer für einen Titel gewählt hat (#8).
+		// Die Fassung, die der Besitzer für einen Titel gewählt hat.
 		`ALTER TABLE item ADD COLUMN bevorzugte_datei TEXT`,
-		// Serien: das Jahr der letzten Folge und ob sie abgeschlossen ist (#13).
+		// Serien: das Jahr der letzten Folge und ob sie abgeschlossen ist.
 		`ALTER TABLE item ADD COLUMN end_year INTEGER`,
 		`ALTER TABLE item ADD COLUMN laeuft_noch INTEGER`,
 		// Rotten Tomatoes in Prozent; -1 = gibt es nicht, NULL = nie gefragt.

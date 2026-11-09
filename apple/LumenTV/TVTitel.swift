@@ -8,7 +8,7 @@
 import SwiftUI
 import LumenKit
 
-// Die Titelseite auf dem Fernseher (GitHub-Issue #1).
+// Die Titelseite auf dem Fernseher.
 //
 // Bisher spielte ein Klick auf eine Karte sofort. Das war schnell, liess
 // aber keinen Platz für alles andere: zur Liste legen, merken, als
@@ -149,7 +149,7 @@ struct TVDetailView: View {
     /// Zeile, damit der Fokus nur nach rechts und links muss.
     @ViewBuilder
     private func knoepfe(_ item: Item) -> some View {
-        // Mehrere Fassungen desselben Films (Issue #8): „Abspielen" fragt
+        // Mehrere Fassungen desselben Films: „Abspielen" fragt
         // zuerst nach der Qualität — als Dialog, durch den der Fokus geht.
         let fassungen = Fassungen.liste(detail?.files ?? [])
         HStack(spacing: 24) {
@@ -202,7 +202,7 @@ struct TVDetailView: View {
                       systemImage: item.isOnList ? "bookmark.fill" : "bookmark")
             }
 
-            // Das Herz (Issue #10): was einem gefallen hat — anders als die
+            // Das Herz: was einem gefallen hat — anders als die
             // Merkliste, die sammelt, was man noch sehen will.
             if item.kind == "movie" || item.kind == "series" {
                 Button {

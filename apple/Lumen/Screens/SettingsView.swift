@@ -141,7 +141,7 @@ struct SettingsView: View {
                 Button("Verlauf löschen", role: .destructive) { confirmClearHistory = true }
             }
 
-            // Für Besitzer und Mitverwalter (Issue #6) — nur in der Mac-App:
+            // Für Besitzer und Mitverwalter — nur in der Mac-App:
             // Die Verwaltung gibt es nur dort und im Browser.
             if session.verwaltungHier {
                 Section {

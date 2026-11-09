@@ -8,7 +8,7 @@
 import XCTest
 @testable import LumenKit
 
-// Fassungen und Teile eines Films (Issue #8) — dieselben Fälle wie in
+// Fassungen und Teile eines Films — dieselben Fälle wie in
 // lumen-core (Tests.kt: fassungenTests), damit iPhone, Fernseher, Android
 // und Browser dasselbe zeigen und denselben Stand speichern.
 

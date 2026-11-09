@@ -15,7 +15,7 @@ public actor APIClient {
     public private(set) var baseURL: URL
     public private(set) var token: String?
 
-    /// Das Entsperr-Token der Verwaltung (Issue #6). Nur im Speicher, nie
+    /// Das Entsperr-Token der Verwaltung. Nur im Speicher, nie
     /// im Schlüsselbund: wer die App neu startet, entsperrt neu — so ist
     /// die Sperre gemeint. Es geht als `X-Lumen-Admin` an jede
     /// Verwaltungs-Anfrage mit; der Server verlängert es bei jeder.
@@ -588,7 +588,7 @@ public actor APIClient {
     /// die Gesamtzahl, ob es weitergeht, und die Genres für die Knöpfe —
     /// dieselbe Anfrage wie im Browser (api.js: seite). Ohne `genre` alle.
     ///
-    /// `sort` ist title, added, year oder year-asc (Issue #11); nil lässt
+    /// `sort` ist title, added, year oder year-asc; nil lässt
     /// den Server wählen — bei einer Liste die Reihenfolge, in der gemerkt
     /// wurde. `buchstabe` springt zu den Titeln mit diesem Anfang („A" …
     /// „Z", die Raute für Zahlen und Zeichen). `liste` ist merkliste oder
@@ -665,7 +665,7 @@ public actor APIClient {
         return text.addingPercentEncoding(withAllowedCharacters: erlaubt) ?? text
     }
 
-    /// Foto, Lebensdaten und Biografie einer Person (Issue #9). 404, wenn
+    /// Foto, Lebensdaten und Biografie einer Person. 404, wenn
     /// sie in keinem Titel steht, den dieses Profil sehen darf.
     public func person(_ name: String) async throws -> PersonInfo {
         let teil = Self.pfadTeil(name)
@@ -778,7 +778,7 @@ public actor APIClient {
         _ = try await request("DELETE", "/watchlist/\(id)")
     }
 
-    /// Das Herz setzen (Issue #10) — anders als die Merkliste nicht „will
+    /// Das Herz setzen — anders als die Merkliste nicht „will
     /// ich noch sehen", sondern „hat mir richtig gefallen".
     public func addFavorite(_ id: String) async throws {
         _ = try await request("PUT", "/favorites/\(id)")

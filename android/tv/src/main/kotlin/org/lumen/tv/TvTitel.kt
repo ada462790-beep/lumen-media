@@ -139,7 +139,7 @@ internal fun TvTitel(
     val item = d?.item ?: ziel.item
     val l = liste
     val staffeln = AmStueck.staffelnOrdnen(d?.seasons ?: emptyList())
-    // Mehrere Fassungen desselben Films (Issue #8): Dann fragt „Abspielen"
+    // Mehrere Fassungen desselben Films: Dann fragt „Abspielen"
     // zuerst nach der Qualität — nur bei einem Film für sich, nicht aus
     // einer Liste heraus (die läuft am Stück, mit der Standard-Fassung).
     val fassungen = Fassungen.liste(d?.files ?: emptyList())
@@ -269,7 +269,7 @@ internal fun TvTitel(
                                 aendern { c -> if (item.onList) c.removeFromWatchlist(item.id) else c.addToWatchlist(item.id) }
                             }
                         }
-                        // Das Herz gleich neben „Merken" (Issue #10) — für Filme und Serien.
+                        // Das Herz gleich neben „Merken" — für Filme und Serien.
                         if (item.kind == "movie" || item.kind == "series") {
                             item(key = "herz") {
                                 TvHerz(item.favorite) {

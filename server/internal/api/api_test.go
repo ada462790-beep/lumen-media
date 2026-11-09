@@ -93,7 +93,7 @@ func (h *harness) do(method, path, body, token string) (*http.Response, []byte) 
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	// Rechte-Änderungen verlangen den Code noch einmal (Issue #6); der
+	// Rechte-Änderungen verlangen den Code noch einmal; der
 	// Besitzer der Tests gibt ihn mit, ausser ein Test will es anders.
 	if token != "" && token == h.tok && !h.ohneBestaetigung {
 		req.Header.Set("X-Lumen-Bestaetigung", "einsehrgutespasswort")

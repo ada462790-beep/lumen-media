@@ -17,7 +17,7 @@ import (
 // Platten-Priorität aus und gibt die Ausgabe zurück — wie
 // cmd.CombinedOutput() bzw. cmd.Output().
 //
-// Issue #4: „Wiedergabe hat Vorrang". Auf einem NAS mit schwachem
+// „Wiedergabe hat Vorrang". Auf einem NAS mit schwachem
 // Prozessor soll ein Scan nie das Bild ruckeln lassen; das Umwandeln für
 // die Wiedergabe läuft mit normaler Priorität und gewinnt damit immer.
 func Niedrig(cmd *exec.Cmd, mitFehlerausgabe bool) ([]byte, error) {

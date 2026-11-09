@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Fassungen und Teile eines Films (Issue #8) — dieselben Regeln wie im
+/// Fassungen und Teile eines Films — dieselben Regeln wie im
 /// Browser (app.js: fassungName, fassungsWahl, startPlayer) und in
 /// lumen-core auf Android (Fassungen.kt).
 ///

@@ -59,7 +59,7 @@ type Item struct {
 	Overview      string `json:"overview,omitempty"`
 	AgeRating     string `json:"ageRating,omitempty"`
 	AgeYears      *int   `json:"ageYears,omitempty"`
-	// Serien: Jahr der letzten Folge und ob noch neue kommen (Issue #13).
+	// Serien: Jahr der letzten Folge und ob noch neue kommen.
 	// Leer, solange die Quelle es nicht gesagt hat.
 	EndYear    *int  `json:"endYear,omitempty"`
 	LaeuftNoch *bool `json:"laeuftNoch,omitempty"`
@@ -332,7 +332,7 @@ func (s *Store) UpsertItem(ctx context.Context, it *Item) error {
 			return err
 		}
 		// Eine neue Folge macht ihre Serie „neu": Sie rückt unter
-		// „Zuletzt hinzugefügt" nach vorn (Issue #11). Die Bedingung am
+		// „Zuletzt hinzugefügt" nach vorn. Die Bedingung am
 		// Ende lässt die Zeile der Serie in Ruhe, wenn sich nichts ändert —
 		// sonst schriebe jede nachgeschlagene Folge die Serie neu.
 		if it.Kind == "episode" && it.ParentID != "" {
@@ -409,7 +409,7 @@ type Query struct {
 	// NotIDs: diese Titel bleiben draussen — etwa alles, was schon angefangen wurde.
 	NotIDs []string
 	// Buchstabe: nur Titel, die damit anfangen („a" … „z"), „#" für alles
-	// andere (Zahlen, Zeichen). Issue #11.
+	// andere (Zahlen, Zeichen).
 	Buchstabe string
 	// Freigabe: die Abfrage kommt aus den Rechten eines Kontos. Dann
 	// heisst „keine Bibliotheken" auch „nichts" — auch wenn Kennungen
@@ -512,7 +512,7 @@ func (s *Store) Query(ctx context.Context, q Query) ([]Item, error) {
 	switch q.Sort {
 	case "added":
 		// Bei Serien zählt die neueste Folge: Kommt zu einer alten Serie
-		// eine neue Staffel, steht sie wieder vorn (Issue #11). Das steht
+		// eine neue Staffel, steht sie wieder vorn. Das steht
 		// fertig in zuletzt_neu (UpsertItem führt es nach); vorher wurde
 		// es bei jeder Abfrage für jede Serie über alle Folgen gesucht.
 		order = `i.zuletzt_neu DESC`
@@ -647,7 +647,7 @@ type MediaFile struct {
 	HDR        string `json:"hdr,omitempty"`
 	Missing    bool   `json:"missing,omitempty"`
 	// Bevorzugt: Diese Fassung hat der Besitzer für den Titel gewählt; die
-	// Geräte nehmen sie zuerst (Issue #8).
+	// Geräte nehmen sie zuerst.
 	Bevorzugt bool `json:"preferred,omitempty"`
 	// Spuren und Kapitel — gefüllt, wenn die Datei ausgemessen ist.
 	Spuren  []Track   `json:"tracks,omitempty"`
@@ -1259,7 +1259,7 @@ func (s *Store) Besetzung(ctx context.Context, itemID string) ([]Person, error) 
 }
 
 // FassungWaehlen legt fest, welche Datei eines Titels die Geräte zuerst
-// nehmen (Issue #8: „American Psycho" als MKV in 1080p und als AVI in
+// nehmen (etwa „American Psycho" als MKV in 1080p und als AVI in
 // 400p). Leere Kennung = wieder die grösste.
 func (s *Store) FassungWaehlen(ctx context.Context, itemID, fileID string) error {
 	if fileID != "" {

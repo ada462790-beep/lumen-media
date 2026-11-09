@@ -7,7 +7,7 @@
 
 package api
 
-// Fassungen und Teile (Issue #8): welche Datei eines Titels gilt, eine
+// Fassungen und Teile: welche Datei eines Titels gilt, eine
 // fälschlich zugeordnete Datei abtrennen, einen Film in Teilen zu einer
 // Datei zusammenführen.
 

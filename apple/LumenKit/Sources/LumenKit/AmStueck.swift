@@ -169,7 +169,7 @@ public final class Abspielfolge {
     /// „Von vorn": nur der erste Titel beginnt bei 0 statt am gemerkten
     /// Stand. Alles danach läuft wie gewohnt.
     @ObservationIgnored private var ersterVonVorn: Bool
-    /// Die gewählte Fassung des ersten Titels (Issue #8) — „In welcher
+    /// Die gewählte Fassung des ersten Titels — „In welcher
     /// Qualität?". Gilt nur für ihn; alles danach nimmt den Standard.
     @ObservationIgnored private var ersteDatei: String?
     /// Eine heruntergeladene Datei statt des Servers.

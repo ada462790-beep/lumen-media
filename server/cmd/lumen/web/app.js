@@ -37,7 +37,7 @@ const app = document.getElementById('app');
 const voll = () => !!(S.me?.account?.isOwner || S.me?.account?.vollzugriff);
 const $ = sel => app.querySelector(sel);
 
-/* Rechte ändern verlangt den Code noch einmal (Issue #6). api.js fragt
+/* Rechte ändern verlangt den Code noch einmal. api.js fragt
    hier nach, wenn der Server „bestaetigen" antwortet. Ein echtes <dialog>:
    Esc bricht ab, der Fokus bleibt im Feld. */
 api.bestaetigen = (hinweis = '') => new Promise(fertig => {
@@ -228,7 +228,7 @@ function standbild(it, hoch) {
       src="${esc(it.frame)}${tokenSuffix(it.frame)}" alt="" loading="lazy" data-weg>`;
 }
 // Das Jahr eines Titels — bei Serien der Zeitraum: „2014–2020" für eine
-// abgeschlossene, „seit 2014" für eine, die noch läuft (Issue #13).
+// abgeschlossene, „seit 2014" für eine, die noch läuft.
 function jahre(it) {
   if (!it || !it.year) return '';
   if (it.kind !== 'series' || it.laeuftNoch == null) return String(it.year);
@@ -1191,7 +1191,7 @@ function viewHome() {
     <div style="height:40px"></div></div>`);
 }
 
-// Sortieren und nach Buchstaben springen (Issue #11).
+// Sortieren und nach Buchstaben springen.
 // Je Art eigene Wörter: „Neueste Serien" ist in jeder Sprache ein eigener
 // Text, kein ausgetauschtes Wort in „Neueste Filme".
 const SORTIERUNGEN = serien => [['title', 'A–Z'], ['added', tr('Neu hinzugefügt')],
@@ -1267,7 +1267,7 @@ function mehrLadenEinrichten() {
   mehrBeobachter.observe(ziel);
 }
 
-// Favoriten (Issue #10): was einem richtig gut gefallen hat — getrennt nach
+// Favoriten: was einem richtig gut gefallen hat — getrennt nach
 // Filmen und Serien. Nur das eigene Profil sieht sie.
 function viewFavorites() {
   const items = S.data?.items || [];
@@ -1388,7 +1388,7 @@ function viewNews() {
 }
 
 /* Alles mit einer Person — die Seite hinter dem Porträt in der Suche. */
-// Personenseite (Issue #9): Foto, Lebensdaten, Biografie mit Quelle — und
+// Personenseite: Foto, Lebensdaten, Biografie mit Quelle — und
 // darunter, worin die Person in der eigenen Mediathek mitspielt.
 function viewPerson() {
   const items = S.data?.items || [];
@@ -1456,8 +1456,8 @@ function viewDetail() {
   if (!d) return shell(`<div class="wrap">${loading()}</div>`);
   const it = d.item;
   const files = d.files || [];
-  // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p — Issue
-  // #8): Sie sind ein Film. „Ansehen" fragt dann zuerst nach der Qualität
+  // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p): Sie
+  // sind ein Film. „Ansehen" fragt dann zuerst nach der Qualität
   // (Auflösung, Format, Grösse). Oben steht die Standard-Fassung — die vom
   // Besitzer gewählte, sonst die mit der höchsten Auflösung. Teile eines
   // Films (CD1, CD2, a/b) sind keine Fassungen.
@@ -2124,8 +2124,8 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       (d.files || []).find(f => !f.missing);
     if (!file) { toast(tr('Zu diesem Titel gibt es keine Datei.')); return; }
 
-    // Ein Film in Teilen („Apocalypse Now (1979) a.avi", „b.avi", „c.avi",
-    // Issue #8): Die Teile laufen nacheinander, als wäre es ein Film. Der
+    // Ein Film in Teilen („Apocalypse Now (1979) a.avi", „b.avi", „c.avi"):
+    // Die Teile laufen nacheinander, als wäre es ein Film. Der
     // Stand zählt über alle Teile, damit „Weiter bei" in Teil 2 landet.
     const teile = [];
     for (let nr = 1; ; nr++) {
@@ -3920,7 +3920,7 @@ function viewAdminWishes() {
 }
 
 /* ---------------------------------------------------------------- Updates
-   Issue #3: Lumen sagt, ob es eine neuere Fassung gibt, und setzt sie auf
+   Lumen sagt, ob es eine neuere Fassung gibt, und setzt sie auf
    Wunsch selbst ein — jetzt oder nachts, aber nie, während jemand schaut.
    Dafür zählt nur die Zahl der Wiedergaben, keine Namen. */
 function updateKurz(u, version) {
@@ -4033,7 +4033,7 @@ function updateFrage(n) {
 }
 
 /* ------------------------------------------------- Verwaltungssperre
-   Issue #6: Wer in die Verwaltung darf, schützt sie mit eigenem PIN,
+   Wer in die Verwaltung darf, schützt sie mit eigenem PIN,
    Passwort oder einem Code aus der Authenticator-App. Kein E-Mail, kein
    SMS. Nach dem Entsperren gilt ein Token eine Viertelstunde. */
 const sperreName = k => ({ pin: 'PIN', password: tr('Passwort'), totp: tr('Authenticator-App') })[k] || tr('keine');

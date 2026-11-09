@@ -11,7 +11,7 @@ import Observation
 /// „Zur Liste": in welche Listen ein Titel gehört.
 ///
 /// Die Rechnung hinter der Auswahl auf der Titelseite — auf dem iPhone,
-/// dem Mac und dem Fernseher dieselbe (GitHub-Issue #1). Gezeigt werden
+/// dem Mac und dem Fernseher dieselbe. Gezeigt werden
 /// nur Listen, in die man schreiben darf: die eigenen und geteilte, bei
 /// denen alle mitschreiben. Ein Tipp legt hinein oder nimmt heraus; was
 /// gerade gilt, steht an jeder Liste (`hasItem`).

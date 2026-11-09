@@ -7,7 +7,7 @@
 
 package api
 
-// Updates in der Verwaltung (GitHub-Issue #3): Lumen sieht nach, ob es
+// Updates in der Verwaltung: Lumen sieht nach, ob es
 // eine neuere Fassung gibt, sagt es dem Besitzer, und setzt sie auf
 // Wunsch selbst ein — von Hand oder nachts von selbst, aber nie, während
 // jemand schaut.
@@ -92,8 +92,8 @@ type updateStand struct {
 var updStand updateStand
 
 func (s *Server) updatePruefer() *update.Pruefer {
-	// Ein Token aus der Verwaltung hat Vorrang vor LUMEN_GITHUB_TOKEN
-	// (Issue #14): Ist das aus der docker-compose.yml abgelaufen, lässt es
+	// Ein Token aus der Verwaltung hat Vorrang vor LUMEN_GITHUB_TOKEN:
+	// Ist das aus der docker-compose.yml abgelaufen, lässt es
 	// sich so ersetzen, ohne den Container anzufassen. Vorher galt das
 	// alte aus der Umgebung weiter, und das Feld war gesperrt.
 	token := s.st.Setting(context.Background(), "update.token", "")
@@ -369,7 +369,7 @@ func (s *Server) UpdateWaechter(ctx context.Context) {
 		}
 		zuletztVersucht = jetzt.Format(time.RFC3339)
 		if n := s.live.Load().Total; n > 0 {
-			// Wie in Issue #3 gewünscht: nicht alle zehn Minuten neu
+			// Wie gewünscht: nicht alle zehn Minuten neu
 			// anklopfen, sondern auf das Fenster am nächsten Tag
 			// verschieben — und das einmal ins Protokoll schreiben.
 			updStand.mu.Lock()

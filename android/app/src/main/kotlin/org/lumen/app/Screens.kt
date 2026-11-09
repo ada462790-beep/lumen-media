@@ -124,8 +124,8 @@ fun DetailScreen(
     }
     val item = d.item
     val staffeln = AmStueck.staffelnOrdnen(d.seasons)
-    // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p —
-    // Issue #8): „Ansehen" fragt dann zuerst nach der Qualität. Teile
+    // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p):
+    // „Ansehen" fragt dann zuerst nach der Qualität. Teile
     // eines Films (a/b/c) sind keine Fassungen; die laufen nacheinander.
     val fassungen = Fassungen.liste(d.files)
 

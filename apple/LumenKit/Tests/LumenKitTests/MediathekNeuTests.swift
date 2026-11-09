@@ -8,8 +8,8 @@
 import XCTest
 @testable import LumenKit
 
-// Jahre bei Serien (#13), Favoriten (#10), Sortieren und Buchstaben (#11),
-// die Personenseite (#9) und Fassungen und Teile beim Aufräumen (#8).
+// Jahre bei Serien, Favoriten, Sortieren und Buchstaben,
+// die Personenseite und Fassungen und Teile beim Aufräumen.
 //
 // Die Adressen prüft ein `URLProtocol`, das jede Anfrage mitschreibt und
 // selbst antwortet: so sieht der Test genau, was der Client dem Server

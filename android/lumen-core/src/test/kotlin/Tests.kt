@@ -906,7 +906,7 @@ private fun pinTests() {
 
 // ---------------------------------------------------------------- Verwaltung
 
-/** Vollzugriff (Issue #6): was das Konto darüber sagt. */
+/** Vollzugriff: was das Konto darüber sagt. */
 private fun verwaltungTests() {
     // Ein älterer Server kennt isAdmin nicht: dann darf, wer Besitzer ist.
     val alt = Account.from(Json.parse("""
@@ -997,7 +997,7 @@ private fun abzeichenTests() {
 
     // Ähnliche Titel und Besetzung auf der Titelseite.
     val d = ItemDetail.from(Json.parse("""{"item":{"id":"m","title":"M","kind":"movie"},
-        "cast":[{"name":"Ada Muster","rolle":"Hauptrolle","bild":"/api/v1/art/m/cast00"},{"name":"Bo"}],
+        "cast":[{"name":"Alex Muster","rolle":"Hauptrolle","bild":"/api/v1/art/m/cast00"},{"name":"Bo"}],
         "similar":[{"id":"s1","title":"S1","neu":true},{"id":"s2","title":"S2"}]}"""))
     gleich("Zwei aus der Besetzung", 2, d.cast.size)
     gleich("Rolle gelesen", "Hauptrolle", d.cast[0].rolle)
@@ -1074,7 +1074,7 @@ private fun profilbildTests() {
     gleich("Ohne eigenes Bild keine Adresse", null, c.profilbildUrl("acc_1", "fig-wal"))
     pruefe("Vorschau mit Schlüssel", c.vorschauUrl("it_1")?.endsWith("/api/v1/art/it_1/vorschau?key=k") == true)
 
-    val me = Me.from(Json.parse("""{"account":{"id":"a","name":"Ada","avatar":"fig-wal"},
+    val me = Me.from(Json.parse("""{"account":{"id":"a","name":"Alex","avatar":"fig-wal"},
         "neuigkeiten":3,"figuren":["fuchs","eule"]}"""))
     gleich("Ungelesene aus /me", 3, me.neuigkeiten)
     gleich("Figuren aus /me", listOf("fuchs", "eule"), me.figuren)
@@ -1675,7 +1675,7 @@ private fun fakeAntwort(ex: com.sun.net.httpserver.HttpExchange, code: Int, body
     ex.responseBody.use { if (roh.isNotEmpty()) it.write(roh) }
 }
 
-private const val ME_JSON = """{"account":{"id":"acc_1","name":"Ada","isOwner":false}}"""
+private const val ME_JSON = """{"account":{"id":"acc_1","name":"Alex","isOwner":false}}"""
 
 /**
  * Der Medienschlüssel statt des Tokens in den Adressen — gegen einen
@@ -1807,8 +1807,8 @@ private fun unterwegsTests() {
                 when {
                     j["name"].text == "Zu" ->
                         fakeAntwort(ex, 429, """{"error":"Zu viele Versuche. Versuch es in 5 Minuten wieder."}""")
-                    j["name"].text == "Ada" && j["secret"].text == "1234" ->
-                        fakeAntwort(ex, 200, """{"token":"T","account":{"id":"acc_1","name":"Ada"}}""")
+                    j["name"].text == "Alex" && j["secret"].text == "1234" ->
+                        fakeAntwort(ex, 200, """{"token":"T","account":{"id":"acc_1","name":"Alex"}}""")
                     else -> fakeAntwort(ex, 401, """{"error":"das stimmt nicht"}""")
                 }
             }
@@ -1839,18 +1839,18 @@ private fun unterwegsTests() {
 
         s.unlockByName("Zu", "1")
         gleich("429: die Meldung des Servers", "Zu viele Versuche. Versuch es in 5 Minuten wieder.", s.lastError)
-        s.unlockByName("Ada", "falsch")
+        s.unlockByName("Alex", "falsch")
         gleich("falscher PIN", "das stimmt nicht", s.lastError)
         pruefe("noch nicht angemeldet", s.stage is Stage.ChoosingProfile)
-        s.unlockByName("Ada", "")
+        s.unlockByName("Alex", "")
         pruefe("ohne PIN gar nicht erst gefragt", s.lastError != null && koerper.size == 2)
 
-        s.unlockByName(" Ada ", "1234", "Testhandy")
+        s.unlockByName(" Alex ", "1234", "Testhandy")
         pruefe("angemeldet", s.stage is Stage.SignedIn)
         gleich("Token gemerkt", "T", store.token)
         gleich("Schlüssel vor dem ersten Bildschirm", "MK", s.client.medienSchluessel)
         val j = Json.parse(koerper.last())
-        gleich("mit Namen, getrimmt", "Ada", j["name"].text)
+        gleich("mit Namen, getrimmt", "Alex", j["name"].text)
         gleich("ohne Kennung", null, j["profileId"].text)
         gleich("mit Gerätenamen", "Testhandy", j["deviceName"].text)
         pruefe("mit Geräteart", j["deviceKind"].text != null)
@@ -1921,7 +1921,7 @@ private fun wiedergabenTests() {
 
 // ---------------------------------------------------------------- Jahr, Person, Stöbern
 
-/** Issue #13: bei Serien der Zeitraum, sonst das Jahr. */
+/** Bei Serien der Zeitraum, sonst das Jahr. */
 private fun jahresTests() {
     fun serie(rest: String) = titel("""{"id":"s","title":"S","kind":"series","year":2014$rest}""")
     gleich("läuft noch", "seit 2014", serie(""","laeuftNoch":true""").jahresText)
@@ -1937,12 +1937,12 @@ private fun jahresTests() {
     pruefe("Titelseite nimmt den Zeitraum",
         Titelseite.metaZeile(serie(""","laeuftNoch":false,"endYear":2020""")).startsWith("2014–2020"))
 
-    // Issue #10: das Herz
+    // Das Herz
     pruefe("Favorit gelesen", titel("""{"id":"a","title":"A","favorite":true}""").favorite)
     pruefe("ohne Angabe kein Favorit", !titel("""{"id":"a","title":"A"}""").favorite)
 }
 
-/** Issue #9: die Personenseite. */
+/** Die Personenseite. */
 private fun personTests() {
     val p = PersonInfo.from(Json.parse("""{"name":"Jude Law","bio":"Ein Schauspieler.","bioSprache":"en",
         "geboren":"1972-12-29","geburtsort":"London","gestorben":"",
@@ -1967,7 +1967,7 @@ private fun personTests() {
     pruefe("ohne Bio kein Hinweis", !leer.nurEnglisch)
 }
 
-/** Issue #10 und #11 gegen einen kleinen Testserver: was die App fragt. */
+/** Herz und Stöbern gegen einen kleinen Testserver: was die App fragt. */
 private fun stoebernTests() {
     gleich("Sortierungen wie im Browser", listOf("title", "added", "year", "year-asc"),
         Sortierung.entries.map { it.schluessel })

@@ -624,7 +624,7 @@ internal data class TvAbspielen(
     val index: Int = -1,
     val ab: Double? = null,
     val listenName: String? = null,
-    // Die gewählte Fassung des ersten Titels (Issue #8); null: die erste.
+    // Die gewählte Fassung des ersten Titels; null: die erste.
     val dateiId: String? = null,
 )
 
@@ -978,7 +978,7 @@ private fun TvStartseite(
             }
 
             // Die Listen stehen immer da — auch leer: dann nur mit „Neue
-            // Liste", denn anlegen soll man sie auch hier können (Issue #1).
+            // Liste", denn anlegen soll man sie auch hier können.
             item(key = "lumen:listen") {
                 Column(Modifier.padding(bottom = 40.dp)) {
                     Text(tx(R.string.listen), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)

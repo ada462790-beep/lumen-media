@@ -741,7 +741,7 @@ class ApiClient(
         limit: Int = 60,
         offset: Int = 0,
         // Nur Titel mit diesem Anfangsbuchstaben — „#“ für Zahlen und
-        // Zeichen (Issue #11). Der Server kennt es nur zusammen mit A–Z.
+        // Zeichen. Der Server kennt es nur zusammen mit A–Z.
         buchstabe: String? = null,
     ): Seite {
         val q = buildMap {
@@ -805,7 +805,7 @@ class ApiClient(
     }
 
     /**
-     * Die Angaben zu einer Person (Issue #9). Null, wenn der Server sie
+     * Die Angaben zu einer Person. Null, wenn der Server sie
      * nicht kennt (404) — dann zeigt die Seite nur die Titel. Andere Fehler
      * gehen weiter wie überall.
      */
@@ -917,7 +917,7 @@ class ApiClient(
 
     fun removeFromWatchlist(id: String) { send("DELETE", "/watchlist/$id") }
 
-    /** Das Herz (Issue #10): nur für das eigene Profil, wie die Merkliste. */
+    /** Das Herz: nur für das eigene Profil, wie die Merkliste. */
     fun addFavorite(id: String) { send("PUT", "/favorites/$id") }
 
     fun removeFavorite(id: String) { send("DELETE", "/favorites/$id") }

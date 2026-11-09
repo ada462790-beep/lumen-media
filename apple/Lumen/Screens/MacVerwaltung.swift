@@ -1048,7 +1048,7 @@ struct GruppenView: View {
 // MARK: - Updates
 
 /// Neue Fassungen von Lumen — nachsehen, einsetzen, planen (app.js:
-/// viewAdminUpdate, Issue #3). Nur der Besitzer. Von den Wiedergaben
+/// viewAdminUpdate). Nur der Besitzer. Von den Wiedergaben
 /// zählt nur die Zahl, keine Namen.
 struct UpdatesView: View {
     @Environment(Session.self) private var session

@@ -7,7 +7,7 @@
 
 package store
 
-// Gruppen (GitHub-Issue #6): der Besitzer legt Gruppen an — „Familie",
+// Gruppen: der Besitzer legt Gruppen an — „Familie",
 // „Gäste", „Mitverwalter" — und steckt Konten hinein. Eine Gruppe sagt,
 // welche Bibliotheken ihre Mitglieder sehen, welche Grenzen gelten und
 // ob sie in die Verwaltung dürfen.

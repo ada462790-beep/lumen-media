@@ -44,7 +44,7 @@ type Guess struct {
 	// NurNummer: Der Dateiname ist nur eine Nummer („1.mkv", „Teil 2.avi").
 	// Der Titel kommt dann aus dem Ordner. Ob das Folgen einer Miniserie
 	// sind oder Teile eines Films, entscheidet der Scanner nach der Zahl
-	// der Dateien im Ordner (Issue #12).
+	// der Dateien im Ordner.
 	NurNummer bool
 	// Land trennt gleichnamige Serien: „The Office (US)" und „The Office
 	// (UK)" sind zwei Serien. Als Ländercode, wie TMDb ihn bei
@@ -677,7 +677,7 @@ func jahrInKlammern(s string) []int {
 
 // seriesTitle holt den Serientitel.
 //
-// Der Ordner zählt mehr als der Dateiname (Issue #8): In
+// Der Ordner zählt mehr als der Dateiname: In
 // „Ahsoka/Star Wars - Ahsok - S01E01.mkv" ist der Tippfehler im Namen,
 // nicht im Ordner, und „The German/The German - S01E01.mkv" verlor im
 // Dateinamen sein „German" als Sprachangabe. Vor allem aber hängen so alle

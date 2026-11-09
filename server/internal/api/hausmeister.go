@@ -165,7 +165,7 @@ func (s *Server) durchlaufGesperrt(ctx context.Context, lib store.Library, vonSe
 			s.log.Error("metadaten", "library", lib.Name, "err", err)
 		}
 	}
-	// Leere Doppel von Serien aus älteren Fassungen (Issue #7) gehen in
+	// Leere Doppel von Serien aus älteren Fassungen gehen in
 	// der Serie mit den Dateien auf — samt dem Stand der Leute.
 	if n, err := s.st.SerienZusammenfuehren(ctx); err == nil && n > 0 {
 		s.st.Log(ctx, "info", "scan", fmt.Sprintf("%d doppelte Serien zusammengeführt", n))

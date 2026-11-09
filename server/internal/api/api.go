@@ -258,7 +258,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/admin/items/{id}/metadata/assign", admin(s.adminTitelZuweisen))
 	mux.Handle("PUT /api/v1/admin/items/{id}/intro", admin(s.adminVorspannSetzen))
 	mux.Handle("DELETE /api/v1/admin/items/{id}/intro", admin(s.adminVorspannLoeschen))
-	// Fassungen und Teile (Issue #8).
+	// Fassungen und Teile.
 	mux.Handle("PUT /api/v1/admin/items/{id}/fassung", admin(s.adminFassungWaehlen))
 	mux.Handle("POST /api/v1/admin/files/{id}/abtrennen", admin(s.adminDateiAbtrennen))
 	mux.Handle("POST /api/v1/admin/libraries/{id}/scan", admin(s.adminScan))
@@ -275,7 +275,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/admin/lock", admin(s.adminSperreSetzen))
 	// Gruppen: nur der Besitzer.
 	mux.Handle("GET /api/v1/admin/groups", admin(s.adminGruppen))
-	// Rechte ändern verlangt den Code noch einmal (Issue #6).
+	// Rechte ändern verlangt den Code noch einmal.
 	mux.Handle("POST /api/v1/admin/groups", owner(s.bestaetigt(s.adminGruppeAnlegen)))
 	mux.Handle("PUT /api/v1/admin/groups/{id}", owner(s.bestaetigt(s.adminGruppeAendern)))
 	mux.Handle("DELETE /api/v1/admin/groups/{id}", owner(s.bestaetigt(s.adminGruppeLoeschen)))

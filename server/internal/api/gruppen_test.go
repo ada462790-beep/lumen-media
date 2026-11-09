@@ -203,7 +203,7 @@ func (h *harness) ownerID() string {
 	return ""
 }
 
-// Issue #6: Rechte ändern verlangt den Code noch einmal — auch bei offener
+// Rechte ändern verlangt den Code noch einmal — auch bei offener
 // Verwaltung. Ohne: 428, falsch: 403, richtig: durch.
 func TestRechteAendernVerlangtBestaetigung(t *testing.T) {
 	h := newHarness(t)

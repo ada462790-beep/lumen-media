@@ -9,7 +9,7 @@ package org.lumen.core
 
 /**
  * Sortieren und nach Anfangsbuchstaben springen in den Rastern der Filme
- * und Serien (Issue #11) — dieselben vier Ordnungen wie im Browser
+ * und Serien — dieselben vier Ordnungen wie im Browser
  * (app.js: SORTIERUNGEN, BUCHSTABEN). Steht hier, damit Telefon und
  * Fernseher dasselbe anbieten und Tests.kt es ohne Gerät prüfen kann.
  */

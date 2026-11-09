@@ -7,7 +7,7 @@
 
 package meta
 
-// Angaben zu einer Person aus der Besetzung (Issue #9): Foto, kurze
+// Angaben zu einer Person aus der Besetzung: Foto, kurze
 // Biografie, Geburtstag — mit Quelle.
 //
 // Zuerst TMDb in der eingestellten Sprache. Fehlt dort die Biografie,

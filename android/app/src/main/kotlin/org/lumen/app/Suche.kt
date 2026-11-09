@@ -286,7 +286,7 @@ private fun GenreChip(genre: String, onClick: () -> Unit) {
 }
 
 /**
- * Die Personenseite (Issue #9): Foto, Lebensdaten, Biografie und Quellen —
+ * Die Personenseite: Foto, Lebensdaten, Biografie und Quellen —
  * darunter, worin die Person in der eigenen Mediathek mitspielt. Kennt der
  * Server die Person nicht (oder antwortet er nicht), bleiben nur die Titel.
  */

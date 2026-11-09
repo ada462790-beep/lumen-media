@@ -131,7 +131,7 @@ func TestWildnis(t *testing.T) {
 		// ---------------------------------------- Miniserien
 		ep("Chernobyl/Chernobyl.S01E01.German.DL.mkv", "Chernobyl", 0, 1, 1),
 		// Nur eine Nummer: Parse sagt „Folge"; ob es bei zwei Dateien doch
-		// ein Film in Teilen ist, entscheidet der Scanner (Issue #12).
+		// ein Film in Teilen ist, entscheidet der Scanner.
 		ep("Der Tunnel/1.mkv", "Der Tunnel", 0, 1, 1),
 		ep("Das Boot (1985)/Teil 3.avi", "Das Boot", 1985, 1, 3),
 

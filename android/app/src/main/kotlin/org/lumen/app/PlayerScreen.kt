@@ -49,7 +49,7 @@ data class Abspielen(
     val ab: Double? = null,
     // Der Name der Liste, die am Stück läuft — für die Zeile oben im Bild.
     val listenName: String? = null,
-    // Welche Fassung des ersten Titels läuft (Issue #8) — gewählt unter
+    // Welche Fassung des ersten Titels läuft — gewählt unter
     // „In welcher Qualität?". Null heisst: die erste, wie der Server sie ordnet.
     val dateiId: String? = null,
 )

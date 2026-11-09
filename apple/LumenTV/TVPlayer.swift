@@ -38,7 +38,7 @@ struct TVPlayerView: View {
     var ab: Int = 0
     /// „Von vorn": der erste Titel beginnt am Anfang, nicht am Stand.
     var vonVorn = false
-    /// Die gewählte Fassung (Issue #8); nil heisst die erste.
+    /// Die gewählte Fassung; nil heisst die erste.
     var datei: String? = nil
 
     @State private var folge: Abspielfolge?

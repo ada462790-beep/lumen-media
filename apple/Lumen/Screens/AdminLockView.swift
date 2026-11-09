@@ -8,7 +8,7 @@
 import SwiftUI
 import LumenKit
 
-/// Die eigene Verwaltungssperre setzen (GitHub-Issue #6).
+/// Die eigene Verwaltungssperre setzen.
 ///
 /// Jede Person mit Zugang zur Verwaltung schützt sie für sich: mit einem
 /// PIN, einem Passwort oder einem Code aus einer Authenticator-App. Nur

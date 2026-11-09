@@ -25,7 +25,7 @@ public struct Account: Codable, Identifiable, Hashable, Sendable {
     public let createdAt: Date
     public let expiresAt: Date?
     /// Darf in die Verwaltung: der Besitzer immer, sonst über eine Gruppe
-    /// mit „Verwaltung" (Issue #6). Dieselbe Grenze wie für den Besitzer:
+    /// mit „Verwaltung". Dieselbe Grenze wie für den Besitzer:
     /// auch ein Mitverwalter sieht nicht, wer was schaut.
     ///
     /// Wahlfrei, damit die App mit einem älteren Server redet, der das
@@ -189,7 +189,7 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public let title: String
     public let originalTitle: String?
     public let year: Int?
-    /// Bei Serien (Issue #13): das letzte Jahr und ob noch Folgen kommen.
+    /// Bei Serien: das letzte Jahr und ob noch Folgen kommen.
     /// Fehlt `laeuftNoch`, weiss der Server es nicht — dann bleibt es beim
     /// blossen Startjahr, statt „seit 2014" über eine längst beendete
     /// Serie zu schreiben.
@@ -217,7 +217,7 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public let finished: Bool?
     public let myRating: Int?
     public let onList: Bool?
-    /// Das Herz (Issue #10). Fehlt bei Go, wenn es nicht gesetzt ist.
+    /// Das Herz. Fehlt bei Go, wenn es nicht gesetzt ist.
     public let favorite: Bool?
     public let resumeMs: Int64?
 
@@ -292,7 +292,7 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public var isOnList: Bool { onList == true }
     public var isFavorite: Bool { favorite == true }
 
-    /// Das Jahr, wie es unter einem Titel steht (Issue #13): bei Serien
+    /// Das Jahr, wie es unter einem Titel steht: bei Serien
     /// „seit 2014", solange sie läuft, „2014–2020", wenn sie beendet ist —
     /// sonst nur das Jahr. Dieselbe Regel wie im Browser (app.js: jahre).
     /// nil, wenn der Titel kein Jahr hat.
@@ -363,7 +363,7 @@ public struct MediaFile: Codable, Identifiable, Hashable, Sendable {
     public let videoCodec: String?
     public let hdr: String?
     public let missing: Bool?
-    /// Die Fassung, die jemand in der Verwaltung gewählt hat (Issue #8).
+    /// Die Fassung, die jemand in der Verwaltung gewählt hat.
     /// Fehlt, wenn keine gewählt ist — dann nimmt Lumen die grösste.
     public let preferred: Bool?
     /// Tonspuren und Untertitel, Kapitel — gefüllt, sobald der Server die
@@ -621,7 +621,7 @@ public struct PersonQuelle: Codable, Hashable, Sendable {
     public var link: URL? { Session.sourceLink(url) }
 }
 
-/// Die Personenseite (Issue #9, GET /persons/{name}): Foto, Lebensdaten,
+/// Die Personenseite (GET /persons/{name}): Foto, Lebensdaten,
 /// Biografie, Quellen. Alles ausser dem Namen kann fehlen — kennt TMDb die
 /// Person nicht, bleibt es beim Namen und ihren Titeln.
 ///

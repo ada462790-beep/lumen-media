@@ -96,7 +96,7 @@ export const api = {
     }
     if (res.status === 204) return null;
 
-    // Der Server will eine Bestätigung (Issue #6): nachfragen und noch
+    // Der Server will eine Bestätigung: nachfragen und noch
     // einmal schicken. Bei „stimmt nicht" erneut fragen, abbrechen geht immer.
     if ((res.status === 428 || res.status === 403) && this.bestaetigen) {
       let info = {};

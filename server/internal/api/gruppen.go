@@ -7,7 +7,7 @@
 
 package api
 
-// Gruppen und Verwaltungssperre (GitHub-Issue #6).
+// Gruppen und Verwaltungssperre.
 //
 // Wer darf in die Verwaltung? Der Besitzer, und jede Person in einer
 // Gruppe mit „Verwaltung". Für beide gilt dieselbe Grenze wie immer:
@@ -263,7 +263,7 @@ func (s *Server) codePruefen(r *http.Request, a *store.Account, code string, pro
 
 // bestaetigt verlangt beim Ändern von Rechten (Gruppen, wer in welche
 // Gruppe gehört, Einschränkungen eines Profils) den Code noch einmal —
-// auch wenn die Verwaltung schon offen ist (Issue #6: „zusätzliche
+// auch wenn die Verwaltung schon offen ist (Wunsch: „zusätzliche
 // Passworteingabe beim Anpassen von Benutzerrechten"). Wer kurz vom
 // Rechner weg ist, soll niemandem Adminrechte geben lassen.
 //

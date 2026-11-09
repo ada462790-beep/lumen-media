@@ -7,7 +7,7 @@
 
 package store
 
-// Leere Doppel von Serien zusammenführen (Issue #7).
+// Leere Doppel von Serien zusammenführen.
 //
 // Bis zur Fassung 0.1.12 legte jeder Durchlauf eine Serie neu an, sobald
 // TMDb ihren Titel geändert hatte. Die Dateien wanderten dabei jedes Mal
@@ -299,7 +299,7 @@ func (s *Store) serieUeberfuehren(ctx context.Context, alt, neu string, konten [
 
 // FilmeOhneDatei entfernt Filme, an denen keine einzige Datei mehr hängt
 // — etwa „1", „2", „3" aus älteren Fassungen, deren Dateien inzwischen
-// richtig als Folgen einer Miniserie erkannt sind (Issue #12). Eine
+// richtig als Folgen einer Miniserie erkannt sind. Eine
 // Datei, die nur gerade fehlt, steht weiter in der Datenbank; solche
 // Filme bleiben.
 func (s *Store) FilmeOhneDatei(ctx context.Context) (int, error) {

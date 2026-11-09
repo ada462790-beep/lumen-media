@@ -38,7 +38,7 @@ struct PlayerView: View {
     var ab: Int = 0
     /// „Von vorn": der erste Titel beginnt am Anfang, nicht am Stand.
     var vonVorn = false
-    /// Die gewählte Fassung (Issue #8); nil heisst die erste.
+    /// Die gewählte Fassung; nil heisst die erste.
     var datei: String? = nil
     /// Ein heruntergeladener Titel: die Datei dieses Downloads, ohne Server.
     var offlineDatei: String? = nil

@@ -11,7 +11,7 @@ import LumenKit
 // Filmreihen und Listen auf dem Fernseher.
 //
 // Listen lassen sich hier anlegen, umbenennen, löschen und füllen
-// (GitHub-Issue #1) — mit der Fernbedienung, über die grosse Tastatur des
+// — mit der Fernbedienung, über die grosse Tastatur des
 // Systems. Das Umstellen der Reihenfolge bleibt dem iPhone, dem Mac und
 // dem Browser: Ziehen gibt es auf dem Fernseher nicht, und eine Reihe
 // „nach oben / nach unten"-Knöpfe stünde dem Fokus nur im Weg.

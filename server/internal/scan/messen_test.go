@@ -121,7 +121,7 @@ func TestGescheiterteMessungBehaeltWerte(t *testing.T) {
 }
 
 // Ändern die Metadaten den Titel einer Serie, legt der nächste Durchlauf
-// sie nicht neu an (Issue #7: „9-1-1 Notruf L.A." fünfzigmal).
+// sie nicht neu an (sonst etwa „9-1-1 Notruf L.A." fünfzigmal).
 func TestSerieBleibtNachUmbenennung(t *testing.T) {
 	root := t.TempDir()
 	for _, f := range []string{"9-1-1 (2018)/Staffel 1/9-1-1 S01E01.mkv", "9-1-1 (2018)/Staffel 1/9-1-1 S01E02.mkv"} {

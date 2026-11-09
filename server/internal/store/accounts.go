@@ -42,7 +42,7 @@ type Account struct {
 	Disabled  bool       `json:"disabled"`
 	CreatedAt time.Time  `json:"createdAt"`
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	// Gruppe, falls das Konto in einer steckt (Issue #6).
+	// Gruppe, falls das Konto in einer steckt.
 	GroupID   string `json:"groupId,omitempty"`
 	GroupName string `json:"groupName,omitempty"`
 	// IsAdmin: darf in die Verwaltung — der Besitzer immer, sonst über

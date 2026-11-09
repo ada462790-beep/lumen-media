@@ -420,7 +420,7 @@ type view struct {
 	Finished bool    `json:"finished,omitempty"`
 	MyRating int     `json:"myRating,omitempty"`
 	OnList   bool    `json:"onList,omitempty"`
-	// Favorit: das Herz (Issue #10) — nur für das eigene Profil.
+	// Favorit: das Herz — nur für das eigene Profil.
 	Favorit  bool   `json:"favorite,omitempty"`
 	ResumeMS int64  `json:"resumeMs,omitempty"`
 	Poster   string `json:"poster,omitempty"`
@@ -1172,7 +1172,7 @@ func (s *Server) removeFavorit(w http.ResponseWriter, r *http.Request) {
 }
 
 // buchstaben: GET /items/letters?kind=movie — wie viele Titel unter jedem
-// Anfangsbuchstaben stehen, für die Buchstabenleiste (Issue #11).
+// Anfangsbuchstaben stehen, für die Buchstabenleiste.
 func (s *Server) buchstaben(w http.ResponseWriter, r *http.Request) {
 	q, err := s.scope(r)
 	if err != nil {

@@ -17,7 +17,7 @@ import LumenKit
 // MARK: - Filme und Serien
 
 /// Oben die Genres des Servers als Knöpfe, darunter die Sortierung und —
-/// bei A–Z — eine Reihe der Buchstaben (Issue #11), darunter die Karten.
+/// bei A–Z — eine Reihe der Buchstaben, darunter die Karten.
 /// Beim Herunterblättern lädt das Raster die nächste Seite nach.
 struct TVRasterView: View {
     @Environment(Session.self) private var session
@@ -227,7 +227,7 @@ struct TVMerklisteView: View {
 
 // MARK: - Favoriten
 
-/// Was einem besonders gefallen hat (Issue #10), getrennt nach Filmen und
+/// Was einem besonders gefallen hat, getrennt nach Filmen und
 /// Serien. Nur dieses Profil sieht es.
 struct TVFavoritenView: View {
     @Environment(Session.self) private var session
@@ -303,7 +303,7 @@ struct TVFavoritenView: View {
 
 // MARK: - Alles mit einer Person
 
-/// Die Personenseite (Issue #9): Foto, Lebensdaten, Biografie, Quellen —
+/// Die Personenseite: Foto, Lebensdaten, Biografie, Quellen —
 /// darunter die Titel, in denen die Person mitspielt, soweit das Profil
 /// sie sehen darf. Hinter der Besetzung und den Personen in der Suche.
 ///

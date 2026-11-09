@@ -250,7 +250,7 @@ private val RASTER_KARTE: Dp = 170.dp
 
 /**
  * Was über einem Raster gewählt ist: Genre, Sortierung und — nur bei A–Z —
- * der Anfangsbuchstabe (Issue #11). Steht im Gerüst, damit es bleibt, wenn
+ * der Anfangsbuchstabe. Steht im Gerüst, damit es bleibt, wenn
  * man von einem Titel zurückkommt.
  */
 internal data class TvRasterWahl(
@@ -542,7 +542,7 @@ internal fun TvMerkliste(client: ApiClient, gesehen: Boolean, onGesehen: (Boolea
 // ---------------------------------------------------------------- Favoriten
 
 /**
- * Die Favoriten (Issue #10): was mit dem Herz markiert ist, Filme und
+ * Die Favoriten: was mit dem Herz markiert ist, Filme und
  * Serien getrennt wie im Browser. Nur ich sehe sie.
  */
 @Composable
@@ -692,7 +692,7 @@ internal fun TvListen(client: ApiClient, stand: Int, onOpen: (String) -> Unit, o
 // ---------------------------------------------------------------- Person
 
 /**
- * Die Personenseite (Issue #9): Foto, Lebensdaten, Biografie (eingeklappt)
+ * Die Personenseite: Foto, Lebensdaten, Biografie (eingeklappt)
  * und Quellen — darunter, worin die Person in der Mediathek mitspielt.
  * Kennt der Server die Person nicht, bleiben nur die Titel. Die Quellen
  * stehen als Text da: einen Browser für Links gibt es am Fernseher nicht.

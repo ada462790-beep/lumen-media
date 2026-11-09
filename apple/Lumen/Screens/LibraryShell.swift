@@ -86,7 +86,7 @@ struct LibraryShell: View {
             splitLayout
             #endif
         }
-        // Die Verwaltungssperre (Issue #6): antwortet der Server auf eine
+        // Die Verwaltungssperre: antwortet der Server auf eine
         // Verwaltungs-Anfrage mit „gesperrt", merkt sich die Sitzung das,
         // und hier erscheint der Dialog — egal, aus welcher Ansicht die
         // Anfrage kam. Nach dem Entsperren läuft sie von selbst weiter.
@@ -558,7 +558,7 @@ struct PosterRaster: View {
 /// „Filme" und „Serien": oben die Genres des Servers als Knöpfe, darunter
 /// das Raster, das beim Herunterscrollen nachlädt — wie im Browser.
 ///
-/// Sortiert wird über das Menü oben rechts (Issue #11), wie in den Apps
+/// Sortiert wird über das Menü oben rechts, wie in den Apps
 /// von Apple; bei A–Z steht über dem Raster die Leiste der Buchstaben.
 struct BrowseView: View {
     @Environment(Session.self) private var session
@@ -761,7 +761,7 @@ struct WatchlistView: View {
     }
 }
 
-/// Die Favoriten (Issue #10): was einem richtig gut gefallen hat, getrennt
+/// Die Favoriten: was einem richtig gut gefallen hat, getrennt
 /// nach Filmen und Serien — wie im Browser (app.js: viewFavorites). Nur
 /// dieses Profil sieht sie.
 struct FavoritenView: View {

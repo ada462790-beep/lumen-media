@@ -169,8 +169,8 @@ struct DetailView: View {
     /// bricht sie um, statt Knöpfe abzuschneiden.
     @ViewBuilder
     private func actions(_ item: Item, _ detail: ItemDetail) -> some View {
-        // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p —
-        // Issue #8): „Ansehen" fragt dann zuerst nach der Qualität. Teile
+        // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p):
+        // „Ansehen" fragt dann zuerst nach der Qualität. Teile
         // eines Films (a/b/c) sind keine Fassungen; die laufen nacheinander.
         let fassungen = Fassungen.liste(detail.files)
         FlussLayout(abstand: 10) {
@@ -219,7 +219,7 @@ struct DetailView: View {
             }
             .buttonStyle(KopfKnopf())
 
-            // Das Herz (Issue #10) gleich neben „Merken": gemerkt ist, was
+            // Das Herz gleich neben „Merken": gemerkt ist, was
             // man noch sehen will, ein Favorit, was einem gefallen hat.
             if item.kind == "movie" || item.kind == "series" {
                 Button {

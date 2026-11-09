@@ -43,7 +43,7 @@ public final class Playback {
     /// in Teilen die Länge des laufenden Teils.
     public private(set) var duration: Double = 0
 
-    // MARK: Fassung und Teile (Issue #8)
+    // MARK: Fassung und Teile
 
     /// Ein Film in Teilen („… a.avi", „… b.avi"): alle Teile, und welcher
     /// gerade läuft. Bei einer einzigen Datei ist `teile` eins lang.

@@ -317,7 +317,7 @@ fun PrimaryButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
 }
 
 /**
- * Das Herz neben „Merken" (Issue #10): rund wie die übrigen Knöpfe, rot,
+ * Das Herz neben „Merken": rund wie die übrigen Knöpfe, rot,
  * wenn der Titel zu den eigenen Favoriten gehört. Die Merkliste ist „will
  * ich noch sehen", das Herz „mag ich" — darum zwei Knöpfe. Mit Wort wie im
  * Browser („Zu Favoriten" / „Favorit"): ein Herz allein lässt offen, ob

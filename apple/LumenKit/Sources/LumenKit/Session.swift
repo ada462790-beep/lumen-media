@@ -102,7 +102,7 @@ public final class Session {
     /// Sicherungen). Die Verwaltung an sich fragt `isAdmin`.
     public var isOwner: Bool { me?.account.isOwner == true || me?.account.vollzugriff == true }
 
-    /// Besitzer oder Mitverwalter (Issue #6): wer die Verwaltung sieht.
+    /// Besitzer oder Mitverwalter: wer die Verwaltung sieht.
     public var isAdmin: Bool { me?.account.darfVerwalten == true }
 
     // MARK: - Verwaltungssperre

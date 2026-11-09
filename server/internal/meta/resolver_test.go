@@ -311,7 +311,7 @@ func resolverFor(t *testing.T, st *store.Store, srv *httptest.Server) *Resolver 
 	return r
 }
 
-// Issue #15: Statt zu suchen, den Link von TMDb oder IMDb einfügen.
+// Statt zu suchen, den Link von TMDb oder IMDb einfügen.
 func TestZuweisenMitLink(t *testing.T) {
 	srv := fakeSources(t)
 	st := testStore(t)

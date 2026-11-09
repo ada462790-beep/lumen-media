@@ -7,7 +7,7 @@
 
 package api
 
-// Die Personenseite (Issue #9): Foto, Biografie, Quellen. Siehe
+// Die Personenseite: Foto, Biografie, Quellen. Siehe
 // meta/person.go.
 
 import (

@@ -575,7 +575,7 @@ func (r *Resolver) Kandidaten(ctx context.Context, kind, suche string, jahr int)
 	if !r.Ready() {
 		return nil, fmt.Errorf("es ist keine Metadaten-Quelle eingerichtet")
 	}
-	// Ein Link oder eine Kennung statt eines Titels (Issue #15): direkt
+	// Ein Link oder eine Kennung statt eines Titels: direkt
 	// diesen einen Eintrag holen, statt zu suchen.
 	if c, ok, err := r.direkterTreffer(ctx, kind, suche); ok || err != nil {
 		if err != nil {

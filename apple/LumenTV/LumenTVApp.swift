@@ -76,7 +76,7 @@ struct TVRootView: View {
                 // eigenen Stapel. Die Menü-Taste der Fernbedienung führt
                 // von selbst zurück.
                 TVShell()
-                    // Die Verwaltungssperre (Issue #6): meldet der Server
+                    // Die Verwaltungssperre: meldet der Server
                     // „gesperrt", erscheint hier der Entsperr-Dialog. Die
                     // Sperre selbst richtet man im Browser oder am iPhone
                     // ein — der Fernseher braucht nur den Schlüssel.
@@ -272,7 +272,7 @@ struct TVHomeView: View {
                     // Listen. Sie öffnen eine eigene Seite, statt gleich
                     // abzuspielen — eine Liste ist keine einzelne Datei. Die
                     // Listen stehen immer da: dort lässt sich auch eine neue
-                    // anlegen (Issue #1).
+                    // anlegen.
                     if geladen {
                         TVListenRail(listen: listen)
                     }
@@ -364,7 +364,7 @@ struct TVBackdrop: View {
 /// Eine Reihe von Karten. Ein Klick öffnet die Titelseite — ausser die
 /// Reihe gibt mit `play` etwas anderes vor, etwa „die Liste ab hier
 /// spielen". Ein langer Druck auf die Fernbedienung öffnet `menu`, je
-/// Titel: dort steht, was sonst einen Umweg bräuchte (Issue #1).
+/// Titel: dort steht, was sonst einen Umweg bräuchte.
 struct TVRail<Menu: View>: View {
     let title: String
     let items: [Item]

@@ -1092,7 +1092,7 @@ fun Reihenzeile(model: LumenViewModel, titel: String, eintraege: List<Item>,
 
 /**
  * Was über einem Raster gewählt ist: Genre, Sortierung und — nur bei A–Z —
- * der Anfangsbuchstabe (Issue #11). Eine Grösse, damit sie im Gerüst
+ * der Anfangsbuchstabe. Eine Grösse, damit sie im Gerüst
  * stehen bleibt, wenn eine Titelseite darüber aufgeht.
  */
 data class RasterWahl(
@@ -1376,7 +1376,7 @@ private fun WatchlistScreen(model: LumenViewModel, liste: String,
 }
 
 /**
- * Die Favoriten (Issue #10): was mit dem Herz markiert ist, getrennt nach
+ * Die Favoriten: was mit dem Herz markiert ist, getrennt nach
  * Filmen und Serien wie im Browser. Nur das eigene Profil sieht sie.
  */
 @Composable

@@ -259,14 +259,14 @@ CREATE TABLE IF NOT EXISTS rating (
   PRIMARY KEY (account_id, item_id)
 );
 
--- Angaben zu Personen aus der Besetzung (Issue #9), zwischengespeichert.
+-- Angaben zu Personen aus der Besetzung, zwischengespeichert.
 CREATE TABLE IF NOT EXISTS person_info (
   name          TEXT PRIMARY KEY,
   daten         TEXT NOT NULL,
   geholt        INTEGER NOT NULL
 );
 
--- Favoriten (Issue #10): was jemandem besonders gefallen hat. Wie die
+-- Favoriten: was jemandem besonders gefallen hat. Wie die
 -- Merkliste privat — nur das eigene Profil sieht es.
 CREATE TABLE IF NOT EXISTS favorit (
   account_id    TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,

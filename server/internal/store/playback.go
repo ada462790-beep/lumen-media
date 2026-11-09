@@ -685,7 +685,7 @@ func (s *Store) FertigeIDs(ctx context.Context, accountID string, limit int) ([]
 
 // ---------------------------------------------------------------- Favoriten
 
-// AddFavorit setzt das Herz (Issue #10). Nur im eigenen Profil.
+// AddFavorit setzt das Herz. Nur im eigenen Profil.
 func (s *Store) AddFavorit(ctx context.Context, accountID, itemID string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO favorit (account_id, item_id, added_at) VALUES (?,?,?)`,
