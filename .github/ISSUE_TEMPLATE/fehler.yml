@@ -1,0 +1,52 @@
+name: Fehler melden / Bug report
+description: Etwas funktioniert nicht wie beschrieben.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Melden! Englisch geht auch. **Sicherheitslücken bitte nicht hier**, sondern vertraulich (siehe SECURITY.md).
+        Bitte keine persönlichen Angaben, Server-Adressen von aussen, Tokens oder Passwörter einfügen.
+  - type: textarea
+    id: was
+    attributes:
+      label: Was passiert?
+      description: Was hast du getan, was ist passiert, was hättest du erwartet?
+      placeholder: "1. Verwaltung › Bibliotheken öffnen\n2. …\nErwartet: …\nPassiert: …"
+    validations:
+      required: true
+  - type: input
+    id: fassung
+    attributes:
+      label: Lumen-Fassung
+      description: Steht in den Einstellungen unter „Über Lumen" (etwa 0.1.20).
+    validations:
+      required: true
+  - type: dropdown
+    id: wo
+    attributes:
+      label: Wo?
+      multiple: true
+      options:
+        - Server / Docker
+        - Browser
+        - iPhone / iPad
+        - Mac
+        - Apple TV
+        - Android
+        - Android TV / Fire TV
+        - Vermittler (Fernzugriff)
+    validations:
+      required: true
+  - type: input
+    id: umgebung
+    attributes:
+      label: Umgebung
+      description: NAS-Modell oder Betriebssystem, Docker ja/nein, Browser oder Gerät.
+      placeholder: "z. B. Synology DS920+, Docker; Safari 18"
+  - type: textarea
+    id: protokoll
+    attributes:
+      label: Protokoll
+      description: Auszug aus Verwaltung › Protokoll oder `docker logs lumen`. Bitte Namen und Adressen unkenntlich machen.
+      render: text

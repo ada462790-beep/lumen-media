@@ -1,0 +1,32 @@
+name: Wunsch / Feature request
+description: Eine Idee, was Lumen können sollte.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für die Idee! Englisch geht auch. Lumen bleibt aufgeräumt und verrät der Verwaltung nie, wer was schaut — Wünsche, die dem widersprechen, können wir nicht umsetzen.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Worum geht es?
+      description: Was möchtest du tun, und was fehlt dir dafür heute?
+    validations:
+      required: true
+  - type: textarea
+    id: vorschlag
+    attributes:
+      label: Wie könnte es aussehen?
+      description: Dein Vorschlag — gern mit Beispielen aus anderen Apps.
+  - type: dropdown
+    id: wo
+    attributes:
+      label: Wo?
+      multiple: true
+      options:
+        - Server / Verwaltung
+        - Browser
+        - Apple-Apps
+        - Android-Apps
+        - Fernseher (Apple TV, Android TV, Fire TV)
+        - Alle

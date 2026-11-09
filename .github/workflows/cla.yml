@@ -1,0 +1,40 @@
+# Prüft, ob im Pull-Request das Häkchen für die Beitragsvereinbarung
+# (CLA.md) gesetzt ist.
+#
+# Bewusst klein: keine fremden Actions, kein Checkout, kein Code aus dem
+# Pull-Request, kein Token mit Schreibrechten. Gelesen wird nur der Text
+# des Pull-Requests aus der Ereignisdatei, die GitHub mitliefert — darum
+# geht es auch bei Pull-Requests aus Forks ohne Geheimnisse.
+#
+# Der Text kommt nie als Ausdruck ins Skript (das liesse sich zum
+# Einschleusen von Befehlen nutzen), sondern nur über jq aus der Datei.
+
+name: CLA
+
+on:
+  pull_request:
+    # „edited": Wer das Häkchen nachträglich setzt, bekommt sofort einen
+    # neuen Lauf.
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  haekchen:
+    name: Beitragsvereinbarung zugestimmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Häkchen im Pull-Request
+        run: |
+          set -eu
+          text=$(jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" | tr -d '\r')
+          # Die Zeile aus .github/pull_request_template.md, angehakt mit [x]
+          # oder [X] — auf Deutsch oder auf Englisch.
+          if printf '%s\n' "$text" | grep -Eiq '^[[:space:]]*[-*][[:space:]]+\[x\][[:space:]]+(Ich habe die CLA gelesen und stimme zu|I have read and agree to the CLA)'; then
+            echo "CLA zugestimmt — danke!"
+            exit 0
+          fi
+          echo "::error::Bitte im Pull-Request das Häkchen „Ich habe die CLA gelesen und stimme zu“ setzen (siehe CLA.md). Please tick the CLA checkbox in the pull request description."
+          exit 1

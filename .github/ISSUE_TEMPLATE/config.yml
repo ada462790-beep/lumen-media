@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Sicherheitslücke melden / Report a vulnerability
+    url: https://github.com/ada462790-beep/lumen-media/security/advisories/new
+    about: Bitte nie als öffentliches Issue — vertraulich über GitHub melden (siehe SECURITY.md). Never as a public issue.
