@@ -167,13 +167,74 @@ func TestHerunterladenPrueftSumme(t *testing.T) {
 	}
 }
 
-func TestPrivatOhneTokenErklaert(t *testing.T) {
+// Das öffentliche Repository: kein Token, keine Anmeldung. Lumen fragt
+// ohne Authorization-Kopf und lädt über die gewöhnlichen Adressen
+// (browser_download_url), nicht über die API.
+func TestOeffentlichOhneToken(t *testing.T) {
+	inhalt := []byte("#!/bin/sh\necho neu\n")
+	pk := paket(t, inhalt)
+	h := sha256.Sum256(pk)
+	summen := fmt.Sprintf("%s v9.9.9\n%s  %s\n", FassungsPraefix, hex.EncodeToString(h[:]), Paketname())
+	sig := ed25519.Sign(testSchluessel, []byte(summen))
+
+	mux := http.NewServeMux()
+	var srv *httptest.Server
+	ohneKopf := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "" {
+				t.Errorf("%s: Authorization gesendet, obwohl kein Token gesetzt ist", r.URL.Path)
+			}
+			next(w, r)
+		}
+	}
+	mux.HandleFunc("/repos/x/y/releases/latest", ohneKopf(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"tag_name":"v9.9.9","html_url":"%s/rel","assets":[
+			{"name":"%s","url":"%s/a/paket","browser_download_url":"%s/dl/paket","size":%d},
+			{"name":"pruefsummen.txt","url":"%s/a/summen","browser_download_url":"%s/dl/summen","size":10},
+			{"name":"pruefsummen.txt.sig","url":"%s/a/sig","browser_download_url":"%s/dl/sig","size":10}]}`,
+			srv.URL, Paketname(), srv.URL, srv.URL, len(pk), srv.URL, srv.URL, srv.URL, srv.URL)
+	}))
+	mux.HandleFunc("/a/", func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("ohne Token über die API geladen: %s", r.URL.Path)
+		w.WriteHeader(500)
+	})
+	mux.HandleFunc("/dl/paket", ohneKopf(func(w http.ResponseWriter, r *http.Request) { w.Write(pk) }))
+	mux.HandleFunc("/dl/summen", ohneKopf(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, summen) }))
+	mux.HandleFunc("/dl/sig", ohneKopf(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, base64.StdEncoding.EncodeToString(sig))
+	}))
+	srv = httptest.NewServer(mux)
+	defer srv.Close()
+
+	p := &Pruefer{Repo: "x/y", Version: "0.0.1", API: srv.URL}
+	rel, err := p.Neueste(context.Background())
+	if err != nil {
+		t.Fatalf("öffentliches Repository ohne Token: %v", err)
+	}
+	if rel.Version != "9.9.9" {
+		t.Fatalf("Release %+v", rel)
+	}
+	if Paketname() != "lumen-linux-amd64.tar.gz" {
+		return // das Testpaket ist für linux/amd64 gebaut
+	}
+	bin, err := p.Herunterladen(context.Background(), rel, t.TempDir())
+	if err != nil {
+		t.Fatalf("Herunterladen ohne Token: %v", err)
+	}
+	if got, _ := os.ReadFile(bin); !bytes.Equal(got, inhalt) {
+		t.Fatalf("ausgepackt: %q", got)
+	}
+}
+
+// Ohne Veröffentlichung (oder bei einem privaten Fork ohne Token) sagt
+// die Meldung, was los ist, und nennt das Token als Ausweg.
+func TestOhneVeroeffentlichungErklaert(t *testing.T) {
 	srv := fakeGitHub(t, nil, "")
 	defer srv.Close()
 	p := &Pruefer{Repo: "x/y", Version: "0.0.1", API: srv.URL}
 	_, err := p.Neueste(context.Background())
-	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("Token")) {
-		t.Fatalf("erwartet Hinweis aufs Token, bekam %v", err)
+	if err == nil || !strings.Contains(err.Error(), "Token") || !strings.Contains(err.Error(), "noch keine Veröffentlichung") {
+		t.Fatalf("erwartet Hinweis auf fehlende Veröffentlichung und aufs Token, bekam %v", err)
 	}
 }
 

@@ -69,7 +69,7 @@ type asset struct {
 type Pruefer struct {
 	Repo    string // owner/name
 	Version string // die laufende, ohne „v"
-	Token   string // nötig, solange das Repository privat ist
+	Token   string // nur bei einem privaten Repository (etwa einem privaten Fork); sonst leer
 	HTTP    *http.Client
 	API     string // zum Testen; sonst https://api.github.com
 }
@@ -104,8 +104,10 @@ func (p *Pruefer) anfrage(ctx context.Context, url, accept string) (*http.Respon
 	}
 	if resp.StatusCode == 404 && p.Token == "" {
 		resp.Body.Close()
-		return nil, errors.New("GitHub kennt die Veröffentlichung nicht — ist das Repository privat? " +
-			"Dann braucht Lumen ein Token (LUMEN_GITHUB_TOKEN), oder das Repository wird öffentlich")
+		// Ein öffentliches Repository braucht kein Token. 404 heisst dann:
+		// noch keine Veröffentlichung — oder doch ein privates (Fork).
+		return nil, errors.New("Auf GitHub gibt es zu " + p.Repo + " noch keine Veröffentlichung. " +
+			"Ist das Repository privat (etwa ein eigener Fork), braucht Lumen ein Token (LUMEN_GITHUB_TOKEN)")
 	}
 	// 403 mit aufgebrauchtem Kontingent ist kein kaputtes Token, sondern
 	// „zu oft gefragt" — das soll nicht als „Token ungültig" erscheinen.
@@ -278,8 +280,9 @@ func (p *Pruefer) pruefsumme(ctx context.Context, r *Release, summen, sig asset,
 	return "", fmt.Errorf("in pruefsummen.txt steht nichts zu %s", name)
 }
 
-// laden holt eine Datei — über die API mit Token (bei einem privaten
-// Repository der einzige Weg) oder über die gewöhnliche Adresse.
+// laden holt eine Datei — ohne Token über die gewöhnliche Adresse (der
+// Normalfall, das Repository ist öffentlich), mit Token über die API
+// (bei einem privaten Fork der einzige Weg).
 func (p *Pruefer) laden(ctx context.Context, a asset, ziel string) error {
 	url, accept := a.browserURL, "application/octet-stream"
 	if p.Token != "" && a.apiURL != "" {

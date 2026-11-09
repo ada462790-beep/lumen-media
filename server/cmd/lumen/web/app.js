@@ -4006,7 +4006,7 @@ function viewAdminUpdate() {
             ? tr('Kommt aus LUMEN_GITHUB_TOKEN (docker-compose.yml). Ein Token hier hat Vorrang — so lässt sich ein abgelaufenes ersetzen, ohne den Container anzufassen.')
             : u.tokenGesetzt
               ? tr('Ist eingetragen. Ein neues ersetzt das alte; es wird gespeichert, aber nie wieder angezeigt.')
-              : tr('Nur nötig, solange das Repository privat ist. Wird gespeichert, aber nie wieder angezeigt.')}</div></div>
+              : tr('Optional — nur nötig, wenn die Updates aus einem privaten Repository kommen. Wird gespeichert, aber nie wieder angezeigt.')}</div></div>
         <input type="password" name="token" placeholder="${u.tokenGesetzt ? tr('neues Token, ghp_… oder github_pat_…') : tr('ghp_… oder github_pat_…')}" autocomplete="off" style="width:min(320px,100%)"></div>
         ${u.tokenQuelle === 'verwaltung' ? `<button type="button" class="btn row" style="width:100%;justify-content:flex-start;min-height:46px;color:#ff6961" data-tokenweg>
           <span class="t-body">${tr('Token entfernen')}</span></button>` : ''}</div></section>

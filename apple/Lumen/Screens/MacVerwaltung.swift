@@ -1239,7 +1239,7 @@ struct UpdatesView: View {
         if u.tokenGesetzt {
             return String(localized: "Ist eingetragen. Ein neues ersetzt das alte; es wird gespeichert, aber nie wieder angezeigt.", bundle: .lumen, locale: .lumen)
         }
-        return String(localized: "Nur nötig, solange das Repository privat ist. Wird gespeichert, aber nie wieder angezeigt.", bundle: .lumen, locale: .lumen)
+        return String(localized: "Optional — nur nötig, wenn die Updates aus einem privaten Repository kommen. Wird gespeichert, aber nie wieder angezeigt.", bundle: .lumen, locale: .lumen)
     }
 
     private func protokollZeile(_ p: UpdateEintrag) -> some View {
