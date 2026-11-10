@@ -475,10 +475,15 @@ func (s *Server) musikFavoriten(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	alben, _, err := s.st.MusikAlben(r.Context(), v, store.MusikAlbenAbfrage{IDs: fav["album"], Limit: 1000})
-	if err != nil {
-		failErr(w, err)
-		return
+	// Ohne Lieblingsalben keine Abfrage — eine leere ID-Liste hiesse für
+	// MusikAlben „alle", und unter Favoriten stand jedes Album.
+	var alben []store.MusikAlbum
+	if len(fav["album"]) > 0 {
+		alben, _, err = s.st.MusikAlben(r.Context(), v, store.MusikAlbenAbfrage{IDs: fav["album"], Limit: 1000})
+		if err != nil {
+			failErr(w, err)
+			return
+		}
 	}
 	pos := map[string]int{}
 	for i, id := range fav["album"] {
@@ -737,7 +742,7 @@ func (s *Server) musikDatei(w http.ResponseWriter, r *http.Request) {
 	}
 	als := r.URL.Query().Get("als")
 	if als == "" {
-		dateiSenden(w, r, t.Pfad, musikTyp(t), "")
+		medienSenden(w, r, t.Pfad, musikTyp(t), "")
 		return
 	}
 	if als != "aac" && als != "opus" {

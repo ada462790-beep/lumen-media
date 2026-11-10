@@ -168,7 +168,7 @@
  "Deine Anmeldung ist abgelaufen. Bitte melde dich wieder an.": "Your session has expired. Please sign in again.",
  "Deine Bewertung": "Your Rating",
  "Deine Fassung": "Your Version",
- "Deinen PIN für die Verwaltung eingeben": "Enter your admin PIN",
+ "Deine PIN für die Verwaltung eingeben": "Enter your admin PIN",
  "Den Code aus deiner Authenticator-App eingeben": "Enter the code from your authenticator app",
  "Der Aufnahmeort bleibt auf dem Server": "Location stays on the server",
  "Der Aufnahmeort wird angezeigt": "Location is shown",
@@ -571,7 +571,7 @@
  "Neue PIN – mindestens vier Ziffern": "New PIN – at least four digits",
  "Neue Sammlung": "New Collection",
  "Neue Playlist": "New Playlist",
- "Neuer PIN": "New PIN",
+ "Neue PIN": "New PIN",
  "Neues Passwort": "New password",
  "Neues Passwort – mindestens acht Zeichen": "New password – at least eight characters",
  "Neueste": "Latest",
@@ -1335,5 +1335,8 @@
  "Diese Einstellungen ändert nur der Besitzer des Servers.": "Only the server owner can change these settings.",
  "Ohne „Herunterladen“ gibt es keinen Download-Knopf, und Lumen liefert Filme nur etwa doppelt so schnell aus, wie sie laufen. Wer technisch versiert ist, kann einen Strom trotzdem mitschneiden.": "Without “Download” there’s no download button, and Lumen only sends films about twice as fast as they play. Someone technically savvy can still record a stream.",
  "Diese Einstellung ändert nur der Besitzer des Servers.": "Only the server owner can change this setting.",
- "Wird nur für diese Anmeldung gebraucht und nirgends gespeichert. Ein Konto ohne Passwort lässt sich nicht übernehmen – setze bei {art} zuerst eines.": "Only used for this sign-in and never stored. An account without a password can’t be imported – set one in {art} first."
+ "Wird nur für diese Anmeldung gebraucht und nirgends gespeichert. Ein Konto ohne Passwort lässt sich nicht übernehmen – setze bei {art} zuerst eines.": "Only used for this sign-in and never stored. An account without a password can’t be imported – set one in {art} first.",
+ "Nochmal ansehen": "Watch again",
+ "erzwungen": "forced",
+ "Für dein Profil ist noch nichts freigegeben. Frag jemanden, der Lumen verwaltet.": "Nothing has been approved for your profile yet. Ask someone who manages Lumen."
 }

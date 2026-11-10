@@ -32,6 +32,20 @@ func (s *Store) CreateWish(ctx context.Context, accountID, title string, year in
 	if title == "" {
 		return nil, errors.New("titel fehlt")
 	}
+	// Derselbe offene Wunsch noch einmal (zweimal getippt): den alten geben.
+	var alt string
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM wish WHERE account_id = ? AND lower(title) = lower(?)
+		    AND COALESCE(year,0) = ? AND state IN ('open','working')`,
+		accountID, title, year).Scan(&alt); err == nil {
+		if liste, err := s.Wishes(ctx, accountID, false); err == nil {
+			for i := range liste {
+				if liste[i].ID == alt {
+					return &liste[i], nil
+				}
+			}
+		}
+	}
 	now := time.Now()
 	w := &Wish{ID: newID("w"), Title: title, Year: year, State: "open",
 		CreatedAt: now, Mine: true}

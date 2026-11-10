@@ -104,6 +104,8 @@ export const ansichten = {
 };
 
 export function nachRender() {
+  // Seite gewechselt, während ein Foto offen war: zu.
+  if (bx && !bx.hidden && !ansichten[C.S.view]) schliessen();
   const a = ansichten[C.S.view];
   if (a?.nachher) a.nachher();
 }
@@ -367,18 +369,42 @@ function oeffnen(liste, i) {
   B.liste = liste; B.i = i; B.zoom = 1; B.x = B.y = 0;
   bx.hidden = false;
   document.body.classList.add('fo-offen');
+  // Ein Eintrag im Verlauf: „Zurück" (Browser, Android-Taste) schliesst
+  // das Foto, statt die Seite darunter zu wechseln und das Foto offen zu
+  // lassen.
+  if (!history.state?.fotoOffen) {
+    try { history.pushState({ ...(history.state || {}), fotoOffen: true }, ''); } catch {}
+  }
   malen();
   bx.querySelector('[data-fo-zu]')?.focus();
 }
 
+// Vom Knopf oder mit Esc geschlossen: den eigenen Verlaufseintrag
+// zurücknehmen — das popstate schliesst dann (zurueckGedrueckt).
 function zu() {
+  if (history.state?.fotoOffen) { history.back(); return; }
+  schliessen();
+}
+
+/* zurueckGedrueckt: app.js fragt bei jedem „Zurück" zuerst hier. Ist ein
+   Foto offen, schliesst es sich, und die Seite bleibt, wo sie ist. */
+export function zurueckGedrueckt() {
+  if (!bx || bx.hidden) return false;
+  schliessen();
+  return true;
+}
+
+function schliessen() {
   diashowAus();
   bx.querySelector('video')?.pause();
   bx.hidden = true;
   bx.innerHTML = '';
   document.body.classList.remove('fo-offen');
   // Zur Kachel des zuletzt gezeigten Fotos — wer blättert, landet dort.
-  document.querySelector(`[data-fo-oeffnen="${B.i}"]`)?.scrollIntoView({ block: 'nearest' });
+  // Der Fokus geht dorthin zurück (Tastatur, Bildschirmleser).
+  const kachel = document.querySelector(`[data-fo-oeffnen="${B.i}"]`);
+  kachel?.scrollIntoView({ block: 'nearest' });
+  kachel?.focus({ preventScroll: true });
 }
 
 function blaettern(r) {

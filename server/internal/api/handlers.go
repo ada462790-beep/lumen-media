@@ -1379,6 +1379,18 @@ func (s *Server) adminCreateLibrary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Derselbe Ordner zweimal (Doppelklick, nochmal versucht) oder ein
+	// Ordner in einem anderen: Die Dateien gehörten dann zwei Bibliotheken,
+	// und das Löschen der einen leerte die andere.
+	if libs, err := s.st.Libraries(r.Context()); err == nil {
+		for _, l := range libs {
+			if ordnerUeberschneiden(l.Path, in.Path) {
+				failW(w, http.StatusConflict,
+					"dieser ordner gehört schon zur bibliothek „{name}“ (oder liegt darin)", "name", l.Name)
+				return
+			}
+		}
+	}
 	lib, err := s.st.CreateLibrary(r.Context(), in.Name, strings.TrimSpace(in.Kind),
 		strings.TrimSpace(in.Path), in.Lang)
 	if err != nil {
@@ -1895,4 +1907,22 @@ func (s *Server) verwalteteMediatheken(r *http.Request) map[string]bool {
 		out[id] = true
 	}
 	return out
+}
+
+// ordnerUeberschneiden: a und b sind derselbe Ordner, oder einer liegt im
+// anderen (nach dem Auflösen von Verweisen).
+func ordnerUeberschneiden(a, b string) bool {
+	norm := func(p string) string {
+		p = filepath.Clean(strings.TrimSpace(p))
+		if echt, err := filepath.EvalSymlinks(p); err == nil {
+			p = echt
+		}
+		return p
+	}
+	a, b = norm(a), norm(b)
+	drin := func(innen, aussen string) bool {
+		rel, err := filepath.Rel(aussen, innen)
+		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	return drin(a, b) || drin(b, a)
 }

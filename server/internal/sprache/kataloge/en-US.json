@@ -289,5 +289,6 @@
   "{n} neue Titel": {
     "one": "{n} new title",
     "other": "{n} new titles"
-  }
+  },
+  "dieser ordner gehört schon zur bibliothek „{name}“ (oder liegt darin)": "This folder already belongs to the library “{name}” (or is inside it)."
 }

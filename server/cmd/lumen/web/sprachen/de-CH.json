@@ -185,5 +185,9 @@
  "Musik|{n} Titel · {geprueft}": {
   "one": "{n} Titel · {geprueft}",
   "other": "{n} Titel · {geprueft}"
+ },
+ "{n} Interpreten": {
+  "one": "{n} Interpret",
+  "other": "{n} Interpreten"
  }
 }

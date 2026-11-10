@@ -318,11 +318,24 @@ func ordnerBegrenzen(ordner string, grenze int64) {
 	}
 }
 
+// medienSenden ist dateiSenden für Dateien aus einer Mediathek: nie aus dem
+// Datenordner (medienOeffnen). Eigene Zwischendateien (Vorschaubilder,
+// Umgewandeltes) liegen genau dort und gehen über dateiSenden.
+func medienSenden(w http.ResponseWriter, r *http.Request, pfad, typ, downloadName string) {
+	if fh, err := medienOeffnen(pfad); err != nil {
+		fail(w, http.StatusGone, "die datei ist nicht mehr da")
+		return
+	} else {
+		fh.Close()
+	}
+	dateiSenden(w, r, pfad, typ, downloadName)
+}
+
 // dateiSenden liefert eine Datei mit Range — Springen im Lied, Wischen im
 // Video. Der Name kommt nur bei Downloads mit; sonst verrät die Antwort
 // nicht, wie die Datei auf der Platte heisst.
 func dateiSenden(w http.ResponseWriter, r *http.Request, pfad, typ, downloadName string) {
-	fh, err := medienOeffnen(pfad)
+	fh, err := os.Open(pfad)
 	if err != nil {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return

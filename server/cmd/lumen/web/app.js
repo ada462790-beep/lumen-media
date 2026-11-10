@@ -636,6 +636,9 @@ async function go(view, opts = {}) {
   if (S.me) S.hinweis = '';
   // Die Verwaltung gibt es nur am Computer — auch über eine Adresse nicht.
   if (ADMIN_VIEWS.includes(view) && nurBeruehrung()) view = 'amComputer';
+  // Wer nicht verwaltet, landet über eine Verwaltungs-Adresse auf der
+  // Startseite — nicht in einer Fehlermeldung, bei der „Nochmal" nie hilft.
+  if (ADMIN_VIEWS.includes(view) && S.me && !S.me.account?.isAdmin) { view = 'home'; opts = { ...opts, ersetzen: true }; }
   // Stand der Seite, die man verlässt (Scrollstelle, Filter), festhalten:
   // „Zurück" soll genau dorthin führen.
   standMerken();
@@ -683,10 +686,18 @@ async function go(view, opts = {}) {
 }
 
 addEventListener('popstate', e => {
+  // Ein offenes Foto (oder Ähnliches) schliesst sich zuerst.
+  for (const m of MEDIATHEK) if (m.zurueckGedrueckt?.()) return;
   let st = e.state;
   // Von Hand geänderte Adresse: kein Zustand, aber eine lesbare Adresse.
   if (!st?.view) { const z = ansichtAusAdresse(); if (z) st = { ...z, tiefe: verlaufTiefe }; }
   verlaufTiefe = st && typeof st.tiefe === 'number' ? st.tiefe : 0;
+  // Angemeldet zurück auf Profilauswahl oder PIN-Eingabe: die gelten nicht
+  // mehr — sonst stand „Wer schaut?" da, obwohl man angemeldet ist.
+  if (st && S.me && ['start', 'setup', 'profiles', 'unlock', 'redeem'].includes(st.view)) {
+    go('home', { ersetzen: true });
+    return;
+  }
   if (st && st.view && S.me) go(st.view, { id: st.id, ausVerlauf: true, query: st.query, schluessel: st.schluessel, stand: st });
 });
 
@@ -929,6 +940,13 @@ function render() {
 
   if (S.hinweis && !S.me && !S.busy) html = `<div class="anmelde-hinweis" role="alert">${esc(S.hinweis)}</div>` + html;
   const vorherFokus = fokusSchluessel();
+  // Dieselbe Seite neu gezeichnet (Stern gesetzt, Folge abgehakt, Schalter
+  // umgelegt): an derselben Stelle bleiben. Vorher sprang jede solche
+  // Handlung ganz nach oben.
+  const gleicheSeite = !S.wiederherstellen && `${S.view}|${S.id ?? ''}` === letzteAnsicht;
+  const altSeite = gleicheSeite ? app.querySelector('.page') : null;
+  const altScroll = altSeite ? altSeite.scrollTop : 0;
+  const altReihen = gleicheSeite ? [...app.querySelectorAll('.rail')].map(r => r.scrollLeft) : null;
   app.innerHTML = html;
   randHinweise();
   hoverKarteWeg();
@@ -943,6 +961,11 @@ function render() {
   }
   if (S.view === 'player') mountPlayer();
   else nachDemZeichnen(vorherFokus);
+  if (gleicheSeite && !S.busy) {
+    const seite = app.querySelector('.page');
+    if (seite && altScroll) seite.scrollTop = altScroll;
+    if (altReihen) app.querySelectorAll('.rail').forEach((r, i) => { if (altReihen[i]) r.scrollLeft = altReihen[i]; });
+  }
   for (const m of MEDIATHEK) m.nachRender();
 }
 
@@ -1152,7 +1175,12 @@ function viewHome() {
           ? ((S.me.libraries || []).length
             ? tr('Die Bibliotheken sind angelegt, aber noch nicht eingelesen — unter Verwaltung › Bibliotheken siehst du, wie weit es ist.')
             : tr('Lege eine Bibliothek an und zeige Lumen, wo deine Filme liegen.'))
-          : tr('Sobald der Besitzer Filme hinzufügt, erscheinen sie hier.')}</p>
+          // Kinderprofil: Es gibt Filme, nur ist noch keiner für dieses
+          // Alter freigegeben (oft fehlt die Altersangabe, solange TMDb
+          // nicht eingerichtet ist). „Noch nichts da" stimmte dann nicht.
+          : S.me?.account?.isKid
+            ? tr('Für dein Profil ist noch nichts freigegeben. Frag jemanden, der Lumen verwaltet.')
+            : tr('Sobald der Besitzer Filme hinzufügt, erscheinen sie hier.')}</p>
       ${verwaltungHier()
         ? `<button class="btn btn-primary" style="margin-top:22px" data-go="adminLibraries">${(S.me.libraries || []).length ? tr('Zu den Bibliotheken') : tr('Bibliothek anlegen')}</button>` : ''}
     </div></div>`);
@@ -1441,7 +1469,7 @@ function fassungsWahl(it, fassungen, resumeSec) {
   const admin = S.me?.account?.isAdmin;
   const zeile = (f, i) => `<div class="row" style="min-height:56px;gap:12px">
       <button class="btn" style="flex:1;justify-content:flex-start;gap:12px;padding:0;text-align:left"
-        data-play="${esc(it.id)}" data-file="${esc(f.id)}" title="${esc(f.path || '')}">
+        data-play="${esc(it.id)}" data-file="${esc(f.id)}"${resumeSec > 60 ? '' : ' data-from="0"'} title="${esc(f.path || '')}">
         <span style="display:flex;width:30px;height:30px;border-radius:50%;background:var(--fill);align-items:center;justify-content:center;flex:none">${PLAY(12)}</span>
         <span><span class="t-body">${esc(fassungName(f))}</span>
           ${i === 0 ? `<span class="t-caption c-2"> ${tr('· Standard')}</span>` : ''}</span></button>
@@ -1535,7 +1563,7 @@ function viewDetail() {
       ${folgeBearbeiten(e)}
       <button class="btn btn-round sm folge-haken${e.finished ? ' folge-haken--an' : ''}" style="flex:none"
         data-folge-gesehen="${esc(e.id)}" aria-pressed="${!!e.finished}"
-        aria-label="${esc(e.title)}: ${e.finished ? 'gesehen' : tr('als gesehen markieren')}"
+        aria-label="${esc(e.title)}: ${e.finished ? tr('gesehen') : tr('als gesehen markieren')}"
         title="${e.finished ? tr('Gesehen – nochmal tippen zum Zurücknehmen') : tr('Als gesehen markieren')}">${svg(I.check, 16, 2.6)}</button>
     </div>`).join('');
 
@@ -1556,6 +1584,8 @@ function viewDetail() {
   // geschauten — der Server weiss sie (dieselbe wie auf der Startseite).
   const w = d.weiter;
   const serienKnopfText = !w ? tr('Ansehen')
+    // Alles gesehen: nicht „Weiter mit S1 F1", sondern ehrlich von vorn.
+    : d.item.finished && !(w.resumeMs > 0) ? tr('Nochmal ansehen')
     : w.resumeMs > 0 ? `${tr('Weiter bei')} ${clock(w.resumeMs / 1000)} · ${sf(w.seasonNo, w.episodeNo)}`
     : (d.item.gesehen || 0) > 0 ? tr('Weiter mit S{seasonNo} F{episodeNo}', { seasonNo: w.seasonNo, episodeNo: w.episodeNo }) : tr('Ansehen');
 
@@ -1570,7 +1600,7 @@ function viewDetail() {
     aac: 'AAC', ac3: tr('Dolby Digital'), eac3: tr('Dolby Digital Plus'), truehd: tr('Dolby TrueHD'), dts: 'DTS', mp3: 'MP3', flac: 'FLAC', opus: tr('Opus'),
     subrip: 'SRT', ass: 'ASS', mov_text: tr('Text'), webvtt: 'WebVTT', hdmv_pgs_subtitle: tr('PGS (Bild)'), dvd_subtitle: tr('DVD (Bild)') }[c] || (c || '').toUpperCase());
   const spur = t => [spracheN(t.language), codecN(t.codec), t.kind === 'audio' ? kanaele(t.channels) : '',
-    t.forced ? 'erzwungen' : '', t.hearingImpaired ? tr('für Hörgeschädigte') : '', t.external ? tr('eigene Datei') : '',
+    t.forced ? tr('erzwungen') : '', t.hearingImpaired ? tr('für Hörgeschädigte') : '', t.external ? tr('eigene Datei') : '',
     t.title && !/^(stereo|surround|5\.1|2\.0)$/i.test(t.title) ? `„${t.title}“` : ''].filter(Boolean).join(' · ');
   const fileRows = files.map(f => {
     const ton = (f.tracks || []).filter(t => t.kind === 'audio');
@@ -1609,7 +1639,9 @@ function viewDetail() {
             ? `<button class="btn btn-primary" data-fassungmenu="${esc(it.id)}" aria-expanded="${S.fassungMenu === it.id}">
                 ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}
                 <span style="opacity:.6;font-weight:500;margin-left:2px">${tr('· {n} Qualitäten', { n: fassungen.length })}</span></button>`
-            : `<button class="btn btn-primary" data-play="${it.id}" data-file="${esc(playable.id)}">
+            // „Ansehen" heisst von vorn: Unter einer Minute zeigt der Knopf
+            // keine Stelle an — dann darf er auch nicht still dort weitermachen.
+            : `<button class="btn btn-primary" data-play="${it.id}" data-file="${esc(playable.id)}"${resumeSec > 60 ? '' : ' data-from="0"'}>
                 ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}</button>`) : ''}
           ${it.kind === 'series' && (d.seasons || []).length ? `<button class="btn btn-primary" data-serie-play="${esc(it.id)}">
               ${PLAY(16)} ${esc(serienKnopfText)}</button>` : ''}
@@ -1726,7 +1758,7 @@ function spurName(t) {
   let name = t.language && t.language !== 'und' ? sprachName(t.language) : tr('Unbekannt');
   const z = [];
   if (t.title && t.title.toLowerCase() !== name.toLowerCase()) z.push(t.title);
-  if (t.forced) z.push('erzwungen');
+  if (t.forced) z.push(tr('erzwungen'));
   if (t.hearingImpaired) z.push(tr('für Hörgeschädigte'));
   // Bild-Untertitel (PGS, DVD) rechnet der Server ins Bild — die Wahl
   // startet den Strom neu, darum steht es dabei.
@@ -2199,6 +2231,15 @@ async function startPlayer(itemId, fromSec, fileId = null) {
     trickplayLaden(S.playing);
     // Ob es „Untertitel suchen" gibt — einmal gefragt, dann gemerkt.
     if (utStand.verfuegbar === null) utStandLaden().then(() => { if (S.playing?.mounted) { S.playing.spurenHtml = ''; patchChrome(); } });
+    // Ein eigener Eintrag im Verlauf (ohne neue Adresse): „Zurück" im
+    // Browser oder am Android-Handy schliesst den Film und führt auf die
+    // Seite, von der aus er lief — vorher sprang es eine Seite zu weit.
+    if (!history.state?.spieler) {
+      try {
+        verlaufTiefe++;
+        history.pushState({ ...(history.state || {}), tiefe: verlaufTiefe, spieler: true }, '');
+      } catch {}
+    }
     S.view = 'player';
     render();          // baut den Player auf, mountPlayer hängt sich ein
     await openStream(start);
@@ -2974,6 +3015,9 @@ async function naechstesAnbieten(p, sekunden) {
     return;
   }
   naechsterWeg();
+  // Ein offenes Seitenfeld (Folgen, Spuren) lag über der Karte, und ihre
+  // Knöpfe waren auf dem Handy nicht zu erreichen — es macht Platz.
+  if (p.spurenOffen) { p.spurenOffen = false; p.spurenHtml = ''; patchChrome(); }
   let rest = sekunden;
   const box = document.createElement('div');
   box.id = 'naechster';
@@ -3045,6 +3089,11 @@ async function spielerAnhalten() {
 async function stopPlayer() {
   const p = await spielerAnhalten();
   if (!p) return;
+  // Lief der Film von genau der Seite aus, auf die es zurückgeht: den
+  // eigenen Verlaufseintrag des Players zurücknehmen — sonst stünde die
+  // Seite danach zweimal im Verlauf.
+  const st = history.state;
+  if (st?.spieler && st.view === 'detail' && st.id === zielNachPlayer(p)) { history.back(); return; }
   // Der Player hatte keinen eigenen Eintrag im Verlauf; zurück geht es
   // auf die Seite, von der aus er gestartet wurde — bei einer Folge die
   // Serie mit ihrer Staffel, nicht die nackte Folge.
@@ -4046,7 +4095,7 @@ function viewAdminUnlock() {
   const pin = art === 'pin', app = art === 'totp';
   return shell(`<div class="wrap wrap--flat" style="max-width:520px">
     ${ohead(tr('Verwaltung gesperrt'), app ? tr('Den Code aus deiner Authenticator-App eingeben')
-      : pin ? tr('Deinen PIN für die Verwaltung eingeben') : tr('Dein Passwort für die Verwaltung eingeben'), 'home')}
+      : pin ? tr('Deine PIN für die Verwaltung eingeben') : tr('Dein Passwort für die Verwaltung eingeben'), 'home')}
     <form id="adminunlock" class="panel" style="margin-top:28px">
       <div class="field">
         <input id="asecret" name="code" type="${app ? 'text' : 'password'}" style="text-align:center;letter-spacing:.2em"
@@ -4082,7 +4131,7 @@ function viewAdminLock() {
 
 function lockDetail(k) {
   if (k === 'pin' || k === 'password') return `<div class="group group--inset" style="margin-top:-10px"><div style="padding:16px" class="field">
-    <label for="lsecret">${k === 'pin' ? tr('Neuer PIN') : tr('Neues Passwort')}</label>
+    <label for="lsecret">${k === 'pin' ? tr('Neue PIN') : tr('Neues Passwort')}</label>
     <input id="lsecret" name="secret" type="password" inputmode="${k === 'pin' ? 'numeric' : 'text'}" autocomplete="new-password"
       placeholder="${k === 'pin' ? tr('mindestens vier Ziffern') : tr('mindestens acht Zeichen')}"></div></div>`;
   if (k === 'totp') return `<div class="group group--inset" style="margin-top:-10px"><div style="padding:16px" id="totpbox">

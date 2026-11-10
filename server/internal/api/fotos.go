@@ -263,7 +263,7 @@ func (s *Server) fotoVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("als") != "h264" {
-		dateiSenden(w, r, f.Pfad, "video/mp4", "")
+		medienSenden(w, r, f.Pfad, "video/mp4", "")
 		return
 	}
 	lim, _ := s.st.Limits(r.Context(), accountOf(r).ID)
@@ -309,7 +309,7 @@ func (s *Server) fotoOriginal(w http.ResponseWriter, r *http.Request) {
 	}
 	typ := map[string]string{"jpeg": "image/jpeg", "png": "image/png", "heic": "image/heic", "webp": "image/webp",
 		"gif": "image/gif", "mp4": "video/mp4", "mov": "video/quicktime"}[f.Format]
-	dateiSenden(w, r, f.Pfad, typ, filepath.Base(f.Pfad))
+	medienSenden(w, r, f.Pfad, typ, filepath.Base(f.Pfad))
 }
 
 // ---------------------------------------------------------------- Hintergrund
