@@ -114,7 +114,34 @@ class LumenViewModel(private val store: Serverliste) : ViewModel() {
     val license: String get() = controller.license
     val sourceUrl: String? get() = controller.sourceUrl
 
-    init { run { controller.start() } }
+    init {
+        // Eine 401 irgendwo — auch aus dem Player oder einem Bildlader, die
+        // nicht über [fetch] gehen — meldet ab und führt zur Profilwahl.
+        client.beiAbmeldung = { vomServerAbgemeldet() }
+        run { controller.start() }
+    }
+
+    override fun onCleared() {
+        client.beiAbmeldung = null
+        super.onCleared()
+    }
+
+    private val abmeldeSperre = Any()
+
+    /**
+     * Der Server hat das Token zurückgewiesen. Blockiert (Abmelden spricht
+     * noch mit dem Server) — nur im Hintergrund rufen. Mehrere 401 auf
+     * einmal melden nur einmal ab: wer nicht mehr angemeldet ist, bleibt,
+     * wo er ist.
+     */
+    private fun vomServerAbgemeldet() {
+        synchronized(abmeldeSperre) {
+            if (controller.stage !is Stage.SignedIn) return
+            controller.signOut()
+        }
+        val danach = controller.stage
+        viewModelScope.launch(Dispatchers.Main) { _stage.value = danach }
+    }
 
     /**
      * Zählt hoch, sobald ein eigenes Profilbild hochgeladen wurde — es
@@ -212,9 +239,9 @@ class LumenViewModel(private val store: Serverliste) : ViewModel() {
             // die Profilwahl holen) — das gehört in den Hintergrund, in dem
             // wir hier schon sind. Auf dem Hauptfaden wäre es bei einem
             // abgelaufenen Token ein NetworkOnMainThreadException-Absturz.
-            controller.signOut()
-            val danach = controller.stage
-            withContext(Dispatchers.Main) { _stage.value = danach }
+            // Meist hat [ApiClient.beiAbmeldung] das schon erledigt; dann
+            // geschieht hier nichts mehr.
+            vomServerAbgemeldet()
             null
         } catch (e: LumenException) {
             withContext(Dispatchers.Main) { _error.value = e.message }
@@ -240,9 +267,7 @@ class LumenViewModel(private val store: Serverliste) : ViewModel() {
         try {
             Antwort(block(client), null)
         } catch (e: LumenException.SignedOut) {
-            controller.signOut()
-            val danach = controller.stage
-            withContext(Dispatchers.Main) { _stage.value = danach }
+            vomServerAbgemeldet()
             Antwort(null, e.message)
         } catch (e: LumenException) {
             Antwort(null, e.message ?: tx(R.string.das_hat_nicht_geklappt))

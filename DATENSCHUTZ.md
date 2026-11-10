@@ -104,6 +104,28 @@ Zertifikat unterschieben und mitlesen. Wenn du den Vermittler nicht selbst
 betreibst, nimm unterwegs die Apps — oder gib Lumen ein öffentliches
 Zertifikat (`--tls-cert`), dann gibt es keine Warnung zum Wegklicken.
 
+## Chromecast
+
+Wer in der Android-App auf einen Chromecast schickt, benutzt dafür den
+**Default Media Receiver von Google** — die Empfänger-App, die Google für
+Chromecast-Geräte bereitstellt und die der Chromecast von Google lädt. Eine
+eigene Empfänger-App hat Lumen nicht.
+
+Das Telefon gibt dem Chromecast dafür:
+
+- den **Titel** des Films oder der Folge und die Adresse des Hintergrundbilds,
+- die **Adresse des Stroms** und der Untertitel. Darin steht ein
+  **Medienschlüssel**, nicht dein Token: Er öffnet nur Bilder, Videos und
+  Untertitel und läuft ab (6 Stunden nach der letzten Benutzung, spätestens
+  nach 48 Stunden, nach einem Neustart des Servers sofort).
+
+Den Film holt der Chromecast selbst bei deinem Server im Heimnetz; über
+Google läuft er nicht. Was Google und der Chromecast mit dem Titel und den
+Angaben zur Wiedergabe tun, bestimmen Google und dessen Bedingungen für
+Chromecast — darauf hat Lumen keinen Einfluss. Wer das nicht möchte, schaut
+ohne Chromecast: Lumen schickt nichts dorthin, solange niemand „Abspielen"
+mit verbundenem Chromecast wählt.
+
 ## Woran du das prüfen kannst
 
 Der Quelltext liegt offen. Die wichtigsten Stellen:

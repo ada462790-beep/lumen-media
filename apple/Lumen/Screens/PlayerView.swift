@@ -11,11 +11,16 @@ import LumenKit
 
 /// Der Player.
 ///
-/// Darunter steckt AVPlayer: Vollbild, AirPlay, Bild-in-Bild und die
-/// Steuerung auf dem Sperrbildschirm kommen damit umsonst. Eine eigene
-/// Steuerung nachzubauen hiesse, all das nachzubauen — darum übernimmt
-/// `VideoPlayer` die Bedienung, und Lumen legt nur die Angaben darüber,
-/// die das System nicht kennt:
+/// Darunter steckt der Player des Systems: auf iPhone und iPad
+/// `AVPlayerViewController` (siehe `SystemPlayer`), auf dem Mac `VideoPlayer`.
+/// Steuerung, Vollbild und AirPlay kommen damit mit. Umsonst ist der Rest
+/// nicht: Bild-in-Bild gibt es auf iOS nur mit `AVPlayerViewController` und
+/// `allowsPictureInPicturePlayback` — `VideoPlayer` bietet es nicht an —,
+/// und Ton bei Stummschalter, Weiterspielen beim Sperren und die Steuerung
+/// auf dem Sperrbildschirm erst mit der Audio-Sitzung `.playback`, die
+/// `Playback` vor dem Abspielen setzt. Eine eigene Steuerung nachzubauen
+/// hiesse, all das nachzubauen — darum übernimmt das System die Bedienung,
+/// und Lumen legt nur die Angaben darüber, die das System nicht kennt:
 ///
 /// - rechts unten, über der Zeitleiste, zwei Symbole wie im Player des
 ///   Apple TV: Sprechblase für Untertitel, Wellen für den Ton. Jedes öffnet
@@ -74,8 +79,15 @@ struct PlayerView: View {
             Color.black.ignoresSafeArea()
 
             if let playback, let player = playback.player {
+                #if os(iOS)
+                // Die eigenen Einblendungen bleiben, wo sie waren: im ZStack
+                // über dem Bild, nicht in contentOverlayView.
+                SystemPlayer(player: player)
+                    .ignoresSafeArea()
+                #else
                 VideoPlayer(player: player)
                     .ignoresSafeArea()
+                #endif
             } else if folge?.naechster == nil, hinweisOffline == nil {
                 VStack(spacing: 16) {
                     ProgressView().controlSize(.large)
@@ -865,3 +877,36 @@ struct UpNextCard: View {
         }
     }
 }
+
+#if os(iOS)
+/// `AVPlayerViewController` als SwiftUI-Ansicht — wegen Bild-in-Bild.
+///
+/// `VideoPlayer` steckt zwar dasselbe darunter, lässt aber nicht an
+/// `allowsPictureInPicturePlayback` heran: Ohne Knopf und ohne automatischen
+/// Wechsel ins kleine Fenster beim Verlassen der App. Alles andere bleibt,
+/// wie es war — die Einblendungen von Lumen liegen weiterhin im ZStack von
+/// `PlayerView` darüber.
+struct SystemPlayer: UIViewControllerRepresentable {
+    let player: AVPlayer
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let ansicht = AVPlayerViewController()
+        ansicht.player = player
+        ansicht.allowsPictureInPicturePlayback = true
+        // Wer die App verlässt, während der Film läuft, sieht ihn im
+        // kleinen Fenster weiter.
+        ansicht.canStartPictureInPictureAutomaticallyFromInline = true
+        ansicht.videoGravity = .resizeAspect
+        return ansicht
+    }
+
+    func updateUIViewController(_ ansicht: AVPlayerViewController, context: Context) {
+        // Ein neuer Player (Tonspur gewechselt, nächste Folge): übernehmen.
+        if ansicht.player !== player { ansicht.player = player }
+    }
+
+    static func dismantleUIViewController(_ ansicht: AVPlayerViewController, coordinator: ()) {
+        ansicht.player = nil
+    }
+}
+#endif

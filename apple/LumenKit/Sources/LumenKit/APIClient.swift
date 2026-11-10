@@ -353,7 +353,11 @@ public actor APIClient {
     /// nicht ändern.
     static let bekannteCodes: Set<String> = [
         "falsch", "verwaltung_braucht_sperre", "kein_download", "zu_viele_downloads",
+        "wird_vorbereitet",  // = untertitelWirdVorbereitet
     ]
+
+    /// Die Untertitelspur wird noch aus der Datei gezogen (202, bei HLS 503).
+    public static let untertitelWirdVorbereitet = "wird_vorbereitet"
 
     /// Abgebrochen, nicht gescheitert: URLError.cancelled oder eine
     /// abgebrochene Aufgabe.
@@ -844,9 +848,18 @@ public actor APIClient {
     /// Eine Untertitelspur als WebVTT, mit dem Token als Kopfzeile. Die
     /// Zeiten darin gelten für die ganze Datei — der Player legt sie
     /// selbst über das Bild (`Untertitel.lesen`).
+    ///
+    /// Eingebettete Spuren zieht der Server erst aus der Datei; solange
+    /// antwortet er 202 mit `{"code": "wird_vorbereitet"}` (und
+    /// Retry-After: 3). Das ist JSON, kein WebVTT — dann kommt
+    /// `LumenError.abgelehnt` mit `untertitelWirdVorbereitet`, und der Player
+    /// fragt etwas später noch einmal.
     public func untertitel(fileId: String, spur: Int) async throws -> String {
         let datei = "\(spur).vtt"
         let data = try await request("GET", "/stream/\(fileId)/subtitles/\(datei)")
+        if Self.code(from: data) == Self.untertitelWirdVorbereitet {
+            throw LumenError.abgelehnt(code: Self.untertitelWirdVorbereitet, meldung: "", status: 202)
+        }
         guard let text = String(data: data, encoding: .utf8) else {
             throw LumenError.server(String(localized: "Diese Untertitel lassen sich nicht lesen.", bundle: .lumenKit, locale: .lumen), 422)
         }

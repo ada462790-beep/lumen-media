@@ -43,6 +43,10 @@ class ApiClient(
             field = neu
         }
 
+    /** Schützt das Setzen des Tokens und das Vergleichen-und-Löschen nach
+     *  einer 401 (siehe [senden]) — beides darf sich nicht überholen. */
+    private val tokenSperre = Any()
+
     /**
      * Das Token dieses Geräts. Es reist nur im Kopf „Authorization", nie in
      * einer Adresse — siehe [medienSchluessel].
@@ -50,7 +54,7 @@ class ApiClient(
     // @Volatile: gesetzt wird im Hintergrund (Anmelden, 401), gelesen
     // überall — auch beim Bauen von Bildadressen mitten im Zeichnen.
     @Volatile var token: String? = token
-        set(value) {
+        set(value) = synchronized(tokenSperre) {
             // Neues Token, neue Person oder abgemeldet: der Schlüssel des
             // alten Tokens öffnet dann nichts mehr, was uns gehört.
             if (value != field) medienSchluesselVergessen()
@@ -58,6 +62,17 @@ class ApiClient(
         }
 
     val isSignedIn: Boolean get() = !token.isNullOrEmpty()
+
+    /**
+     * Wird gerufen, wenn der Server das Token zurückweist (401) — die
+     * Anmeldung gilt nicht mehr. Wie setAbmeldeHandler auf Apple: Wer die
+     * Oberfläche führt, meldet dann ab und zeigt wieder die Profilwahl.
+     *
+     * Läuft im Faden der Anfrage, also im Hintergrund. Wer die Oberfläche
+     * anfasst, muss selbst auf den Hauptfaden wechseln. Gerufen wird nur,
+     * wenn das zurückgewiesene Token noch das aktuelle war — siehe [senden].
+     */
+    @Volatile var beiAbmeldung: (() -> Unit)? = null
 
     /**
      * Das Zertifikat des Servers festnageln.
@@ -387,7 +402,11 @@ class ApiClient(
         roh: ByteArray? = null,
         typ: String = "application/octet-stream",
     ): Paar {
-        val hadToken = !token.isNullOrEmpty()
+        // Das Token, mit dem diese Anfrage losgeht. Kommt die 401 erst
+        // später — nach einem Profilwechsel —, darf sie nicht das Token des
+        // neuen Profils löschen. Swift macht dasselbe mit `gesendet`.
+        val gesendet = token
+        val hadToken = !gesendet.isNullOrEmpty()
 
         // PATCH kennt HttpURLConnection nicht — `setRequestMethod("PATCH")`
         // wirft eine ProtocolException. Der Server nimmt für denselben
@@ -409,7 +428,7 @@ class ApiClient(
             // Damit Meldungen des Servers schon vor der Anmeldung in der
             // Sprache der App kommen; danach gilt die Sprache des Profils.
             c.setRequestProperty("Accept-Language", Texte.sprache)
-            token?.let { c.setRequestProperty("Authorization", "Bearer $it") }
+            gesendet?.let { c.setRequestProperty("Authorization", "Bearer $it") }
 
             if (body != null || roh != null) {
                 c.doOutput = true
@@ -447,7 +466,16 @@ class ApiClient(
             // wir ihm eben gegeben haben — einen falschen PIN etwa. Wer das
             // vermengt, sagt beim Vertippen „Deine Anmeldung ist abgelaufen".
             401 -> if (hadToken) {
-                token = null
+                val nochAktuell = synchronized(tokenSperre) {
+                    if (token == gesendet) { token = null; true } else false
+                }
+                if (!nochAktuell) {
+                    // Die Antwort gilt einem Token, das schon ersetzt ist —
+                    // ein anderes Profil, eine neue Anmeldung. Kein Abmelden:
+                    // das träfe die Person, die jetzt angemeldet ist.
+                    throw LumenException.Server(messageOf(antwort.text), code)
+                }
+                beiAbmeldung?.invoke()
                 throw LumenException.SignedOut
             } else {
                 throw LumenException.Server(messageOf(antwort.text), code)
@@ -985,6 +1013,38 @@ class ApiClient(
     fun subtitleUrl(fileId: String, index: Int): String {
         val q = buildMap { stromSchluessel()?.let { put("key", it) } }
         return url("/stream/$fileId/subtitles/$index.vtt", q)
+    }
+
+    /**
+     * Ob eine Untertitelspur fertig ist. Eingebettete Spuren zieht der
+     * Server erst aus der Datei — das kann bei grossen Dateien Minuten
+     * dauern. Solange antwortet er 202 (mit [kurz]: 503) und dem Code
+     * „wird_vorbereitet". Ein Abspieler, der die Spur so bekäme, hielte
+     * das JSON für einen Untertitel oder wartete beim Start bis zu 20
+     * Sekunden; darum fragt die App erst hier und gibt die Spur danach weiter.
+     *
+     * [kurz]: nur eine Sekunde warten lassen — für die Frage vor dem Start.
+     * Sonst wartet der Server bis zu 20 Sekunden, ehe er „noch nicht" sagt.
+     * Wahr heisst fertig, falsch heisst später noch einmal fragen. Andere
+     * Fehler (die Spur gibt es nicht, lässt sich nicht lesen) gehen weiter.
+     */
+    fun untertitelBereit(fileId: String, index: Int, kurz: Boolean = false): Boolean {
+        val q = if (kurz) mapOf("warten" to "1") else emptyMap()
+        return try {
+            senden("GET", "/stream/$fileId/subtitles/$index.vtt", q).code != 202
+        } catch (e: LumenException.Server) {
+            if (e.status == 503 && e.code == "wird_vorbereitet") false else throw e
+        }
+    }
+
+    /**
+     * Eine HLS-Sitzung beim Server beenden — beim Schliessen des Players.
+     * Sonst rechnet der Server noch zwei Minuten weiter, und die Wiedergabe
+     * zählt so lange bei „auf wie vielen Geräten" mit. Die Kennung steht in
+     * der Adresse der Medienliste, siehe [HlsSitzung.kennung].
+     */
+    fun hlsBeenden(fileId: String, sitzung: String) {
+        send("DELETE", "/stream/$fileId/hls/$sitzung")
     }
 
     // ---------------------------------------------------------- Herunterladen

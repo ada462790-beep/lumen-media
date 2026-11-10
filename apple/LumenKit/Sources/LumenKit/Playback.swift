@@ -154,6 +154,10 @@ public final class Playback {
     private var reportedFinished = false
     @ObservationIgnored private var cues: [Untertitel] = []
     @ObservationIgnored private var cuesFuer: Int?
+    /// Die Spur, die gerade geholt wird — oder auf die gewartet wird, weil
+    /// der Server sie noch aus der Datei zieht. Damit ein zweites Wählen
+    /// keine zweite Abfrage startet.
+    @ObservationIgnored private var untertitelLaedt: Int?
 
     public init(client: APIClient) { self.client = client }
 
@@ -397,7 +401,37 @@ public final class Playback {
             }
         }
 
+        Self.tonFuerFilmeEinschalten()
         player.play()
+    }
+
+    /// Die Audio-Sitzung auf „Film" stellen, bevor das Bild läuft.
+    ///
+    /// Ohne das gilt die Vorgabe des Systems (`.soloAmbient`): Mit dem
+    /// Stummschalter am iPhone bliebe der Film stumm, beim Sperren hielte
+    /// er an, und Bild-in-Bild ginge gar nicht — trotz `UIBackgroundModes:
+    /// audio` in der Info.plist. Auf dem Apple TV schadet es nicht und gibt
+    /// den Ton richtig an AirPlay und HomePod weiter. Der Mac kennt keine
+    /// Audio-Sitzung.
+    private static func tonFuerFilmeEinschalten() {
+        #if os(iOS) || os(tvOS)
+        let sitzung = AVAudioSession.sharedInstance()
+        do {
+            try sitzung.setCategory(.playback, mode: .moviePlayback)
+            try sitzung.setActive(true)
+        } catch {
+            // Geht es nicht, spielt der Film trotzdem — nur eben mit dem
+            // Verhalten von vorher. Kein Grund, die Wiedergabe abzubrechen.
+        }
+        #endif
+    }
+
+    /// Nach dem Schliessen: die Sitzung wieder freigeben, damit etwa die
+    /// Musik weiterspielt, die vor dem Film lief.
+    private static func tonFuerFilmeAusschalten() {
+        #if os(iOS) || os(tvOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 
     private func hlsSitzungMerken(_ adressen: [String], fileId: String) {
@@ -458,6 +492,7 @@ public final class Playback {
         lauf &+= 1
         isPreparing = false
         await aufraeumen()
+        Self.tonFuerFilmeAusschalten()
     }
 
     /// Den Stand jetzt sichern — die App geht in den Hintergrund, und ob
@@ -602,6 +637,7 @@ public final class Playback {
         untertitelText = nil
         cues = []
         cuesFuer = nil
+        untertitelLaedt = nil
         laeuftUeberHLS = false
         intro = nil
         creditsMs = nil
@@ -660,21 +696,47 @@ public final class Playback {
     /// das Menü zeigt keine Untertitel an.
     public var zeigtUntertitelSelbst: Bool { !(nativeUntertitel && laeuftUeberHLS) }
 
+    /// Wie oft nach einer Spur gefragt wird, die der Server noch aus der
+    /// Datei zieht. Je Frage wartet er bis zu 20 Sekunden, dazu 3 Sekunden
+    /// Pause (Retry-After) — zusammen gut zehn Minuten.
+    private static let untertitelVersuche = 30
+
     private func ladeUntertitel(_ index: Int) {
-        guard zeigtUntertitelSelbst, let file, cuesFuer != index else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let vtt = try await self.client.untertitel(fileId: file.id, spur: index)
-                guard self.untertitelSpur == index, self.file?.id == file.id else { return }
-                self.cues = Untertitel.lesen(vtt)
-                self.cuesFuer = index
-            } catch {
-                // Lassen sich die Untertitel nicht lesen, bleibt es still
-                // aus — ein Fehler, der das Bild überdeckt, wäre schlimmer.
-                guard self.untertitelSpur == index else { return }
-                self.untertitelSpur = nil
-                self.untertitelText = nil
+        guard zeigtUntertitelSelbst, let file, cuesFuer != index, untertitelLaedt != index else { return }
+        untertitelLaedt = index
+        Task { [weak self, client] in
+            var versuch = 0
+            while true {
+                do {
+                    let vtt = try await client.untertitel(fileId: file.id, spur: index)
+                    guard let self else { return }
+                    if self.untertitelLaedt == index { self.untertitelLaedt = nil }
+                    guard self.untertitelSpur == index, self.file?.id == file.id else { return }
+                    self.cues = Untertitel.lesen(vtt)
+                    self.cuesFuer = index
+                    return
+                } catch let fehler as LumenError
+                            where fehler.code == APIClient.untertitelWirdVorbereitet
+                                && versuch < Playback.untertitelVersuche {
+                    // Noch nicht fertig: nicht als geladen merken, später
+                    // noch einmal — solange diese Spur gewählt bleibt.
+                    versuch += 1
+                    try? await Task.sleep(for: .seconds(3))
+                    guard let self, !Task.isCancelled,
+                          self.untertitelSpur == index, self.file?.id == file.id else {
+                        if let self, self.untertitelLaedt == index { self.untertitelLaedt = nil }
+                        return
+                    }
+                } catch {
+                    // Lassen sich die Untertitel nicht lesen, bleibt es still
+                    // aus — ein Fehler, der das Bild überdeckt, wäre schlimmer.
+                    guard let self else { return }
+                    if self.untertitelLaedt == index { self.untertitelLaedt = nil }
+                    guard self.untertitelSpur == index else { return }
+                    self.untertitelSpur = nil
+                    self.untertitelText = nil
+                    return
+                }
             }
         }
     }

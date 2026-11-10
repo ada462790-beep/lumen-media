@@ -286,6 +286,25 @@ private fun TvRoot(store: Serverliste) {
         stage = controller.stage
     }
 
+    // Weist der Server das Token zurück (401), irgendwo — Startseite,
+    // Player, Bildlader —, abmelden und zurück zur Profilwahl. Der Aufruf
+    // kommt aus dem Faden der Anfrage; der Zustand wird auf dem Hauptfaden
+    // gesetzt, das Abmelden selbst läuft im Hintergrund. Mehrere 401 auf
+    // einmal melden nur einmal ab: danach ist [stage] nicht mehr SignedIn.
+    DisposableEffect(controller) {
+        controller.client.beiAbmeldung = {
+            scope.launch {
+                if (stage is Stage.SignedIn) {
+                    stage = Stage.StartingUp
+                    hintergrund { controller.signOut() }
+                    profilHier = (controller.stage as? Stage.ChoosingProfile)?.unterwegs != true
+                    stage = controller.stage
+                }
+            }
+        }
+        onDispose { controller.client.beiAbmeldung = null }
+    }
+
     if (einladung && stage is Stage.ChoosingProfile) {
         androidx.activity.compose.BackHandler { einladung = false; einladungFehler = null }
         TvEinladung(einladungFehler, onAbbrechen = { einladung = false; einladungFehler = null }) { code, name, art, geheim ->
@@ -425,6 +444,12 @@ private fun TvServerScreen(message: String?, onZurueck: (() -> Unit)?,
                 singleLine = true,
                 placeholder = { Text("192.168.1.20:8097") },
                 modifier = Modifier.width(560.dp))
+            // http nach draussen: nur ein Hinweis, verbinden geht trotzdem.
+            if (Adresswarnung.unverschluesseltAusserhalb(adresse)) {
+                Spacer(Modifier.height(10.dp))
+                Text(tx(R.string.http_ausserhalb_heimnetz), color = Tv.bad, fontSize = 16.sp,
+                     textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 760.dp))
+            }
             // Von unterwegs läuft die Verbindung verschlüsselt, und ein
             // Heimserver stellt sein Zertifikat meist selbst aus. Dann
             // braucht der Fernseher einmal dessen Fingerabdruck.
