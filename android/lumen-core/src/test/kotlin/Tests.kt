@@ -74,6 +74,7 @@ fun main(args: Array<String>) {
     verwaltungTests()
     medienschluesselTests()
     unterwegsTests()
+    anmeldungBehaltenTests()
     wiedergabenTests()
     jahresTests()
     personTests()
@@ -1864,6 +1865,89 @@ private fun unterwegsTests() {
             try { ApiClient(adresse, "T").news() } catch (e: LumenException.Unterwegs) { }
             throw IllegalStateException("erwartet")
         }
+    } finally {
+        server.stop(0)
+    }
+}
+
+// ---------------------------------------------------------------- Anmeldung behalten
+
+/**
+ * Nur eine 401 kostet die Anmeldung. Ein überlasteter Server (503, 429)
+ * beim Start darf das gespeicherte Token nicht löschen. Und eine späte 401
+ * für ein altes Token löscht nicht das neue.
+ */
+private fun anmeldungBehaltenTests() {
+    var meStatus = 503
+    var spaete401 = false
+    val server = com.sun.net.httpserver.HttpServer.create(
+        java.net.InetSocketAddress("127.0.0.1", 0), 0)
+    server.createContext("/api/v1/") { ex ->
+        when (ex.requestURI.path) {
+            "/api/v1/hello" -> fakeAntwort(ex, 200, """{"server":"Lumen","version":"t","setUp":true}""")
+            "/api/v1/profiles" -> fakeAntwort(ex, 200, "[]")
+            "/api/v1/me" -> when (meStatus) {
+                200 -> fakeAntwort(ex, 200, ME_JSON)
+                401 -> fakeAntwort(ex, 401, """{"error":"abgemeldet"}""")
+                else -> fakeAntwort(ex, meStatus, """{"error":"gerade nicht"}""")
+            }
+            "/api/v1/me/media-key" -> fakeAntwort(ex, 200, """{"key":"MK","gueltigSek":21600}""")
+            "/api/v1/news" -> {
+                if (spaete401) Thread.sleep(300)
+                fakeAntwort(ex, 401, """{"error":"abgemeldet"}""")
+            }
+            else -> fakeAntwort(ex, 404, """{"error":"nicht gefunden"}""")
+        }
+    }
+    server.start()
+    try {
+        val adresse = "http://127.0.0.1:${server.address.port}"
+        val store = MemoryTokenStore(serverUrl = adresse, token = "ALT")
+
+        // 503 beim Start: Token bleibt, zurück zur Adresse mit Meldung.
+        val s = SessionController(store)
+        s.start()
+        pruefe("503: zurück zur Adresse", s.stage is Stage.NeedsServer)
+        gleich("503: Token bleibt gespeichert", "ALT", store.token)
+        pruefe("503: Client behält das Token", s.client.isSignedIn)
+
+        meStatus = 429
+        s.start()
+        gleich("429: Token bleibt gespeichert", "ALT", store.token)
+
+        // Server wieder da: mit demselben Token hinein.
+        meStatus = 200
+        s.start()
+        pruefe("danach angemeldet", s.stage is Stage.SignedIn)
+
+        // 401: jetzt ist das Token wirklich weg.
+        meStatus = 401
+        s.start()
+        gleich("401: Token gelöscht", null, store.token)
+        pruefe("401: Profilwahl", s.stage is Stage.ChoosingProfile)
+
+        // Rückruf bei 401 — genau einmal, und das Token ist danach weg.
+        var gerufen = 0
+        val c = ApiClient(adresse, "T1")
+        c.beiAbmeldung = { gerufen++ }
+        try { c.news(); fehler.add("401 ohne Fehler"); geprueft++ } catch (e: LumenException.SignedOut) { geprueft++ }
+        gleich("Rückruf bei 401", 1, gerufen)
+        pruefe("Token nach 401 weg", !c.isSignedIn)
+
+        // Späte 401 für ein altes Token: das neue bleibt, kein Rückruf.
+        spaete401 = true
+        val d = ApiClient(adresse, "ALT")
+        var dGerufen = 0
+        d.beiAbmeldung = { dGerufen++ }
+        val faden = Thread {
+            try { d.news() } catch (e: LumenException) { /* erwartet */ }
+        }
+        faden.start()
+        Thread.sleep(100)
+        d.token = "NEU"
+        faden.join(5000)
+        gleich("späte 401: neues Token bleibt", "NEU", d.token)
+        gleich("späte 401: kein Rückruf", 0, dGerufen)
     } finally {
         server.stop(0)
     }

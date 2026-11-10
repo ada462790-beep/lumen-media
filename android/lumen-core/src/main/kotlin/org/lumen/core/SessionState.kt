@@ -266,19 +266,39 @@ class SessionController(
             noteLicense(hello)
             if (!hello.setUp) { stage = Stage.NeedsSetup; return }
             if (liste != null && client.isSignedIn) {
-                try {
-                    angemeldet(client.me())
-                    return
-                } catch (e: LumenException) {
-                    store.token = null
-                    client.signOut()
-                }
+                if (mitGespeichertemToken()) return
             }
             stage = profilwahl()
         } catch (e: LumenException) {
             stage = Stage.NeedsServer(e.message)
         }
     }
+
+    /**
+     * Mit dem gespeicherten Token hinein. Wahr heisst: fertig — angemeldet
+     * oder, bei einem Fehler, der nichts über die Anmeldung sagt, zurück
+     * zur Adresse mit der Meldung. Falsch heisst: weiter zur Profilwahl.
+     *
+     * Vergessen wird das Token nur, wenn der Server es zurückweist (401).
+     * Eine Zeitüberschreitung, ein überlasteter Server (503, 429) oder eine
+     * Antwort, die diese App nicht lesen kann, sagt nichts über die
+     * Anmeldung — wer dann neu anmelden müsste, hätte sie grundlos verloren.
+     * Wie Session.nachHallo auf Apple: „Nochmal versuchen" kommt mit dem
+     * Token wieder hinein.
+     */
+    private fun mitGespeichertemToken(): Boolean =
+        try {
+            angemeldet(client.me())
+            true
+        } catch (e: LumenException.SignedOut) {
+            // Token abgelaufen oder zurückgezogen.
+            store.token = null
+            client.signOut()
+            false
+        } catch (e: LumenException) {
+            stage = Stage.NeedsServer(e.message)
+            true
+        }
 
     private fun connect() {
         try {
@@ -290,16 +310,7 @@ class SessionController(
 
             if (!hello.setUp) { stage = Stage.NeedsSetup; return }
 
-            if (client.isSignedIn) {
-                try {
-                    angemeldet(client.me())
-                    return
-                } catch (e: LumenException) {
-                    // Token abgelaufen oder zurückgezogen.
-                    store.token = null
-                    client.signOut()
-                }
-            }
+            if (client.isSignedIn && mitGespeichertemToken()) return
             stage = profilwahl()
         } catch (e: LumenException) {
             stage = Stage.NeedsServer(e.message)

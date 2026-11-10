@@ -286,6 +286,25 @@ private fun TvRoot(store: Serverliste) {
         stage = controller.stage
     }
 
+    // Weist der Server das Token zurück (401), irgendwo — Startseite,
+    // Player, Bildlader —, abmelden und zurück zur Profilwahl. Der Aufruf
+    // kommt aus dem Faden der Anfrage; der Zustand wird auf dem Hauptfaden
+    // gesetzt, das Abmelden selbst läuft im Hintergrund. Mehrere 401 auf
+    // einmal melden nur einmal ab: danach ist [stage] nicht mehr SignedIn.
+    DisposableEffect(controller) {
+        controller.client.beiAbmeldung = {
+            scope.launch {
+                if (stage is Stage.SignedIn) {
+                    stage = Stage.StartingUp
+                    hintergrund { controller.signOut() }
+                    profilHier = (controller.stage as? Stage.ChoosingProfile)?.unterwegs != true
+                    stage = controller.stage
+                }
+            }
+        }
+        onDispose { controller.client.beiAbmeldung = null }
+    }
+
     if (einladung && stage is Stage.ChoosingProfile) {
         androidx.activity.compose.BackHandler { einladung = false; einladungFehler = null }
         TvEinladung(einladungFehler, onAbbrechen = { einladung = false; einladungFehler = null }) { code, name, art, geheim ->
