@@ -257,7 +257,20 @@ internal data class TvRasterWahl(
     val genre: String? = null,
     val sortierung: Sortierung = Sortierung.TITEL,
     val buchstabe: String? = null,
-)
+    /** Die Richtung: absteigend heisst Z bis A, das Neueste zuerst. */
+    val absteigend: Boolean = false,
+    /** Zählt bei „Neu mischen" hoch — eine neue Wahl, also neu laden. */
+    val mischung: Int = 0,
+) {
+    companion object {
+        /** Die gemerkte Sortierung aus den Prefs des Profils, sonst Titel aufsteigend. */
+        fun aus(prefs: Map<String, String>?, kind: String): TvRasterWahl {
+            val (art, ab) = Sortierung.aus(prefs?.get(Sortierung.prefSchluessel(kind)), kind)
+                ?: (Sortierung.TITEL to false)
+            return TvRasterWahl(sortierung = art, absteigend = ab)
+        }
+    }
+}
 
 /**
  * Filme oder Serien als Raster, wie im Browser: oben „Alle" und die Genres,
@@ -279,7 +292,8 @@ internal fun TvRaster(
     zwischenspeicher: MutableMap<String, Seite>? = null,
 ) {
     val genre = wahl.genre
-    val cacheSchluessel = "$kind|$genre|${wahl.sortierung.name}|${wahl.buchstabe}|$fest"
+    val cacheSchluessel = "$kind|$genre|${wahl.sortierung.name}|${wahl.absteigend}|${wahl.mischung}|${wahl.buchstabe}|$fest"
+    val richtung = if (wahl.absteigend) "desc" else "asc"
     var seite by remember(kind, wahl) { mutableStateOf(zwischenspeicher?.get(cacheSchluessel)) }
     var genres by remember(kind) { mutableStateOf<List<String>>(emptyList()) }
     var buchstaben by remember(kind, genre) { mutableStateOf(Buchstaben(emptyMap())) }
@@ -294,7 +308,7 @@ internal fun TvRaster(
         seite?.let { schon -> if (schon.genres.isNotEmpty()) genres = schon.genres; return@LaunchedEffect }
         try {
             val s = withContext(Dispatchers.IO) {
-                client.seite(kind, genre, sort = wahl.sortierung.schluessel, buchstabe = buchstabe)
+                client.seite(kind, genre, sort = wahl.sortierung.schluessel, buchstabe = buchstabe, dir = richtung)
             }
             seite = s
             zwischenspeicher?.put(cacheSchluessel, s)
@@ -319,8 +333,9 @@ internal fun TvRaster(
         scope.launch {
             try {
                 val n = withContext(Dispatchers.IO) {
+                    // Mit dem Samen der ersten Seite: bei „Zufällig" dieselbe Mischung.
                     client.seite(kind, genre, sort = wahl.sortierung.schluessel,
-                                 offset = s.naechsterOffset, buchstabe = buchstabe)
+                                 offset = s.naechsterOffset, buchstabe = buchstabe, dir = richtung, seed = s.seed)
                 }
                 if (seite === s) {
                     val zusammen = s.mit(n)
@@ -366,16 +381,24 @@ internal fun TvRaster(
                     Spacer(Modifier.height(6.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
                             contentPadding = PaddingValues(vertical = 6.dp, horizontal = 2.dp)) {
-                        items(Sortierung.entries, key = { it.schluessel }) { so ->
+                        // Die Richtung vorn; bei „Zufällig" neu mischen.
+                        item(key = "lumen:richtung") {
+                            TvWahlPille(if (wahl.sortierung == Sortierung.ZUFALL) Sortierung.neuMischen
+                                        else Sortierung.richtung(wahl.absteigend), false) {
+                                onWahl(if (wahl.sortierung == Sortierung.ZUFALL) wahl.copy(mischung = wahl.mischung + 1)
+                                       else wahl.copy(absteigend = !wahl.absteigend, buchstabe = null))
+                            }
+                        }
+                        items(Sortierung.faelle(kind), key = { it.schluessel }) { so ->
                             TvWahlPille(so.titel(kind), wahl.sortierung == so) {
-                                onWahl(wahl.copy(sortierung = so, buchstabe = null))
+                                onWahl(wahl.copy(sortierung = so, absteigend = so.vorgabeAbsteigend, buchstabe = null))
                             }
                         }
                     }
                 }
                 if (!fest && wahl.sortierung.mitLeiste) {
                     Spacer(Modifier.height(4.dp))
-                    TvBuchstabenLeiste(buchstaben, wahl.buchstabe) { onWahl(wahl.copy(buchstabe = it)) }
+                    TvBuchstabenLeiste(buchstaben, wahl.buchstabe, wahl.absteigend) { onWahl(wahl.copy(buchstabe = it)) }
                 }
                 fehler?.let {
                     Spacer(Modifier.height(10.dp))
@@ -410,11 +433,11 @@ internal fun TvRaster(
  * fokussieren — der Fokus springt über sie hinweg, statt ins Leere zu führen.
  */
 @Composable
-private fun TvBuchstabenLeiste(buchstaben: Buchstaben, gewaehlt: String?, onWahl: (String?) -> Unit) {
+private fun TvBuchstabenLeiste(buchstaben: Buchstaben, gewaehlt: String?, absteigend: Boolean, onWahl: (String?) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(vertical = 6.dp, horizontal = 2.dp)) {
         item(key = "lumen:alle") { TvBuchstabe(tx(R.string.alle), gewaehlt == null, true) { onWahl(null) } }
-        items(Buchstaben.ALLE, key = { it }) { b ->
+        items(Buchstaben.reihe(absteigend), key = { it }) { b ->
             TvBuchstabe(b, gewaehlt == b, buchstaben.waehlbar(b)) { onWahl(b) }
         }
     }

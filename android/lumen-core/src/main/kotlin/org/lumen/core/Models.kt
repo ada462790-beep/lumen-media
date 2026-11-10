@@ -838,6 +838,8 @@ data class Seite(
     val offset: Int,
     val weiter: Boolean,
     val genres: List<String>,
+    /** Bei sort=random der Samen dieser Mischung — fürs Nachladen. */
+    val seed: Long? = null,
 ) {
     /** Die nächste Seite hinten anhängen; was schon da ist, kommt nicht doppelt. */
     fun mit(naechste: Seite): Seite {
@@ -864,6 +866,7 @@ data class Seite(
             offset = j["offset"].int ?: 0,
             weiter = j["weiter"].bool ?: false,
             genres = j["genres"].strings(),
+            seed = j["seed"].long,
         )
     }
 }

@@ -38,7 +38,9 @@ object AmStueck {
     /**
      * Die Staffeln in der Reihenfolge zum Durchschauen. Staffel 0 sind die
      * Specials — die gehören ans Ende, nicht vor die erste Folge. Der
-     * Server sortiert sie nach vorn, weil er nur nach Nummer geht.
+     * Server schickt sie schon so (store.folgenOrdnung), wie Browser und
+     * Apple-Apps sie zeigen; hier bleibt es zur Sicherheit, falls ein
+     * älterer Server antwortet.
      */
     fun staffelnOrdnen(staffeln: List<Item>): List<Item> =
         staffeln.sortedWith(compareBy<Item>({ istSpecials(it) }, { it.seasonNo ?: Int.MAX_VALUE }))
@@ -54,9 +56,10 @@ object AmStueck {
     fun staffelName(staffel: Item): String =
         if (istSpecials(staffel)) Texte.t(Tx.SPECIALS) else staffel.title
 
-    /** Die Folgen einer Staffel nach Nummer; ohne Nummer ans Ende. */
+    /** Die Folgen einer Staffel nach Nummer; ohne Nummer (oder 0) ans Ende,
+     *  bei Gleichstand in der Reihenfolge des Servers — wie überall. */
     fun folgenOrdnen(folgen: List<Item>): List<Item> =
-        folgen.sortedBy { it.episodeNo ?: Int.MAX_VALUE }
+        folgen.sortedBy { f -> f.episodeNo?.takeIf { it > 0 } ?: Int.MAX_VALUE }
 
     /** Alle Folgen einer Serie hintereinander, Staffel für Staffel. */
     fun folgenDerSerie(staffeln: List<Item>, folgenDerStaffel: (Item) -> List<Item>): Sequence<Item> =
@@ -78,12 +81,16 @@ object AmStueck {
      */
     fun folgeNach(folgen: Sequence<Item>, aktuellId: String,
                   spielbar: (Item) -> Boolean = { true }): Item? {
-        var gefunden = false
+        var aktuell: Item? = null
         for (folge in folgen) {
-            if (gefunden) {
+            val vorher = aktuell
+            if (vorher != null) {
+                // Aus einer regulären Staffel nicht von selbst in die
+                // Specials — wie im Browser und auf Apple-Geräten.
+                if (!istSpecials(vorher) && istSpecials(folge)) return null
                 if (spielbar(folge)) return folge
             } else if (folge.id == aktuellId) {
-                gefunden = true
+                aktuell = folge
             }
         }
         return null

@@ -629,11 +629,20 @@ private val ZielStapelSaver = listSaver<List<Ziel>, String>(
 
 /** Die Wahl über einem Raster, ebenso übers Beenden im Hintergrund hinweg. */
 private val RasterWahlSaver = listSaver<RasterWahl, String?>(
-    save = { listOf(it.genre, it.sortierung.name, it.buchstabe) },
+    save = { listOf(it.genre, it.sortierung.name, it.buchstabe, if (it.absteigend) "1" else "0", it.mischung.toString()) },
     restore = { l ->
-        RasterWahl(l[0], Sortierung.entries.firstOrNull { it.name == l[1] } ?: Sortierung.TITEL, l[2])
+        RasterWahl(l[0], Sortierung.entries.firstOrNull { it.name == l[1] } ?: Sortierung.TITEL, l[2],
+                   absteigend = l.getOrNull(3) == "1", mischung = l.getOrNull(4)?.toIntOrNull() ?: 0)
     },
 )
+
+/** Die Sortierung ins Profil schreiben (sort.movie, sort.series) — wie im
+ *  Browser gilt sie dann beim nächsten Start und auf anderen Geräten. */
+private fun sortierungMerken(model: LumenViewModel, kind: String, alt: RasterWahl, neu: RasterWahl) {
+    if (alt.sortierung == neu.sortierung && alt.absteigend == neu.absteigend) return
+    val wert = neu.sortierung.wert(neu.absteigend)
+    model.send { it.updatePrefs(mapOf(Sortierung.prefSchluessel(kind) to wert)) }
+}
 
 /** Die Ansichten im Reiter Merkliste. */
 private object MerkAnsicht {
@@ -655,8 +664,13 @@ private fun LibraryScaffold(model: LumenViewModel) {
     var merkAnsicht by rememberSaveable { mutableStateOf(MerkAnsicht.MERKLISTE) }
     // Genre, Sortierung und Buchstabe der Raster — sie bleiben, wenn man
     // von einem Titel zurückkommt.
-    var filmWahl by rememberSaveable(stateSaver = RasterWahlSaver) { mutableStateOf(RasterWahl()) }
-    var serienWahl by rememberSaveable(stateSaver = RasterWahlSaver) { mutableStateOf(RasterWahl()) }
+    // Die Sortierung kommt beim ersten Mal aus dem Profil.
+    var filmWahl by rememberSaveable(stateSaver = RasterWahlSaver) {
+        mutableStateOf(RasterWahl.aus(model.me?.prefs, "movie"))
+    }
+    var serienWahl by rememberSaveable(stateSaver = RasterWahlSaver) {
+        mutableStateOf(RasterWahl.aus(model.me?.prefs, "series"))
+    }
     // Favoriten: Filme oder Serien, wie im Browser getrennt.
     var favoritenSerien by rememberSaveable { mutableStateOf(false) }
 
@@ -789,11 +803,13 @@ private fun LibraryScaffold(model: LumenViewModel) {
                     if (reihenZeigen) {
                         ReihenScreen(model) { oeffnen(Ziel.ReiheOffen(it.id)) }
                     } else {
-                        BrowseScreen(model, "movie", filmRaster, filmWahl, { filmWahl = it }, titelOeffnen, suchen)
+                        BrowseScreen(model, "movie", filmRaster, filmWahl,
+                                     { sortierungMerken(model, "movie", filmWahl, it); filmWahl = it }, titelOeffnen, suchen)
                     }
                 }
             }
-            Tab.Series -> BrowseScreen(model, "series", serienRaster, serienWahl, { serienWahl = it },
+            Tab.Series -> BrowseScreen(model, "series", serienRaster, serienWahl,
+                                       { sortierungMerken(model, "series", serienWahl, it); serienWahl = it },
                                        titelOeffnen, suchen)
             // Merkliste, Gesehen und Listen in einem Reiter — eine Wahl
             // oben, nicht zwei ineinander. Die Favoriten haben ihren
@@ -1099,7 +1115,20 @@ data class RasterWahl(
     val genre: String? = null,
     val sortierung: Sortierung = Sortierung.TITEL,
     val buchstabe: String? = null,
-)
+    /** Die Richtung: absteigend heisst Z bis A, das Neueste zuerst. */
+    val absteigend: Boolean = false,
+    /** Zählt bei „Neu mischen" hoch — eine neue Wahl, also neu laden. */
+    val mischung: Int = 0,
+) {
+    companion object {
+        /** Die gemerkte Sortierung aus den Prefs des Profils, sonst Titel aufsteigend. */
+        fun aus(prefs: Map<String, String>?, kind: String): RasterWahl {
+            val (art, ab) = Sortierung.aus(prefs?.get(Sortierung.prefSchluessel(kind)), kind)
+                ?: (Sortierung.TITEL to false)
+            return RasterWahl(sortierung = art, absteigend = ab)
+        }
+    }
+}
 
 /**
  * Filme oder Serien als Raster — mit Genre-Knöpfen oben, der Sortierung,
@@ -1116,7 +1145,7 @@ private fun BrowseScreen(model: LumenViewModel, kind: String,
     // Unter diesem Schlüssel hält das ViewModel, was zuletzt geladen war —
     // samt nachgeladener Seiten. So steht das Raster nach der Rückkehr von
     // einem Titel gleich wieder da, an derselben Stelle.
-    val cacheSchluessel = "$kind|${wahl.genre}|${wahl.sortierung.name}|${wahl.buchstabe}"
+    val cacheSchluessel = "$kind|${wahl.genre}|${wahl.sortierung.name}|${wahl.absteigend}|${wahl.mischung}|${wahl.buchstabe}"
     var seite by remember(kind, wahl) { mutableStateOf(model.raster[cacheSchluessel]) }
     // Die Genres vom ersten Laden: gefiltert schickt der Server dieselben,
     // aber bis er antwortet, sollen die Knöpfe nicht verschwinden.
@@ -1135,9 +1164,12 @@ private fun BrowseScreen(model: LumenViewModel, kind: String,
         scope.launch { raster.scrollToItem(0) }
     }
 
-    fun holen(c: ApiClient, offset: Int = 0): Seite =
+    // Beim Nachladen mit dem Samen der ersten Seite — sonst käme bei
+    // „Zufällig" eine neue Mischung, und Titel stünden doppelt da.
+    fun holen(c: ApiClient, offset: Int = 0, seed: Long? = null): Seite =
         c.seite(kind, genre, sort = wahl.sortierung.schluessel, offset = offset,
-                buchstabe = wahl.buchstabe.takeIf { wahl.sortierung.mitLeiste })
+                buchstabe = wahl.buchstabe.takeIf { wahl.sortierung.mitLeiste },
+                dir = if (wahl.absteigend) "desc" else "asc", seed = seed)
 
     LaunchedEffect(kind, wahl, versuch) {
         // Schon da: nicht neu laden — sonst schrumpfte das Raster auf die
@@ -1168,7 +1200,7 @@ private fun BrowseScreen(model: LumenViewModel, kind: String,
         if (!s.weiter || mehrLaedt) return
         mehrLaedt = true
         scope.launch {
-            val n = model.fetch { holen(it, offset = s.naechsterOffset) }
+            val n = model.fetch { holen(it, offset = s.naechsterOffset, seed = s.seed) }
             if (n != null && seite === s) {
                 val zusammen = s.mit(n)
                 seite = zusammen
@@ -1212,12 +1244,15 @@ private fun BrowseScreen(model: LumenViewModel, kind: String,
                         GenreKnoepfe(genres, genre) { waehlen(wahl.copy(genre = it, buchstabe = null)) }
                     }
                     Spacer(Modifier.height(8.dp))
-                    SortierKnoepfe(kind, wahl.sortierung) {
-                        waehlen(wahl.copy(sortierung = it, buchstabe = null))
-                    }
+                    SortierKnoepfe(kind, wahl,
+                        onWahl = { waehlen(wahl.copy(sortierung = it, absteigend = it.vorgabeAbsteigend, buchstabe = null)) },
+                        onRichtung = {
+                            waehlen(if (wahl.sortierung == Sortierung.ZUFALL) wahl.copy(mischung = wahl.mischung + 1)
+                                    else wahl.copy(absteigend = !wahl.absteigend, buchstabe = null))
+                        })
                     if (wahl.sortierung.mitLeiste) {
                         Spacer(Modifier.height(8.dp))
-                        BuchstabenLeiste(buchstaben, wahl.buchstabe) { waehlen(wahl.copy(buchstabe = it)) }
+                        BuchstabenLeiste(buchstaben, wahl.buchstabe, wahl.absteigend) { waehlen(wahl.copy(buchstabe = it)) }
                     }
                 }
             }
@@ -1238,13 +1273,22 @@ private fun BrowseScreen(model: LumenViewModel, kind: String,
         onRetry = { fehler = null; versuch++ })
 }
 
-/** A–Z, Neu hinzugefügt, Neueste, Älteste — wie im Browser. */
+/**
+ * Die Richtung vorn — „Aufsteigend"/„Absteigend", bei „Zufällig" „Neu
+ * mischen" —, dahinter die Sortierungen zum Wischen, wie im Browser.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SortierKnoepfe(kind: String, gewaehlt: Sortierung, onWahl: (Sortierung) -> Unit) {
+private fun SortierKnoepfe(kind: String, wahl: RasterWahl, onWahl: (Sortierung) -> Unit, onRichtung: () -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(Sortierung.entries, key = { it.schluessel }) { s ->
-            FilterChip(selected = gewaehlt == s, onClick = { onWahl(s) },
+        item(key = "lumen:richtung") {
+            AssistChip(onClick = onRichtung,
+                       label = { Text(if (wahl.sortierung == Sortierung.ZUFALL) Sortierung.neuMischen
+                                      else Sortierung.richtung(wahl.absteigend)) },
+                       colors = AssistChipDefaults.assistChipColors(labelColor = Lumen.label))
+        }
+        items(Sortierung.faelle(kind), key = { it.schluessel }) { s ->
+            FilterChip(selected = wahl.sortierung == s, onClick = { onWahl(s) },
                        label = { Text(s.titel(kind)) },
                        colors = FilterChipDefaults.filterChipColors(
                            labelColor = Lumen.label2, selectedContainerColor = Lumen.fill,
@@ -1259,12 +1303,12 @@ private fun SortierKnoepfe(kind: String, gewaehlt: Sortierung, onWahl: (Sortieru
  * zu tippen.
  */
 @Composable
-private fun BuchstabenLeiste(buchstaben: Buchstaben, gewaehlt: String?, onWahl: (String?) -> Unit) {
+private fun BuchstabenLeiste(buchstaben: Buchstaben, gewaehlt: String?, absteigend: Boolean, onWahl: (String?) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         item(key = "lumen:alle") {
             BuchstabenPunkt(tx(R.string.alle), gewaehlt == null, true, tx(R.string.alle_buchstaben)) { onWahl(null) }
         }
-        items(Buchstaben.ALLE, key = { it }) { b ->
+        items(Buchstaben.reihe(absteigend), key = { it }) { b ->
             val n = buchstaben.anzahl(b)
             BuchstabenPunkt(b, gewaehlt == b, n > 0,
                 (if (b == Buchstaben.RAUTE) tx(R.string.zahlen_und_zeichen) else tx(R.string.buchstabe_x, b)) + if (n > 0) ", " + Texte.n(TxN.TITEL_ANZAHL, n) else "") {

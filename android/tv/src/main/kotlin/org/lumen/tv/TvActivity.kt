@@ -675,8 +675,15 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
     var ungelesen by remember { mutableStateOf(me.neuigkeiten) }
     // Genre, Sortierung und Buchstabe der Raster bleiben, wenn man von
     // einem Titel zurückkommt — ebenso, ob die Favoriten Serien zeigen.
-    var filmWahl by remember { mutableStateOf(TvRasterWahl()) }
-    var serienWahl by remember { mutableStateOf(TvRasterWahl()) }
+    // Die Sortierung kommt aus dem Profil und wird dort gemerkt
+    // (sort.movie, sort.series) — wie im Browser und auf dem Telefon.
+    var filmWahl by remember { mutableStateOf(TvRasterWahl.aus(me.prefs, "movie")) }
+    var serienWahl by remember { mutableStateOf(TvRasterWahl.aus(me.prefs, "series")) }
+    fun sortierungMerken(kind: String, alt: TvRasterWahl, neu: TvRasterWahl) {
+        if (alt.sortierung != neu.sortierung || alt.absteigend != neu.absteigend) {
+            prefSetzen(Sortierung.prefSchluessel(kind), neu.sortierung.wert(neu.absteigend))
+        }
+    }
     var favoritenSerien by remember { mutableStateOf(false) }
     var merklisteGesehen by remember { mutableStateOf(false) }
     // Was die Startseite und die Raster zuletzt zeigten — damit sie nach
@@ -800,9 +807,9 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
                         onReihe = { oeffnen(TvSeite.ReiheOffen(it.id)) },
                         onListe = { oeffnen(TvSeite.ListeOffen(it.id)) },
                         onListeAngelegt = { listenStand++; oeffnen(TvSeite.ListeOffen(it)) })
-                    TvBereich.FILME -> TvRaster(client, "movie", filmWahl, { filmWahl = it }, titelOeffnen,
+                    TvBereich.FILME -> TvRaster(client, "movie", filmWahl, { sortierungMerken("movie", filmWahl, it); filmWahl = it }, titelOeffnen,
                                                 zwischenspeicher = rasterSpeicher)
-                    TvBereich.SERIEN -> TvRaster(client, "series", serienWahl, { serienWahl = it }, titelOeffnen,
+                    TvBereich.SERIEN -> TvRaster(client, "series", serienWahl, { sortierungMerken("series", serienWahl, it); serienWahl = it }, titelOeffnen,
                                                  zwischenspeicher = rasterSpeicher)
                     TvBereich.SUCHE -> TvSuche(client, suche, { suche = it },
                         onOpen = titelOeffnen,

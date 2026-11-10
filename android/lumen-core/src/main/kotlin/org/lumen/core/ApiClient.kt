@@ -743,11 +743,18 @@ class ApiClient(
         // Nur Titel mit diesem Anfangsbuchstaben — „#“ für Zahlen und
         // Zeichen. Der Server kennt es nur zusammen mit A–Z.
         buchstabe: String? = null,
+        // asc oder desc; null: die übliche Richtung der Sortierung.
+        dir: String? = null,
+        // Bei sort=random der Samen aus der ersten Seite — das Nachladen
+        // setzt dieselbe Mischung fort.
+        seed: Long? = null,
     ): Seite {
         val q = buildMap {
             put("seite", "1")
             put("kind", kind)
             put("sort", sort)
+            dir?.let { put("dir", it) }
+            seed?.takeIf { it > 0 }?.let { put("seed", it.toString()) }
             put("limit", limit.toString())
             put("offset", offset.toString())
             genre?.takeIf { it.isNotBlank() }?.let { put("genre", it) }

@@ -329,8 +329,15 @@ private fun amStueckTests() {
     gleich("nach Staffelende die nächste Staffel", "e4", AmStueck.folgeNach(nordlicht, "e3")?.id)
     gleich("auch nach einer gesehenen Folge die nächste", "e2",
         AmStueck.folgeNach(nordlicht, "e1")?.id)
-    gleich("eine Folge ohne Datei wird übersprungen", "x1",
-        AmStueck.folgeNach(nordlicht, "e3") { it.id != "e4" }?.id)
+    gleich("eine Folge ohne Datei wird übersprungen", "e4",
+        AmStueck.folgeNach(nordlicht, "e2") { it.id != "e3" }?.id)
+    pruefe("aus der letzten Staffel nicht von selbst in die Specials",
+        AmStueck.folgeNach(nordlicht, "e4") == null)
+    pruefe("auch nicht über eine Folge ohne Datei hinweg",
+        AmStueck.folgeNach(nordlicht, "e3") { it.id != "e4" } == null)
+    gleich("Folgen ohne Nummer ans Ende der Staffel", listOf("e1", "e2", "o"),
+        AmStueck.folgenOrdnen(listOf(titel("o", "episode", "Ohne", 1, 0), titel("e2", "episode", "Zwei", 1, 2),
+            titel("e1", "episode", "Eins", 1, 1))).map { it.id })
     pruefe("nach der letzten Folge nichts", AmStueck.folgeNach(nordlicht, "x1") == null)
     pruefe("unbekannte Folge: nichts", AmStueck.folgeNach(nordlicht, "gibtsnicht") == null)
 
@@ -1969,11 +1976,21 @@ private fun personTests() {
 
 /** Herz und Stöbern gegen einen kleinen Testserver: was die App fragt. */
 private fun stoebernTests() {
-    gleich("Sortierungen wie im Browser", listOf("title", "added", "year", "year-asc"),
+    gleich("Sortierungen wie im Browser",
+        listOf("title", "added", "premiered", "rating", "runtime", "lastwatched", "unwatched", "random"),
         Sortierung.entries.map { it.schluessel })
-    gleich("Neueste Filme", "Neueste Filme", Sortierung.NEUESTE.titel("movie"))
-    gleich("Neueste Serien", "Neueste Serien", Sortierung.NEUESTE.titel("series"))
-    pruefe("Leiste nur bei A–Z", Sortierung.TITEL.mitLeiste && !Sortierung.HINZUGEFUEGT.mitLeiste)
+    pruefe("Laufzeit nur bei Filmen", Sortierung.LAUFZEIT in Sortierung.faelle("movie") &&
+        Sortierung.LAUFZEIT !in Sortierung.faelle("series"))
+    gleich("Aufschrift", "Ungesehene zuerst", Sortierung.UNGESEHEN.titel("series"))
+    pruefe("Leiste nur nach Titel", Sortierung.TITEL.mitLeiste && !Sortierung.HINZUGEFUEGT.mitLeiste)
+    gleich("gemerkt gelesen", Sortierung.HINZUGEFUEGT to false, Sortierung.aus("added:asc", "movie"))
+    gleich("ohne Richtung die übliche", Sortierung.BEWERTUNG to true, Sortierung.aus("rating", "movie"))
+    gleich("Laufzeit gibt es bei Serien nicht", null, Sortierung.aus("runtime:asc", "series"))
+    gleich("alter Wert unbekannt", null, Sortierung.aus("year-asc", "movie"))
+    gleich("zum Merken", "title:desc", Sortierung.TITEL.wert(true))
+    gleich("Profilschlüssel", "sort.series", Sortierung.prefSchluessel("series"))
+    gleich("absteigend von Z", "Z", Buchstaben.reihe(true).first())
+    gleich("absteigend die Raute zuletzt", Buchstaben.RAUTE, Buchstaben.reihe(true).last())
     gleich("27 Buchstaben", 27, Buchstaben.ALLE.size)
     gleich("zuerst die Raute", Buchstaben.RAUTE, Buchstaben.ALLE.first())
     val b = Buchstaben.from(Json.parse("""{"A":12,"#":3,"Q":"x"}"""))
@@ -2034,8 +2051,10 @@ private fun stoebernTests() {
 
         c.seite("movie", sort = "title", buchstabe = Buchstaben.RAUTE)
         pruefe("Raute kodiert", anfragen.any { "buchstabe=%23" in it && "sort=title" in it })
-        c.seite("series", sort = "year-asc")
-        pruefe("Älteste zuerst", anfragen.any { "sort=year-asc" in it && "kind=series" in it && "buchstabe" !in it })
+        c.seite("series", sort = "premiered", dir = "asc")
+        pruefe("Älteste zuerst", anfragen.any { "sort=premiered" in it && "dir=asc" in it && "kind=series" in it && "buchstabe" !in it })
+        c.seite("movie", sort = "random", offset = 60, seed = 4711L)
+        pruefe("Zufall mit Samen", anfragen.any { "sort=random" in it && "seed=4711" in it })
 
         val bs = c.buchstaben("movie", "Drama")
         gleich("Leiste gezählt", 2, bs.anzahl("A"))
