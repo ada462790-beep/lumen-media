@@ -748,6 +748,8 @@ public struct ItemSeite: Codable, Sendable {
     public let weiter: Bool
     /// Go schickt `null`, wenn kein Titel ein Genre hat.
     public let genres: [String]?
+    /// Bei `sort=random`: der Samen dieser Mischung — fürs Nachladen.
+    public let seed: Int64?
 }
 
 // MARK: - Filmreihen

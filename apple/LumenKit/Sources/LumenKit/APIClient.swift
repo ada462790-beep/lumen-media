@@ -588,12 +588,15 @@ public actor APIClient {
     /// die Gesamtzahl, ob es weitergeht, und die Genres für die Knöpfe —
     /// dieselbe Anfrage wie im Browser (api.js: seite). Ohne `genre` alle.
     ///
-    /// `sort` ist title, added, year oder year-asc; nil lässt
-    /// den Server wählen — bei einer Liste die Reihenfolge, in der gemerkt
-    /// wurde. `buchstabe` springt zu den Titeln mit diesem Anfang („A" …
+    /// `sort` ist eine `Sortierung` (title, added, premiered, rating,
+    /// runtime, lastwatched, unwatched, random), `dir` asc oder desc (nil:
+    /// die übliche Richtung), `seed` der Samen von „random" aus der ersten
+    /// Seite; nil lässt den Server wählen — bei einer Liste die
+    /// Reihenfolge, in der gemerkt wurde. `buchstabe` springt zu den Titeln mit diesem Anfang („A" …
     /// „Z", die Raute für Zahlen und Zeichen). `liste` ist merkliste oder
     /// favoriten: dann nur die eigenen.
     public func seite(kind: String?, genre: String? = nil, sort: String? = "title",
+                      dir: String? = nil, seed: Int64? = nil,
                       buchstabe: String? = nil, liste: String? = nil,
                       limit: Int = 60, offset: Int = 0) async throws -> ItemSeite {
         var q: [String: String] = [
@@ -601,6 +604,8 @@ public actor APIClient {
         ]
         if let kind, !kind.isEmpty { q["kind"] = kind }
         if let sort, !sort.isEmpty { q["sort"] = sort }
+        if let dir, !dir.isEmpty { q["dir"] = dir }
+        if let seed, seed > 0 { q["seed"] = String(seed) }
         if let genre, !genre.isEmpty { q["genre"] = genre }
         // Die Raute kodiert URLComponents selbst als %23 — roh stünde es für den
         // Anker der Adresse, und der Server bekäme gar nichts.

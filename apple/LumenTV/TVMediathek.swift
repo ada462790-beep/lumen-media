@@ -54,11 +54,22 @@ struct TVRasterView: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 20) {
-                            ForEach(Sortierung.allCases) { art in
+                            ForEach(Sortierung.faelle(kind: kind)) { art in
                                 wahlKnopf(art.name(kind: kind), gewaehlt: raster.sortierung == art) {
                                     Task { await raster.sortieren(art) }
                                 }
                             }
+                            // Die Richtung als eigener Knopf; bei „Zufällig" neu mischen.
+                            Button {
+                                Task { await raster.richtungUmkehren() }
+                            } label: {
+                                Image(systemName: raster.sortierung == .zufall ? "shuffle"
+                                      : (raster.absteigend ? "arrow.down" : "arrow.up"))
+                                    .font(.callout.weight(.semibold))
+                            }
+                            .accessibilityLabel(raster.sortierung == .zufall
+                                                ? String(localized: "Neu mischen", bundle: .lumen, locale: .lumen)
+                                                : richtungName(absteigend: raster.absteigend))
                         }
                         .padding(.vertical, 20)
                     }
@@ -69,7 +80,7 @@ struct TVRasterView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 buchstabenKnopf(nil, raster)
-                                ForEach(Buchstaben.alle, id: \.self) { b in
+                                ForEach(raster.buchstabenReihe, id: \.self) { b in
                                     buchstabenKnopf(b, raster)
                                 }
                             }
@@ -99,7 +110,12 @@ struct TVRasterView: View {
         }
         .task {
             guard raster == nil else { return }
-            let neu = Raster(client: session.client, kind: kind, genre: startGenre)
+            let neu = Raster(client: session.client, kind: kind, genre: startGenre,
+                             gemerkt: session.me?.prefs[Sortierung.prefSchluessel(kind: kind)],
+                             speicher: .standard,
+                             merken: { schluessel, wert in
+                                 Task { await session.prefsSetzen([schluessel: wert]) }
+                             })
             raster = neu
             await neu.laden(genre: startGenre)
         }
