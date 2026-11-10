@@ -28,6 +28,7 @@ import (
 	"lumen/internal/scan"
 	"lumen/internal/store"
 	"lumen/internal/stream"
+	"lumen/internal/update"
 )
 
 type Server struct {
@@ -56,7 +57,8 @@ type Server struct {
 	// grund endet, wenn Lumen herunterfährt. Arbeit im Hintergrund
 	// (Durchläufe, Metadaten) hängt daran statt an der Anfrage, die sie
 	// angestossen hat — siehe hintergrund().
-	grund context.Context
+	grund        context.Context
+	grundBeenden func()
 	// Welcher Browser-Player zu welcher Wiedergabe gehört (laeufe.go).
 	laeufe laufBuch
 	// Sprache des Servers und der Profile im Speicher (sprache.go).
@@ -68,6 +70,27 @@ type Server struct {
 
 // SetzeGrund gibt den Kontext, der beim Herunterfahren endet.
 func (s *Server) SetzeGrund(ctx context.Context) { s.grund = ctx }
+
+// SetzeBeenden nennt die Funktion, die alle Arbeit im Hintergrund abbricht
+// (das Ende von grund). Ein Neustart nach Update oder Wiederherstellen
+// ruft sie vor dem Neustart auf.
+func (s *Server) SetzeBeenden(f func()) { s.grundBeenden = f }
+
+// neustarten startet Lumen neu — aber erst, nachdem Umwandlungen und Arbeit
+// im Hintergrund beendet sind. Vorher liefen FFmpeg-Prozesse über den
+// Neustart hinaus weiter und blieben im Container als Zombies liegen.
+func (s *Server) neustarten() error {
+	if s.grundBeenden != nil {
+		s.grundBeenden()
+	}
+	if s.tr != nil {
+		s.tr.StopAll()
+	}
+	if !s.ArbeitAbwarten(10 * time.Second) {
+		s.log.Warn("Arbeit im Hintergrund hörte vor dem Neustart nicht rechtzeitig auf")
+	}
+	return update.Neustart()
+}
 
 // hintergrund ist der Kontext für Arbeit, die eine Anfrage anstösst, die
 // aber länger läuft als diese: Sie endet nicht mit der Anfrage, wohl aber,

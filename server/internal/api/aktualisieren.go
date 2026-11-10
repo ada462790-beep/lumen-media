@@ -313,7 +313,7 @@ func (s *Server) updateEinsetzen(ctx context.Context, rel *update.Release, auto 
 	s.updateProtokollieren(ctx, eintrag)
 	// Kurz warten, damit die Antwort an die Verwaltung noch rausgeht.
 	time.Sleep(time.Second)
-	if err := update.Neustart(); err != nil {
+	if err := s.neustarten(); err != nil {
 		s.log.Error("update neustart", "err", err)
 		s.updateProtokollieren(ctx, updateEintrag{Von: s.version, Nach: rel.Version, Auto: auto,
 			Ergebnis: "fehler", Notiz: "Neustart klappte nicht — bitte Lumen von Hand neu starten: " + err.Error()})

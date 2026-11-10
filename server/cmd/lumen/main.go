@@ -198,6 +198,7 @@ func run(o Optionen, log *slog.Logger) error {
 	grund, allesBeenden := context.WithCancel(context.Background())
 	defer allesBeenden()
 	srv.SetzeGrund(grund)
+	srv.SetzeBeenden(allesBeenden)
 	// Umwandlungen vom letzten Lauf wegräumen (kurzlebig.go).
 	srv.KurzlebigAufraeumen()
 	// Hardware-Beschleunigung erkennen, Vorschaubilder und Untertitel im

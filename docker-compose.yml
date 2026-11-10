@@ -54,6 +54,9 @@ services:
     # Beim Herunterfahren Zeit lassen, damit die Datenbank sauber
     # geschlossen wird (Docker gibt sonst nur 10 Sekunden).
     stop_grace_period: 30s
+    # Ein kleiner Init-Prozess räumt beendete FFmpeg-Prozesse ab, damit im
+    # Container keine „Zombies" liegen bleiben.
+    init: true
     ports:
       # Nur im Heimnetz. Diesen Port NICHT im Router freigeben — für
       # unterwegs gibt es den Vermittler (siehe unten und README.md).

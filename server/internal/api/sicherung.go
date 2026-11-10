@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"lumen/internal/store"
-	"lumen/internal/update"
 )
 
 func (s *Server) sicherungsOrdner() string { return filepath.Join(s.dataDir, "sicherungen") }
@@ -97,7 +96,7 @@ func (s *Server) adminWiederherstellen(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]string{"status": tr(w, "Lumen startet neu und nimmt die Sicherung.")})
 	go func() {
 		time.Sleep(time.Second)
-		if err := update.Neustart(); err != nil {
+		if err := s.neustarten(); err != nil {
 			s.log.Error("neustart nach wiederherstellen", "err", err)
 		}
 	}()
