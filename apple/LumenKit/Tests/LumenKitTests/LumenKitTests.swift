@@ -536,6 +536,11 @@ final class URLTests: XCTestCase {
         XCTAssertEqual(ohneHintergrund.posterArt, "poster")
         XCTAssertEqual(ohneHintergrund.wideArt, "frame")
 
+        // Folgen: Das Poster ist das Standbild der Folge und geht vor.
+        let folgeJSON = #"{"id":"it_2","libraryId":"lib_1","kind":"episode","title":"F","matchState":"matched","addedAt":"2026-10-23T13:35:52+02:00","poster":"/p","frame":"/f"}"#
+        let folge = try JSONDecoder.lumen.decode(Item.self, from: Data(folgeJSON.utf8))
+        XCTAssertEqual(folge.wideArt, "poster")
+
         // Ein älterer Server schickt kein `frame` — dann wie bisher.
         let nackt = try titel("")
         XCTAssertEqual(nackt.posterArt, "poster")

@@ -8,11 +8,9 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
-	"lumen/internal/meta"
 	"lumen/internal/store"
 )
 
@@ -51,27 +49,10 @@ func (s *Server) adminMetadatenNeu(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	ctx := s.hintergrund()
-	go func() {
-		// In Häppchen zu 50: Dazwischen kommt ein „Prüfen" dran. Vorher
-		// hielt das Neuladen von ein paar tausend Titeln die Sperre eine
-		// Stunde lang, und jeder Scan wartete still.
-		for ctx.Err() == nil {
-			var res *meta.Result
-			var err error
-			s.Nacheinander(ctx, func(ctx context.Context) {
-				res, err = s.meta.ResolvePending(ctx, lib, 50)
-			})
-			if err != nil {
-				s.log.Error("metadaten", "err", err)
-				break
-			}
-			if res == nil || res.Matched+res.Unmatched == 0 {
-				break
-			}
-		}
-		s.Nacheinander(ctx, s.ReihenBilden)
-	}()
+	// In Häppchen zu 50 (metadatenNachholen): Dazwischen kommt ein
+	// „Prüfen" dran. Vorher hielt das Neuladen von ein paar tausend Titeln
+	// die Sperre eine Stunde lang, und jeder Scan wartete still.
+	go s.metadatenNachholen(s.hintergrund(), lib, 0)
 	ok(w, map[string]any{"status": "läuft", "titel": n})
 }
 

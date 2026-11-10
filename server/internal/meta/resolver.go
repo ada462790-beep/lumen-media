@@ -115,6 +115,13 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 	if err != nil {
 		return nil, err
 	}
+	// Folgen kommen erst in die Liste, wenn ihre Serie zugeordnet ist. Wurde
+	// in diesem Häppchen eine Serie zugeordnet, holen wir ihre Folgen gleich
+	// mit — sonst erst beim nächsten Durchlauf.
+	mitSerien := false
+	for i := range pending {
+		mitSerien = mitSerien || pending[i].Kind == "series"
+	}
 
 	r.standMu.Lock()
 	r.stand = Stand{Laeuft: true, Library: libraryID, Gesamt: len(pending)}
@@ -126,7 +133,7 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 	}()
 
 	res := &Result{}
-	for i := range pending {
+	for i := 0; i < len(pending); i++ { // wächst unterwegs (Folgen frisch zugeordneter Serien)
 		if ctx.Err() != nil {
 			return res, ctx.Err()
 		}
@@ -143,6 +150,15 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 				fmt.Sprintf("%s: %v", pending[i].Title, err))
 		default:
 			res.Matched++
+		}
+		if i == len(pending)-1 && mitSerien && len(pending) < limit {
+			mitSerien = false
+			if mehr, err := r.st.PendingItems(ctx, libraryID, limit-len(pending)); err == nil {
+				pending = append(pending, mehr...)
+				r.standMu.Lock()
+				r.stand.Gesamt = len(pending)
+				r.standMu.Unlock()
+			}
 		}
 	}
 	r.st.Log(ctx, "info", "metadaten", fmt.Sprintf(
@@ -468,19 +484,23 @@ func (r *Resolver) saveArtwork(ctx context.Context, itemID string, c *Candidate)
 	// Bilder aus der Sammlung selbst („poster.jpg" neben dem Film) hat
 	// jemand bewusst dort hingelegt — die ersetzt TMDb nicht.
 	lokaleArten := r.st.LokaleBildArten(ctx, itemID)
+	// Von Hand gesetzte Bilder (gesperrt) bleiben ebenso.
+	sperren, _ := r.st.Sperren(ctx, itemID)
 	for _, art := range []struct{ kind, url string }{
 		{"poster", c.PosterURL},
 		{"backdrop", c.BackdropURL},
 	} {
-		if art.url == "" || lokaleArten[art.kind] {
+		if art.url == "" || lokaleArten[art.kind] || sperren[art.kind] {
 			continue
 		}
 		name := fmt.Sprintf("%s-%s%s", itemID, art.kind, extOf(art.url))
 		dest := filepath.Join(r.artDir, name)
 
-		if _, err := os.Stat(dest); err == nil {
-			// Schon da — nicht noch einmal holen.
-			_ = r.st.SetArtwork(ctx, itemID, art.kind, name, art.url)
+		// Schon da und von derselben Adresse — nicht noch einmal holen.
+		// Kommt eine andere Adresse (der Titel wurde neu zugeordnet, TMDb
+		// hat ein anderes Bild), wird ersetzt: Sonst blieben nach dem
+		// Zuweisen der richtigen Serie Poster und Folgenbilder der falschen.
+		if _, err := os.Stat(dest); err == nil && r.st.BildQuelle(ctx, itemID, art.kind) == art.url {
 			continue
 		}
 		if err := r.download(ctx, art.url, dest); err != nil {

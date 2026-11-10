@@ -161,8 +161,14 @@ func (s *Server) durchlaufGesperrt(ctx context.Context, lib store.Library, vonSe
 		return
 	}
 	if s.meta != nil && s.meta.Ready() {
-		if _, err := s.meta.ResolvePending(ctx, lib.ID, 500); err != nil {
+		res, err := s.meta.ResolvePending(ctx, lib.ID, 500)
+		if err != nil {
 			s.log.Error("metadaten", "library", lib.Name, "err", err)
+		} else if res != nil && res.Checked >= 500 {
+			// Mehr als ein Häppchen wartet (eine grosse Serien-Mediathek hat
+			// tausende Folgen): den Rest gleich danach im Hintergrund holen,
+			// nicht erst in den nächsten Nächten zu je 500.
+			s.metadatenImHintergrund(lib.ID)
 		}
 	}
 	// Leere Doppel von Serien aus älteren Fassungen gehen in

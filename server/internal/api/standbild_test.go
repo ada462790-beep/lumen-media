@@ -8,6 +8,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"os/exec"
@@ -90,5 +91,65 @@ func TestStandbildAusKaputterDatei(t *testing.T) {
 	resp, raw := h.do("GET", "/api/v1/art/"+itemID+"/frame", "", h.tok)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("erwartet 404, bekommen %d %s", resp.StatusCode, raw)
+	}
+}
+
+// Folgen: Das Standbild von TMDb liegt als „Poster" da. Dann bietet Lumen
+// kein Bild aus der Datei an — vorher bekam jede Folge eins, und die Web-App
+// zeigte es statt des richtigen.
+func TestFolgeMitTMDbBildOhneStandbildAusDerDatei(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ohne FFmpeg gibt es nie ein Standbild")
+	}
+	h := newHarness(t)
+	ctx := t.Context()
+	lib, err := h.st.CreateLibrary(ctx, "Serien", "series", h.root, "de")
+	if err != nil {
+		t.Fatal(err)
+	}
+	serie := &store.Item{LibraryID: lib.ID, Kind: "series", Title: "Nordlicht", MatchState: "matched"}
+	if err := h.st.UpsertItem(ctx, serie); err != nil {
+		t.Fatal(err)
+	}
+	staffel := &store.Item{LibraryID: lib.ID, Kind: "season", ParentID: serie.ID, Title: "Staffel 1", SeasonNo: 1, MatchState: "matched"}
+	if err := h.st.UpsertItem(ctx, staffel); err != nil {
+		t.Fatal(err)
+	}
+	mitBild := &store.Item{LibraryID: lib.ID, Kind: "episode", ParentID: staffel.ID, Title: "Eins", SeasonNo: 1, EpisodeNo: 1, MatchState: "matched"}
+	ohneBild := &store.Item{LibraryID: lib.ID, Kind: "episode", ParentID: staffel.ID, Title: "Zwei", SeasonNo: 1, EpisodeNo: 2, MatchState: "matched"}
+	for _, it := range []*store.Item{mitBild, ohneBild} {
+		if err := h.st.UpsertItem(ctx, it); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := h.st.SetArtwork(ctx, mitBild.ID, "poster", mitBild.ID+"-poster.jpg", "https://image.tmdb.org/t/p/original/x.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	_, raw := h.do("GET", "/api/v1/items/"+staffel.ID+"/children", "", h.tok)
+	var folgen []struct {
+		ID     string `json:"id"`
+		Poster string `json:"poster"`
+		Frame  string `json:"frame"`
+	}
+	if err := json.Unmarshal(raw, &folgen); err != nil {
+		t.Fatalf("%v: %s", err, raw)
+	}
+	gesehen := 0
+	for _, f := range folgen {
+		switch f.ID {
+		case mitBild.ID:
+			gesehen++
+			if f.Poster == "" || f.Frame != "" {
+				t.Errorf("Folge mit TMDb-Bild: poster=%q frame=%q", f.Poster, f.Frame)
+			}
+		case ohneBild.ID:
+			gesehen++
+			if f.Frame == "" {
+				t.Errorf("Folge ohne Bild bekommt kein Standbild")
+			}
+		}
+	}
+	if gesehen != 2 {
+		t.Fatalf("Folgen fehlen: %s", raw)
 	}
 }

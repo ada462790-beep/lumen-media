@@ -212,6 +212,9 @@ function artOf(it, kind = 'poster') {
   const img = url => `<img class="art-img" src="${esc(url)}${tokenSuffix(url)}" alt="" loading="lazy">`;
   if (kind === 'wide') {
     if (it.backdrop) return img(it.backdrop);
+    // Bei Folgen ist das „Poster" das Standbild der Folge (breit) — es geht
+    // dem Bild aus der Datei vor.
+    if (it.kind === 'episode' && it.poster) return img(it.poster);
     if (it.frame) return `<div class="art-none"></div>${standbild(it, false)}`;
     if (it.poster) return img(it.poster);
   } else if (it.poster) {

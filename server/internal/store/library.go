@@ -986,7 +986,16 @@ func (s *Store) PendingItems(ctx context.Context, libraryID string, limit int) (
 	if limit <= 0 {
 		limit = 200
 	}
-	q := `SELECT ` + itemCols + ` FROM item i WHERE i.match_state = 'pending'`
+	// Staffeln holt niemand einzeln (die Serie bringt sie mit), und eine
+	// Folge lässt sich erst nachschlagen, wenn ihre Serie zugeordnet ist.
+	// Ohne diese Bedingung blieben solche Titel für immer „wartend“ und
+	// belegten die vordersten Plätze: Jeder Durchlauf prüfte dieselben
+	// Folgen einer unbekannten Serie, und neue Folgen kamen nie dran.
+	q := `SELECT ` + itemCols + ` FROM item i WHERE i.match_state = 'pending'
+	   AND (i.kind IN ('movie','series')
+	        OR (i.kind = 'episode' AND EXISTS (
+	              SELECT 1 FROM item st JOIN item se ON se.id = st.parent_id
+	               WHERE st.id = i.parent_id AND COALESCE(se.tmdb_id,'') != '')))`
 	args := []any{}
 	if libraryID != "" {
 		q += ` AND i.library_id = ?`
@@ -1078,6 +1087,15 @@ func (s *Store) SetArtwork(ctx context.Context, itemID, kind, path, sourceURL st
 		                    WHERE x.item_id = excluded.item_id AND x.feld = excluded.kind)`,
 		itemID, kind, path, nullStr(sourceURL))
 	return err
+}
+
+// BildQuelle ist die Adresse, von der das gespeicherte Bild stammt ("" wenn
+// keins da ist).
+func (s *Store) BildQuelle(ctx context.Context, itemID, kind string) string {
+	var u sql.NullString
+	_ = s.db.QueryRowContext(ctx,
+		`SELECT source_url FROM artwork WHERE item_id = ? AND kind = ?`, itemID, kind).Scan(&u)
+	return u.String
 }
 
 func (s *Store) ArtworkFor(ctx context.Context, itemIDs []string) (map[string]map[string]string, error) {

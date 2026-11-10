@@ -157,13 +157,17 @@ var (
 	// „Film - Teil 2" mit Bindestrich davor — die Schreibweise der Dateiteile.
 	reTeilMitStrich = regexp.MustCompile(`(?i)^(.*?)[\s._]+-[\s._]+(?:part|teil|pt)[\s._-]*(\d{1,2})[\s._-]*$`)
 	// VIDEO_TS: „VTS_01_2.VOB" ist der zweite Teil des ersten Titelsatzes.
-	reVTS      = regexp.MustCompile(`(?i)^vts_(\d{2})_(\d{1,2})$`)
-	reEdition  = regexp.MustCompile(`(?i)\b(director'?s[\s._-]?cut|extended(?:[\s._-]cut)?|unrated|theatrical|remastered|uncut|final[\s._-]cut|special[\s._-]edition)\b`)
-	reQuality  = regexp.MustCompile(`(?i)\b(2160p|1080p|720p|480p|4k|uhd)\b`)
-	reHDR      = regexp.MustCompile(`(?i)\b(hdr10\+|hdr10|hdr|dolby[\s._-]?vision|dv)\b`)
-	reLang     = regexp.MustCompile(`(?i)\b(german|deutsch|english|multi|dl|ger|eng)\b`)
-	reBrackets = regexp.MustCompile(`[\(\[\{][^\)\]\}]*[\)\]\}]`)
-	reSpace    = regexp.MustCompile(`\s+`)
+	reVTS     = regexp.MustCompile(`(?i)^vts_(\d{2})_(\d{1,2})$`)
+	reEdition = regexp.MustCompile(`(?i)\b(director'?s[\s._-]?cut|extended(?:[\s._-]cut)?|unrated|theatrical|remastered|uncut|final[\s._-]cut|special[\s._-]edition)\b`)
+	reQuality = regexp.MustCompile(`(?i)\b(2160p|1080p|720p|480p|4k|uhd)\b`)
+	reHDR     = regexp.MustCompile(`(?i)\b(hdr10\+|hdr10|hdr|dolby[\s._-]?vision|dv)\b`)
+	reLang    = regexp.MustCompile(`(?i)\b(german|deutsch|english|multi|dl|ger|eng)\b`)
+	// „WEB-DL" und „H.265" vereinheitlichen, bevor Sprachwörter („DL") und
+	// Punkte wegfallen — sonst blieb „WEB- … H 265" im Folgentitel stehen.
+	reWebDL      = regexp.MustCompile(`(?i)\bweb[\s._-]?dl\b`)
+	reCodecPunkt = regexp.MustCompile(`(?i)\b[hx][\s._]?26([45])\b`)
+	reBrackets   = regexp.MustCompile(`[\(\[\{][^\)\]\}]*[\)\]\}]`)
+	reSpace      = regexp.MustCompile(`\s+`)
 )
 
 // junk sind die Wortbrocken, die Release-Gruppen anhängen und die nie Teil
@@ -174,6 +178,9 @@ var junk = []string{
 	"avc", "xvid", "divx", "aac", "ac3", "eac3", "dts", "dtshd", "truehd",
 	"atmos", "ddp", "dd5", "flac", "10bit", "8bit", "repack", "proper",
 	"internal", "limited", "complete", "imax", "hybrid", "sdr",
+	// Kürzel der Streamingdienste und Tonformate mit Kanalzahl. „web" und
+	// „nf" allein nicht: „Charlotte's Web" ist ein Titel.
+	"amzn", "dsnp", "atvp", "hmax", "ddp2", "ddp5", "ddp7", "dd2", "dd7",
 }
 
 // Parse deutet einen Dateinamen. dirs sind die Ordner darüber, von aussen
@@ -1028,6 +1035,8 @@ func cleanRoh(s string) string { return cleanWeg(s, false, false) }
 
 func cleanWeg(s string, ohneSprache, ohneTechnik bool) string {
 	s = reBrackets.ReplaceAllString(s, " ")
+	s = reWebDL.ReplaceAllString(s, " webdl ")
+	s = reCodecPunkt.ReplaceAllString(s, " h26$1 ")
 
 	// Technische Angaben gehören nicht in den Titel — sie stehen schon in
 	// eigenen Feldern. „Sommerhaus CD1" ist der Film „Sommerhaus", Teil 1.

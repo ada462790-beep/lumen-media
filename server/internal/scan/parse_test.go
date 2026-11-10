@@ -314,3 +314,17 @@ func TestOrdnerTitelNurFuerDieseFolge(t *testing.T) {
 		t.Error("die genannte Folge bekommt ihren Titel nicht")
 	}
 }
+
+// Release-Brocken gehören nicht in den Folgentitel — auch nicht „WEB-DL",
+// das früher durch das Sprachwort „DL" zu „WEB-" zerfiel.
+func TestFolgentitelOhneReleaseBrocken(t *testing.T) {
+	for pfad, want := range map[string]string{
+		"The.Boys.S04E01.Department.of.Dirty.Tricks.2160p.AMZN.WEB-DL.DDP5.1.H.265-NTb.mkv": "Department of Dirty Tricks",
+		"Senna.S01E03.Monaco.German.DL.1080p.WEB.H264-GRP.mkv":                              "Monaco",
+	} {
+		g := ParseFuer(pfad, []string{"Serien", "Show", "Season 01"}, "series")
+		if g.EpisodeTitle != want {
+			t.Errorf("%s: Folgentitel %q, erwartet %q", pfad, g.EpisodeTitle, want)
+		}
+	}
+}

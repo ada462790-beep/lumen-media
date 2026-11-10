@@ -329,6 +329,8 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     /// ein hochkant beschnittenes Poster.
     public var wideArt: String {
         if backdrop != nil { return "backdrop" }
+        // Bei Folgen ist das Poster das breite Standbild von TMDb.
+        if kind == "episode", poster != nil { return "poster" }
         if frame != nil { return "frame" }
         return "poster"
     }

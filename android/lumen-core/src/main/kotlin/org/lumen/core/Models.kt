@@ -272,6 +272,8 @@ data class Item(
     val wideKind: String
         get() = when {
             backdrop != null -> "backdrop"
+            // Bei Folgen ist das Poster das breite Standbild von TMDb.
+            kind == "episode" && poster != null -> "poster"
             frame != null -> "frame"
             else -> "poster"
         }

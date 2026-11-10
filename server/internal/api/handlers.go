@@ -540,7 +540,13 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 				v.Backdrop = "/api/v1/art/" + it.ID + "/backdrop"
 			}
 		}
-		if standbilder && (v.Poster == "" || v.Backdrop == "") {
+		// Ein Bild aus der Datei nur, wo das passende fehlt. Bei Folgen ist
+		// das „Poster" das Standbild von TMDb (oder das eigene -thumb.jpg) —
+		// es ist schon breit; einen Hintergrund haben Folgen nie. Vorher
+		// bekam darum jede Folge ein zufälliges Bild aus der Datei, und das
+		// verdrängte das richtige.
+		folgeMitBild := it.Kind == "episode" && v.Poster != ""
+		if standbilder && !folgeMitBild && (v.Poster == "" || v.Backdrop == "") {
 			v.Frame = "/api/v1/art/" + it.ID + "/frame"
 		}
 		out[i] = v

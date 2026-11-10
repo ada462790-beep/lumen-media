@@ -273,6 +273,10 @@ private fun reihenListenTests() {
         {"id":"it_7","kind":"movie","title":"Alles da","poster":"/p","backdrop":"/b"}
     """))
     gleich("mit Hintergrund der Hintergrund", "backdrop", allesDa.wideKind)
+    val folge = Item.from(Json.parse("""
+        {"id":"it_6","kind":"episode","title":"Folge","poster":"/p","frame":"/f"}
+    """))
+    gleich("Folge: das Standbild von TMDb geht dem Bild aus der Datei vor", "poster", folge.wideKind)
     gleich("ganz ohne Bilder bleibt es beim Poster", "poster",
         Item.from(Json.parse("""{"id":"x","title":"Leer"}""")).wideKind)
 

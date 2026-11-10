@@ -137,33 +137,55 @@ func (s *Server) adminResolve(w http.ResponseWriter, r *http.Request) {
 		ok(w, map[string]string{"status": "läuft schon"}) // sprache: fest – eine Kennung
 		return
 	}
-	ctx := s.hintergrund()
 	go func() {
 		defer metaLaeuft.Store(false)
-		// Unter der Arbeitssperre, in Häppchen zu 50: nie neben einem
-		// Durchlauf her (sonst doppelte Anfragen bei TMDb und zwei
-		// Downloads ins selbe Bild), aber ein „Prüfen" kommt dazwischen
-		// dran.
-		for rest := limit; rest > 0 && ctx.Err() == nil; {
-			var res *meta.Result
-			var err error
-			s.Nacheinander(ctx, func(ctx context.Context) {
-				res, err = s.meta.ResolvePending(ctx, lib, min(rest, 50))
-			})
-			if err != nil {
-				s.log.Error("metadaten", "err", err)
-				break
-			}
-			if res == nil || res.Matched+res.Unmatched == 0 {
-				break
-			}
-			rest -= res.Matched + res.Unmatched
-		}
-		// Mit den Metadaten kommen die TMDb-Reihen; die selbst erkannten
-		// rücken danach zurecht.
-		s.Nacheinander(ctx, s.ReihenBilden)
+		s.metadatenNachholen(s.hintergrund(), lib, limit)
 	}()
 	ok(w, map[string]string{"status": "läuft"})
+}
+
+// metadatenNachholen holt, was noch wartet — bis nichts mehr zu tun ist
+// oder grenze Titel erledigt sind (0 = keine Grenze). Unter der
+// Arbeitssperre, in Häppchen zu 50: nie neben einem Durchlauf her (sonst
+// doppelte Anfragen bei TMDb und zwei Downloads ins selbe Bild), aber ein
+// „Prüfen" kommt dazwischen dran.
+func (s *Server) metadatenNachholen(ctx context.Context, lib string, grenze int) {
+	for rest := grenze; ctx.Err() == nil && (grenze <= 0 || rest > 0); {
+		n := 50
+		if grenze > 0 {
+			n = min(rest, 50)
+		}
+		var res *meta.Result
+		var err error
+		s.Nacheinander(ctx, func(ctx context.Context) {
+			res, err = s.meta.ResolvePending(ctx, lib, n)
+		})
+		if err != nil {
+			s.log.Error("metadaten", "err", err)
+			break
+		}
+		// Nichts hat seinen Zustand geändert (nur Fehler, etwa kein
+		// Internet): aufhören statt im Kreis zu fragen.
+		if res == nil || res.Matched+res.Unmatched == 0 {
+			break
+		}
+		rest -= res.Matched + res.Unmatched
+	}
+	// Mit den Metadaten kommen die TMDb-Reihen; die selbst erkannten
+	// rücken danach zurecht.
+	s.Nacheinander(ctx, s.ReihenBilden)
+}
+
+// metadatenImHintergrund: wie metadatenNachholen ohne Grenze, aber nur
+// einmal gleichzeitig.
+func (s *Server) metadatenImHintergrund(lib string) {
+	if !metaLaeuft.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer metaLaeuft.Store(false)
+		s.metadatenNachholen(s.hintergrund(), lib, 0)
+	}()
 }
 
 func (s *Server) adminUnmatched(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +264,10 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// Kurz zwischenspeichern, danach fragt der Browser nach (304, wenn gleich):
+	// Beim Neuzuordnen bleibt die Adresse dieselbe, mit einem Tag sah man das
+	// falsche Bild nach der Korrektur noch bis morgen.
+	w.Header().Set("Cache-Control", "private, max-age=600")
 	w.Header().Set("Content-Type", fmt.Sprintf("image/%s",
 		strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")))
 	http.ServeContent(w, r, name, info.ModTime(), f)
@@ -282,7 +307,10 @@ func (s *Server) reihenBild(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// Kurz zwischenspeichern, danach fragt der Browser nach (304, wenn gleich):
+	// Beim Neuzuordnen bleibt die Adresse dieselbe, mit einem Tag sah man das
+	// falsche Bild nach der Korrektur noch bis morgen.
+	w.Header().Set("Cache-Control", "private, max-age=600")
 	w.Header().Set("Content-Type", fmt.Sprintf("image/%s",
 		strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")))
 	http.ServeContent(w, r, name, info.ModTime(), f)
