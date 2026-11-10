@@ -40,6 +40,7 @@
     <string name="das_hat_nicht_geklappt">That didn’t work</string>
     <string name="das_laesst_sich_nicht_abspielen">This can’t be played</string>
     <string name="das_sind_nicht_64_zeichen">That’s not 64 characters from 0–9 and a–f.</string>
+    <string name="http_ausserhalb_heimnetz">This address isn’t on your home network, and http is unencrypted — your PIN, password and sign-in could be read on the way. From outside, connect over https instead.</string>
     <string name="das_war_die_letzte_folge">That was the last episode.</string>
     <string name="dateien">Files</string>
     <string name="dein_name">Your Name</string>

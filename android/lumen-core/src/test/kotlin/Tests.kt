@@ -76,6 +76,7 @@ fun main(args: Array<String>) {
     unterwegsTests()
     anmeldungBehaltenTests()
     hlsUndUntertitelTests()
+    adresswarnungTests()
     wiedergabenTests()
     jahresTests()
     personTests()
@@ -2001,6 +2002,21 @@ private fun hlsUndUntertitelTests() {
     } finally {
         server.stop(0)
     }
+}
+
+// ---------------------------------------------------------------- Unverschlüsselt nach draussen
+
+private fun adresswarnungTests() {
+    for (a in listOf("192.168.1.20", "10.0.0.5:8097", "172.20.1.1", "nas", "lumen.local:8097",
+                     "localhost", "127.0.0.1", "100.101.102.103", "http://[fd00::1]:8097", "nas.lan",
+                     "https://lumen.example.org", "https://203.0.113.5:8443")) {
+        pruefe("keine Warnung: $a", !Adresswarnung.unverschluesseltAusserhalb(a))
+    }
+    for (a in listOf("lumen.example.org", "http://203.0.113.5:8097", "8.8.8.8", "172.32.0.1",
+                     "100.128.0.1", "http://[2001:db8::1]:8097")) {
+        pruefe("Warnung: $a", Adresswarnung.unverschluesseltAusserhalb(a))
+    }
+    pruefe("leer: keine Warnung", !Adresswarnung.unverschluesseltAusserhalb(""))
 }
 
 // ---------------------------------------------------------------- Eigene Wiedergaben

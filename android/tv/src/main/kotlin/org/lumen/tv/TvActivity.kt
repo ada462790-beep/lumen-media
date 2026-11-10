@@ -444,6 +444,12 @@ private fun TvServerScreen(message: String?, onZurueck: (() -> Unit)?,
                 singleLine = true,
                 placeholder = { Text("192.168.1.20:8097") },
                 modifier = Modifier.width(560.dp))
+            // http nach draussen: nur ein Hinweis, verbinden geht trotzdem.
+            if (Adresswarnung.unverschluesseltAusserhalb(adresse)) {
+                Spacer(Modifier.height(10.dp))
+                Text(tx(R.string.http_ausserhalb_heimnetz), color = Tv.bad, fontSize = 16.sp,
+                     textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 760.dp))
+            }
             // Von unterwegs läuft die Verbindung verschlüsselt, und ein
             // Heimserver stellt sein Zertifikat meist selbst aus. Dann
             // braucht der Fernseher einmal dessen Fingerabdruck.

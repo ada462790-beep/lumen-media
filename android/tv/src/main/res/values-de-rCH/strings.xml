@@ -41,6 +41,7 @@
     <string name="das_hat_nicht_geklappt">Das hat nicht geklappt</string>
     <string name="das_laesst_sich_nicht_abspielen">Das lässt sich nicht abspielen</string>
     <string name="das_sind_nicht_64_zeichen">Das sind nicht 64 Zeichen aus 0–9 und a–f.</string>
+    <string name="http_ausserhalb_heimnetz">Diese Adresse liegt nicht im Heimnetz, und über http ist die Verbindung unverschlüsselt — PIN, Passwort und Anmeldung liessen sich unterwegs mitlesen. Von aussen besser über https verbinden.</string>
     <string name="das_war_die_letzte_folge">Das war die letzte Folge.</string>
     <string name="dateien">Dateien</string>
     <string name="dein_name">Dein Name</string>

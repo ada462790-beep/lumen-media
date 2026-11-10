@@ -243,6 +243,13 @@ private fun ServerScreen(model: LumenViewModel, message: String?) {
         )
         Spacer(Modifier.height(24.dp))
         Field(tx(R.string.adresse), address, { address = it }, hint = "lumen.local:8097")
+        // http nach draussen: nur ein Hinweis, verbinden geht trotzdem.
+        if (Adresswarnung.unverschluesseltAusserhalb(address)) {
+            Text(tx(R.string.http_ausserhalb_heimnetz),
+                 color = Lumen.warn, fontSize = 13.sp,
+                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                 modifier = Modifier.padding(top = 8.dp))
+        }
 
         // Von unterwegs läuft die Verbindung verschlüsselt, und ein
         // Heimserver stellt sein Zertifikat meist selbst aus. Dann braucht
