@@ -3,11 +3,16 @@
 *[Deutsche, ausführliche Fassung](README.md)* — the German README is the
 complete documentation; this page is a short English summary.
 
-Lumen is your own streaming service at home. Movies, shows, music and
-photos from your own disks, on every device in the house — calm, tidy, with
-an interface that looks like Apple built it. Lumen is free software
-(AGPL-3.0), runs as a single Docker container on your NAS and needs no
-account, no subscription and no cloud.
+Lumen is your own streaming service at home. Movies and shows from your
+own disks, on every device in the house — calm, tidy, with an interface
+that looks like Apple built it. Lumen is free software (AGPL-3.0), runs as
+a single Docker container on your NAS and needs no account, no
+subscription and no cloud.
+
+Lumen is deliberately a server for **movies and TV shows** only — there
+are no music or photo libraries. Music and photo libraries from older
+versions are removed on the first start of a newer version (files on disk
+stay untouched; a backup `lumen.db.vor-umbau` is written first).
 
 **The promise: the admin never sees who watches what.** You run the server
 and decide who belongs and what they may see. But when someone watches

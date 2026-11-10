@@ -2,11 +2,14 @@
 
 *[English summary](README.en.md)*
 
-Dein eigener Streaming-Dienst für zu Hause. Filme, Serien, Musik und Fotos
-von der eigenen Platte, auf jedem Gerät im Haus — ruhig, aufgeräumt, mit
-einer Oberfläche, die aussieht, als hätte Apple sie gebaut. Lumen ist
-freie Software (AGPL-3.0), läuft als ein einziger Docker-Container auf dem
-NAS und braucht weder Konto noch Abo noch Cloud.
+Dein eigener Streaming-Dienst für zu Hause. Filme und Serien von der
+eigenen Platte, auf jedem Gerät im Haus — ruhig, aufgeräumt, mit einer
+Oberfläche, die aussieht, als hätte Apple sie gebaut. Lumen ist freie
+Software (AGPL-3.0), läuft als ein einziger Docker-Container auf dem NAS
+und braucht weder Konto noch Abo noch Cloud.
+
+Lumen ist bewusst ein Server für **Filme und Serien** — und nur dafür.
+Musik- und Fotobibliotheken gibt es nicht.
 
 - **Ein Server, alle Geräte:** Browser, iPhone, iPad, Mac, Apple TV,
   Android, Android TV und Fire TV.
@@ -376,11 +379,6 @@ Vorschaubilder beim Spulen; Untertitel suchen und herunterladen
 (OpenSubtitles, Schlüssel in der Verwaltung); Downloads für unterwegs, wenn
 die Verwaltung sie erlaubt.
 
-**Musik und Fotos.** Eigene Bibliotheksarten mit Alben, Interpreten,
-Wiedergabelisten und einem Player, der beim Blättern weiterläuft; Fotos
-nach Jahren, Monaten und Alben mit Diashow. Der Aufnahmeort von Fotos ist
-standardmässig ausgeblendet.
-
 **Eigene Sammlungen** („Weihnachtsfilme“, „Marvel in Reihenfolge“) neben
 den automatisch erkannten Filmreihen.
 
@@ -477,6 +475,14 @@ Startet Lumen gar nicht mehr, geht es auch von Hand: in der File Station
 `daten/sicherungen/lumen-1.db` nach `daten/lumen.db.wiederherstellen`
 kopieren und das Projekt neu starten. Lumen prüft die Datei und setzt sie
 ein; die bisherige Datenbank wird dabei ersetzt.
+
+**Musik und Fotos aus älteren Fassungen.** Frühere Fassungen kannten
+auch Bibliotheken für Musik und Fotos. Beim ersten Start einer neueren
+Fassung entfernt Lumen solche Bibliotheken samt Hörstand, Musik-Favoriten,
+Musiklisten und den zwischengespeicherten Covern und Vorschaubildern
+(`daten/mediathek`). Die Dateien auf der Platte bleiben, wo sie sind;
+Filme und Serien sind nicht betroffen. Vorher legt Lumen wie bei jedem
+Umbau `lumen.db.vor-umbau` an.
 
 **Zurück auf eine ältere Fassung** nach einem Update: Vor jedem Umbau der
 Datenbank legt Lumen `daten/lumen.db.vor-umbau` an. Eine ältere Fassung

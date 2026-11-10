@@ -47,7 +47,7 @@ Statistik.
 - **PIN zurücksetzen:** Hast du deine PIN vergessen, kann die Verwaltung eine
   neue setzen. Damit sie sich danach nicht als du anmelden und deinen Stand
   lesen kann, löscht Lumen dabei alles Private deines Profils: Fortschritt,
-  Gesehen-Haken, Merkliste, Favoriten, Bewertungen, Hörstand, deine privaten
+  Gesehen-Haken, Merkliste, Favoriten, Bewertungen, deine privaten
   Listen und die gemerkten Spuren je Serie. Alle deine Geräte werden
   abgemeldet. Geteilte Listen bleiben, die sieht der Haushalt ohnehin. Beim
   nächsten Anmelden sagt Lumen dir, dass das passiert ist.
@@ -75,9 +75,7 @@ Zufallsnamen ohne Bezug zum Film oder zur Wiedergabe und werden danach
 gelöscht. Untertitel werden im Arbeitsspeicher gewandelt, nicht als Datei mit
 Zeitstempel abgelegt. Untertitel, die jemand von OpenSubtitles holt, legt
 Lumen nicht neben den Film, sondern im Datenordner ab, mit festem Datum für
-Datei und Ordner. Lieder und Handyvideos, die ein Gerät nicht direkt
-abspielen kann, werden unter einem Zufallsnamen umgewandelt und nach
-20 Minuten ohne Abruf gelöscht (beim Neustart sofort). Vorschaubilder fürs
+Datei und Ordner. Vorschaubilder fürs
 Spulen entstehen nur im Durchgang über die ganze Mediathek, nicht beim
 Abspielen eines bestimmten Films. Standbilder und Vorschau-Clips, die beim ersten Ansehen
 einer Karte entstehen, bekommen ein festes Datum statt der echten Uhrzeit.
