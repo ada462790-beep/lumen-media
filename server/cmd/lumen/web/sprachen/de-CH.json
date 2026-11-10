@@ -149,5 +149,13 @@
   "zahl": "fehlen",
   "one": "{doppel} Doppel · {fehlen} fehlt",
   "other": "{doppel} Doppel · {fehlen} fehlen"
+ },
+ "{n} Folgen untersucht.": {
+  "one": "{n} Folge untersucht.",
+  "other": "{n} Folgen untersucht."
+ },
+ "Vorspann in {n} erkannt.": {
+  "one": "Vorspann in {n} erkannt.",
+  "other": "Vorspann in {n} erkannt."
  }
 }

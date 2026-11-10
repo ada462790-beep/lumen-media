@@ -342,9 +342,10 @@ gerechnet ist, und FFmpeg setzt genau dort an, wo du hinspringst.
 **Ton und Untertitel** wählt man im Player: jede Tonspur der Datei,
 Untertitel eingebettet oder als `.srt` daneben (`Film.de.srt`,
 `Film.en.forced.srt`). Die Sprache merkt sich Lumen pro Konto. Den
-**Vorspann** überspringt ein Knopf — aus den Kapiteln der Datei, oder weil
-jemand ihn einmal für die ganze Serie markiert hat —, und im Abspann steht
-schon da, was als Nächstes kommt.
+**Vorspann** überspringt ein Knopf — aus den Kapiteln der Datei, weil
+jemand ihn markiert hat, oder weil Lumen ihn selbst erkannt hat (siehe
+[Vorspann und Abspann erkennen](#vorspann-und-abspann-erkennen)) —, und im
+Abspann steht schon da, was als Nächstes kommt.
 
 **Suchen** geht nach Titel, Schauspieler, Genre und Jahr, auch zusammen:
 „Filme mit Tom Hanks aus den 90ern", „Komödie 2019".
@@ -389,6 +390,63 @@ wird nicht gespeichert, und die Verwaltung sieht davon nichts.
 **Kinderprofile.** Beim Einladen wählbar, mit Altersgrenze; Gruppen und
 Rechte können Grenzen nie lockerer machen. Wer verwaltet, braucht eine PIN
 und hat selbst keine Grenzen.
+
+### Vorspann und Abspann erkennen
+
+Folgen einer Staffel teilen sich die Titelmusik. Lumen hört sich darum im
+Hintergrund jede Folge an und sucht, was sie mit ihren Nachbarfolgen
+gemeinsam hat — so findet es Vorspann und Abspann auch ohne Kapitel in der
+Datei, und auch dann, wenn der Vorspann erst nach einer Szene („Cold Open")
+kommt.
+
+So geht es:
+
+- Von jeder Folge liest FFmpeg den Ton der ersten zehn Minuten und der
+  letzten fünf (bei kurzen Folgen das erste Drittel und das letzte
+  Viertel), in Mono und mit 5512 Hz. Video wird gar nicht erst decodiert.
+  Daraus rechnet Lumen einen kleinen Fingerabdruck — 32 Bit je
+  Zehntelsekunde — und vergisst den Ton gleich wieder. Chromaprint braucht es
+  dafür nicht (das FFmpeg im Container hat es nicht).
+- Jede Folge wird mit bis zu vier Nachbarfolgen derselben Staffel
+  verglichen (hat die Staffel zu wenige, mit den nächsten Folgen der
+  Serie). Ein gemeinsamer Abschnitt von 15 bis 120 Sekunden am Anfang ist
+  ein Vorspann-Kandidat, einer von mindestens 10 Sekunden, der bis kurz vor
+  das Ende reicht, ein Abspann-Kandidat.
+- Es gewinnt, was die meisten Nachbarn an derselben Stelle wiederfinden.
+  Eine Rückblende („Was bisher geschah") teilt eine Folge nur mit der
+  einen, aus der sie stammt — das reicht nie. Benutzt wird ein Ergebnis
+  nur ab einer Mindestsicherheit; lieber gar kein „Vorspann überspringen"
+  als eines, das in die Handlung springt.
+- Was gilt, in dieser Reihenfolge: Vorspann von Hand an der Folge
+  markiert, Kapitel der Datei, von Hand an der Serie markiert, erkannt.
+  Beim Abspann: Kapitel, dann erkannt. Liegt die Erkennung bei einer Folge
+  daneben, markiert man den Vorspann an der Folge (`PUT
+  /api/v1/admin/items/{folge}/intro`) oder an der Serie.
+
+Die Arbeit läuft wie Vorschaubilder und Untertitel: nacheinander, mit
+niedrigster Rechen- und Plattenpriorität, nie während eine Umwandlung
+läuft, und jede Datei genau einmal — das Ergebnis steht in der Datenbank
+und gilt, bis sich die Datei ändert. Je Folge sind es auf einem
+schwachen NAS einige Sekunden bis wenige Dutzend, vor allem fürs Lesen
+von der Platte. Ein- und ausschalten und sehen, wie weit sie ist, kann man
+in der Verwaltung unter „Umwandeln".
+
+Grenzen:
+
+- Es braucht mindestens zwei Folgen derselben Serie. Eine einzelne Folge
+  wird untersucht, sobald eine zweite dazukommt.
+- Serien ohne gemeinsame Titelmusik (jede Folge mit eigenem Vorspann,
+  Abspann über wechselnden Liedern) erkennt Lumen nicht — dann gibt es
+  eben keinen Knopf, und „Als Nächstes" kommt wie bisher kurz vor Schluss.
+- Gesucht wird nur in den ersten zehn Minuten; ein noch späterer Vorspann
+  wird nicht gefunden.
+- Ist der Vorspann nur teilweise gleich (Szenen mit Dialog über der Musik,
+  verschieden lange Fassungen), findet Lumen eher den gemeinsamen Kern:
+  Der Sprung landet dann ein wenig zu früh, nicht mitten in der Handlung.
+- Filme werden nicht untersucht; dort gibt es keine nächste Folge, und ein
+  falsch erkannter Abspann wäre ärgerlicher als keiner.
+- Eine Folge in mehreren Dateien (Teil 1/2) bekommt einen Vorspann, aber
+  keinen erkannten Abspann.
 
 ### Hardware-Beschleunigung
 

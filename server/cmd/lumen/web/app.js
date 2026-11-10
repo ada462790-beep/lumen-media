@@ -1884,7 +1884,7 @@ function spurenPanel(p) {
     }
     if (S.me?.account?.isAdmin && p.kind === 'episode' && p.seriesId) {
       const m = p.introMarke;
-      const stand = p.intro ? `<div class="spuren-hinweis">${p.intro.quelle === 'kapitel' ? tr('Aus den Kapiteln der Datei') : tr('Markiert')}: ${clock(p.intro.vonMs / 1000)}–${clock(p.intro.bisMs / 1000)}</div>` : '';
+      const stand = p.intro ? `<div class="spuren-hinweis">${p.intro.quelle === 'kapitel' ? tr('Aus den Kapiteln der Datei') : p.intro.quelle === 'automatisch' ? tr('Automatisch erkannt') : tr('Markiert')}: ${clock(p.intro.vonMs / 1000)}–${clock(p.intro.bisMs / 1000)}</div>` : '';
       html += abschnitt(tr('Vorspann für alle'), stand + (m == null
         ? `<button class="spur" data-intro-von><span class="spur-name">${tr('Vorspann beginnt hier')}</span></button>`
         : `<div class="spuren-hinweis">${tr('Beginn bei {zeit} gemerkt', { zeit: clock(m) })}</div>
@@ -4290,6 +4290,7 @@ function viewAdminUmwandlung() {
     colorspace: tr('HDR wird vereinfacht umgerechnet (colorspace) – zscale fehlt in diesem FFmpeg.'),
     keins: tr('Dieses FFmpeg kann HDR nicht umrechnen.') }[d.tonemapping] || '';
   const vorrat = d.vorrat || {};
+  const erkennung = d.vorspannErkennung || {};
   return shell(`<div class="wrap wrap--flat" style="max-width:900px">
     ${ohead(tr('Umwandeln'), tr('Hardware-Beschleunigung und Vorbereitung'))}
     <form id="umwandlungform">
@@ -4314,6 +4315,10 @@ function viewAdminUmwandlung() {
           <span style="flex:1"><span class="t-body" id="uw-untertitel">${tr('Untertitel vorbereiten')}</span>
             <span class="t-caption c-2" style="display:block">${esc(tr('{n} Untertitelspuren liegen bereit.', { n: vorrat.untertitel || 0 }))}</span></span>
           <button type="button" class="switch" role="switch" aria-checked="${!!d.untertitelVorbereiten}" data-sw="1" data-feld="untertitel" aria-labelledby="uw-untertitel"><i></i></button></div>
+        <div class="row" style="min-height:52px;gap:12px">
+          <span style="flex:1"><span class="t-body" id="uw-vorspann">${tr('Vorspann und Abspann erkennen')}</span>
+            <span class="t-caption c-2" style="display:block">${esc(tr('{n} Folgen untersucht.', { n: erkennung.untersucht || 0 }))} ${esc(tr('Vorspann in {n} erkannt.', { n: erkennung.mitVorspann || 0 }))}</span></span>
+          <button type="button" class="switch" role="switch" aria-checked="${!!erkennung.an}" data-sw="1" data-feld="vorspann" aria-labelledby="uw-vorspann"><i></i></button></div>
       </div></section>
       <p class="t-sub c-2" style="margin:16px 2px 0;max-width:760px">${esc(tonemap)}
         ${esc(tr('Höchstens {n} Umwandlungen laufen gleichzeitig.', { n: d.maxUmwandlungen || 2 }))}
@@ -5191,7 +5196,7 @@ async function formularAbschicken(e) {
 
   if (f.id === 'umwandlungform') {
     const an = name => f.querySelector(`[data-feld="${name}"]`)?.getAttribute('aria-checked') === 'true';
-    const e = { trickplay: an('trickplay'), untertitelVorbereiten: an('untertitel') };
+    const e = { trickplay: an('trickplay'), untertitelVorbereiten: an('untertitel'), vorspannErkennen: an('vorspann') };
     if (!f.hardware.disabled) e.hardware = f.hardware.value;
     try { S.data = await api.adminUmwandlungSetzen(e); toast(tr('Gespeichert')); return render(); }
     catch (err) { return toast(err.message); }

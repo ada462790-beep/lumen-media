@@ -1206,5 +1206,15 @@
  "Wird nur für diese Anmeldung gebraucht und nirgends gespeichert. Ein Konto ohne Passwort lässt sich nicht übernehmen – setze bei {art} zuerst eines.": "Only used for this sign-in and never stored. An account without a password can’t be imported – set one in {art} first.",
  "Nochmal ansehen": "Watch again",
  "erzwungen": "forced",
- "Für dein Profil ist noch nichts freigegeben. Frag jemanden, der Lumen verwaltet.": "Nothing has been approved for your profile yet. Ask someone who manages Lumen."
+ "Für dein Profil ist noch nichts freigegeben. Frag jemanden, der Lumen verwaltet.": "Nothing has been approved for your profile yet. Ask someone who manages Lumen.",
+ "Automatisch erkannt": "Detected automatically",
+ "Vorspann und Abspann erkennen": "Detect intros and credits",
+ "{n} Folgen untersucht.": {
+  "one": "{n} episode analyzed.",
+  "other": "{n} episodes analyzed."
+ },
+ "Vorspann in {n} erkannt.": {
+  "one": "Intro found in {n}.",
+  "other": "Intro found in {n}."
+ }
 }
