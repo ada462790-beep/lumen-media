@@ -124,10 +124,9 @@ func Open(path string) (*Store, error) {
 // nachruesten() erweitert, zählt ihn um eins hoch — dann sichert Lumen
 // die Datenbank, bevor es sie umbaut.
 //
-// Stand 12: Tabelle vorspann_erkannt (vorspann_erkennung.go,
-// vorspannErkennungTabellen) — neu angelegt, nichts umzurechnen. (Stand 11
-// ist für die Bildschirmzeit der Kinderprofile vorgesehen.)
-const SchemaStand = 12
+// Stand 11: Tabelle vorspann_erkannt (vorspann_erkennung.go,
+// vorspannErkennungTabellen) — neu angelegt, nichts umzurechnen.
+const SchemaStand = 11
 
 // umbauen bringt Daten einer älteren Fassung auf den neuen Stand — jeder
 // Schritt genau einmal, je nach dem Stand, den die Datenbank mitbringt.

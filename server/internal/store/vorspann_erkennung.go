@@ -30,7 +30,7 @@ import (
 	"errors"
 )
 
-// vorspannErkennungTabellen legt die Tabelle an (Schema-Stand 12). Eigene
+// vorspannErkennungTabellen legt die Tabelle an (Schema-Stand 11). Eigene
 // Funktion, damit sie beim Zusammenführen mit anderen Änderungen am
 // Schema als Ganzes umgezählt werden kann.
 func vorspannErkennungTabellen(db *sql.DB) error {
