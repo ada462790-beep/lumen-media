@@ -190,11 +190,14 @@ export const api = {
   },
   /* Eine Seite eines Rasters: Titel, Gesamtzahl, ob es weitergeht, und
      die Genres für die Filterknöpfe. */
-  seite({ kind, genre, sort = 'title', buchstabe, liste, limit = 60, offset = 0 } = {}) {
+  seite({ kind, genre, sort = 'title', dir, seed, buchstabe, liste, limit = 60, offset = 0 } = {}) {
     const p = new URLSearchParams({ seite: '1', limit, offset });
     if (kind) p.set('kind', kind);
     if (genre) p.set('genre', genre);
     if (sort) p.set('sort', sort);
+    // Richtung (asc|desc) und, bei „Zufällig", der Samen der ersten Seite.
+    if (dir) p.set('dir', dir);
+    if (seed) p.set('seed', seed);
     if (buchstabe) p.set('buchstabe', buchstabe);
     if (liste) p.set('liste', liste);
     return this.call('/items?' + p);
