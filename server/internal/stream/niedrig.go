@@ -40,3 +40,15 @@ func Niedrig(cmd *exec.Cmd, mitFehlerausgabe bool) ([]byte, error) {
 	}
 	return out.Bytes(), err
 }
+
+// NiedrigStarten startet einen Hintergrund-Aufruf wie Niedrig, liest aber
+// nicht selbst: Wer die Ausgabe über cmd.StdoutPipe() Stück für Stück
+// verarbeitet (der Ton für die Vorspann-Erkennung), muss sie nicht ganz im
+// Speicher halten. Warten (cmd.Wait) ist Sache des Aufrufers.
+func NiedrigStarten(cmd *exec.Cmd) error {
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	prioritaetSenken(cmd.Process.Pid)
+	return nil
+}
