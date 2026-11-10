@@ -26,8 +26,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Timeline
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.Dispatchers
@@ -208,6 +210,12 @@ private fun Wiedergabe(
 
     // Ton und Untertitel: was gewählt ist, und ob das Feld dazu offen ist.
     var wahl by remember { mutableStateOf(Spuren.Wahl()) }
+    // Die Untertitelspuren, die der Server schon fertig hat. Nur die gehen
+    // an den Abspieler: eine Spur, die er erst noch aus der Datei zieht,
+    // hielte den Start bis zu 20 Sekunden auf oder käme als JSON an.
+    var utBereit by remember { mutableStateOf(emptySet<Int>()) }
+    // Die HLS-Sitzung, falls umgewandelt wird — beim Schliessen beenden.
+    var hlsSitzung by remember { mutableStateOf<HlsSitzung?>(null) }
     var offen by remember { mutableStateOf<Offen?>(null) }
     var steuerungSichtbar by remember { mutableStateOf(true) }
 
@@ -255,15 +263,15 @@ private fun Wiedergabe(
     fun spuren(): List<Track> = datei?.tracks ?: emptyList()
 
     /**
-     * Das MediaItem: der Strom mit der gewünschten Tonspur, und alle
-     * Text-Untertitel seitlich dazu. Die gewählte Spur bekommt den
+     * Das MediaItem: der Strom mit der gewünschten Tonspur, und die
+     * fertigen Text-Untertitel seitlich dazu. Die gewählte Spur bekommt den
      * Vorrang; erkannt wird sie später an ihrer Kennung „spur-N".
      */
     fun mediaItem(): MediaItem? {
         val d = datei ?: return null
         val p = plan ?: return null
         val adresse = model.client.streamUrl(d, p, wahl.ton)
-        val untertitel = Spuren.text(d.tracks).map { t ->
+        val untertitel = Spuren.text(d.tracks).filter { it.index in utBereit }.map { t ->
             MediaItem.SubtitleConfiguration.Builder(
                 android.net.Uri.parse(model.client.subtitleUrl(d.id, t.index)))
                 .setMimeType(MimeTypes.TEXT_VTT)
@@ -318,6 +326,13 @@ private fun Wiedergabe(
         if (abMs > 1000) p.setMediaItem(m, abMs) else p.setMediaItem(m)
         p.prepare()
         p.playWhenReady = true
+    }
+
+    /** Neu laden, weil eine Untertitelspur fertig wurde — angehalten bleibt angehalten. */
+    fun mitUntertitelNeuLaden(p: ExoPlayer) {
+        val spielte = p.playWhenReady
+        laden(p, p.currentPosition)
+        p.playWhenReady = spielte
     }
 
     fun merken(key: String, wert: String) {
@@ -431,6 +446,15 @@ private fun Wiedergabe(
         umgewandelt = !pl.direct
         wahl = Spuren.vorbelegen(f.tracks, model.me?.prefs ?: emptyMap())
 
+        // Ist die vorgewählte Untertitelspur schon fertig, kommt sie gleich
+        // mit; sonst startet der Film ohne, und sie folgt, sobald sie da ist.
+        // Kurz gefragt: der Server wartet dafür nur eine Sekunde.
+        utBereit = emptySet()
+        wahl.untertitel?.let { i ->
+            val bereit = withContext(Dispatchers.IO) { oderNull { model.client.untertitelBereit(f.id, i, kurz = true) } }
+            if (bereit == true) utBereit = setOf(i)
+        }
+
         val dauer = if (f.durationSeconds > 0) f.durationSeconds else item.runtimeSeconds
         laenge = dauer
 
@@ -507,6 +531,14 @@ private fun Wiedergabe(
                         tonAnwenden(this@apply)
                         untertitelAnwenden(this@apply)
                     }
+
+                    // Die Kennung der HLS-Sitzung steht in der Adresse der
+                    // Medienliste, die der Abspieler selbst holt.
+                    override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                        val d = datei ?: return
+                        val liste = (this@apply.currentManifest as? HlsManifest)?.mediaPlaylist ?: return
+                        HlsSitzung.kennung(liste.baseUri, d.id)?.let { hlsSitzung = HlsSitzung(d.id, it) }
+                    }
                 })
                 laden(this, (ab * 1000).toLong())
             }
@@ -514,6 +546,28 @@ private fun Wiedergabe(
             androidx.media3.session.MediaSession.Builder(context, p)
                 .setId("lumen-" + item.id + "-" + System.nanoTime())
                 .build()
+        }
+    }
+
+    // Eine gewählte Untertitelspur, die noch nicht fertig ist: nachfragen,
+    // bis der Server sie hat (er wartet je Frage bis zu 20 Sekunden, sagt
+    // dann 202 und „in 3 Sekunden wieder"), und dann mit ihr neu laden.
+    LaunchedEffect(player, wahl.untertitel) {
+        val p = player ?: return@LaunchedEffect
+        val d = datei ?: return@LaunchedEffect
+        val i = wahl.untertitel ?: return@LaunchedEffect
+        if (i in utBereit) return@LaunchedEffect
+        repeat(UNTERTITEL_VERSUCHE) {
+            when (withContext(Dispatchers.IO) { oderNull { model.client.untertitelBereit(d.id, i) } }) {
+                true -> {
+                    utBereit = utBereit + i
+                    if (player === p) mitUntertitelNeuLaden(p)
+                    return@LaunchedEffect
+                }
+                false -> delay(3000)
+                // Gibt es nicht oder lässt sich nicht lesen: ohne Untertitel.
+                null -> return@LaunchedEffect
+            }
         }
     }
 
@@ -535,6 +589,9 @@ private fun Wiedergabe(
     LaunchedEffect(player) {
         val p = player ?: return@LaunchedEffect
         var tick = 0
+        // Was zuletzt gesichert wurde — angehalten ändert sich nichts, und
+        // dann geht auch nichts an den Server.
+        var gesichert = -1.0
         while (true) {
             delay(500)
             tick++
@@ -555,7 +612,10 @@ private fun Wiedergabe(
             if (tick % 10 == 0 && pos > 0 && laenge > 0) {
                 val position = gesamtStelle(pos / 1000.0)
                 val dauer = gesamtLaenge()
-                model.send { it.saveProgress(item.id, position, dauer) }
+                if (kotlin.math.abs(position - gesichert) >= 1.0) {
+                    gesichert = position
+                    model.send { it.saveProgress(item.id, position, dauer) }
+                }
                 if (letzterTeil() && position / dauer >= SessionController.FINISHED_AT) alsGesehen()
             }
         }
@@ -566,6 +626,12 @@ private fun Wiedergabe(
         sitzung = null
         player?.release()
         player = null
+        // Die Umwandlung gleich beenden, statt sie zwei Minuten weiterlaufen
+        // zu lassen. Ohne Warten, und Fehler zählen nicht.
+        hlsSitzung?.let { h ->
+            hlsSitzung = null
+            h.beendenImHintergrund(model.client)
+        }
     }
 
     fun beenden() {

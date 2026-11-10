@@ -1015,6 +1015,38 @@ class ApiClient(
         return url("/stream/$fileId/subtitles/$index.vtt", q)
     }
 
+    /**
+     * Ob eine Untertitelspur fertig ist. Eingebettete Spuren zieht der
+     * Server erst aus der Datei — das kann bei grossen Dateien Minuten
+     * dauern. Solange antwortet er 202 (mit [kurz]: 503) und dem Code
+     * „wird_vorbereitet". Ein Abspieler, der die Spur so bekäme, hielte
+     * das JSON für einen Untertitel oder wartete beim Start bis zu 20
+     * Sekunden; darum fragt die App erst hier und gibt die Spur danach weiter.
+     *
+     * [kurz]: nur eine Sekunde warten lassen — für die Frage vor dem Start.
+     * Sonst wartet der Server bis zu 20 Sekunden, ehe er „noch nicht" sagt.
+     * Wahr heisst fertig, falsch heisst später noch einmal fragen. Andere
+     * Fehler (die Spur gibt es nicht, lässt sich nicht lesen) gehen weiter.
+     */
+    fun untertitelBereit(fileId: String, index: Int, kurz: Boolean = false): Boolean {
+        val q = if (kurz) mapOf("warten" to "1") else emptyMap()
+        return try {
+            senden("GET", "/stream/$fileId/subtitles/$index.vtt", q).code != 202
+        } catch (e: LumenException.Server) {
+            if (e.status == 503 && e.code == "wird_vorbereitet") false else throw e
+        }
+    }
+
+    /**
+     * Eine HLS-Sitzung beim Server beenden — beim Schliessen des Players.
+     * Sonst rechnet der Server noch zwei Minuten weiter, und die Wiedergabe
+     * zählt so lange bei „auf wie vielen Geräten" mit. Die Kennung steht in
+     * der Adresse der Medienliste, siehe [HlsSitzung.kennung].
+     */
+    fun hlsBeenden(fileId: String, sitzung: String) {
+        send("DELETE", "/stream/$fileId/hls/$sitzung")
+    }
+
     // ---------------------------------------------------------- Herunterladen
 
     /**

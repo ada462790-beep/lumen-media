@@ -75,6 +75,7 @@ fun main(args: Array<String>) {
     medienschluesselTests()
     unterwegsTests()
     anmeldungBehaltenTests()
+    hlsUndUntertitelTests()
     wiedergabenTests()
     jahresTests()
     personTests()
@@ -1948,6 +1949,55 @@ private fun anmeldungBehaltenTests() {
         faden.join(5000)
         gleich("späte 401: neues Token bleibt", "NEU", d.token)
         gleich("späte 401: kein Rückruf", 0, dGerufen)
+    } finally {
+        server.stop(0)
+    }
+}
+
+// ---------------------------------------------------------------- HLS-Sitzung, Untertitel
+
+/** Die HLS-Sitzung beenden und auf Untertitel warten, die noch gezogen werden. */
+private fun hlsUndUntertitelTests() {
+    gleich("Kennung aus der Medienliste", "s_42",
+        HlsSitzung.kennung("http://nas:8097/api/v1/stream/f_1/hls/s_42/media.m3u8?key=K", "f_1"))
+    gleich("Kennung aus einem Segment", "s_42", HlsSitzung.kennung("/api/v1/stream/f_1/hls/s_42/17.ts", "f_1"))
+    gleich("Hauptliste hat keine", null, HlsSitzung.kennung("/api/v1/stream/f_1/hls/master.m3u8?key=K", "f_1"))
+    gleich("andere Datei", null, HlsSitzung.kennung("/api/v1/stream/f_2/hls/s_42/media.m3u8", "f_1"))
+    gleich("kein HLS", null, HlsSitzung.kennung("/api/v1/stream/f_1?key=K", "f_1"))
+
+    var versuche = 0
+    val geloescht = mutableListOf<String>()
+    val server = com.sun.net.httpserver.HttpServer.create(
+        java.net.InetSocketAddress("127.0.0.1", 0), 0)
+    server.createContext("/api/v1/") { ex ->
+        val pfad = ex.requestURI.path
+        when {
+            ex.requestMethod == "DELETE" -> { geloescht.add(pfad); fakeAntwort(ex, 204, "") }
+            pfad == "/api/v1/stream/f_1/subtitles/2.vtt" -> {
+                versuche++
+                val kurz = ex.requestURI.query?.contains("warten=1") == true
+                when {
+                    versuche >= 3 -> { ex.responseHeaders.add("Content-Type", "text/vtt")
+                                       val b = "WEBVTT\n".toByteArray()
+                                       ex.sendResponseHeaders(200, b.size.toLong())
+                                       ex.responseBody.use { it.write(b) } }
+                    kurz -> fakeAntwort(ex, 503, """{"code":"wird_vorbereitet","fortschritt":0.2}""")
+                    else -> fakeAntwort(ex, 202, """{"code":"wird_vorbereitet","fortschritt":0.5}""")
+                }
+            }
+            else -> fakeAntwort(ex, 404, """{"error":"diese untertitelspur gibt es nicht"}""")
+        }
+    }
+    server.start()
+    try {
+        val c = ApiClient("http://127.0.0.1:${server.address.port}", "T")
+        pruefe("kurz: 503 heisst noch nicht", !c.untertitelBereit("f_1", 2, kurz = true))
+        pruefe("202 heisst noch nicht", !c.untertitelBereit("f_1", 2))
+        pruefe("dann fertig", c.untertitelBereit("f_1", 2))
+        wirftFehler("Spur gibt es nicht") { c.untertitelBereit("f_1", 9) }
+
+        c.hlsBeenden("f_1", "s_42")
+        gleich("DELETE der Sitzung", listOf("/api/v1/stream/f_1/hls/s_42"), geloescht)
     } finally {
         server.stop(0)
     }
