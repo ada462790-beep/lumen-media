@@ -287,5 +287,9 @@
   "Für heute ist Schluss — morgen ab {zeit} geht es weiter.": "That’s it for today — you can watch again tomorrow from {zeit}.",
   "Gerade ist Pause — ab {zeit} geht es weiter.": "Time for a break — you can watch again from {zeit}.",
   "So viele Minuten lassen sich nicht dazugeben.": "You can’t add that many minutes.",
-  "Von und bis dürfen nicht gleich sein.": "Start and end can’t be the same."
+  "Von und bis dürfen nicht gleich sein.": "Start and end can’t be the same.",
+  "Die Bildschirmzeit lässt sich gerade nicht prüfen. Bitte später nochmals versuchen.": "Screen time can’t be checked right now. Please try again later.",
+  "Für heute ist Schluss — ab {zeit} geht es weiter.": "That’s it for today — you can watch again from {zeit}.",
+  "Die Regel für die Bildschirmzeit liess sich nicht lesen. Bitte neu speichern.": "The screen time rule couldn’t be read. Please save it again.",
+  "Mit einer Tagesgrenze für die Bildschirmzeit lässt sich nichts herunterladen — was so läuft, könnte Lumen nicht zählen.": "Downloads aren’t available with a daily screen time limit — Lumen couldn’t count what plays that way."
 }

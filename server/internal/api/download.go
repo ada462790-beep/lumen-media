@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"lumen/internal/store"
+	"lumen/internal/stream"
 )
 
 // downloadFenster: über diesen Zeitraum gilt maxDownloads.
@@ -91,6 +92,9 @@ func (s *Server) downloadInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lim, _ := s.st.Limits(r.Context(), accountOf(r).ID)
+	if s.bzOhneDownload(r, accountOf(r)) {
+		lim.AllowDownload = false
+	}
 	type datei struct {
 		FileID    string `json:"fileId"`
 		Dateiname string `json:"dateiname"`
@@ -111,6 +115,23 @@ func (s *Server) downloadInfo(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"erlaubt": lim.AllowDownload, "dateien": dateien})
 }
 
+// bzOhneDownload: Für dieses Kinderprofil gilt eine Bildschirmzeit mit
+// Tagesgrenze (oder eine Regel, die sich nicht lesen lässt). Dann gibt es
+// keinen Download: Was offline oder in einem fremden Player von der
+// Download-Adresse läuft, könnte der Server nicht zählen. Ein blosses
+// Zeitfenster ohne Grenze sperrt nicht — ausserhalb des Fensters beginnt
+// ohnehin kein Download, und jede Bereichsanfrage fragt neu.
+func (s *Server) bzOhneDownload(r *http.Request, acc *store.Account) bool {
+	if acc == nil || !acc.IsKid || acc.IsAdmin {
+		return false
+	}
+	regel, err := s.st.BildschirmzeitRegel(r.Context(), acc.ID)
+	if err != nil {
+		return true
+	}
+	return regel.Wirksam() && (regel.Schultage.Minuten > 0 || regel.Wochenende.Minuten > 0)
+}
+
 // download: GET /stream/{fileId}/download — die Originaldatei als Anhang.
 // Anmeldung wie bei den Strömen (Kopfzeile oder Medienschlüssel).
 func (s *Server) download(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +150,13 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return
 	}
-	// Ausserhalb der Bildschirmzeit beginnt auch kein Download.
+	if s.bzOhneDownload(r, acc) {
+		streamFehler(w, http.StatusForbidden, stream.GrundBildschirmzeit,
+			"Mit einer Tagesgrenze für die Bildschirmzeit lässt sich nichts herunterladen — was so läuft, könnte Lumen nicht zählen.")
+		return
+	}
+	// Ausserhalb der Bildschirmzeit beginnt auch kein Download, und
+	// keine weitere Bereichsanfrage.
 	if r.Method != http.MethodHead && s.bildschirmzeitGesperrt(w, r) {
 		return
 	}

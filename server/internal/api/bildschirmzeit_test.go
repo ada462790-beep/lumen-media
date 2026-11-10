@@ -76,13 +76,13 @@ func (k *bzKind) um(zeit string) {
 	k.stellen(time.Date(y, m, d, t.Hour(), t.Minute(), 0, 0, k.uhr.Location()))
 }
 
-// naechsteMinute tut so, als wäre seit dem letzten Zählen eine Minute
-// vergangen.
-func (k *bzKind) naechsteMinute() {
+// zurueck tut so, als hätte das letzte Zählen d früher stattgefunden —
+// die Wiedergaben haben sich in der Zwischenzeit laufend gemeldet.
+func (k *bzKind) zurueck(d time.Duration) {
 	b := &k.h.api.bz
 	b.mu.Lock()
 	for id := range b.gezaehlt {
-		b.gezaehlt[id]--
+		b.gezaehlt[id] = b.gezaehlt[id].Add(-d)
 	}
 	b.mu.Unlock()
 }
@@ -119,7 +119,7 @@ func TestBildschirmzeitSperrtJedenEinstieg(t *testing.T) {
 			t.Errorf("%s: %d %s", weg, resp.StatusCode, raw)
 			continue
 		}
-		if !strings.Contains(text, "morgen ab 07:00") {
+		if !strings.Contains(text, "morgen ab 07:00") && !strings.HasSuffix(weg, "/download") {
 			t.Errorf("%s: Text %q", weg, text)
 		}
 	}
@@ -188,22 +188,24 @@ func TestBildschirmzeitZaehltParalleleEinmal(t *testing.T) {
 	h.live.Start(&stream.Session{AccountID: k.id, DeviceName: "Fernseher", FileID: k.fileID, Mode: "direct"})
 	h.live.Start(&stream.Session{AccountID: h.ownerID(), DeviceName: "Mac", FileID: k.fileID, Mode: "direct"})
 
+	h.api.bildschirmzeitTakt(ctx) // der Anfang zählt noch nichts
 	h.api.bildschirmzeitTakt(ctx)
-	h.api.bildschirmzeitTakt(ctx) // dieselbe Minute
-	if g, _, _ := h.st.BildschirmzeitHeute(ctx, k.id, "2026-11-09"); g != time.Minute {
-		t.Fatalf("nach einer Minute auf zwei Geräten: %v", g)
+	if g, _, _ := h.st.BildschirmzeitHeute(ctx, k.id, "2026-11-09"); g != 0 {
+		t.Fatalf("gleich nach dem Start: %v", g)
 	}
-	k.naechsteMinute()
-	h.api.bildschirmzeitTakt(ctx)
+	for i := 0; i < 4; i++ {
+		k.zurueck(30 * time.Second)
+		h.api.bildschirmzeitTakt(ctx)
+	}
 	if g, _, _ := h.st.BildschirmzeitHeute(ctx, k.id, "2026-11-09"); g != 2*time.Minute {
-		t.Fatalf("nach zwei Minuten: %v", g)
+		t.Fatalf("nach zwei Minuten auf zwei Geräten: %v", g)
 	}
 	if g, _, _ := h.st.BildschirmzeitHeute(ctx, h.ownerID(), "2026-11-09"); g != 0 {
 		t.Fatalf("Besitzer gezählt: %v", g)
 	}
-	// Die Verwaltung sieht die Minuten — und keinen Titel.
+	// Die Verwaltung sieht ungefähr die Minuten — und keinen Titel.
 	_, raw := h.do("GET", "/api/v1/admin/accounts", "", h.tok)
-	if !strings.Contains(string(raw), `"genutztMinuten":2`) || strings.Contains(string(raw), "Sandmann") {
+	if !strings.Contains(string(raw), `"genutztMinuten":0`) || strings.Contains(string(raw), "Sandmann") {
 		t.Fatalf("Verwaltung: %s", raw)
 	}
 
@@ -213,14 +215,20 @@ func TestBildschirmzeitZaehltParalleleEinmal(t *testing.T) {
 	for _, pos := range []int{1000, 1000} {
 		h.do("POST", "/api/v1/items/"+k.itemID+"/progress", `{"positionMs":`+strconv.Itoa(pos)+`,"durationMs":5400000}`, k.tok)
 	}
-	k.naechsteMinute()
+	k.zurueck(30 * time.Second)
 	h.api.bildschirmzeitTakt(ctx)
 	if g, _, _ := h.st.BildschirmzeitHeute(ctx, k.id, "2026-11-09"); g != 2*time.Minute {
 		t.Fatalf("Pause gezählt: %v", g)
 	}
+	// Nach der langen Pause zählt die erste Meldung noch nichts, die Zeit
+	// bis zur nächsten schon.
 	h.do("POST", "/api/v1/items/"+k.itemID+"/progress", `{"positionMs":61000,"durationMs":5400000}`, k.tok)
+	k.zurueck(30 * time.Second)
 	h.api.bildschirmzeitTakt(ctx)
-	if g, _, _ := h.st.BildschirmzeitHeute(ctx, k.id, "2026-11-09"); g != 3*time.Minute {
+	h.do("POST", "/api/v1/items/"+k.itemID+"/progress", `{"positionMs":91000,"durationMs":5400000}`, k.tok)
+	k.zurueck(30 * time.Second)
+	h.api.bildschirmzeitTakt(ctx)
+	if g, _, _ := h.st.BildschirmzeitHeute(ctx, k.id, "2026-11-09"); g < 2*time.Minute+30*time.Second || g > 2*time.Minute+32*time.Second {
 		t.Fatalf("Fortschritt nicht gezählt: %v", g)
 	}
 }
@@ -233,11 +241,11 @@ func TestBildschirmzeitBeendetLaufende(t *testing.T) {
 	h := k.h
 	ctx := t.Context()
 	sess := h.live.Start(&stream.Session{AccountID: k.id, DeviceName: "iPad", FileID: k.fileID, Mode: "transcode"})
-	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", 89*60)
+	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", 90*60)
 
 	// Mit Nachfrist: der erste Takt merkt sich nur, dass die Zeit um ist.
 	h.api.bz.nachfrist = time.Hour
-	h.api.bildschirmzeitTakt(ctx) // zählt die 90. Minute
+	h.api.bildschirmzeitTakt(ctx)
 	h.api.bildschirmzeitTakt(ctx)
 	if !h.live.Laeuft(sess.ID) {
 		t.Fatal("vor Ablauf der Nachfrist beendet")
@@ -292,11 +300,20 @@ func TestBildschirmzeitMitternacht(t *testing.T) {
 	if resp, raw := h.do("GET", "/api/v1/stream/"+k.fileID+"/plan", "", k.tok); resp.StatusCode != 200 {
 		t.Fatalf("nach Mitternacht: %d %s", resp.StatusCode, raw)
 	}
-	h.api.bildschirmzeitTakt(ctx) // räumt den alten Tag weg
+	// Gestern bleibt bis zum nächsten Zählen des Profils (ein Nachtfenster
+	// könnte noch dazugehören) — spätestens am Tag danach ist es weg.
+	h.api.bildschirmzeitTakt(ctx)
+	if g, _, _ := h.st.BildschirmzeitHeute(ctx, k.id, "2026-11-10"); g != 0 {
+		t.Fatalf("neuer Tag nicht frisch: %v", g)
+	}
+	morgen := k.uhr
+	k.stellen(morgen.AddDate(0, 0, 1))
+	h.api.bildschirmzeitTakt(ctx)
+	k.stellen(morgen)
 	var n int
 	_ = h.st.DB().QueryRow(`SELECT count(*) FROM bildschirmzeit_tag WHERE tag = '2026-11-09'`).Scan(&n)
 	if n != 0 {
-		t.Fatalf("gestern liegt noch da: %d", n)
+		t.Fatalf("vorgestern liegt noch da: %d", n)
 	}
 	// Dieselbe Sekunde in New York ist noch Montag: dort wäre die Grenze
 	// noch aufgebraucht. Massgeblich ist die Zone der Uhr des Servers.
@@ -367,5 +384,149 @@ func TestBildschirmzeitVerwaltung(t *testing.T) {
 	}
 	if b, _ := h.st.BildschirmzeitRegel(t.Context(), k.id); !b.Aktiv || b.Schultage.Minuten != 60 {
 		t.Fatalf("gespeichert: %+v", b)
+	}
+}
+
+// Mit einer Tagesgrenze gibt es keinen Download — auch im Fenster nicht:
+// Was von der Download-Adresse läuft, zählt der Server nicht. Mit einem
+// blossen Zeitfenster geht es im Fenster, ausserhalb nicht.
+func TestBildschirmzeitDownload(t *testing.T) {
+	k := neuesBzKind(t, schulRegel())
+	h := k.h
+	k.um("10:00")
+	resp, raw := h.do("GET", "/api/v1/stream/"+k.fileID+"/download", "", k.tok)
+	if code, text := fehlerCode(raw); resp.StatusCode != 403 || code != "bildschirmzeit" || !strings.Contains(text, "Tagesgrenze") {
+		t.Fatalf("Download mit Tagesgrenze: %d %s", resp.StatusCode, raw)
+	}
+	_, raw = h.do("GET", "/api/v1/items/"+k.itemID+"/download/info", "", k.tok)
+	if !strings.Contains(string(raw), `"erlaubt":false`) {
+		t.Fatalf("download/info mit Tagesgrenze: %s", raw)
+	}
+	nurFenster := store.Bildschirmzeit{Aktiv: true,
+		Schultage: store.Tagesregel{Von: "07:00", Bis: "19:30"}, Wochenende: store.Tagesregel{Von: "08:00", Bis: "20:30"}}
+	if err := h.st.SetBildschirmzeit(t.Context(), k.id, nurFenster); err != nil {
+		t.Fatal(err)
+	}
+	if resp, raw := h.do("GET", "/api/v1/stream/"+k.fileID+"/download", "", k.tok); resp.StatusCode != 200 {
+		t.Fatalf("Download im Fenster: %d %s", resp.StatusCode, raw)
+	}
+	k.um("20:00")
+	if resp, _ := h.do("GET", "/api/v1/stream/"+k.fileID+"/download", "", k.tok); resp.StatusCode != 403 {
+		t.Fatalf("Download ausserhalb des Fensters: %d", resp.StatusCode)
+	}
+}
+
+// Die Verwaltung sieht die Minuten nur in Viertelstunden: Wer die
+// Kontenliste immer wieder lädt, erfährt nicht, in welcher Minute das Kind
+// zu schauen begann oder aufhörte.
+func TestBildschirmzeitVerwaltungNurViertelstunden(t *testing.T) {
+	k := neuesBzKind(t, schulRegel())
+	h := k.h
+	ctx := t.Context()
+	genutzt := func() int {
+		_, raw := h.do("GET", "/api/v1/admin/accounts", "", h.tok)
+		var konten []struct {
+			ID             string
+			Bildschirmzeit *bzVerwaltung
+		}
+		_ = json.Unmarshal(raw, &konten)
+		for _, a := range konten {
+			if a.ID == k.id && a.Bildschirmzeit != nil {
+				return a.Bildschirmzeit.GenutztMinuten
+			}
+		}
+		t.Fatalf("Kind fehlt: %s", raw)
+		return -1
+	}
+	gesehen := map[int]bool{}
+	for min := 0; min < 50; min++ {
+		if min > 0 {
+			_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", 60)
+		}
+		g := genutzt()
+		if g%15 != 0 || g > min || min-g >= 15 {
+			t.Fatalf("nach %d Minuten sieht die Verwaltung %d", min, g)
+		}
+		gesehen[g] = true
+	}
+	if len(gesehen) != 4 { // 0, 15, 30, 45
+		t.Fatalf("Stufen: %v", gesehen)
+	}
+	// Das Kind selbst sieht seine Minuten genau.
+	_, raw := h.do("GET", "/api/v1/me/bildschirmzeit", "", k.tok)
+	if !strings.Contains(string(raw), `"genutztMinuten":49`) {
+		t.Fatalf("Kind: %s", raw)
+	}
+}
+
+// Ein Nachtfenster: Was vor Mitternacht verbraucht ist, ist nach
+// Mitternacht noch verbraucht — auch für den Zähler und die Meldung.
+func TestBildschirmzeitNachtfensterZaehler(t *testing.T) {
+	nacht := store.Bildschirmzeit{Aktiv: true,
+		Schultage:  store.Tagesregel{Von: "18:00", Bis: "02:00", Minuten: 90},
+		Wochenende: store.Tagesregel{Von: "18:00", Bis: "02:00", Minuten: 90}}
+	k := neuesBzKind(t, nacht)
+	h := k.h
+	ctx := t.Context()
+	loc := k.uhr.Location()
+	k.stellen(time.Date(2026, 11, 13, 23, 59, 0, 0, loc)) // Freitag
+	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-13", 90*60)
+	k.stellen(time.Date(2026, 11, 14, 0, 1, 0, 0, loc)) // Samstag
+	h.api.bildschirmzeitTakt(ctx)
+	resp, raw := h.do("GET", "/api/v1/stream/"+k.fileID+"/plan", "", k.tok)
+	if code, text := fehlerCode(raw); resp.StatusCode != 403 || code != "bildschirmzeit" || !strings.Contains(text, "ab 18:00") || strings.Contains(text, "morgen") || strings.Contains(text, "Pause") {
+		t.Fatalf("Samstag 00:01: %d %s", resp.StatusCode, raw)
+	}
+	// Die Verwaltung schenkt Minuten auf den Freitag, der noch läuft.
+	if resp, raw := h.do("POST", "/api/v1/admin/accounts/"+k.id+"/bildschirmzeit/geschenk", `{"minuten":30}`, h.tok); resp.StatusCode != 200 || !strings.Contains(string(raw), `"budgetMinuten":120`) || !strings.Contains(string(raw), `"genutztMinuten":90`) {
+		t.Fatalf("schenken: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := h.do("GET", "/api/v1/stream/"+k.fileID+"/plan", "", k.tok); resp.StatusCode != 200 {
+		t.Fatalf("nach dem Schenken: %d", resp.StatusCode)
+	}
+}
+
+// Eine Regel, die sich nicht lesen lässt, sperrt — sie gilt nicht still
+// als „keine Regel".
+func TestBildschirmzeitUnlesbarSperrt(t *testing.T) {
+	k := neuesBzKind(t, schulRegel())
+	h := k.h
+	if _, err := h.st.DB().Exec(`UPDATE bildschirmzeit_regel SET regel = '{kaputt' WHERE account_id = ?`, k.id); err != nil {
+		t.Fatal(err)
+	}
+	resp, raw := h.do("GET", "/api/v1/stream/"+k.fileID+"/plan", "", k.tok)
+	if code, text := fehlerCode(raw); resp.StatusCode != 403 || code != "bildschirmzeit" || !strings.Contains(text, "nicht prüfen") {
+		t.Fatalf("unlesbare Regel: %d %s", resp.StatusCode, raw)
+	}
+	if _, raw := h.do("GET", "/api/v1/me/bildschirmzeit", "", k.tok); !strings.Contains(string(raw), `"erlaubt":false`) {
+		t.Fatalf("me: %s", raw)
+	}
+	// Die Verwaltung speichert neu, dann geht es wieder.
+	if resp, raw := h.do("PUT", "/api/v1/admin/accounts/"+k.id+"/bildschirmzeit", `{"aktiv":true,"schultage":{"von":"07:00","bis":"19:30","minuten":60},"wochenende":{"von":"","bis":"","minuten":0}}`, h.tok); resp.StatusCode != 200 {
+		t.Fatalf("neu speichern: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := h.do("GET", "/api/v1/stream/"+k.fileID+"/plan", "", k.tok); resp.StatusCode != 200 {
+		t.Fatalf("nach dem Speichern: %d", resp.StatusCode)
+	}
+}
+
+// Endet eine Wiedergabe von selbst, während die Zeit schon um ist, bleibt
+// keine alte Nachfrist liegen: Beim nächsten Überziehen gibt es wieder die
+// ganze.
+func TestBildschirmzeitNachfristAufgeraeumt(t *testing.T) {
+	k := neuesBzKind(t, schulRegel())
+	h := k.h
+	ctx := t.Context()
+	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", 90*60)
+	h.api.bz.nachfrist = time.Hour
+	sess := h.live.Start(&stream.Session{AccountID: k.id, DeviceName: "iPad", FileID: k.fileID, Mode: "direct"})
+	h.api.bildschirmzeitTakt(ctx)
+	h.live.End(sess.ID)
+	h.api.bildschirmzeitTakt(ctx)
+	h.api.bz.mu.Lock()
+	_, da := h.api.bz.ueberSeit[k.id]
+	h.api.bz.mu.Unlock()
+	if da {
+		t.Fatal("Nachfrist liegt nach dem Ende noch da")
 	}
 }

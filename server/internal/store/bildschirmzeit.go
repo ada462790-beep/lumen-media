@@ -27,7 +27,9 @@ package store
 // 90 Minuten" sehen; was in diesen Minuten lief, sieht sie nicht.
 //
 // Die Uhr ist die des Servers (Zeitzone aus TZ, siehe zeitzoneMelden):
-// Der Tag beginnt um Mitternacht Ortszeit, die Fenster gelten in Ortszeit.
+// Der Tag beginnt um Mitternacht Ortszeit — ausser mitten in einem
+// Nachtfenster, das zählt bis zu seinem Ende zum Vortag (Schautag). Die
+// Fenster gelten in Ortszeit.
 // Die Uhr eines Geräts zählt nie mit.
 
 import (
@@ -126,7 +128,8 @@ func (b Bildschirmzeit) Wirksam() bool {
 	return false
 }
 
-// Regel für den Kalendertag von t.
+// Regel für den Kalendertag von t. Wer wissen will, welche Regel gerade
+// gilt, fragt mit dem Schautag (SchautagBeginn), nicht mit der Uhrzeit.
 func (b Bildschirmzeit) Regel(t time.Time) Tagesregel {
 	switch t.Weekday() {
 	case time.Saturday, time.Sunday:
@@ -143,11 +146,59 @@ func mitternacht(t time.Time) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 }
 
-// tagUm: der Kalendertag von t um die Minute min (darf 1440 sein).
+// tagUm: der Kalendertag von t um die Minute min (darf 1440 sein), als
+// Uhrzeit an der Wand. Fällt die Zeit in die Lücke der Umstellung auf
+// Sommerzeit (02:30 gibt es dann nicht), gilt der Augenblick der
+// Umstellung — sonst liefe ein Fenster bis 02:30 eine Stunde zu lang, bis
+// 03:30.
 func tagUm(t time.Time, min int) time.Time {
 	y, m, d := t.Date()
-	return time.Date(y, m, d, min/60, min%60, 0, 0, t.Location())
+	k := time.Date(y, m, d, min/60, min%60, 0, 0, t.Location())
+	if min >= 24*60 || k.Hour()*60+k.Minute() == min {
+		return k
+	}
+	// In der Lücke: zurück bis zur ersten Minute nach der Umstellung.
+	for i := 0; i < 180; i++ {
+		v := k.Add(-time.Minute)
+		if v.Day() != d || v.Hour()*60+v.Minute() < min {
+			break
+		}
+		k = v
+	}
+	return k
 }
+
+// nachtfensterEnde: Geht das Fenster des Kalendertags tag über
+// Mitternacht, das Ende am Folgetag; sonst Nullzeit.
+func (b Bildschirmzeit) nachtfensterEnde(tag time.Time) time.Time {
+	r := b.Regel(tag)
+	if r.Von == "" {
+		return time.Time{}
+	}
+	von, _ := uhrzeit(r.Von, false)
+	bis, _ := uhrzeit(r.Bis, true)
+	if bis > von {
+		return time.Time{}
+	}
+	return tagUm(mitternacht(tag).AddDate(0, 0, 1), bis)
+}
+
+// SchautagBeginn: Mitternacht des Schautags von t. Das ist der
+// Kalendertag — ausser nach Mitternacht in einem Fenster, das am Vortag
+// begonnen hat („18:00 bis 02:00"): Dann gehört die Zeit noch zum Vortag,
+// mit dessen Tagesgrenze und dessen Zähler. Sonst gäbe es um Mitternacht
+// mitten im Fenster ein zweites Tagesbudget.
+func (b Bildschirmzeit) SchautagBeginn(t time.Time) time.Time {
+	heute := mitternacht(t)
+	gestern := heute.AddDate(0, 0, -1)
+	if ende := b.nachtfensterEnde(gestern); !ende.IsZero() && t.Before(ende) {
+		return gestern
+	}
+	return heute
+}
+
+// Schautag: der Schlüssel, unter dem gezählt wird (siehe SchautagBeginn).
+func (b Bildschirmzeit) Schautag(t time.Time) string { return Tag(b.SchautagBeginn(t)) }
 
 // imFenster sagt, ob t im Zeitfenster liegt, und bis wann es dauert
 // (Nullzeit: ohne Ende, der ganze Tag ist frei).
@@ -166,19 +217,11 @@ func (b Bildschirmzeit) imFenster(t time.Time) (bool, time.Time) {
 		}
 	} else if !t.Before(start) {
 		// Über Mitternacht: bis zur Bis-Zeit des nächsten Tages.
-		return true, tagUm(mitternacht(t).AddDate(0, 0, 1), bis)
+		return true, b.nachtfensterEnde(t)
 	}
 	// Nach Mitternacht kann noch das Fenster von gestern laufen.
-	gestern := mitternacht(t).AddDate(0, 0, -1)
-	rg := b.Regel(gestern)
-	if rg.Von != "" {
-		gv, _ := uhrzeit(rg.Von, false)
-		gb, _ := uhrzeit(rg.Bis, true)
-		if gb <= gv {
-			if ende := tagUm(t, gb); t.Before(ende) {
-				return true, ende
-			}
-		}
+	if ende := b.nachtfensterEnde(mitternacht(t).AddDate(0, 0, -1)); !ende.IsZero() && t.Before(ende) {
+		return true, ende
 	}
 	return false, time.Time{}
 }
@@ -198,13 +241,14 @@ type Urteil struct {
 }
 
 // Pruefen beurteilt den Zeitpunkt jetzt (in Ortszeit des Servers). genutzt
-// ist die heute schon geschaute Zeit, geschenkt die heute zusätzlich
-// erlaubten Minuten (sie verlängern nur die Tagesgrenze, nicht das Fenster).
+// ist die am Schautag (siehe Schautag) schon geschaute Zeit, geschenkt die
+// an diesem Tag zusätzlich erlaubten Minuten (sie verlängern nur die
+// Tagesgrenze, nicht das Fenster).
 func (b Bildschirmzeit) Pruefen(jetzt time.Time, genutzt time.Duration, geschenkt int) Urteil {
 	if !b.Wirksam() {
 		return Urteil{Erlaubt: true, Rest: -1}
 	}
-	u := Urteil{Budget: b.budget(jetzt, geschenkt)}
+	u := Urteil{Budget: b.budget(b.SchautagBeginn(jetzt), geschenkt)}
 	drin, ende := b.imFenster(jetzt)
 	budgetFrei := u.Budget == 0 || genutzt < u.Budget
 	if drin && budgetFrei {
@@ -225,8 +269,9 @@ func (b Bildschirmzeit) Pruefen(jetzt time.Time, genutzt time.Duration, geschenk
 	return u
 }
 
-func (b Bildschirmzeit) budget(t time.Time, geschenkt int) time.Duration {
-	r := b.Regel(t)
+// budget: die Tagesgrenze des Schautags, der um tag (Mitternacht) beginnt.
+func (b Bildschirmzeit) budget(tag time.Time, geschenkt int) time.Duration {
+	r := b.Regel(tag)
 	if r.Minuten <= 0 {
 		return 0
 	}
@@ -234,11 +279,13 @@ func (b Bildschirmzeit) budget(t time.Time, geschenkt int) time.Duration {
 }
 
 // naechsterBeginn sucht den frühesten Zeitpunkt nach jetzt, an dem es
-// wieder geht. Erlaubte Zeit beginnt immer an einer Von-Zeit oder um
-// Mitternacht (dann ist die Tagesgrenze wieder frei) — darum genügt es,
-// diese Stellen der nächsten Tage durchzugehen.
+// wieder geht. Erlaubte Zeit beginnt immer an einer Von-Zeit, um
+// Mitternacht oder am Ende eines Nachtfensters (dann beginnt ein neuer
+// Schautag mit freier Tagesgrenze) — darum genügt es, diese Stellen der
+// nächsten Tage durchzugehen.
 func (b Bildschirmzeit) naechsterBeginn(jetzt time.Time, genutzt time.Duration, geschenkt int) time.Time {
 	heute := mitternacht(jetzt)
+	schautag := b.Schautag(jetzt)
 	var best time.Time
 	for d := 0; d <= 8; d++ {
 		tag := heute.AddDate(0, 0, d)
@@ -247,16 +294,19 @@ func (b Bildschirmzeit) naechsterBeginn(jetzt time.Time, genutzt time.Duration, 
 			von, _ := uhrzeit(r.Von, false)
 			kandidaten = append(kandidaten, tagUm(tag, von))
 		}
+		if ende := b.nachtfensterEnde(tag.AddDate(0, 0, -1)); !ende.IsZero() {
+			kandidaten = append(kandidaten, ende)
+		}
 		for _, k := range kandidaten {
 			if !k.After(jetzt) || (!best.IsZero() && !k.Before(best)) {
 				continue
 			}
 			g, gs := time.Duration(0), 0
-			if Tag(k) == Tag(jetzt) {
+			if b.Schautag(k) == schautag {
 				g, gs = genutzt, geschenkt
 			}
 			drin, _ := b.imFenster(k)
-			bud := b.budget(k, gs)
+			bud := b.budget(b.SchautagBeginn(k), gs)
 			if drin && (bud == 0 || g < bud) {
 				best = k
 			}
@@ -295,7 +345,12 @@ func bildschirmzeitNachruesten(db *sql.DB) error {
 	return nil
 }
 
+// ErrRegelUnlesbar: Für das Profil steht eine Regel da, die sich nicht
+// lesen lässt. Dann gilt nicht „keine Regel", sondern: gesperrt.
+var ErrRegelUnlesbar = errors.New("Die Regel für die Bildschirmzeit liess sich nicht lesen. Bitte neu speichern.")
+
 // BildschirmzeitRegel liest die Regel eines Profils (ohne Regel: aus).
+// Eine Zeile, die sich nicht lesen lässt, meldet ErrRegelUnlesbar.
 func (s *Store) BildschirmzeitRegel(ctx context.Context, accountID string) (Bildschirmzeit, error) {
 	var raw string
 	err := s.db.QueryRowContext(ctx,
@@ -308,7 +363,10 @@ func (s *Store) BildschirmzeitRegel(ctx context.Context, accountID string) (Bild
 	}
 	var b Bildschirmzeit
 	if err := json.Unmarshal([]byte(raw), &b); err != nil {
-		return Bildschirmzeit{}, nil
+		return Bildschirmzeit{}, ErrRegelUnlesbar
+	}
+	if _, err := PruefeBildschirmzeit(b); err != nil {
+		return Bildschirmzeit{}, ErrRegelUnlesbar
 	}
 	return b, nil
 }
@@ -386,9 +444,11 @@ func (s *Store) BildschirmzeitSchenken(ctx context.Context, accountID, tag strin
 	return neu, err
 }
 
-// BildschirmzeitAufraeumen löscht die Zahlen vergangener Tage aller
-// Profile — Wartung, liest nichts.
-func (s *Store) BildschirmzeitAufraeumen(ctx context.Context, tag string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM bildschirmzeit_tag WHERE tag != ?`, tag)
+// BildschirmzeitAufraeumen löscht die Zahlen aller Profile, die älter als
+// behaltenAb sind — Wartung, liest nichts. Der Aufrufer gibt gestern an:
+// Nach Mitternacht kann ein Nachtfenster noch zum Vortag zählen; die Zeile
+// von gestern löscht dann das nächste Zählen des Profils selbst.
+func (s *Store) BildschirmzeitAufraeumen(ctx context.Context, behaltenAb string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM bildschirmzeit_tag WHERE tag < ?`, behaltenAb)
 	return err
 }

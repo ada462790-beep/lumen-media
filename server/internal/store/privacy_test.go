@@ -59,7 +59,7 @@ var erlaubtOhneKonto = []struct{ datei, stueck, grund string }{
 	{"store.go", "UPDATE token SET last_seen_at = (last_seen_at / 86400) * 86400", "Umbau: Uhrzeiten entfernen, liest nichts"},
 	{"store.go", "UPDATE rating SET updated_at", "Umbau: Uhrzeiten entfernen, liest nichts"},
 	{"playback.go", "WHERE r.item_id = ? AND r.shared = 1", "nur Bewertungen, die ihre Besitzer selbst freigegeben haben"},
-	{"bildschirmzeit.go", "DELETE FROM bildschirmzeit_tag WHERE tag != ?", "Wartung: Zahlen vergangener Tage löschen, liest nichts"},
+	{"bildschirmzeit.go", "DELETE FROM bildschirmzeit_tag WHERE tag < ?", "Wartung: Zahlen vergangener Tage löschen, liest nichts"},
 	{"zusammenfuehren.go", "UPDATE OR IGNORE playlist_item SET item_id = ? WHERE item_id = ?", "Wartung: Titel umhängen, liest nichts"},
 }
 

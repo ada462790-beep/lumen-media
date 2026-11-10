@@ -481,17 +481,16 @@ func (l *Live) KontenMitWiedergabe() map[string]bool {
 	return out
 }
 
-// AktiveKonten: Konten mit einer Wiedergabe, die sich seit seit gemeldet
-// hat — ein Segment geholt oder Daten abgeholt. Eine Wiedergabe in der
-// Pause holt nichts mehr und fällt nach kurzer Zeit heraus; so zählt die
-// Bildschirmzeit nur, solange wirklich etwas läuft.
-func (l *Live) AktiveKonten(seit time.Time) map[string]bool {
+// LetzteMeldungen: je Konto, wann sich seine Wiedergaben zuletzt gemeldet
+// haben (ein Segment geholt, Daten abgeholt). Nur für die Bildschirmzeit;
+// nichts davon geht nach aussen.
+func (l *Live) LetzteMeldungen() map[string]time.Time {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	out := map[string]bool{}
+	out := map[string]time.Time{}
 	for _, s := range l.byID {
-		if s.zuletzt.After(seit) {
-			out[s.AccountID] = true
+		if s.zuletzt.After(out[s.AccountID]) {
+			out[s.AccountID] = s.zuletzt
 		}
 	}
 	return out

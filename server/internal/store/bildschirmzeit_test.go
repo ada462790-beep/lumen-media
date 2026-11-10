@@ -247,3 +247,89 @@ func TestBildschirmzeitSpeicher(t *testing.T) {
 		}
 	}
 }
+
+// Ein Nachtfenster zählt bis zu seinem Ende zum Tag, an dem es begann:
+// um Mitternacht gibt es kein zweites Tagesbudget.
+func TestBildschirmzeitNachtfensterEinBudget(t *testing.T) {
+	loc := zuerich(t)
+	b := Bildschirmzeit{Aktiv: true,
+		Schultage:  Tagesregel{Von: "18:00", Bis: "02:00", Minuten: 90},
+		Wochenende: Tagesregel{Von: "18:00", Bis: "02:00", Minuten: 120}}
+	// Freitag → Samstag: 90 Minuten bis 23:59 verbraucht.
+	fr := um(loc, "2026-11-13", "23:59")
+	if got := b.Schautag(fr); got != "2026-11-13" {
+		t.Fatalf("Schautag Freitag: %s", got)
+	}
+	sa := um(loc, "2026-11-14", "00:01")
+	if got := b.Schautag(sa); got != "2026-11-13" {
+		t.Fatalf("Samstag 00:01 gehört zum Freitag: %s", got)
+	}
+	u := b.Pruefen(sa, 90*time.Minute, 0)
+	if u.Erlaubt || u.Grund != "budget" || u.Budget != 90*time.Minute {
+		t.Fatalf("Samstag 00:01 nach 90 Minuten am Freitag: %+v", u)
+	}
+	if got := u.WeiterAb.Format("2006-01-02 15:04"); got != "2026-11-14 18:00" {
+		t.Errorf("weiter ab %s, erwartet Samstag 18:00", got)
+	}
+	// Nach dem Ende des Fensters beginnt der Samstag.
+	if got := b.Schautag(um(loc, "2026-11-14", "02:00")); got != "2026-11-14" {
+		t.Errorf("Samstag 02:00: %s", got)
+	}
+	// Sonntag → Montag: Nach Mitternacht gilt noch das Wochenende (120).
+	mo := um(loc, "2026-11-16", "01:00")
+	if got := b.Schautag(mo); got != "2026-11-15" {
+		t.Fatalf("Montag 01:00 gehört zum Sonntag: %s", got)
+	}
+	if u := b.Pruefen(mo, 100*time.Minute, 0); !u.Erlaubt || u.Budget != 120*time.Minute || u.Rest != 20*time.Minute {
+		t.Fatalf("Montag 01:00 mit 100 Minuten vom Sonntag: %+v", u)
+	}
+	if u := b.Pruefen(mo, 120*time.Minute, 0); u.Erlaubt || u.WeiterAb.Format("2006-01-02 15:04") != "2026-11-16 18:00" {
+		t.Fatalf("Sonntagsbudget aufgebraucht: %+v", u)
+	}
+	// Ganzer Tag am Samstag, Freitag mit Nachtfenster: bis 02:00 zählt der
+	// Freitag; danach ist der Samstag frei.
+	c := Bildschirmzeit{Aktiv: true,
+		Schultage:  Tagesregel{Von: "18:00", Bis: "02:00", Minuten: 90},
+		Wochenende: Tagesregel{Minuten: 60}}
+	u = c.Pruefen(um(loc, "2026-11-14", "00:30"), 90*time.Minute, 0)
+	if u.Erlaubt || u.WeiterAb.Format("2006-01-02 15:04") != "2026-11-14 02:00" {
+		t.Fatalf("ganzer Samstag nach Freitagsfenster: %+v", u)
+	}
+}
+
+// Umstellung auf Sommerzeit: Ein Fenster bis 02:30 endet um 03:00 (der
+// Augenblick der Umstellung), nicht erst um 03:30.
+func TestBildschirmzeitSommerzeitLuecke(t *testing.T) {
+	loc := zuerich(t)
+	// 2027-03-28 ist ein Sonntag mit Umstellung um 02:00.
+	b := Bildschirmzeit{Aktiv: true,
+		Schultage:  Tagesregel{Von: "07:00", Bis: "19:30"},
+		Wochenende: Tagesregel{Von: "20:00", Bis: "02:30"}}
+	if u := b.Pruefen(um(loc, "2027-03-28", "01:59"), 0, 0); !u.Erlaubt || u.Rest != time.Minute {
+		t.Fatalf("01:59 vor der Umstellung: %+v", u)
+	}
+	if u := b.Pruefen(time.Date(2027, 3, 28, 3, 10, 0, 0, loc), 0, 0); u.Erlaubt {
+		t.Fatalf("03:10 nach der Umstellung noch im Fenster: %+v", u)
+	}
+	if got := tagUm(time.Date(2027, 3, 28, 12, 0, 0, 0, loc), 150); got.Format("15:04 -0700") != "03:00 +0200" {
+		t.Fatalf("02:30 in der Lücke: %s", got)
+	}
+}
+
+// Eine Regel, die sich nicht lesen lässt, meldet einen Fehler — sie gilt
+// nicht still als „keine Regel".
+func TestBildschirmzeitRegelUnlesbar(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(filepath.Join(t.TempDir(), "l.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	kind, _ := st.CreateAccount(ctx, NewAccount{Name: "Kind", IsKid: true})
+	if _, err := st.DB().Exec(`INSERT INTO bildschirmzeit_regel (account_id, regel) VALUES (?, '{kaputt')`, kind.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.BildschirmzeitRegel(ctx, kind.ID); err != ErrRegelUnlesbar {
+		t.Fatalf("kaputte Regel: %v", err)
+	}
+}
