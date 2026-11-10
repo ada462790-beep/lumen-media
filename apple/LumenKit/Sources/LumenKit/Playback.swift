@@ -583,7 +583,16 @@ public final class Playback {
             // Erst fragen, ob es überhaupt noch geht: Ist die Bildschirmzeit
             // eines Kinderprofils um, beendet der Server die Wiedergabe, und
             // der Plan antwortet mit seiner Meldung („morgen ab 07:00 …").
-            _ = try await client.plan(fileId: file.id)
+            // Nur diese Antwort hält auf — bei jedem anderen Fehler (Netz
+            // kurz weg, Server beschäftigt) geht es wie früher mit dem
+            // bisherigen Plan weiter.
+            do {
+                _ = try await client.plan(fileId: file.id)
+            } catch let fehler as LumenError where fehler.code == APIClient.bildschirmzeit {
+                throw fehler
+            } catch {
+                // weiter mit dem bisherigen Plan
+            }
             guard gilt(meiner) else { return }
             try await schluesselFrisch()
             guard gilt(meiner) else { return }
