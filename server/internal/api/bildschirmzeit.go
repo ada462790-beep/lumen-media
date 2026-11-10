@@ -25,7 +25,7 @@ package api
 //     kurzen Nachfrist. Die nächste Anfrage des Geräts (Segment,
 //     Bereichsanfrage, /browser/grund) bekommt dieselbe Meldung.
 //
-// Musik und Fotos zählen nicht; die laufen nicht über diese Wege.
+// Gezählt wird nur, was über diese Wege läuft: Video.
 // Was offline von einem Download läuft, sieht der Server nicht —
 // Herunterladen ist für Kinderprofile ab Werk aus, und ausserhalb der Zeit
 // lässt sich auch kein Download beginnen.

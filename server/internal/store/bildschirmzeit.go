@@ -16,8 +16,7 @@ package store
 // Zeitfenster darf über Mitternacht gehen („18:00 bis 02:00"); die Zeit
 // nach Mitternacht gehört dann noch zum Fenster des Vortags.
 //
-// Gezählt wird nur Video — Filme, Serien, Videos. Musik und Fotos nicht:
-// Ein Hörspiel zum Einschlafen soll nicht die Fernsehzeit aufbrauchen.
+// Gezählt wird Video (Filme, Serien), und nur solange es wirklich läuft.
 // Laufen auf zwei Geräten gleichzeitig Videos desselben Profils, zählt
 // die Minute einmal: Bildschirmzeit ist Uhrzeit, nicht Summe der Geräte.
 //

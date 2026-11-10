@@ -75,7 +75,7 @@ export function bzBearbeiten(konto, nachher) {
       <form autocomplete="off" data-bz-form>
         <label class="wahl-check"><input type="checkbox" name="aktiv"${r.aktiv ? ' checked' : ''}>
           <span style="flex:1">${tr('Bildschirmzeit einschalten')}</span></label>
-        <p class="ff-hinweis" style="margin:4px 0 12px">${tr('Gezählt wird nur, solange ein Video läuft — Musik und Fotos nicht. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag.')}</p>
+        <p class="ff-hinweis" style="margin:4px 0 12px">${tr('Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag.')}</p>
         ${tagesart('schultage', tr('Schultage (Montag bis Freitag)'), r.schultage)}
         ${tagesart('wochenende', tr('Wochenende (Samstag und Sonntag)'), r.wochenende)}
         <p class="ff-hinweis">${tr('Liegt „Bis" vor „Ab", geht die Zeit über Mitternacht.')}</p>

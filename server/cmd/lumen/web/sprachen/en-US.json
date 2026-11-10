@@ -1230,7 +1230,7 @@
  "Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur, wie viele Minuten Bildschirmzeit du heute gebraucht hast — nicht, was du geschaut hast.": "Your history and ratings belong to you. Admins only see how many minutes of Screen Time you’ve used today — not what you watched.",
  "Den ganzen Tag": "All day",
  "Für heute ist Schluss.": "That’s it for today.",
- "Gezählt wird nur, solange ein Video läuft — Musik und Fotos nicht. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag.": "Only time while a video is playing counts — not music or photos. Two devices at once count once. The server’s clock applies; a new day starts at midnight.",
+ "Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag.": "Only time while a video is playing counts. Two devices at once count once. The server’s clock applies; a new day starts at midnight.",
  "Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.": "Time counts while a video is playing. A new day starts at midnight.",
  "Heute einmalig 30 Min. mehr": "30 more minutes, today only",
  "Heute genutzt: {genutzt} Min.": "Used today: {genutzt} min",
