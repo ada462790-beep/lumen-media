@@ -62,7 +62,7 @@ func (s *Server) adminTitelNeu(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
 		return
 	}
-	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
 	if err != nil {
 		failErr(w, err)
 		return
@@ -81,7 +81,7 @@ func (s *Server) adminTitelSuchen(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
 		return
 	}
-	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
 	if err != nil {
 		failErr(w, err)
 		return
@@ -127,7 +127,7 @@ func (s *Server) adminTitelZuweisen(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "welcher eintrag? die kennung fehlt")
 		return
 	}
-	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
 	if err != nil {
 		failErr(w, err)
 		return

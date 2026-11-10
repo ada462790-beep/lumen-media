@@ -391,7 +391,7 @@ func (s *Server) vorspannUndAbspann(ctx context.Context, it *store.Item, files [
 // adminVorspannSetzen markiert den Vorspann einer Serie — wer die
 // Verwaltung darf, darf das; es gilt für alle, die die Serie schauen.
 func (s *Server) adminVorspannSetzen(w http.ResponseWriter, r *http.Request) {
-	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
 	if err != nil {
 		failErr(w, err)
 		return

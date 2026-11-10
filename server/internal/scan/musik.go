@@ -212,7 +212,7 @@ func (s *Scanner) scanMusik(ctx context.Context, lib store.Library, res *Result)
 			}
 			return nil
 		}
-		if !IsAudio(p) || mediathekDateiUeberspringen(d.Name()) {
+		if !IsAudio(p) || mediathekDateiUeberspringen(d.Name()) || VerweisNachDraussen(lib.Path, p, d) {
 			return nil
 		}
 		info, err := d.Info()

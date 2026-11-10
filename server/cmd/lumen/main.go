@@ -89,7 +89,7 @@ func main() {
 		ffprobe = flag.String("ffprobe", envOr("LUMEN_FFPROBE", "ffprobe"), "Pfad zu ffprobe")
 		verbose = flag.Bool("v", false, "ausführlich protokollieren")
 
-		tlsAn   = flag.Bool("tls", envOr("LUMEN_TLS", "") != "", "zusätzlich verschlüsselt hören")
+		tlsAn   = flag.Bool("tls", schalter(envOr("LUMEN_TLS", "")), "zusätzlich verschlüsselt hören")
 		tlsAddr = flag.String("tls-addr", envOr("LUMEN_TLS_ADDR", ":8920"), "Adresse für den verschlüsselten Eingang")
 		tlsCert = flag.String("tls-cert", os.Getenv("LUMEN_TLS_CERT"), "Zertifikat (leer = eigenes anlegen)")
 		tlsKey  = flag.String("tls-key", os.Getenv("LUMEN_TLS_KEY"), "der zugehörige Schlüssel")
@@ -447,4 +447,14 @@ func pfadOhneKennung(p string) string {
 		return p
 	}
 	return "/" + strings.Join(teile[:3], "/") + "/…"
+}
+
+// schalter liest einen Ein/Aus-Wert aus der Umgebung. „0", „false", „nein"
+// und „aus" heissen aus — früher schaltete jeder Wert ein, auch LUMEN_TLS=0.
+func schalter(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "0", "false", "no", "nein", "off", "aus":
+		return false
+	}
+	return true
 }

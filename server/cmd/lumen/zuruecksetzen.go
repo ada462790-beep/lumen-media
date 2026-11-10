@@ -48,6 +48,12 @@ func zuruecksetzenBefehl(args []string, ein io.Reader, aus io.Writer) error {
 	if _, err := os.Stat(pfad); err != nil {
 		return fmt.Errorf("keine Datenbank unter %s — mit --data den Datenordner angeben", pfad)
 	}
+	// Liegt eine Sicherung zum Wiederherstellen bereit, würde das Öffnen
+	// sie einspielen — am laufenden Server vorbei, der dann in eine
+	// gelöschte Datei weiterschriebe. Erst Lumen neu starten.
+	if _, err := os.Stat(pfad + ".wiederherstellen"); err == nil {
+		return errors.New("eine Sicherung wartet darauf, eingespielt zu werden — erst Lumen neu starten, dann zurücksetzen")
+	}
 	// Als root (docker exec) auf den Besitzer der Datenbank wechseln: Neue
 	// Hilfsdateien (-wal, -shm) gehörten sonst root, und Lumen selbst
 	// könnte die Datenbank danach nicht mehr öffnen.
@@ -121,11 +127,16 @@ func zuruecksetzenBefehl(args []string, ein io.Reader, aus io.Writer) error {
 	if *art == "password" {
 		wort = "Passwort"
 	}
+	// Der neue PIN steht nicht auf dem Bildschirm.
+	zurueck := ohneEcho(ein)
 	neu, err := frage("Neue(s) " + wort + ": ")
-	if err != nil {
-		return err
+	fmt.Fprintln(aus)
+	var nochmal string
+	if err == nil {
+		nochmal, err = frage("Noch einmal: ")
+		fmt.Fprintln(aus)
 	}
-	nochmal, err := frage("Noch einmal: ")
+	zurueck()
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,11 @@
 
 package main
 
+import "io"
+
 // Ausserhalb von Linux läuft Lumen nicht als Docker-Container mit fremdem
 // Benutzer — nichts zu wechseln.
 func alsBesitzerDer(string) error { return nil }
+
+// ohneEcho: ausserhalb von Linux bleibt die Anzeige an.
+func ohneEcho(io.Reader) func() { return func() {} }

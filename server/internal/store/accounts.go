@@ -461,6 +461,13 @@ func hashSecret(secret string) (salt, hash []byte, err error) {
 	return salt, hash, err
 }
 
+// Blindrechnen kostet so viel Zeit wie eine echte Prüfung, prüft aber
+// nichts. Für Anfragen ohne Profil oder ohne Sperre: Sonst verriete die
+// kürzere Antwortzeit, welche Profilnamen es gibt und welche einen PIN haben.
+func Blindrechnen(secret string) {
+	_, _ = pbkdf2.Key(sha256.New, secret, []byte("lumen-blind-salz"), pbkdf2Rounds, 32)
+}
+
 // CheckSecret prüft PIN oder Passwort in gleichbleibender Zeit.
 func (s *Store) CheckSecret(ctx context.Context, id, secret string) error {
 	var kind string

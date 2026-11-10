@@ -51,6 +51,12 @@ func (s *Server) adminDateiAbtrennen(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Nur Dateien aus Mediatheken, die dieses Konto sieht — ein auf
+	// einzelne Mediatheken beschränkter Mitverwalter trennt nicht anderswo.
+	if _, err := s.visibleItem(r, f.ItemID); err != nil {
+		failErr(w, err)
+		return
+	}
 	g := scan.Parse(f.Path, s.ordnerUeber(r.Context(), f))
 	neu, err := s.st.DateiAbtrennen(r.Context(), f.ID, g.Title, g.Year)
 	if err != nil {
@@ -91,7 +97,7 @@ var zusammenfuehrenLaeuft sync.Map // item-Kennung → true
 // Unterordner „.lumen-teile", den der Scan nicht ansieht. Wer sicher ist,
 // löscht ihn von Hand.
 func (s *Server) adminTeileZusammenfuehren(w http.ResponseWriter, r *http.Request) {
-	it, err := s.st.Item(r.Context(), r.PathValue("id"))
+	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
 	if err != nil {
 		failErr(w, err)
 		return
@@ -151,7 +157,9 @@ func (s *Server) adminTeileZusammenfuehren(w http.ResponseWriter, r *http.Reques
 		defer zusammenfuehrenLaeuft.Delete(it.ID)
 		ctx := context.Background()
 		if err := s.teileZusammenfuehren(ctx, it, teile, ziel); err != nil {
-			s.st.Log(ctx, "error", "aufraeumen", "Zusammenführen gescheitert: "+err.Error())
+			// Ins Protokoll ohne Pfad: Der verriete den Titel (Datenschutz).
+			s.st.Log(ctx, "error", "aufraeumen", "Zusammenführen gescheitert")
+			s.log.Debug("zusammenführen", "err", stream.Bereinigt(err.Error()))
 			return
 		}
 		s.st.Log(ctx, "info", "aufraeumen", fmt.Sprintf("%d Teile zu einer Datei zusammengeführt", len(teile)))
@@ -166,6 +174,12 @@ func (s *Server) teileZusammenfuehren(ctx context.Context, it *store.Item, teile
 	}
 	defer os.Remove(liste.Name())
 	for _, f := range teile {
+		// Ein Zeilenumbruch im Dateinamen würde der Liste eine eigene
+		// Zeile unterschieben (etwa eine fremde Datei) — gar nicht erst.
+		if strings.ContainsAny(f.Path, "\r\n") {
+			liste.Close()
+			return fmt.Errorf("zeilenumbruch im dateinamen") // nur fürs Debug-Protokoll
+		}
 		// Format der concat-Liste: file '<pfad>', Apostrophe verdoppelt.
 		fmt.Fprintf(liste, "file '%s'\n", strings.ReplaceAll(f.Path, "'", `'\''`))
 	}
@@ -175,7 +189,7 @@ func (s *Server) teileZusammenfuehren(ctx context.Context, it *store.Item, teile
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Hour)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, s.ff.FFmpegPath, "-hide_banner", "-loglevel", "error", "-nostdin",
-		"-f", "concat", "-safe", "0", "-i", liste.Name(), "-map", "0", "-c", "copy", "-f", "matroska", "-y", tmp)
+		"-f", "concat", "-safe", "0", "-protocol_whitelist", "file", "-i", liste.Name(), "-map", "0", "-c", "copy", "-f", "matroska", "-y", tmp)
 	if out, err := stream.Niedrig(cmd, true); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("ffmpeg: %s", strings.TrimSpace(string(out)))

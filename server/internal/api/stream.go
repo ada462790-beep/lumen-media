@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -98,7 +97,7 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request) {
 	defer schliessen()
 	_ = item
 
-	fh, err := os.Open(f.Path)
+	fh, err := medienOeffnen(f.Path)
 	if err != nil {
 		s.st.Log(r.Context(), "error", "stream", "Eine Datei liess sich zum Abspielen nicht öffnen")
 		s.log.Debug("datei öffnen", "err", stream.Bereinigt(err.Error()))

@@ -89,6 +89,7 @@ func New(st *store.Store, sc *scan.Scanner, ff *stream.FFmpeg, tr *stream.Transc
 	version string) *Server {
 	srv := &Server{st: st, scanner: sc, ff: ff, tr: tr, live: live, meta: mt,
 		dataDir: dataDir, log: log, version: version, started: time.Now(), bremse: neueBremse()}
+	datenOrdnerSetzen(dataDir)
 	// Die Wiedergabe hat Vorrang: wird gerade etwas umgewandelt, geht der
 	// Durchlauf langsamer.
 	if sc != nil && live != nil {

@@ -10,7 +10,7 @@
 # Zwei Stufen: bauen in einem vollen Go-Abbild, ausliefern in einem kleinen.
 # Was am Ende übrig bleibt, ist die Binärdatei plus FFmpeg.
 
-FROM golang:1.24-alpine AS bau
+FROM golang:1.25-alpine AS bau
 
 RUN apk add --no-cache build-base
 WORKDIR /quelle
@@ -28,7 +28,7 @@ RUN CGO_ENABLED=1 go build -mod=vendor -trimpath \
 
 # ---------------------------------------------------------------- ausliefern
 
-FROM alpine:3.20
+FROM alpine:3.22
 
 # FFmpeg ist das Wichtigste, was Lumen zur Laufzeit braucht. tzdata, damit
 # Zeiten in der eigenen Zeitzone stimmen; ca-certificates für die

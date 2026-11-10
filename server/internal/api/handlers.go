@@ -195,6 +195,7 @@ func (s *Server) unlock(w http.ResponseWriter, r *http.Request) {
 	// aussen nicht herausfinden lässt, welche Profile ungeschützt sind.
 	if aussen {
 		if acc, err := s.st.Account(r.Context(), id); err != nil || acc.LockKind == "none" || acc.LockKind == "" {
+			store.Blindrechnen(in.Secret)
 			time.Sleep(400 * time.Millisecond)
 			failCode(w, http.StatusUnauthorized, "falsch", falsch)
 			return
@@ -1320,6 +1321,15 @@ func (s *Server) adminLibraries(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	if darf := s.verwalteteMediatheken(r); darf != nil {
+		sichtbar := libs[:0]
+		for _, l := range libs {
+			if darf[l.ID] {
+				sichtbar = append(sichtbar, l)
+			}
+		}
+		libs = sichtbar
+	}
 	out := make([]bibliothekAnsicht, len(libs))
 	for i, l := range libs {
 		e := bibliothekAnsicht{Library: l,
@@ -1487,6 +1497,35 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 	type mitPfad struct {
 		store.Item
 		Pfad string `json:"pfad,omitempty"`
+	}
+	// Ein auf einzelne Mediatheken beschränkter Mitverwalter sieht nur
+	// deren Titel — und deren Pfade.
+	if darf := s.verwalteteMediatheken(r); darf != nil {
+		inDarf := func(itemID string) bool {
+			it, err := s.st.Item(r.Context(), itemID)
+			return err == nil && darf[it.LibraryID]
+		}
+		d := dups[:0]
+		for _, x := range dups {
+			if inDarf(x.ItemID) {
+				d = append(d, x)
+			}
+		}
+		dups = d
+		m := missing[:0]
+		for _, f := range missing {
+			if inDarf(f.ItemID) {
+				m = append(m, f)
+			}
+		}
+		missing = m
+		u := unmatched[:0]
+		for _, it := range unmatched {
+			if darf[it.LibraryID] {
+				u = append(u, it)
+			}
+		}
+		unmatched = u
 	}
 	ohne := make([]mitPfad, 0, len(unmatched))
 	for _, it := range unmatched {
@@ -1839,6 +1878,21 @@ func (s *Server) links(ctx context.Context, it *store.Item) []quellLink {
 		out = append(out, quellLink{"Trakt", "https://trakt.tv/search/tmdb/" + tmdb + "?id_type=" + traktArt})
 	case imdb != "":
 		out = append(out, quellLink{"Trakt", "https://trakt.tv/search/imdb/" + imdb + "?id_type=" + traktArt})
+	}
+	return out
+}
+
+// verwalteteMediatheken: nil für Besitzerrechte (alles), sonst die
+// Mediatheken, die dieses Konto sehen und darum verwalten darf.
+func (s *Server) verwalteteMediatheken(r *http.Request) map[string]bool {
+	acc := accountOf(r)
+	if acc == nil || acc.Besitzerrechte() {
+		return nil
+	}
+	ids, _ := s.st.GrantedLibraries(r.Context(), acc.ID)
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
 	}
 	return out
 }

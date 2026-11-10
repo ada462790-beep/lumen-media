@@ -322,7 +322,7 @@ func ordnerBegrenzen(ordner string, grenze int64) {
 // Video. Der Name kommt nur bei Downloads mit; sonst verrät die Antwort
 // nicht, wie die Datei auf der Platte heisst.
 func dateiSenden(w http.ResponseWriter, r *http.Request, pfad, typ, downloadName string) {
-	fh, err := os.Open(pfad)
+	fh, err := medienOeffnen(pfad)
 	if err != nil {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return

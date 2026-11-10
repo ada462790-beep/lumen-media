@@ -419,7 +419,7 @@ Im Container stehen sie bei `environment`, ohne Docker gehen sie genauso
 | `LUMEN_VAAPI_GERAET` | — | `/dev/dri/renderD128` | Welches Grafikgerät VAAPI nutzt, falls es mehrere gibt |
 | `LUMEN_FFMPEG`, `LUMEN_FFPROBE` | `--ffmpeg`, `--ffprobe` | `ffmpeg`, `ffprobe` | Pfad zu FFmpeg (im Abbild schon dabei) |
 | `LUMEN_WEB` | `--web` | eingebaut | Web-App aus einem Ordner statt der eingebauten (zum Entwickeln) |
-| `LUMEN_TLS` | `--tls` | aus | Jeder Wert schaltet den verschlüsselten Eingang (HTTPS) ein. Mit `LUMEN_RELAY` geht er von selbst an |
+| `LUMEN_TLS` | `--tls` | aus | `1` (oder `ja`, `true`) schaltet den verschlüsselten Eingang (HTTPS) ein, `0`/`nein` lässt ihn aus. Mit `LUMEN_RELAY` geht er von selbst an |
 | `LUMEN_TLS_ADDR` | `--tls-addr` | `:8920` | Adresse des verschlüsselten Eingangs. Im Container den Port `8920` veröffentlichen, wenn Geräte im Heimnetz ihn direkt nutzen sollen |
 | `LUMEN_TLS_NAME` | `--tls-name` | — | Name oder Adresse des NAS fürs eigene Zertifikat (im Container sieht Lumen nur seine Container-Adresse). Gilt auch als bekannter Name |
 | `LUMEN_TLS_CERT`, `LUMEN_TLS_KEY` | `--tls-cert`, `--tls-key` | eigenes Zertifikat | Ein mitgebrachtes Zertifikat, etwa von Let's Encrypt; wird nach Erneuerung von selbst neu gelesen |
@@ -460,7 +460,10 @@ Auswahl anhaken). Am besten ein Zeitplan nach 5:00 Uhr: Dann ist die
 Sicherung von Lumen frisch, und auf sie kommt es an — `lumen.db` selbst
 ist im laufenden Betrieb in Bewegung, die Dateien in `sicherungen` nicht.
 Poster und Bilder lassen sich jederzeit neu laden; wichtig sind
-`sicherungen/` und `lumen.db`.
+`sicherungen/`, `lumen.db` und — wenn du HTTPS oder den Fernzugriff nutzt —
+`eigenes-zertifikat.pem` und `eigener-schluessel.pem`. Gehen die beiden
+verloren, ändert sich der Fingerabdruck, und jede App muss den Server neu
+kennenlernen.
 
 Zwei Dinge dabei: Die Sicherungen enthalten die Prüfwerte der PINs und das
 Geheimnis der Authenticator-App — das Sicherungsziel verschlüsselt

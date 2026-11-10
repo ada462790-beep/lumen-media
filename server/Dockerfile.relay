@@ -16,7 +16,7 @@
 # Anders als Lumen selbst braucht er kein FFmpeg, keine Datenbank und kein
 # C: er reicht Bytes durch. Darum ohne cgo und auf einem leeren Abbild.
 
-FROM golang:1.24-alpine AS bau
+FROM golang:1.25-alpine AS bau
 
 WORKDIR /quelle
 COPY server/go.mod server/go.sum ./

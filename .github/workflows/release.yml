@@ -83,7 +83,7 @@ jobs:
           echo "fassung=$V" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with: { go-version: '1.24' }
+        with: { go-version: '1.25' }
       - name: FFmpeg installieren
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Tests
@@ -139,7 +139,7 @@ jobs:
         if: env.AUSLASSEN != '1'
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         if: env.AUSLASSEN != '1'
-        with: { go-version: '1.24' }
+        with: { go-version: '1.25' }
 
       - name: Cross-Übersetzer
         if: matrix.pakete != '' && env.AUSLASSEN != '1'
@@ -281,7 +281,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: '1.24'
+          go-version: '1.25'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with: { path: dateien, merge-multiple: true }
       # Die erste Zeile nennt die Fassung. Sie steht damit unter der
@@ -318,5 +318,8 @@ jobs:
           # Hand kommt sie aus der Eingabe, und der Tag wird dabei
           # angelegt. In beiden Fällen geprüft (v1.2.3).
           tag_name: ${{ needs.pruefen.outputs.fassung }}
+          # Den Tag auf genau den gebauten Stand setzen, nicht auf das, was
+          # inzwischen oben auf dem Hauptzweig liegt.
+          target_commitish: ${{ github.sha }}
           files: dateien/*
           generate_release_notes: true

@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -130,7 +129,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return
 	}
-	fh, err := os.Open(f.Path)
+	fh, err := medienOeffnen(f.Path)
 	if err != nil {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return

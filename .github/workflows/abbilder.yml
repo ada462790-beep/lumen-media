@@ -67,13 +67,12 @@ jobs:
       # :latest bekommt nur eine echte Veröffentlichung, und nur die
       # neueste. Ein nachgeschobener alter Tag oder ein Neubau einer alten
       # Fassung soll nicht jedes NAS nachts auf den alten Stand setzen.
-      # Von Hand gestartet zählt nur, was auf GitHub als Veröffentlichung
+      # Es zählt nur, was auf GitHub als Veröffentlichung
       # steht (kein Entwurf, keine Vorabfassung).
       - name: Gilt als latest?
         id: latest
         env:
           V: ${{ steps.v.outputs.mit }}
-          EREIGNIS: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
           neueste=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
@@ -81,7 +80,10 @@ jobs:
           if [ "$V" != "$neueste" ]; then
             echo "$V ist nicht die neueste Fassung ($neueste) — kein :latest."
             latest=
-          elif [ "$EREIGNIS" = "workflow_dispatch" ]; then
+          else
+            # Auch beim Tag-Weg: ohne fertige Veröffentlichung kein :latest —
+            # sonst zöge jede NAS mit automatischen Updates eine Fassung,
+            # deren Veröffentlichung gescheitert ist.
             art=$(gh release view "$V" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease \
                     --jq 'if .isDraft or .isPrerelease then "vorab" else "echt" end' 2>/dev/null || echo fehlt)
             if [ "$art" != "echt" ]; then
@@ -92,7 +94,7 @@ jobs:
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with: { go-version: '1.24' }
+        with: { go-version: '1.25' }
       - name: FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Tests
