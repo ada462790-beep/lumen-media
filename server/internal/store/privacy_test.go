@@ -30,7 +30,10 @@ import (
 // Reihenfolge von „Weiterschauen", die eigenen Einstellungen und die
 // Geräte eines Profils.
 var privateTables = []string{"progress", "rating", "watchlist", "favorit",
-	"playlist", "playlist_item", "progress_reihe", "prefs", "token"}
+	"playlist", "playlist_item", "progress_reihe", "prefs", "token",
+	// Bildschirmzeit: wie lange ein Profil heute geschaut hat — kein Was,
+	// aber trotzdem nur je Profil (bildschirmzeit.go).
+	"bildschirmzeit_tag"}
 
 // kontoGebunden: die Abfrage legt sich auf genau ein Konto fest. Ein
 // blosses „account_id" im Text genügt nicht — „account_id IS NOT NULL"
@@ -56,6 +59,7 @@ var erlaubtOhneKonto = []struct{ datei, stueck, grund string }{
 	{"store.go", "UPDATE token SET last_seen_at = (last_seen_at / 86400) * 86400", "Umbau: Uhrzeiten entfernen, liest nichts"},
 	{"store.go", "UPDATE rating SET updated_at", "Umbau: Uhrzeiten entfernen, liest nichts"},
 	{"playback.go", "WHERE r.item_id = ? AND r.shared = 1", "nur Bewertungen, die ihre Besitzer selbst freigegeben haben"},
+	{"bildschirmzeit.go", "DELETE FROM bildschirmzeit_tag WHERE tag != ?", "Wartung: Zahlen vergangener Tage löschen, liest nichts"},
 	{"zusammenfuehren.go", "UPDATE OR IGNORE playlist_item SET item_id = ? WHERE item_id = ?", "Wartung: Titel umhängen, liest nichts"},
 }
 

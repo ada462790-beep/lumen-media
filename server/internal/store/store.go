@@ -126,7 +126,10 @@ func Open(path string) (*Store, error) {
 //
 // Stand 11: Tabelle vorspann_erkannt (vorspann_erkennung.go,
 // vorspannErkennungTabellen) — neu angelegt, nichts umzurechnen.
-const SchemaStand = 11
+//
+// Stand 12: Bildschirmzeit (bildschirmzeit.go, bildschirmzeitNachruesten)
+// — zwei neue Tabellen, nichts umzurechnen.
+const SchemaStand = 12
 
 // umbauen bringt Daten einer älteren Fassung auf den neuen Stand — jeder
 // Schritt genau einmal, je nach dem Stand, den die Datenbank mitbringt.
@@ -225,6 +228,9 @@ func umbauen(db *sql.DB) error {
 			return fmt.Errorf("musik und fotos entfernen: %w", err)
 		}
 	}
+	// Stand 12: Bildschirmzeit (bildschirmzeit.go) — zwei neue Tabellen,
+	// angelegt in bildschirmzeitNachruesten; an den Daten ändert sich
+	// nichts. Der Stand zählt trotzdem hoch, damit vorher gesichert wird.
 	return nil
 }
 
@@ -578,6 +584,10 @@ func nachruesten(db *sql.DB) error {
 	}
 	// Automatisch erkannter Vorspann und Abspann (vorspann_erkennung.go).
 	if err := vorspannErkennungTabellen(db); err != nil {
+		return err
+	}
+	// Bildschirmzeit (bildschirmzeit.go, Stand 12).
+	if err := bildschirmzeitNachruesten(db); err != nil {
 		return err
 	}
 	// Handbearbeitung, eigene Sammlungen, Untertitel (funktionen_schema.go).
