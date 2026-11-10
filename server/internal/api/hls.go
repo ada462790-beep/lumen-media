@@ -50,6 +50,11 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return
 	}
+	// Bildschirmzeit vor allem anderen: Ausserhalb der Zeit entsteht
+	// keine Sitzung (bildschirmzeit.go).
+	if s.bildschirmzeitGesperrt(w, r) {
+		return
+	}
 	if s.tr == nil || !s.ff.Available() {
 		fail(w, http.StatusServiceUnavailable,
 			"ohne FFmpeg kann dieser server nicht umwandeln")
@@ -157,7 +162,7 @@ func (s *Server) hlsMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := r.PathValue("session")
 	if !s.live.Gehoert(sid, accountOf(r).ID, f.ID) {
-		s.wiedergabeVorbei(w, sid)
+		s.wiedergabeVorbei(w, r, sid)
 		return
 	}
 	j := s.gemerkterAuftrag(r, f, sid)
@@ -205,7 +210,7 @@ func (s *Server) hlsSegment(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("segment")
 	sid := r.PathValue("session")
 	if !s.live.Gehoert(sid, accountOf(r).ID, f.ID) {
-		s.wiedergabeVorbei(w, sid)
+		s.wiedergabeVorbei(w, r, sid)
 		return
 	}
 	j := s.gemerkterAuftrag(r, f, sid)
@@ -299,7 +304,7 @@ func (s *Server) gemerkterAuftrag(r *http.Request, f *store.MediaFile, sid strin
 func (s *Server) segmentFehler(w http.ResponseWriter, r *http.Request, sid string, err error) {
 	select {
 	case <-s.live.Stopped(sid):
-		s.wiedergabeVorbei(w, sid)
+		s.wiedergabeVorbei(w, r, sid)
 		return
 	default:
 	}

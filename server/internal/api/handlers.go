@@ -1021,6 +1021,8 @@ func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Bewegt sich die Stelle, läuft gerade etwas (Bildschirmzeit).
+	s.bz.fortschritt(accountOf(r).ID, r.PathValue("id"), in.PositionMS)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1601,13 +1603,15 @@ func (s *Server) adminAccounts(w http.ResponseWriter, r *http.Request) {
 		Limits    store.Limits `json:"limits"`
 		Libraries []string     `json:"libraries"`
 		Devices   int          `json:"devices"`
+		// Nur bei Kinderprofilen: Regel und heute verbrauchte Minuten.
+		Bildschirmzeit *bzVerwaltung `json:"bildschirmzeit,omitempty"`
 	}
 	out := make([]entry, 0, len(accs))
 	for _, a := range accs {
 		lim, _ := s.st.Limits(r.Context(), a.ID)
 		libs, _ := s.st.GrantedLibraries(r.Context(), a.ID)
 		devs, _ := s.st.Devices(r.Context(), a.ID)
-		out = append(out, entry{a, lim, libs, len(devs)})
+		out = append(out, entry{a, lim, libs, len(devs), s.bildschirmzeitVerwaltung(r.Context(), &a)})
 	}
 	ok(w, out)
 }

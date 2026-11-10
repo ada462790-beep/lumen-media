@@ -33,6 +33,10 @@ func (s *Server) streamPlan(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Ist die Bildschirmzeit um, erfährt die App es schon hier.
+	if s.bildschirmzeitGesperrt(w, r) {
+		return
+	}
 	// Ausdrücklich gewählte Ton- und Untertitelspur zählen mit; ein
 	// automatisch eingebrannter Untertitel nicht — er kommt nur dazu, wenn
 	// ohnehin über HLS gespielt wird.
@@ -55,6 +59,13 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if f.Missing {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
+		return
+	}
+
+	// Bildschirmzeit: keine neue Wiedergabe ausserhalb der Zeit. Eine
+	// laufende holt weiter ihre Bereiche, bis der Wächter sie nach der
+	// Nachfrist beendet (bildschirmzeit.go).
+	if s.live.Finden(acc.ID, dev.Name, f.ID, "direct") == "" && s.bildschirmzeitGesperrt(w, r) {
 		return
 	}
 

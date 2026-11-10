@@ -191,6 +191,9 @@ const (
 	GrundAbgelaufen = "wiedergabe_abgelaufen"
 	// GrundErsetzt: Dasselbe Gerät spielt inzwischen etwas anderes.
 	GrundErsetzt = "wiedergabe_ersetzt"
+	// GrundBildschirmzeit: Das Zeitfenster oder die Tagesgrenze des
+	// Profils ist erreicht. Nicht neu ansetzen, sondern die Meldung zeigen.
+	GrundBildschirmzeit = "bildschirmzeit"
 )
 
 func NewLive() *Live {
@@ -447,6 +450,51 @@ func (l *Live) EndeKonto(accountID string) int {
 		}
 	}
 	return n
+}
+
+// EndeKontoMit beendet alle Wiedergaben eines Kontos mit einem Grund und
+// gibt ihre Kennungen zurück (damit Umwandlungen mit enden).
+func (l *Live) EndeKontoMit(accountID, grund string) []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var ids []string
+	for id, s := range l.byID {
+		if s.AccountID == accountID {
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range ids {
+		l.endGesperrt(id, grund)
+	}
+	return ids
+}
+
+// KontenMitWiedergabe: die Konten, die gerade etwas laufen haben — nur
+// die Kennungen, für die Bildschirmzeit. Nichts davon geht nach aussen.
+func (l *Live) KontenMitWiedergabe() map[string]bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	out := map[string]bool{}
+	for _, s := range l.byID {
+		out[s.AccountID] = true
+	}
+	return out
+}
+
+// AktiveKonten: Konten mit einer Wiedergabe, die sich seit seit gemeldet
+// hat — ein Segment geholt oder Daten abgeholt. Eine Wiedergabe in der
+// Pause holt nichts mehr und fällt nach kurzer Zeit heraus; so zählt die
+// Bildschirmzeit nur, solange wirklich etwas läuft.
+func (l *Live) AktiveKonten(seit time.Time) map[string]bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	out := map[string]bool{}
+	for _, s := range l.byID {
+		if s.zuletzt.After(seit) {
+			out[s.AccountID] = true
+		}
+	}
+	return out
 }
 
 // DrosselVon: die Drossel einer laufenden Wiedergabe (nil = keine).

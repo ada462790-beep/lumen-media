@@ -129,6 +129,10 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return
 	}
+	// Ausserhalb der Bildschirmzeit beginnt auch kein Download.
+	if r.Method != http.MethodHead && s.bildschirmzeitGesperrt(w, r) {
+		return
+	}
 	fh, err := medienOeffnen(f.Path)
 	if err != nil {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")

@@ -62,6 +62,10 @@ type Server struct {
 	laeufe laufBuch
 	// Sprache des Servers und der Profile im Speicher (sprache.go).
 	sprachen sprachSpeicher
+	// Bildschirmzeit der Kinderprofile (bildschirmzeit.go).
+	bz bzWaechter
+	// jetzt: die Uhr für Bildschirmzeit-Fenster; nil = time.Now (Tests stellen sie).
+	jetzt func() time.Time
 }
 
 // SetzeGrund gibt den Kontext, der beim Herunterfahren endet.
@@ -244,6 +248,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/me/device", auth(s.meinGeraetAbmelden))
 	mux.Handle("GET /api/v1/me/playbacks", auth(s.meineWiedergaben))
 	mux.Handle("DELETE /api/v1/me/playbacks/{id}", auth(s.meineWiedergabeBeenden))
+	mux.Handle("GET /api/v1/me/bildschirmzeit", auth(s.meineBildschirmzeit))
 
 	mux.Handle("GET /api/v1/wishes", auth(s.wishes))
 	mux.Handle("POST /api/v1/wishes", auth(s.createWish))
@@ -352,6 +357,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/accounts", admin(s.adminAccounts))
 	mux.Handle("POST /api/v1/admin/invites", admin(s.adminCreateInvite))
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/limits", admin(s.bestaetigt(s.adminSetLimits)))
+	// Bildschirmzeit eines Kinderprofils; das Geschenk („heute 30 Min.
+	// mehr") ohne erneuten Code, es gilt nur heute (bildschirmzeit.go).
+	mux.Handle("PUT /api/v1/admin/accounts/{id}/bildschirmzeit", admin(s.bestaetigt(s.adminBildschirmzeit)))
+	mux.Handle("POST /api/v1/admin/accounts/{id}/bildschirmzeit/geschenk", admin(s.adminBildschirmzeitGeschenk))
 	// PIN eines Haushaltsprofils zurücksetzen — nie die des Besitzers.
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/sperre", admin(s.bestaetigt(s.adminKontoSperre)))
 	mux.Handle("PUT /api/v1/admin/wishes/{id}", admin(s.adminSetWishState))

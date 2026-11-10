@@ -34,6 +34,7 @@ import (
 type laufEintrag struct {
 	sid    string // die jüngste Wiedergabe dieses Players
 	fehler string // woran die letzte Anfrage scheiterte ("" = an nichts)
+	code   string // fester Code zum Fehler, falls es einen gibt (bildschirmzeit)
 	wann   time.Time
 }
 
@@ -103,12 +104,23 @@ func (s *Server) browserGrund(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case !da || lauf == "":
 		ok(w, map[string]string{"code": "unbekannt"})
+	case e.fehler != "" && e.code != "":
+		// Schon übersetzt (bildschirmzeitText).
+		ok(w, map[string]string{"code": e.code, "error": e.fehler})
 	case e.fehler != "":
 		ok(w, map[string]string{"code": "fehler", "error": tr(w, e.fehler)})
 	case e.sid != "" && s.live.Laeuft(e.sid):
 		ok(w, map[string]string{"code": "laeuft"})
 	default:
 		grund := s.live.Grund(e.sid)
+		if grund == stream.GrundBildschirmzeit {
+			// Wie bei HLS: die Meldung, ausser es gibt inzwischen wieder Zeit.
+			if l, gilt := s.bildschirmzeitLage(r.Context(), accountOf(r)); gilt && !l.urteil.Erlaubt {
+				ok(w, map[string]string{"code": grund, "error": bildschirmzeitText(w, l)})
+				return
+			}
+			grund = stream.GrundAbgelaufen
+		}
 		if grund == "" {
 			grund = stream.GrundAbgelaufen
 		}

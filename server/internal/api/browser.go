@@ -43,6 +43,13 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 		scheitern(w, http.StatusGone, "die datei ist nicht mehr da")
 		return
 	}
+	// Bildschirmzeit: Der Browser sieht den Status nicht — darum merkt
+	// sich der Lauf den Code, und /browser/grund sagt ihn.
+	if l, gilt := s.bildschirmzeitLage(r.Context(), acc); gilt && !l.urteil.Erlaubt {
+		s.laeufe.setzen(acc.ID, lauf, laufEintrag{fehler: bildschirmzeitText(w, l), code: stream.GrundBildschirmzeit})
+		bildschirmzeitFehler(w, l)
+		return
+	}
 	if !s.ff.Available() {
 		scheitern(w, http.StatusServiceUnavailable,
 			"ohne FFmpeg kann dieser server nichts für den browser vorbereiten")

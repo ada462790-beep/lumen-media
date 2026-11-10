@@ -41,8 +41,18 @@ func streamFehler(w http.ResponseWriter, status int, code, text string) {
 //
 // Ist der Grund nicht (mehr) bekannt, gilt „abgelaufen": dann ist es lange
 // her, und neu ansetzen schadet nicht.
-func (s *Server) wiedergabeVorbei(w http.ResponseWriter, sid string) {
+func (s *Server) wiedergabeVorbei(w http.ResponseWriter, r *http.Request, sid string) {
 	grund := s.live.Grund(sid)
+	if grund == stream.GrundBildschirmzeit {
+		// Beendet wegen der Bildschirmzeit: dieselbe Meldung wie beim
+		// Start. Hat die Verwaltung inzwischen Zeit geschenkt, darf das
+		// Gerät einfach neu ansetzen.
+		if l, gilt := s.bildschirmzeitLage(r.Context(), accountOf(r)); gilt && !l.urteil.Erlaubt {
+			bildschirmzeitFehler(w, l)
+			return
+		}
+		grund = stream.GrundAbgelaufen
+	}
 	text := "die wiedergabe war zu lange still und ist abgelaufen — sie lässt sich einfach neu starten"
 	switch grund {
 	case stream.GrundBeendet:

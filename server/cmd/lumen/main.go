@@ -218,6 +218,8 @@ func run(o Optionen, log *slog.Logger) error {
 	go srv.UpdateWaechter(grund)
 	// Und sichert einmal am Tag die Datenbank (zwei Generationen).
 	go srv.SicherungsWaechter(grund)
+	// Und zählt die Bildschirmzeit der Kinderprofile (bildschirmzeit.go).
+	go srv.BildschirmzeitWaechter(grund)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", srv.Handler())
