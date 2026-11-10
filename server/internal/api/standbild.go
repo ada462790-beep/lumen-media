@@ -101,8 +101,17 @@ func (s *Server) standbild(ctx context.Context, it *store.Item) (string, error) 
 		return "", errors.New("ungültige kennung")
 	}
 	ziel := filepath.Join(s.standbildOrdner(), it.ID+".jpg")
+	quelle := ziel + ".quelle" // aus welcher Datei das Bild stammt
 	if _, err := os.Stat(ziel); err == nil {
-		return ziel, nil
+		// Gehört die Datei inzwischen zu einem anderen Titel (ein neuer
+		// Durchlauf hat sie umgehängt), ist das Bild das der alten Folge.
+		// Ohne Vermerk (ältere Fassung) oder ohne Datei bleibt es stehen.
+		vermerk, verr := os.ReadFile(quelle)
+		jetzt, derr := s.standbildDatei(ctx, it)
+		if verr != nil || derr != nil || string(vermerk) == jetzt.ID {
+			return ziel, nil
+		}
+		_ = os.Remove(ziel)
 	}
 	standbildMu.Lock()
 	if wann, ok := standbildFehlschlag[it.ID]; ok && time.Since(wann) < standbildPause {
@@ -203,6 +212,7 @@ func (s *Server) standbild(ctx context.Context, it *store.Item) (string, error) 
 	if err := os.Rename(tmp, ziel); err != nil {
 		return "", err
 	}
+	_ = os.WriteFile(quelle, []byte(datei.ID), 0o644)
 	return ziel, nil
 }
 

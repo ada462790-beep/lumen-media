@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"lumen/internal/store"
 	"lumen/internal/stream"
@@ -83,6 +84,16 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 	// Ein Gerät spielt eine Sache: Fragt es neu an (anderer Film, andere
 	// Tonspur, nach einer Pause), endet seine alte Wiedergabe — und zählt
 	// weder bei der eigenen Grenze noch bei der des Servers mit.
+	// Prüfen und Anmelden in einem Zug: Sonst kämen zwei gleichzeitige
+	// Anfragen beide an der Grenze vorbei (Profil-Grenze wie Server-Grenze
+	// fürs Umwandeln).
+	hlsStartMu.Lock()
+	gesperrt := true
+	defer func() {
+		if gesperrt {
+			hlsStartMu.Unlock()
+		}
+	}()
 	s.live.ReplaceFor(acc.ID, dev.Name)
 	if n := s.live.CountFor(acc.ID); n >= lim.MaxStreams {
 		failW(w, http.StatusTooManyRequests,
@@ -104,6 +115,8 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 		FromHeight: f.Height, ToHeight: zielHoehe(plan, f),
 		Drossel: drosselFuer(lim, f),
 	})
+	hlsStartMu.Unlock()
+	gesperrt = false
 
 	// Text-Untertitel schon einmal leise vorbereiten.
 	go s.untertitelVorab(f)
@@ -353,3 +366,6 @@ func (s *Server) maxUmwandlungen() int {
 	}
 	return 2
 }
+
+// hlsStartMu schützt den Schritt „Grenzen prüfen, Wiedergabe anmelden".
+var hlsStartMu sync.Mutex

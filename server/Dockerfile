@@ -68,7 +68,10 @@ EXPOSE 8097
 # Datenordner passend machen kann, und gibt die Rechte dann ab. Lumen
 # selbst läuft nie als root. Siehe server/docker-start.sh.
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD wget -qO- http://127.0.0.1:8097/api/v1/health >/dev/null || exit 1
+# Der Port kommt aus LUMEN_ADDR (wer ihn ändert, soll keinen dauerhaft
+# „ungesunden" Container bekommen). Beim ersten Start nach einem Update
+# laufen Sicherung und Umbau der Datenbank — dafür die längere Anlaufzeit.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s \
+  CMD wget -qO- "http://127.0.0.1:${LUMEN_ADDR##*:}/api/v1/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/local/bin/lumen-start"]

@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -116,15 +117,35 @@ func Wiederherstellen(ordner string, nr int, dbPfad string) error {
 	if err := pruefeDatei(quelle); err != nil {
 		return err
 	}
-	inhalt, err := os.ReadFile(quelle)
-	if err != nil {
-		return err
-	}
+	// Kopieren statt ganz in den Speicher lesen: Auf einem NAS mit 1 GB
+	// wäre eine grosse Datenbank sonst zu viel auf einmal.
 	ziel := dbPfad + ".wiederherstellen"
-	if err := os.WriteFile(ziel+".neu", inhalt, 0o600); err != nil {
+	if err := dateiKopieren(quelle, ziel+".neu"); err != nil {
+		_ = os.Remove(ziel + ".neu")
 		return err
 	}
 	return os.Rename(ziel+".neu", ziel)
+}
+
+func dateiKopieren(von, nach string) error {
+	ein, err := os.Open(von)
+	if err != nil {
+		return err
+	}
+	defer ein.Close()
+	aus, err := os.OpenFile(nach, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(aus, ein); err != nil {
+		aus.Close()
+		return err
+	}
+	if err := aus.Sync(); err != nil {
+		aus.Close()
+		return err
+	}
+	return aus.Close()
 }
 
 // pruefeDatei öffnet eine Datenbankdatei nur lesend und prüft sie.

@@ -134,6 +134,9 @@ func run(o Optionen, log *slog.Logger) error {
 	addr, dataDir, webDir := o.Addr, o.DataDir, o.WebDir
 	ffmpegPath, ffprobePath := o.FFmpeg, o.FFprobe
 	zeitzoneMelden(log)
+	if err := beschreibbar(dataDir); err != nil {
+		return err
+	}
 	st, err := store.Open(filepath.Join(dataDir, "lumen.db"))
 	if err != nil {
 		return err
@@ -457,4 +460,20 @@ func schalter(v string) bool {
 		return false
 	}
 	return true
+}
+
+// beschreibbar prüft vor dem Öffnen der Datenbank, ob Lumen im Datenordner
+// schreiben darf. Sonst käme von SQLite nur „unable to open database file"
+// — und niemand wüsste, dass es an den Rechten des Ordners liegt.
+func beschreibbar(ordner string) error {
+	if err := os.MkdirAll(ordner, 0o755); err != nil {
+		return fmt.Errorf("datenordner %s lässt sich nicht anlegen: %w", ordner, err)
+	}
+	f, err := os.CreateTemp(ordner, ".schreibprobe-*")
+	if err != nil {
+		return fmt.Errorf("im datenordner %s darf Lumen nicht schreiben (Rechte oder schreibgeschützt eingebunden? Im Container: PUID/PGID prüfen): %w", ordner, err)
+	}
+	name := f.Name()
+	f.Close()
+	return os.Remove(name)
 }
