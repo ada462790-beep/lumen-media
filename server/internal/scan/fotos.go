@@ -126,7 +126,7 @@ func (s *Scanner) scanFotos(ctx context.Context, lib store.Library, res *Result)
 			return nil
 		}
 		art, format := fotoArt(p)
-		if art == "" || mediathekDateiUeberspringen(d.Name()) || VerweisNachDraussen(lib.Path, p, d) {
+		if art == "" || mediathekDateiUeberspringen(d.Name()) || VerweisInDatenordner(p, d) {
 			return nil
 		}
 		info, err := d.Info()

@@ -89,7 +89,17 @@ func (s *Server) neustarten() error {
 	if !s.ArbeitAbwarten(10 * time.Second) {
 		s.log.Warn("Arbeit im Hintergrund hörte vor dem Neustart nicht rechtzeitig auf")
 	}
-	return update.Neustart()
+	err := update.Neustart()
+	if err != nil {
+		// Die Arbeit im Hintergrund ist schon beendet. Im Container startet
+		// Docker Lumen neu, wenn es endet — das ist besser als ein Lumen,
+		// das weiterläuft, aber nie mehr prüft, lädt oder sichert.
+		s.log.Error("Neustart gescheitert — Lumen bitte von Hand neu starten", "err", err)
+		if imContainer() {
+			os.Exit(1)
+		}
+	}
+	return err
 }
 
 // hintergrund ist der Kontext für Arbeit, die eine Anfrage anstösst, die

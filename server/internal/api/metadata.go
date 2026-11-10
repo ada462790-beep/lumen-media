@@ -129,6 +129,9 @@ func (s *Server) adminResolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lib := r.URL.Query().Get("library")
+	if !s.mediathekPruefen(w, r, lib) {
+		return
+	}
 	limit := qInt(r, "limit", 200)
 
 	// Das kann dauern; die Anfrage wartet nicht darauf. Läuft schon ein
@@ -193,6 +196,15 @@ func (s *Server) adminUnmatched(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		failErr(w, err)
 		return
+	}
+	if darf := s.verwalteteMediatheken(r); darf != nil {
+		sichtbar := items[:0]
+		for _, it := range items {
+			if darf[it.LibraryID] {
+				sichtbar = append(sichtbar, it)
+			}
+		}
+		items = sichtbar
 	}
 	ok(w, items)
 }

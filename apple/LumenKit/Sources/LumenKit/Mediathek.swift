@@ -82,7 +82,9 @@ public enum Sortierung: String, CaseIterable, Identifiable, Sendable {
     public static func aus(_ wert: String?, kind: String) -> (Sortierung, Bool)? {
         guard let wert, !wert.isEmpty else { return nil }
         let teile = wert.split(separator: ":", maxSplits: 1).map(String.init)
-        guard let art = Sortierung(rawValue: teile[0]), faelle(kind: kind).contains(art) else { return nil }
+        // „:" allein gibt keine Teile — dann wie unbekannt, kein Absturz.
+        guard let erster = teile.first, let art = Sortierung(rawValue: erster),
+              faelle(kind: kind).contains(art) else { return nil }
         let ab: Bool
         switch teile.count > 1 ? teile[1] : "" {
         case "asc": ab = false

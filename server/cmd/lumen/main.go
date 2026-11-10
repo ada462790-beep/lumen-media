@@ -189,6 +189,7 @@ func run(o Optionen, log *slog.Logger) error {
 	}
 
 	scanner := scan.New(st, ff)
+	scan.DatenordnerSchuetzen(dataDir)
 	// Lokale Bilder („poster.jpg" neben dem Film) landen bei den anderen.
 	scanner.BilderOrdner = resolver.ArtDir()
 	srv := api.New(st, scanner, ff, tr, live, resolver, dataDir, log, version)
@@ -467,7 +468,9 @@ func schalter(v string) bool {
 // schreiben darf. Sonst käme von SQLite nur „unable to open database file"
 // — und niemand wüsste, dass es an den Rechten des Ordners liegt.
 func beschreibbar(ordner string) error {
-	if err := os.MkdirAll(ordner, 0o755); err != nil {
+	// 0700 wie store.Open: Datenbank, Schlüssel und Sicherungen gehen nur
+	// Lumen etwas an.
+	if err := os.MkdirAll(ordner, 0o700); err != nil {
 		return fmt.Errorf("datenordner %s lässt sich nicht anlegen: %w", ordner, err)
 	}
 	f, err := os.CreateTemp(ordner, ".schreibprobe-*")

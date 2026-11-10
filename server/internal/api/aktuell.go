@@ -20,6 +20,9 @@ import (
 // Eintrag der Quelle zuweisen, wenn Lumen danebenlag.
 
 func (s *Server) adminLibrarySetzen(w http.ResponseWriter, r *http.Request) {
+	if !s.mediathekPruefen(w, r, r.PathValue("id")) {
+		return
+	}
 	var in struct {
 		IntervalMin *int   `json:"intervalMin"`
 		ScanAt      string `json:"scanAt"`
@@ -44,6 +47,9 @@ func (s *Server) adminMetadatenNeu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lib := r.URL.Query().Get("library")
+	if !s.mediathekPruefen(w, r, lib) {
+		return
+	}
 	n, err := s.st.MetadatenZuruecksetzen(r.Context(), lib, "")
 	if err != nil {
 		failErr(w, err)
@@ -71,6 +77,8 @@ func (s *Server) adminTitelNeu(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Eine lange Serie: der Rest der Folgen im Hintergrund.
+	s.metadatenImHintergrund(it.LibraryID)
 	s.ReihenBilden(r.Context())
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -140,6 +148,7 @@ func (s *Server) adminTitelZuweisen(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	s.metadatenImHintergrund(it.LibraryID)
 	s.ReihenBilden(r.Context())
 	neu, _ := s.st.Item(r.Context(), it.ID)
 	if neu == nil {

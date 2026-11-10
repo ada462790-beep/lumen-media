@@ -1419,11 +1419,17 @@ func (s *Server) adminCreateLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Derselbe Ordner zweimal (Doppelklick, nochmal versucht) oder ein
-	// Ordner in einem anderen: Die Dateien gehörten dann zwei Bibliotheken,
-	// und das Löschen der einen leerte die andere.
+	// Ordner in einem anderen, der dieselben Dateien liest: Sie gehörten
+	// dann zwei Bibliotheken, und das Löschen der einen leerte die andere.
+	// Verschachtelt mit anderer Art („/media" Filme, „/media/Fotos" Fotos)
+	// liest jede nur ihre Dateien — das bleibt erlaubt; Filme und Serien
+	// lesen aber beide Videos.
 	if libs, err := s.st.Libraries(r.Context()); err == nil {
+		video := func(k string) bool { return k == "movie" || k == "series" }
+		neueArt := strings.TrimSpace(in.Kind)
 		for _, l := range libs {
-			if ordnerUeberschneiden(l.Path, in.Path) {
+			gleicheDateien := l.Kind == neueArt || (video(l.Kind) && video(neueArt))
+			if ordnerGleich(l.Path, in.Path) || (gleicheDateien && ordnerUeberschneiden(l.Path, in.Path)) {
 				failW(w, http.StatusConflict,
 					"dieser ordner gehört schon zur bibliothek „{name}“ (oder liegt darin)", "name", l.Name)
 				return
@@ -1447,6 +1453,9 @@ func (s *Server) adminScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
+	if !s.mediathekPruefen(w, r, id) {
+		return
+	}
 	for _, l := range libs {
 		if l.ID != id {
 			continue
@@ -1964,4 +1973,41 @@ func ordnerUeberschneiden(a, b string) bool {
 		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 	}
 	return drin(a, b) || drin(b, a)
+}
+
+// darfMediathek: Darf dieses Konto die Mediathek id verwalten? Für ""
+// (alle Mediatheken) nur mit Besitzerrechten.
+func (s *Server) darfMediathek(r *http.Request, id string) bool {
+	darf := s.verwalteteMediatheken(r)
+	if darf == nil {
+		return true
+	}
+	return id != "" && darf[id]
+}
+
+// mediathekPruefen antwortet selbst, wenn das Konto die Mediathek nicht
+// verwalten darf — ein auf einzelne Mediatheken beschränkter Mitverwalter
+// prüft, plant und lädt nur dort.
+func (s *Server) mediathekPruefen(w http.ResponseWriter, r *http.Request, id string) bool {
+	if s.darfMediathek(r, id) {
+		return true
+	}
+	if id == "" {
+		fail(w, http.StatusForbidden, "wähle eine bibliothek, die du verwaltest")
+		return false
+	}
+	failErr(w, store.ErrNotFound)
+	return false
+}
+
+// ordnerGleich: derselbe Ordner (nach dem Auflösen von Verweisen).
+func ordnerGleich(a, b string) bool {
+	norm := func(p string) string {
+		p = filepath.Clean(strings.TrimSpace(p))
+		if echt, err := filepath.EvalSymlinks(p); err == nil {
+			p = echt
+		}
+		return p
+	}
+	return norm(a) == norm(b)
 }

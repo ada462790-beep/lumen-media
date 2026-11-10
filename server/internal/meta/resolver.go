@@ -153,8 +153,18 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 		}
 		if i == len(pending)-1 && mitSerien && len(pending) < limit {
 			mitSerien = false
-			if mehr, err := r.st.PendingItems(ctx, libraryID, limit-len(pending)); err == nil {
-				pending = append(pending, mehr...)
+			if mehr, err := r.st.PendingItems(ctx, libraryID, limit); err == nil {
+				// Nur Neues: Was eben schon versucht wurde (etwa ohne
+				// Internet gescheitert), kommt nicht gleich nochmal dran.
+				schon := make(map[string]bool, len(pending))
+				for _, p := range pending {
+					schon[p.ID] = true
+				}
+				for _, m := range mehr {
+					if !schon[m.ID] && len(pending) < limit {
+						pending = append(pending, m)
+					}
+				}
 				r.standMu.Lock()
 				r.stand.Gesamt = len(pending)
 				r.standMu.Unlock()
@@ -709,9 +719,10 @@ func (r *Resolver) NeuLaden(ctx context.Context, it *store.Item) error {
 // titelNachholen holt die Metadaten eines Titels und seiner Folgen — alle,
 // nicht nur die, die zufällig unter den ersten 500 der Mediathek stehen.
 //
-// Die ersten 50 gleich (die Seite zeigt danach den richtigen Stand), den
-// Rest einer langen Serie im Hintergrund — die Anfrage soll nicht minutenlang
-// hängen.
+// Die ersten 50 gleich (die Seite zeigt danach den richtigen Stand). Den
+// Rest einer langen Serie holt der Aufrufer im Hintergrund nach (api:
+// metadatenImHintergrund) — die Anfrage soll nicht minutenlang hängen, und
+// der Rest läuft unter derselben Arbeitssperre wie jeder Durchgang.
 func (r *Resolver) titelNachholen(ctx context.Context, id string) error {
 	wartet, err := r.st.PendingUnter(ctx, id)
 	if err != nil {
@@ -728,18 +739,8 @@ func (r *Resolver) titelNachholen(ctx context.Context, id string) error {
 		}
 	}
 	const sofort = 50
-	if len(wartet) <= sofort {
-		holen(ctx, wartet)
-		r.ReihenBilderHolen(ctx)
-		return ctx.Err()
-	}
-	holen(ctx, wartet[:sofort])
-	rest := wartet[sofort:]
-	go func() {
-		bg := context.WithoutCancel(ctx)
-		holen(bg, rest)
-		r.ReihenBilderHolen(bg)
-	}()
+	holen(ctx, wartet[:min(len(wartet), sofort)])
+	r.ReihenBilderHolen(ctx)
 	return ctx.Err()
 }
 

@@ -255,7 +255,7 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			}
 			return nil
 		}
-		if !IsVideo(path) || IsJunkFile(path) || VerweisNachDraussen(lib.Path, path, d) {
+		if !IsVideo(path) || IsJunkFile(path) || VerweisInDatenordner(path, d) {
 			return nil
 		}
 		rel, _ := filepath.Rel(lib.Path, path)

@@ -11,31 +11,50 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 )
 
-// VerweisNachDraussen meldet einen symbolischen Verweis, der aus dem
-// Medienordner hinauszeigt. Solche Dateien nimmt Lumen nicht auf: Ein
-// „Lied" als Verweis auf /data/lumen.db hätte jedem Profil die ganze
-// Datenbank zum Herunterladen gegeben. Verweise innerhalb des Ordners
-// (aufgeräumte Sammlungen) bleiben erlaubt.
-func VerweisNachDraussen(wurzel, pfad string, d fs.DirEntry) bool {
+// geschuetzt ist Lumens Datenordner (Datenbank, Schlüssel, Sicherungen).
+var geschuetzt atomic.Pointer[string]
+
+// DatenordnerSchuetzen nennt den Ordner, in den kein Verweis aus einer
+// Mediathek zeigen darf.
+func DatenordnerSchuetzen(ordner string) {
+	if ordner == "" {
+		return
+	}
+	if echt, err := filepath.EvalSymlinks(ordner); err == nil {
+		ordner = echt
+	}
+	if abs, err := filepath.Abs(ordner); err == nil {
+		ordner = abs
+	}
+	geschuetzt.Store(&ordner)
+}
+
+// VerweisInDatenordner meldet einen symbolischen Verweis, der in Lumens
+// Datenordner zeigt. Solche Dateien nimmt Lumen nicht auf: Ein „Lied" als
+// Verweis auf /data/lumen.db hätte jedem Profil die ganze Datenbank zum
+// Herunterladen gegeben. Verweise anderswohin (auf eine zweite Freigabe,
+// ein anderes Volume) sind auf einem NAS üblich und bleiben erlaubt.
+func VerweisInDatenordner(pfad string, d fs.DirEntry) bool {
 	if d == nil || d.Type()&fs.ModeSymlink == 0 {
 		return false
 	}
-	return !InnerhalbVon(wurzel, pfad)
+	return InDatenordner(pfad)
 }
 
-// InnerhalbVon prüft, ob pfad nach dem Auflösen aller Verweise in wurzel
-// liegt. Was sich nicht auflösen lässt, gilt als draussen.
-func InnerhalbVon(wurzel, pfad string) bool {
+// InDatenordner prüft, ob pfad nach dem Auflösen aller Verweise im
+// Datenordner liegt. Was sich nicht auflösen lässt, gilt als verdächtig.
+func InDatenordner(pfad string) bool {
+	d := geschuetzt.Load()
+	if d == nil {
+		return false
+	}
 	ziel, err := filepath.EvalSymlinks(pfad)
 	if err != nil {
-		return false
+		return true
 	}
-	w, err := filepath.EvalSymlinks(wurzel)
-	if err != nil {
-		return false
-	}
-	rel, err := filepath.Rel(w, ziel)
+	rel, err := filepath.Rel(*d, ziel)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

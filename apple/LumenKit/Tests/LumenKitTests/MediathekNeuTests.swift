@@ -230,6 +230,9 @@ final class RasterAnfragenTests: XCTestCase {
         XCTAssertEqual(Sortierung.aus("added:asc", kind: "movie")?.0, .hinzugefuegt)
         XCTAssertEqual(Sortierung.aus("added:asc", kind: "movie")?.1, false)
         XCTAssertEqual(Sortierung.aus("rating", kind: "movie")?.1, true)
+        // Kaputte Werte im Profil: nil statt Absturz.
+        XCTAssertNil(Sortierung.aus(":", kind: "movie"))
+        XCTAssertNil(Sortierung.aus("::", kind: "movie"))
         XCTAssertNil(Sortierung.aus("runtime:asc", kind: "series"))
         XCTAssertNil(Sortierung.aus("year", kind: "movie"))
         XCTAssertEqual(Sortierung.titel.wert(absteigend: true), "title:desc")

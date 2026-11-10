@@ -224,9 +224,12 @@ func (l *lokalLauf) bilder(ctx context.Context, id string, bilder map[string]str
 		return
 	}
 	for art, pfad := range bilder {
-		// Lstat: Ein Verweis („poster.jpg" → /data/lumen.db) wird nicht
-		// kopiert und dann als Bild ausgeliefert.
-		info, err := os.Lstat(pfad)
+		// Ein Verweis in den Datenordner („poster.jpg" → /data/lumen.db)
+		// wird nicht kopiert und dann als Bild ausgeliefert.
+		if InDatenordner(pfad) {
+			continue
+		}
+		info, err := os.Stat(pfad)
 		if err != nil || !info.Mode().IsRegular() || info.Size() > 20<<20 {
 			continue
 		}

@@ -315,7 +315,9 @@ func (s *Server) updateEinsetzen(ctx context.Context, rel *update.Release, auto 
 	time.Sleep(time.Second)
 	if err := s.neustarten(); err != nil {
 		s.log.Error("update neustart", "err", err)
-		s.updateProtokollieren(ctx, updateEintrag{Von: s.version, Nach: rel.Version, Auto: auto,
+		// Mit eigenem Zusammenhang: der des Hintergrunds ist beim Neustart
+		// schon beendet, der Eintrag ginge sonst verloren.
+		s.updateProtokollieren(context.Background(), updateEintrag{Von: s.version, Nach: rel.Version, Auto: auto,
 			Ergebnis: "fehler", Notiz: "Neustart klappte nicht — bitte Lumen von Hand neu starten: " + err.Error()})
 	}
 }
