@@ -173,6 +173,10 @@ func TestUmbauOhneMusikUndFotos(t *testing.T) {
 	if _, err := os.Stat(pfad + ".vor-umbau"); err != nil {
 		t.Fatalf("keine Sicherung vor dem Umbau: %v", err)
 	}
+	// Die API darf die Ordner von Musik und Fotos einmal wegräumen.
+	if v := st.Setting(t.Context(), MediathekResteEinst, ""); v != "1" {
+		t.Fatalf("Marke für die Reste auf der Platte: %q", v)
+	}
 	var stand int
 	_ = st.DB().QueryRow(`PRAGMA user_version`).Scan(&stand)
 	if stand != SchemaStand {

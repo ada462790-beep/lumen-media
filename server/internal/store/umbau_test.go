@@ -8,6 +8,7 @@
 package store
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -208,5 +209,81 @@ func TestFolgeErbtFreigabe(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("Profil ab 12 sieht %d Folgen/Staffeln einer Serie ab 18", len(got))
+	}
+}
+
+// Scheitert ein Umbau mittendrin, bleibt die Sicherung von vor dem Update
+// beim nächsten Start, wie sie ist — sie wird nicht vom halb umgebauten
+// Stand überschrieben. Der nächste Start macht beim erreichten Schritt
+// weiter.
+func TestGescheiterterUmbauBehaeltSicherung(t *testing.T) {
+	pfad := filepath.Join(t.TempDir(), "lumen.db")
+	st, err := Open(pfad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB().Exec(`PRAGMA user_version = 8`); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.SetSetting(t.Context(), "probe", "vor dem update")
+	_ = st.Close()
+
+	umbauSchrittFertig = func(n int) error {
+		if n == 9 {
+			return os.ErrInvalid // nach Schritt 9 scheitert es
+		}
+		return nil
+	}
+	defer func() { umbauSchrittFertig = nil }()
+	if _, err := Open(pfad); err == nil {
+		t.Fatal("Umbau sollte scheitern")
+	}
+	sicherung, err := os.ReadFile(pfad + ".vor-umbau")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(pfad + umbauOffenEndung); err != nil {
+		t.Fatalf("Marke fehlt nach dem gescheiterten Umbau: %v", err)
+	}
+	// Schritt 9 ist festgeschrieben.
+	db, err := sql.Open("sqlite3", pfad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stand int
+	_ = db.QueryRow(`PRAGMA user_version`).Scan(&stand)
+	_, _ = db.Exec(`INSERT INTO setting (key, value) VALUES ('probe', 'halb umgebaut')
+	                ON CONFLICT (key) DO UPDATE SET value = excluded.value`)
+	_ = db.Close()
+	if stand != 9 {
+		t.Fatalf("Stand nach dem gescheiterten Schritt 10: %d, erwartet 9", stand)
+	}
+
+	umbauSchrittFertig = nil
+	st, err = Open(pfad)
+	if err != nil {
+		t.Fatalf("zweiter Anlauf: %v", err)
+	}
+	defer st.Close()
+	nachher, err := os.ReadFile(pfad + ".vor-umbau")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(nachher) != string(sicherung) {
+		t.Fatal("die saubere Sicherung wurde überschrieben")
+	}
+	if _, err := os.Stat(pfad + umbauOffenEndung); err == nil {
+		t.Fatal("Marke liegt nach dem gelungenen Umbau noch da")
+	}
+	alt, err := sql.Open("sqlite3", pfad+".vor-umbau")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer alt.Close()
+	var probe string
+	_ = alt.QueryRow(`SELECT value FROM setting WHERE key = 'probe'`).Scan(&probe)
+	_ = alt.QueryRow(`PRAGMA user_version`).Scan(&stand)
+	if probe != "vor dem update" || stand != 8 {
+		t.Fatalf("Sicherung: %q Stand %d", probe, stand)
 	}
 }

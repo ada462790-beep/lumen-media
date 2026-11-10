@@ -101,6 +101,9 @@ func Open(path string) (*Store, error) {
 	if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, SchemaStand)); err != nil {
 		return nil, fmt.Errorf("schema-stand setzen: %w", err)
 	}
+	// Der Umbau ist ganz durch: Beim nächsten Umbau darf wieder eine neue
+	// Sicherung entstehen.
+	_ = os.Remove(path + umbauOffenEndung)
 	if err := optimieren(context.Background(), db); err != nil {
 		return nil, fmt.Errorf("statistik: %w", err)
 	}
@@ -131,12 +134,39 @@ func Open(path string) (*Store, error) {
 // — zwei neue Tabellen, nichts umzurechnen.
 const SchemaStand = 12
 
+// umbauOffenEndung: die Marke neben der Datenbank, solange ein Umbau
+// nicht ganz durch ist (vorDemNachruesten).
+const umbauOffenEndung = ".umbau-offen"
+
+// umbauSchrittFertig: nur für Tests — wird nach jedem Schritt mit dem
+// erreichten Stand gerufen und kann einen Fehler vortäuschen.
+var umbauSchrittFertig func(stand int) error
+
 // umbauen bringt Daten einer älteren Fassung auf den neuen Stand — jeder
 // Schritt genau einmal, je nach dem Stand, den die Datenbank mitbringt.
+//
+// Nach jedem Schritt steht der erreichte Stand in user_version. Scheitert
+// ein späterer Schritt, beginnt der nächste Start dort und nicht wieder
+// ganz vorn — die früheren Schritte sind schon festgeschrieben. Jeder
+// Schritt läuft in einer Transaktion oder lässt sich ohne Schaden
+// wiederholen (UPDATE … WHERE, DROP … IF EXISTS).
 func umbauen(db *sql.DB) error {
 	var stand int
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&stand); err != nil {
 		return err
+	}
+	// erreicht: Schritt n ist durch.
+	erreicht := func(n int) error {
+		if stand >= n {
+			return nil
+		}
+		if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, n)); err != nil {
+			return fmt.Errorf("schema-stand %d setzen: %w", n, err)
+		}
+		if umbauSchrittFertig != nil {
+			return umbauSchrittFertig(n)
+		}
+		return nil
 	}
 
 	// Stand 1: Bibliotheken sahen jede Stunde nach. Wer das nie verstellt
@@ -147,6 +177,9 @@ func umbauen(db *sql.DB) error {
 		                       WHERE scan_interval_min = 60 AND scan_at = ''`, StandardScanZeit); err != nil {
 			return fmt.Errorf("scan-takt umstellen: %w", err)
 		}
+	}
+	if err := erreicht(1); err != nil {
+		return err
 	}
 
 	// Stand 2: keine Uhrzeiten mehr, die mit Schauen zusammenhängen.
@@ -168,6 +201,9 @@ func umbauen(db *sql.DB) error {
 			}
 		}
 	}
+	if err := erreicht(2); err != nil {
+		return err
+	}
 
 	// Stand 4: Die Zuordnung kann mehr (Ordner vor Dateiname, bekannterer
 	// Treffer gewinnt bei gleichem Namen). Was bisher nicht erkannt war,
@@ -177,6 +213,9 @@ func umbauen(db *sql.DB) error {
 		                       WHERE match_state = 'unmatched' AND kind IN ('movie','series')`); err != nil {
 			return fmt.Errorf("nicht erkannte neu nachschlagen: %w", err)
 		}
+	}
+	if err := erreicht(4); err != nil {
+		return err
 	}
 
 	// Stand 5: Der Scanner liest NFO-Dateien und Bilder neben den Dateien,
@@ -190,6 +229,9 @@ func umbauen(db *sql.DB) error {
 			return fmt.Errorf("nicht erkannte neu nachschlagen: %w", err)
 		}
 	}
+	if err := erreicht(5); err != nil {
+		return err
+	}
 	// Stand 6: „ohne Altersgrenze" heisst nicht mehr 0, sondern
 	// OhneAltersgrenze — damit „nur FSK 0" einstellbar wird (schutz.go).
 	if stand < 6 {
@@ -197,12 +239,18 @@ func umbauen(db *sql.DB) error {
 			return err
 		}
 	}
+	if err := erreicht(6); err != nil {
+		return err
+	}
 	// Stand 7: titel_klein, original_klein und zuletzt_neu sind neu
 	// (nachruesten) und werden einmal für alle Titel gefüllt.
 	if stand < 7 {
 		if err := titelKleinFuellen(db); err != nil {
 			return fmt.Errorf("titel nachtragen: %w", err)
 		}
+	}
+	if err := erreicht(7); err != nil {
+		return err
 	}
 	// Stand 8: Kinder aus älteren Fassungen als Kinderprofile kennzeichnen
 	// (schutz.go) — sonst erreichten die neuen Schutzregeln genau die
@@ -212,6 +260,9 @@ func umbauen(db *sql.DB) error {
 			return fmt.Errorf("kinderprofile erkennen: %w", err)
 		}
 	}
+	if err := erreicht(8); err != nil {
+		return err
+	}
 	// Stand 9: Neue Sortierschlüssel (sortieren.go) — natürliche
 	// Zahlenfolge, ä wie a, Artikel je Sprache — für alle Titel. Eigene
 	// Sortiertitel aus feld_sperre werden zu sort_eigen.
@@ -220,6 +271,9 @@ func umbauen(db *sql.DB) error {
 			return fmt.Errorf("sortierschlüssel neu rechnen: %w", err)
 		}
 	}
+	if err := erreicht(9); err != nil {
+		return err
+	}
 	// Stand 10: Lumen ist ein Server für Filme und Serien. Musik- und
 	// Fotobibliotheken samt allem, was daran hing, und ihre Tabellen
 	// fallen weg (musik_fotos_entfernen.go).
@@ -227,6 +281,9 @@ func umbauen(db *sql.DB) error {
 		if err := musikUndFotosEntfernen(db); err != nil {
 			return fmt.Errorf("musik und fotos entfernen: %w", err)
 		}
+	}
+	if err := erreicht(10); err != nil {
+		return err
 	}
 	// Stand 12: Bildschirmzeit (bildschirmzeit.go) — zwei neue Tabellen,
 	// angelegt in bildschirmzeitNachruesten; an den Daten ändert sich
@@ -415,7 +472,15 @@ func progressOhneUhrzeit(db *sql.DB) error {
 //   - Stammt sie von einer neueren Lumen-Fassung, startet Lumen auch
 //     nicht: Eine ältere Fassung kennt den neueren Aufbau nicht.
 //   - Steht ein Umbau an, legt Lumen vorher eine Sicherung daneben
-//     („lumen.db.vor-umbau"), nur für den Besitzer lesbar.
+//     („lumen.db.vor-umbau"), nur für den Besitzer lesbar, und eine Marke
+//     („lumen.db.umbau-offen" mit dem Stand von vorher), die erst
+//     verschwindet, wenn der Umbau ganz durch ist. Steht die Marke beim
+//     nächsten Start noch da, ist ein Umbau mittendrin gescheitert: Dann
+//     bleibt die Sicherung, wie sie ist — sie ist die saubere von vor dem
+//     Update; eine neue wäre der halb umgebaute Stand. Ein fester Name
+//     statt einer Sicherung je Stand: Lumen behält nicht mehr Kopien der
+//     Datenbank als nötig (jede wäre ein Stück Verlauf), und die Anleitung
+//     zum Zurückgehen bleibt dieselbe.
 func vorDemNachruesten(db *sql.DB, path string) error {
 	var tabellen int
 	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table'`).Scan(&tabellen); err != nil {
@@ -448,6 +513,16 @@ func vorDemNachruesten(db *sql.DB, path string) error {
 	}
 
 	ziel := path + ".vor-umbau"
+	marke := path + umbauOffenEndung
+	if _, err := os.Stat(marke); err == nil {
+		if _, err := os.Stat(ziel); err == nil {
+			alt, _ := os.ReadFile(marke)
+			slog.Warn("Ein früherer Umbau der Datenbank wurde nicht fertig — Lumen macht weiter; "+
+				"die Sicherung von davor bleibt, wie sie ist", "jetzt", stand,
+				"sicherung", ziel, "stand der sicherung", strings.TrimSpace(string(alt)))
+			return nil
+		}
+	}
 	neu := ziel + ".neu"
 	_ = os.Remove(neu)
 	if _, err := db.Exec(`VACUUM INTO ?`, neu); err != nil {
@@ -457,6 +532,9 @@ func vorDemNachruesten(db *sql.DB, path string) error {
 		return fmt.Errorf("sicherung vor dem umbau: %w", err)
 	}
 	if err := os.Rename(neu, ziel); err != nil {
+		return fmt.Errorf("sicherung vor dem umbau: %w", err)
+	}
+	if err := os.WriteFile(marke, []byte(fmt.Sprintf("%d\n", stand)), 0o600); err != nil {
 		return fmt.Errorf("sicherung vor dem umbau: %w", err)
 	}
 	slog.Info("Datenbank wird umgebaut", "von", stand, "auf", SchemaStand, "sicherung", ziel)

@@ -571,7 +571,8 @@ ein; die bisherige Datenbank wird dabei ersetzt.
 auch Bibliotheken für Musik und Fotos. Beim ersten Start einer neueren
 Fassung entfernt Lumen solche Bibliotheken samt Hörstand, Musik-Favoriten,
 Musiklisten und den zwischengespeicherten Covern und Vorschaubildern
-(`daten/mediathek`). Die Dateien auf der Platte bleiben, wo sie sind;
+(`daten/mediathek`) — einmal, und nur, was Lumen dort selbst angelegt
+hat. Die Dateien auf der Platte bleiben, wo sie sind;
 Filme und Serien sind nicht betroffen. Vorher legt Lumen wie bei jedem
 Umbau `lumen.db.vor-umbau` an.
 
@@ -580,7 +581,10 @@ Datenbank legt Lumen `daten/lumen.db.vor-umbau` an. Eine ältere Fassung
 startet mit der umgebauten Datenbank absichtlich nicht (sie kennt den neuen
 Aufbau nicht). Zurück geht es so: `lumen.db.vor-umbau` nach
 `lumen.db.wiederherstellen` kopieren und die ältere Fassung starten — was
-seit dem Update dazukam (Fortschritt, Merkliste …), fehlt dann.
+seit dem Update dazukam (Fortschritt, Merkliste …), fehlt dann. Scheitert ein
+Umbau mittendrin, steht daneben `lumen.db.umbau-offen`; beim nächsten Start
+macht Lumen beim erreichten Schritt weiter und lässt die Sicherung von vor
+dem Update unangetastet. Die Marke verschwindet, sobald der Umbau durch ist.
 
 **Auf ein neues NAS umziehen** oder nach einem Plattenausfall: Lumen
 stoppen, den Datenordner aus Hyper Backup an dieselbe Stelle

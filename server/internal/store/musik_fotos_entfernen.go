@@ -50,7 +50,8 @@ var musikFotoIndizesAlt = []string{
 //
 // Die Dateien auf der Platte (Cover, Vorschaubilder) räumt die API beim
 // Start weg (api.MediathekResteWeg) — die Datenbank kennt den
-// Datenordner nicht.
+// Datenordner nicht. Damit das genau einmal geschieht und nur nach diesem
+// Umbau, setzt er die Einstellung MediathekResteEinst.
 func musikUndFotosEntfernen(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -59,6 +60,21 @@ func musikUndFotosEntfernen(db *sql.DB) error {
 	defer func() { _ = tx.Rollback() }()
 
 	weg := `SELECT id FROM library WHERE kind IN ('music','photo')`
+	// Gab es hier je Musik oder Fotos? Nur dann merkt sich der Umbau für
+	// die API, dass deren Ordner auf der Platte einmal wegzuräumen sind —
+	// eine ganz neue Datenbank hatte nie welche.
+	var spuren int
+	if err := tx.QueryRow(`SELECT (SELECT count(*) FROM library WHERE kind IN ('music','photo'))
+	       + (SELECT count(*) FROM sqlite_master WHERE type = 'table'
+	           AND (name LIKE 'musik%' OR name LIKE 'foto%'))`).Scan(&spuren); err != nil {
+		return err
+	}
+	if spuren > 0 {
+		if _, err := tx.Exec(`INSERT INTO setting (key, value) VALUES (?, '1')
+		   ON CONFLICT (key) DO UPDATE SET value = excluded.value`, MediathekResteEinst); err != nil {
+			return err
+		}
+	}
 	for _, q := range []string{
 		`DELETE FROM gruppe_bibliothek WHERE library_id IN (` + weg + `)`,
 		`DELETE FROM grant_library WHERE library_id IN (` + weg + `)`,
@@ -84,3 +100,7 @@ func musikUndFotosEntfernen(db *sql.DB) error {
 	}
 	return tx.Commit()
 }
+
+// MediathekResteEinst: steht auf „1", solange die Ordner von Musik und
+// Fotos nach dem Umbau auf Stand 10 noch wegzuräumen sind.
+const MediathekResteEinst = "umbau.mediathek_reste"
