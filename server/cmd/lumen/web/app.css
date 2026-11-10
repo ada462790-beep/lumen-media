@@ -680,11 +680,11 @@ p.t-sub > svg:first-child, p.t-caption > svg:first-child { flex:none }
 p.t-sub[style*="flex-start"] > svg:first-child { margin-top:.2em }
 /* Waagerecht scrollende Leisten: Verlauf am Rand, wo es weitergeht
    (data-rand setzt app.js). */
-:is(.segment, .chips--rollen, .mu-reiter, .az-leiste)[data-rand="rechts"] {
+:is(.segment, .chips--rollen, .az-leiste)[data-rand="rechts"] {
   -webkit-mask-image:linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(to right, #000 calc(100% - 36px), transparent) }
-:is(.segment, .chips--rollen, .mu-reiter, .az-leiste)[data-rand="links"] {
+:is(.segment, .chips--rollen, .az-leiste)[data-rand="links"] {
   -webkit-mask-image:linear-gradient(to left, #000 calc(100% - 36px), transparent); mask-image:linear-gradient(to left, #000 calc(100% - 36px), transparent) }
-:is(.segment, .chips--rollen, .mu-reiter, .az-leiste)[data-rand="beide"] {
+:is(.segment, .chips--rollen, .az-leiste)[data-rand="beide"] {
   -webkit-mask-image:linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
   mask-image:linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent) }
 .field[hidden] { display:none }

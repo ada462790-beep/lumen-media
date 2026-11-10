@@ -14,9 +14,8 @@ Eine Ansicht ohne Eintrag in ADRESSEN (app.js) bekommt beim Öffnen keine
 eigene Adresse: Der Browser zeigt weiter die alte, F5 landet woanders,
 ein Lesezeichen führt ins Leere. Geprüft wird:
 
-  a) Jede Ansicht, die render() zeichnet (case '…' und die Ansichten der
-     Mediathek-Module musik.js und fotos.js), steht in ADRESSEN – oder
-     ausdrücklich in OHNE_ADRESSE (Anmelden, Player, Zwischenschritte).
+  a) Jede Ansicht, die render() zeichnet (case '…'), steht in ADRESSEN –
+     oder ausdrücklich in OHNE_ADRESSE (Anmelden, Player, Zwischenschritte).
   b) ADRESSEN nennt keine Ansicht, die es nicht gibt, und keine Adresse
      zweimal.
   c) Jede Ansicht in MIT_KENNUNG hat eine Adresse.
@@ -57,9 +56,6 @@ def main() -> int:
     render = app[app.index("function render()"):]
     render = render[:render.index("\n}\n")]
     ansichten = set(re.findall(r"case '(\w+)':", render))
-    for modul in ("musik.js", "fotos.js"):
-        src = (WEB / modul).read_text(encoding="utf-8")
-        ansichten |= set(re.findall(r"^  (\w+): *\{", block(src, "export const ansichten = {"), re.M))
 
     adressen = re.findall(r"\['(\w+)', '([\w/]+)'\]", block(app, "const ADRESSEN = ["))
     ohne = set(re.findall(r"'(\w+)'", block(app, "const OHNE_ADRESSE = [")))

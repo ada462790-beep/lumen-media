@@ -19,12 +19,6 @@
 import { api, ApiError } from './api.js';
 import { T, altersOptionen, schutzText, falschMeldung, frage, schutzDialog, mitteilung,
   einladungsFormular, einladungsBox } from './schutz.js';
-// Musik und Fotos stehen in eigenen Dateien; hier sind sie nur eingehängt:
-// Navigation, Ansichten, Suche, Verwaltung.
-import * as musik from './musik.js';
-import * as fotos from './fotos.js';
-const MEDIATHEK = [musik, fotos];
-const MEDIATHEK_ANSICHTEN = { ...musik.ansichten, ...fotos.ansichten };
 // Handbearbeitung, Sammlungen, Übernahme aus Emby/Jellyfin, Untertitel.
 import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBearbeiten, folgeBearbeiten,
   einstellungenUmzug, metadatenUntertitel, playerUntertitelEintrag, utStand, utStandLaden,
@@ -552,16 +546,12 @@ const NAV = () => [
   ['news', I.glocke, tr('Neuigkeiten')],
 ];
 
-// Musik und Fotos nach Filmen und Serien — nur, wenn es sie gibt und das
-// Profil sie sehen darf.
-const navEintraege = () => [...NAV().slice(0, 3), ...MEDIATHEK.flatMap(m => m.nav()), ...NAV().slice(3)];
-
 function sidebar() {
   const p = S.me?.account;
   if (!p) return '';
-  const items = navEintraege().map(([v, d, label, gruppe]) =>
+  const items = NAV().map(([v, d, label]) =>
     `<a href="#" class="nav" data-go="${v}" title="${esc(label)}"${
-      S.view === v || gruppe?.includes(S.view) || (v === 'watchlist' && ['gesehen', 'playlists', 'playlist'].includes(S.view))
+      S.view === v || (v === 'watchlist' && ['gesehen', 'playlists', 'playlist'].includes(S.view))
         || (v === 'collections' && ['collection', 'sammlungen', 'sammlung'].includes(S.view)) ? ' aria-current="page"' : ''}>${svg(d, 20)}${label}${
       v === 'news' && S.me.neuigkeiten ? `<span class="punkt" aria-hidden="true">${S.me.neuigkeiten > 9 ? '9+' : S.me.neuigkeiten}</span><span class="sr-only">${tr(', {n} ungelesen', { n: S.me.neuigkeiten })}</span>` : ''}</a>`).join('');
   return `<aside class="sidebar glass glass--regular ${S.navZu ? 'sidebar--zu' : 'is-open'}"
@@ -599,7 +589,7 @@ function tabbar() {
   const p = S.me?.account;
   if (!p) return '';
   const ich = ['settings', 'wishes', 'news', 'favorites', 'collections', 'collection', 'sammlungen', 'sammlung', 'playlists', 'playlist',
-    ...ADMIN_VIEWS, ...Object.keys(MEDIATHEK_ANSICHTEN)].includes(S.view);
+    ...ADMIN_VIEWS].includes(S.view);
   return `<nav class="tabbar glass glass--regular" aria-label="${tr('Navigation')}">
     ${TABS().map(([v, d, label]) => `<a href="#" class="tab" data-go="${v}"${
       S.view === v || (v === 'watchlist' && S.view === 'gesehen') ? ' aria-current="page"' : ''}>${svg(d, 22)}<span>${label}</span></a>`).join('')}
@@ -688,8 +678,6 @@ async function go(view, opts = {}) {
 }
 
 addEventListener('popstate', e => {
-  // Ein offenes Foto (oder Ähnliches) schliesst sich zuerst.
-  for (const m of MEDIATHEK) if (m.zurueckGedrueckt?.()) return;
   let st = e.state;
   // Von Hand geänderte Adresse: kein Zustand, aber eine lesbare Adresse.
   if (!st?.view) { const z = ansichtAusAdresse(); if (z) st = { ...z, tiefe: verlaufTiefe }; }
@@ -727,7 +715,6 @@ async function load() {
     // Der Zähler der Neuigkeiten hängt an /me — auf der Startseite
     // nebenbei auffrischen, damit der Punkt nicht bis zur nächsten
     // Anmeldung alt bleibt.
-    if (S.me) await musik.bereicheLaden();
     if (S.me && S.view === 'home') api.me().then(me => { S.me = me; const n = app.querySelector('.sidebar'); if (n) n.outerHTML = sidebar(); }).catch(() => {});
     const daten = await fetchFor(S.view);
     if (nr !== ladeNummer) return;
@@ -765,7 +752,6 @@ async function load() {
 }
 
 async function fetchFor(view) {
-  if (MEDIATHEK_ANSICHTEN[view]) return MEDIATHEK_ANSICHTEN[view].laden();
   switch (view) {
     case 'profiles':
       try { return { profiles: await api.profiles() }; }
@@ -795,8 +781,7 @@ async function fetchFor(view) {
     case 'favorites': return api.seite({ liste: 'favoriten', sort: '', kind: S.favArt || 'movie', limit: 2000 });
     case 'search': {
       if (!S.query.trim()) return { items: [], personen: [], genres: [] };
-      const [d, musikTreffer] = await Promise.all([api.search(S.query), musik.suche(S.query)]);
-      return { ...d, musik: musikTreffer };
+      return api.search(S.query);
     }
     case 'person': {
       const [items, info] = await Promise.all([api.items({ person: S.id, limit: 200 }),
@@ -856,8 +841,7 @@ async function fetchFor(view) {
     case 'adminGroups': { const [groups, libraries, accounts] = await Promise.all([api.adminGroups(), api.adminLibraries(), api.adminAccounts()]); return { groups, libraries, accounts }; }
     case 'adminLock':   return api.adminLock();
     case 'adminUnlock': return api.adminLock();
-    case 'adminLibraries': return { libraries: await api.adminLibraries(),
-                                    mediathek: await api.call('/admin/mediathek').catch(() => null) };
+    case 'adminLibraries': return { libraries: await api.adminLibraries() };
     case 'adminWishes': return api.adminWishes();
     case 'sessions':  return api.adminSessions();
     case 'logs':      return { lines: await api.adminLog(S.logFilter) };
@@ -932,7 +916,7 @@ function render() {
       case 'metadata':  html = viewMetadata(); break;
       case 'amComputer': html = viewAmComputer(); break;
       case 'schonDabei': html = viewSchonDabei(); break;
-      default:          html = MEDIATHEK_ANSICHTEN[S.view] ? MEDIATHEK_ANSICHTEN[S.view].zeichnen() : viewHome();
+      default:          html = viewHome();
     }
   }
   // Der Player wird genau einmal aufgebaut. Würde er sich neu zeichnen,
@@ -971,13 +955,12 @@ function render() {
     if (seite && altScroll) seite.scrollTop = altScroll;
     if (altReihen) app.querySelectorAll('.rail').forEach((r, i) => { if (altReihen[i]) r.scrollLeft = altReihen[i]; });
   }
-  for (const m of MEDIATHEK) m.nachRender();
 }
 
-/* Waagerecht scrollende Leisten (Segmente, Genres, Musik-Reiter): Ein
+/* Waagerecht scrollende Leisten (Segmente, Genres, A–Z): Ein
    Verlauf am Rand zeigt, dass es dort weitergeht – sonst sähe „Ält…"
    aus wie ein abgeschnittener Knopf. */
-const ROLL_LEISTEN = '.segment, .chips--rollen, .mu-reiter, .az-leiste';
+const ROLL_LEISTEN = '.segment, .chips--rollen, .az-leiste';
 function randHinweis(el) {
   const mehr = el.scrollWidth - el.clientWidth;
   if (mehr <= 2) { el.removeAttribute('data-rand'); return; }
@@ -1427,10 +1410,9 @@ function viewSearch() {
     </form>
     <div style="margin-top:28px">
       ${!q ? leer({ symbol: I.search, titel: tr('Wonach suchst du?'), text: tr('Titel, Schauspieler, Genre oder Jahr — auch „Komödie 2019“, „Filme mit Tom Hanks“ oder „Thriller 80er“.') })
-        : `${personenHtml}${genresHtml}${meintest}${musik.suchAbschnitt(d.musik)}
+        : `${personenHtml}${genresHtml}${meintest}
            ${items.length ? `<div class="t-sub c-2" style="margin-bottom:18px">${tr('{n} Treffer', { n: items.length })}${gedeutet ? ' · ' + esc(deutung) : ''}</div>
             <div class="grid">${items.map(posterCard).join('')}</div>`
-           : musik.suchTreffer(d.musik) ? ''
            : personen.length || genres.length ? `<p class="hint">${gedeutet ? tr('Kein Titel passt genau — gesucht wurde {deutung}.', { deutung: esc(deutung) }) : tr('Kein Titel passt genau — aber die Personen und Genres oben.')}</p>`
            : leer({ symbol: I.search, titel: tr('Keine Treffer für „{q}“', { q }),
                text: tr('Prüf die Schreibweise oder versuch es mit einem anderen Wort.'),
@@ -3480,7 +3462,7 @@ function viewSettings() {
       ${svg(I.lock, 18, 2.2)}<span class="t-body" style="flex:1;min-width:220px">${esc(T.verwaltungBrauchtSchutz)}</span>
       <button class="btn btn-pill btn-pill--fill" data-schutz>${tr('PIN festlegen')}</button></div>` : ''}
     <div class="nur-handy" style="margin-top:24px">
-      ${grp(tr('Mehr'), MEDIATHEK.map(m => m.ichZeile(linkRow)).join('') + linkRow(tr('Neuigkeiten'), S.me?.neuigkeiten ? tr('{n} ungelesen', { n: S.me.neuigkeiten }) : tr('was dazugekommen ist'), 'news')
+      ${grp(tr('Mehr'), linkRow(tr('Neuigkeiten'), S.me?.neuigkeiten ? tr('{n} ungelesen', { n: S.me.neuigkeiten }) : tr('was dazugekommen ist'), 'news')
         + linkRow(tr('Favoriten'), tr('was dir besonders gefallen hat'), 'favorites')
         + linkRow(tr('Filmreihen'), tr('von Lumen zusammengestellt'), 'collections')
         + linkRow(tr('Listen'), tr('eigene und geteilte'), 'playlists')
@@ -3777,7 +3759,7 @@ function bibZeile(l) {
           <span class="clamp-1">${ges
             ? `${tr('{fer} von {ges} eingelesen', { fer, ges })}${anteil ? ` · ${anteil} %` : ''}${
                 st.datei ? ' · ' + esc(st.datei) : ''}`
-            : l.kind === 'music' || l.kind === 'photo' ? tr('sucht nach Dateien …') : tr('sucht nach Videodateien …')} · ${tr('läuft seit {dauer}', { dauer })}</span></div>
+            : tr('sucht nach Videodateien …')} · ${tr('läuft seit {dauer}', { dauer })}</span></div>
       </div>`;
   } else if (l.wartet) {
     mitte = `<div class="t-caption c-2" style="margin-top:10px;display:flex;gap:8px">
@@ -3800,9 +3782,7 @@ function bibZeile(l) {
     // Geprüft und nichts gefunden: fast immer steht die Art falsch oder
     // der Ordner ist eine Ebene daneben. Das soll hier stehen und nicht
     // im Protokoll, wo niemand nachsieht.
-    mitte = hinweisZeile(l.kind === 'music' || l.kind === 'photo'
-      ? tr('Geprüft, aber nichts gefunden. Liegen die Dateien wirklich hier? Unterordner liest Lumen mit.')
-      : tr('Geprüft, aber nichts gefunden. Liegen die Dateien wirklich hier — und sind es Videodateien? Unterordner liest Lumen mit.'));
+    mitte = hinweisZeile(tr('Geprüft, aber nichts gefunden. Liegen die Dateien wirklich hier — und sind es Videodateien? Unterordner liest Lumen mit.'));
   }
 
   const knoepfe = S.delLib === l.id
@@ -3819,16 +3799,14 @@ function bibZeile(l) {
       <div class="t-body">${esc(l.name)}${
         // Nur dazusagen, was der Name nicht schon sagt — „Serien · Serien"
         // ist keine Auskunft.
-        l.kind === 'series' && !/serie/i.test(l.name) ? ` ${tr('· Serien')}` : l.kind === 'music' && !/musik/i.test(l.name) ? ` ${tr('· Musik')}`
-          : l.kind === 'photo' && !/foto/i.test(l.name) ? ` ${tr('· Fotos')}` : ''}</div>
+        l.kind === 'series' && !/serie/i.test(l.name) ? ` ${tr('· Serien')}` : ''}</div>
       <div class="t-caption c-2 clamp-1 mono">${esc(l.path)}</div>
-      <div class="t-caption c-2">${l.kind === 'photo' ? tr('{n} Fotos · {geprueft}', { n: l.count, geprueft })
-        : l.kind === 'music' ? tr('Musik|{n} Titel · {geprueft}', { n: l.count, geprueft }) : tr('{n} Titel · {geprueft}', { n: l.count, geprueft })}${ergebnis ? ' · ' + esc(ergebnis) : ''}</div>
+      <div class="t-caption c-2">${tr('{n} Titel · {geprueft}', { n: l.count, geprueft })}${ergebnis ? ' · ' + esc(ergebnis) : ''}</div>
       ${mitte}
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
         <label class="t-caption c-2" style="display:inline-flex;align-items:center;gap:6px">${tr('Von selbst nachsehen')}
           <select class="takt" data-takt="${esc(l.id)}" aria-label="${tr('Wie oft Lumen von selbst nachsieht')}">${takt}</select>${uhrzeit}</label>
-        ${l.kind === 'music' || l.kind === 'photo' ? '' : `<button class="btn btn-pill" style="height:28px;font-size:12px" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>`}
+        <button class="btn btn-pill" style="height:28px;font-size:12px" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;flex:none;padding-top:2px">${knoepfe}</div>
@@ -3884,10 +3862,9 @@ function viewAdminLibraries() {
   const libs = S.data?.libraries || [];
 
   return shell(`<div class="wrap wrap--flat" style="max-width:860px">
-    ${ohead(tr('Bibliotheken'), tr('Wo deine Filme, Serien, Musik und Fotos liegen'))}
+    ${ohead(tr('Bibliotheken'), tr('Wo deine Filme und Serien liegen'))}
     <section style="margin-top:28px"><div class="group group--inset" id="biblist">
       ${bibListe(libs)}</div></section>
-    ${libs.some(l => l.kind === 'photo') ? fotos.adminAbschnitt(S.data?.mediathek) : ''}
     ${libs.length ? `<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
       <button class="btn btn-pill btn-pill--fill" data-metaneu="">${tr('Alle Metadaten neu laden')}</button>
       <span class="t-caption c-2" style="align-self:center">${tr('Holt Beschreibungen, Besetzung und Bilder für alle Titel noch einmal. Von Hand zugewiesene bleiben.')}</span></div>` : ''}
@@ -3897,9 +3874,8 @@ function viewAdminLibraries() {
           <input id="lname" name="name" placeholder="${tr('Filme')}" required></div>
         <div class="field"><label for="lkind">${tr('Art')}</label>
           <select id="lkind" name="kind">
-            <option value="movie">${tr('Filme')}</option><option value="series">${tr('Serien')}</option>
-            <option value="music">${tr('Musik')}</option><option value="photo">${tr('Fotos')}</option></select>
-          <span class="hint">${tr('Bei Filmen und Serien nur eine Angabe darüber, was hier liegt. Folgen erkennt Lumen am Namen (S01E02) oder am Staffelordner darüber — auch wenn hier „Filme“ steht. Musik liest Lumen aus den Tags (sonst „Interpret/Album/01 - Titel“), Fotos nach Aufnahmedatum; jeder Ordner wird ein Album.')}</span></div>
+            <option value="movie">${tr('Filme')}</option><option value="series">${tr('Serien')}</option></select>
+          <span class="hint">${tr('Bei Filmen und Serien nur eine Angabe darüber, was hier liegt. Folgen erkennt Lumen am Namen (S01E02) oder am Staffelordner darüber — auch wenn hier „Filme“ steht.')}</span></div>
         <div class="field"><label for="lpath">${tr('Ordner auf dem Server')}</label>
           <div style="display:flex;gap:8px">
             <input id="lpath" name="path" class="mono" style="flex:1;min-width:0"
@@ -5644,18 +5620,12 @@ const ADRESSEN = [
   ['cleanup', 'verwaltung/aufraeumen'], ['accounts', 'verwaltung/konten'], ['metadata', 'verwaltung/metadaten'],
   ['adminUmwandlung', 'verwaltung/umwandeln'],
   ['sammlungen', 'sammlungen'], ['sammlung', 'sammlung'],
-  ['musik', 'musik'], ['musikAlben', 'musik/alben'], ['musikAlbum', 'musik/album'],
-  ['musikInterpreten', 'musik/interpreten'], ['musikInterpret', 'musik/interpret'], ['musikTitel', 'musik/titel'],
-  ['musikGenres', 'musik/genres'], ['musikGenre', 'musik/genre'], ['musikListen', 'musik/listen'],
-  ['musikListe', 'musik/liste'], ['musikFavoriten', 'musik/favoriten'],
-  ['fotos', 'fotos'], ['fotoAlben', 'fotos/alben'], ['fotoAlbum', 'fotos/album'],
 ];
 // Ansichten ohne eigene Adresse: Anmelden, Einrichten, Player und
 // Zwischenschritte, die nur aus einer anderen Ansicht heraus Sinn haben.
 // tools/adressen_pruefen.py hält ADRESSEN und render() deckungsgleich.
 const OHNE_ADRESSE = ['start', 'setup', 'redeem', 'profiles', 'unlock', 'player', 'adminUnlock', 'amComputer', 'schonDabei'];
-const MIT_KENNUNG = ['detail', 'collection', 'playlist', 'person', 'sammlung',
-  'musikAlbum', 'musikInterpret', 'musikGenre', 'musikListe', 'fotoAlbum'];
+const MIT_KENNUNG = ['detail', 'collection', 'playlist', 'person', 'sammlung'];
 
 // Die Adresse einer Ansicht, etwa „#/titel/abc" oder „#/suche?q=sonne".
 // Hash statt Pfad: der Server muss dafür nichts wissen, und ein Lesezeichen
@@ -5686,9 +5656,7 @@ function ansichtAusAdresse(hash = location.hash) {
     // vergibt ([A-Za-z0-9_-]); „../admin/…" oder ein „?" in einem
     // untergeschobenen Link führt so nirgendwohin. Personen tragen ihren
     // Namen in der Adresse – der wird beim Abrufen kodiert (api.js).
-    // Genres heissen wie in den Tags der Musik („Hip Hop“, „Rock & Roll“) –
-    // sie gehen nur als kodierter Abfragewert an den Server.
-    if (id != null && view !== 'person' && view !== 'musikGenre' && !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return null;
+    if (id != null && view !== 'person' && !/^[A-Za-z0-9_-]{1,64}$/.test(id)) return null;
     const query = view === 'search' ? (new URLSearchParams(m[2] || '').get('q') || '') : null;
     return { view, id, query };
   }
@@ -6140,7 +6108,6 @@ async function boot() {
   }
 }
 
-for (const m of MEDIATHEK) m.einrichten({ S, api, go, render, load, shell, esc, svg, I, toast, loading, PLAY, PAUSE, zurueck });
 // Die Hilfen dieser Datei für die Module der Fenster (fenster.js).
 Object.assign(FU, { S, esc, svg, I, toast, artOf, posterCard, shell, loading, go, load, render, PLAY });
 

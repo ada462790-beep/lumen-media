@@ -79,14 +79,14 @@ Schliessen Löschen Zurück Weiter Fehler Einstellungen Verwaltung""".split())
 # einen deutschen Rest.
 EINZELN = set("""ab von bis gesehen ungelesen abspielen festlegen gemischt faul Minuten Minute Sekunden Stunden
 Std Min Titel Folgen Folge Staffel Fassungen Fassung Teil Uhr heute gestern morgen neu Neu Alle alle umgewandelt
-gelesen Treffer Fotos Foto Alben Interpreten Lieder Listen Liste Bilder Personen Geräte Gerät Bibliotheken
+gelesen Treffer Listen Liste Bilder Personen Geräte Gerät Bibliotheken
 Dateien Datei Sammlungen Filme Film Serien Serie läuft weiter Weiter zurück Zurück hochladen herunterladen
 bearbeiten löschen entfernen öffnen schliessen anzeigen ansehen merken gemerkt hinzufügen umbenennen wählen""".split())
 # Wörter, die in jeder der fünf Sprachen gleich bleiben dürfen.
 NAMEN = {"Lumen", "IMDb", "TMDb", "OMDb", "Emby", "Jellyfin", "OpenSubtitles", "FFmpeg", "GitHub",
          "Chromecast", "AirPlay", "Apple TV", "Android", "Android TV", "Fire TV", "Google TV", "Docker",
          "NVIDIA NVENC", "Intel Quick Sync", "VAAPI (Intel, AMD)", "Rotten Tomatoes", "Mac", "Tablet",
-         "PIN", "Info", "Start", "Stereo", "Specials", "Normal", "Genres", "Album", "Alben", "Interpret"}
+         "PIN", "Info", "Start", "Stereo", "Specials", "Normal", "Genres"}
 
 
 # --------------------------------------------------------------- Lesen
@@ -338,7 +338,7 @@ def platzhalter(s) -> set[str]:
 
 
 def ohne_zusammenhang(k: str) -> str:
-    """„Musik|{n} Titel" → „{n} Titel" (siehe sprache.js)."""
+    """„Tab|Serien" → „Serien" (siehe sprache.js)."""
     return re.sub(r"^[\w-]+\|", "", k)
 
 

@@ -17,8 +17,8 @@ Wörter nehmen.
 - `de-AT.json` erbt von de-DE. Österreichische Monatsnamen („Jänner")
   kommen aus `Intl`, nicht aus dem Katalog.
 - `en-GB.json` erbt von en-US und enthält nur die britischen Abweichungen.
-- Mehrdeutige deutsche Wörter tragen einen Zusammenhang vor `|`:
-  `tr('Musik|{n} Titel')` → „{n} songs", `tr('{n} Titel')` → „{n} titles".
+- Wörter, die je nach Ort anders heissen, tragen einen Zusammenhang vor `|`:
+  `tr('Tab|Serien')` → „TV" (schmaler Reiter), `tr('Serien')` → „TV Shows".
 - Neue Sprache (z. B. fr-CH): Datei anlegen, in `sprache.js` (SPRACHEN,
   ERBT) und in `server/internal/sprache/sprache.go` (Sprachen) eintragen.
 
@@ -45,9 +45,6 @@ Prüfen: `python3 tools/sprache_pruefen.py` (läuft auch in der CI).
 | Filmreihe(n)          | Franchise(s)            | Franchise(s)            |
 | Sammlung(en)          | Collection(s)           | Collection(s)           |
 | Liste(n)              | List(s)                 | List(s)                 |
-| Wiedergabeliste (Musik) | Playlist              | Playlist                |
-| Titel (Musik)         | Song(s)                 | Song(s)                 |
-| Interpret             | Artist                  | Artist                  |
 | Wünsche / wünschen    | Requests / Request      | Requests / Request      |
 | Neuigkeiten           | What’s New              | What’s New              |
 | Ich                   | Me                      | Me                      |

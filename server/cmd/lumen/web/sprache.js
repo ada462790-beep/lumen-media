@@ -18,8 +18,9 @@
  * nach dem einzigen Zahlenwert unter den Platzhaltern – so braucht
  * tr('{gesamt} Titel', { gesamt }) keinen künstlichen Namen n.
  *
- * Wo ein deutsches Wort zwei Bedeutungen hat, steht davor ein Zusammenhang:
- * tr('Musik|{n} Titel') ist „{n} songs", tr('{n} Titel') „{n} titles". Ohne
+ * Wo ein deutsches Wort je nach Ort anders heisst, steht davor ein
+ * Zusammenhang: tr('Tab|Serien') ist im schmalen Reiter „TV", tr('Serien')
+ * „TV Shows". Ohne
  * Eintrag im Katalog fällt der Zusammenhang samt „|" weg.
  *
  * Warum „tr" und nicht „t": In Lumen heissen viele kurze Variablen t

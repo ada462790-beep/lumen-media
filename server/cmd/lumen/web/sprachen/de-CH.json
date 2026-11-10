@@ -11,25 +11,9 @@
   "one": "Höchstens {n} Umwandlung läuft gleichzeitig.",
   "other": "Höchstens {n} Umwandlungen laufen gleichzeitig."
  },
- "Musik|{n} Titel": {
-  "one": "{n} Titel",
-  "other": "{n} Titel"
- },
- "Musik|{n} Titel kommen als Nächstes": {
-  "one": "{n} Titel kommt als Nächstes",
-  "other": "{n} Titel kommen als Nächstes"
- },
- "Musik|{n} Titel kommen später": {
-  "one": "{n} Titel kommt später",
-  "other": "{n} Titel kommen später"
- },
  "{name}, {n} Filme": {
   "one": "{name}, {n} Film",
   "other": "{name}, {n} Filme"
- },
- "{n} Alben": {
-  "one": "{n} Album",
-  "other": "{n} Alben"
  },
  "{n} Bewertungen": {
   "one": "{n} Bewertung",
@@ -67,10 +51,6 @@
   "one": "{n} Kanal",
   "other": "{n} Kanäle"
  },
- "{n} Objekte": {
-  "one": "{n} Objekt",
-  "other": "{n} Objekte"
- },
  "{n} Personen": {
   "one": "{n} Person",
   "other": "{n} Personen"
@@ -82,10 +62,6 @@
  "{n} Sammlungen": {
   "one": "{n} Sammlung",
   "other": "{n} Sammlungen"
- },
- "{n} Sekunden": {
-  "one": "{n} Sekunde",
-  "other": "{n} Sekunden"
  },
  "{n} Untertitelspuren liegen bereit.": {
   "one": "{n} Untertitelspur liegt bereit.",
@@ -149,10 +125,6 @@
   "one": "{gesehen} von {folgen} Folge",
   "other": "{gesehen} von {folgen} Folgen"
  },
- "{min} Minuten": {
-  "one": "{min} Minute",
-  "other": "{min} Minuten"
- },
  "läuft seit {min} Minuten": {
   "one": "läuft seit {min} Minute",
   "other": "läuft seit {min} Minuten"
@@ -177,17 +149,5 @@
   "zahl": "fehlen",
   "one": "{doppel} Doppel · {fehlen} fehlt",
   "other": "{doppel} Doppel · {fehlen} fehlen"
- },
- "{n} Fotos · {geprueft}": {
-  "one": "{n} Foto · {geprueft}",
-  "other": "{n} Fotos · {geprueft}"
- },
- "Musik|{n} Titel · {geprueft}": {
-  "one": "{n} Titel · {geprueft}",
-  "other": "{n} Titel · {geprueft}"
- },
- "{n} Interpreten": {
-  "one": "{n} Interpret",
-  "other": "{n} Interpreten"
  }
 }

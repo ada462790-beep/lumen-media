@@ -1,11 +1,8 @@
 {
  "/volume1/video/Filme": "/volume1/video/Films",
  "Abgebrochen.": "Cancelled.",
- "Alles vergessen, was du gehört hast? „Zuletzt gehört“ und „Beliebt“ fangen von vorn an.": "Forget everything you’ve listened to? “Recently Played” and “Your Favourites” start over.",
  "Auflösen nimmt nur die Reihe weg, keinen Film. Lumen bildet sie danach nicht wieder — unter „Aufräumen“ kannst du sie zurückholen.": "Dissolving only removes the franchise, not any film. Lumen won’t create it again — you can bring it back under “Cleanup”.",
- "Aus den Favoriten nehmen": "Remove from Favourites",
- "Bei Filmen und Serien nur eine Angabe darüber, was hier liegt. Folgen erkennt Lumen am Namen (S01E02) oder am Staffelordner darüber — auch wenn hier „Filme“ steht. Musik liest Lumen aus den Tags (sonst „Interpret/Album/01 - Titel“), Fotos nach Aufnahmedatum; jeder Ordner wird ein Album.": "For films and TV programmes this just says what’s stored here. Lumen recognises episodes by their name (S01E02) or by the season folder above them — even if this says “Films”. Music is read from the tags (otherwise “Artist/Album/01 - Title”), photos by capture date; every folder becomes an album.",
- "Beliebt bei dir": "Your Favourites",
+ "Bei Filmen und Serien nur eine Angabe darüber, was hier liegt. Folgen erkennt Lumen am Namen (S01E02) oder am Staffelordner darüber — auch wenn hier „Filme“ steht.": "For films and TV programmes this just says what’s stored here. Lumen recognises episodes by their name (S01E02) or by the season folder above them — even if this says “Films”.",
  "Der Vermittler reicht nur verschlüsselte Bytes durch. Was jemand schaut, erfährt er nicht — auch wenn du ihn selbst betreibst. Den Fingerabdruck brauchen die Apps einmal, um diesen Server wiederzuerkennen.": "The relay only passes encrypted bytes through. It never learns what anyone watches — even if you run it yourself. The apps need the fingerprint once to recognise this server.",
  "Die Verwaltung kann hier Filme und Serien zusammenstellen, etwa „Weihnachtsfilme“.": "Admins can put together films and programmes here, e.g. “Christmas Films”.",
  "Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Im Browser laufen die Teile nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.": "One film split across several files (a/b/c, CD1/CD2). In the browser the parts play one after another; once merged, the film plays straight through everywhere. Merging joins the parts without re-encoding; the parts are moved to the “.lumen-teile” folder.",
@@ -50,7 +47,6 @@
  "Titel, Schauspieler, Genre oder Jahr — auch „Komödie 2019“, „Filme mit Tom Hanks“ oder „Thriller 80er“.": "Title, actor, genre or year — also “comedy 2019”, “films with Tom Hanks” or “thriller 80s”.",
  "Vorspann für die ganze Serie gemerkt": "Intro marked for the whole programme",
  "Was du fertig geschaut hast, zuletzt Beendetes zuerst — Serien, sobald alle Folgen gesehen sind. Nur du siehst das.": "What you’ve finished, most recent first — programmes once all episodes are watched. Only you can see this.",
- "Zu den Favoriten": "Add to Favourites",
  "Zu meinen Filmen": "Go to My Films",
  "nicht erkannt — Lumen war sich nicht sicher": "not recognised — Lumen wasn’t sure",
  "von Lumen am Titel erkannt": "recognised by Lumen from the title",
@@ -71,8 +67,7 @@
  "· Serien": "· TV Programmes",
  "· {n} Teile eines Films": "· {n} parts of one film",
  "Änderst du etwas am Quelltext, trag deine eigene Fundstelle über LUMEN_SOURCE_URL ein — das verlangt die Lizenz.": "If you change the source code, enter your own location via LUMEN_SOURCE_URL — the licence requires it.",
- "„Zuletzt gehört“ und „Beliebt“ kommen aus deinem eigenen Hören. Niemand sonst sieht das — auch nicht die Verwaltung.": "“Recently Played” and “Your Favourites” come from your own listening. Nobody else sees this — not even admins.",
  "Zu den Favoriten hinzugefügt": "Added to Favourites",
  "Aus den Favoriten entfernt": "Removed from Favourites",
- "Wo deine Filme, Serien, Musik und Fotos liegen": "Where your films, programmes, music and photos are stored"
+ "Wo deine Filme und Serien liegen": "Where your films and programmes are stored"
 }
