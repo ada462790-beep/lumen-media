@@ -200,8 +200,9 @@ func run(o Optionen, log *slog.Logger) error {
 	defer allesBeenden()
 	srv.SetzeGrund(grund)
 	srv.SetzeBeenden(allesBeenden)
-	// Umwandlungen vom letzten Lauf wegräumen (kurzlebig.go).
-	srv.KurzlebigAufraeumen()
+	// Reste von Musik und Fotos aus früheren Fassungen wegräumen
+	// (mediathek_reste.go).
+	srv.MediathekResteWeg()
 	// Hardware-Beschleunigung erkennen, Vorschaubilder und Untertitel im
 	// Hintergrund vorbereiten (umwandlung_einstellungen.go).
 	srv.UmwandlungEinrichten(grund)

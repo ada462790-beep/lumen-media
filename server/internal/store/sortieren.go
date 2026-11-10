@@ -9,8 +9,8 @@ package store
 
 // Sortieren nach Titel — so, wie jemand im Regal sucht.
 //
-// Der Schlüssel, den Sortierschluessel baut, steht in item.sort_title (und
-// bei Musik in titel_sort, name_sort …). SQLite vergleicht ihn Byte für
+// Der Schlüssel, den Sortierschluessel baut, steht in item.sort_title.
+// SQLite vergleicht ihn Byte für
 // Byte; darum muss er schon alles enthalten, was die Reihenfolge ausmacht:
 //
 //   - Artikel am Anfang fallen weg, aber nur die der Sprache des Titels:
@@ -267,7 +267,7 @@ func sortierungNachrechnen(ctx context.Context, t *sql.Tx, itemID string) error 
 	return err
 }
 
-// sortierungUmbauen rechnet für alle Titel und alle Musik die Schlüssel
+// sortierungUmbauen rechnet für alle Titel die Schlüssel
 // neu (Umbau auf Stand 9). Ein von Hand eingetragener Sortiertitel stand
 // bisher nur in feld_sperre.anzeige; er wird zu sort_eigen.
 //
@@ -324,9 +324,6 @@ func sortierungUmbauen(db *sql.DB) error {
 			}
 		}
 		letzte = stapel[len(stapel)-1].id
-	}
-	if err := musikSortierungUmbauen(tx); err != nil {
-		return err
 	}
 	return tx.Commit()
 }

@@ -24,11 +24,11 @@ func TestMedienOeffnenNieAusDemDatenordner(t *testing.T) {
 	db := filepath.Join(daten, "lumen.db")
 	_ = os.WriteFile(db, []byte("geheim"), 0o600)
 	medien := t.TempDir()
-	lied := filepath.Join(medien, "lied.mp3")
-	if err := os.Symlink(db, lied); err != nil {
+	film := filepath.Join(medien, "film.mkv")
+	if err := os.Symlink(db, film); err != nil {
 		t.Skip("keine Verweise möglich:", err)
 	}
-	if f, err := medienOeffnen(lied); err == nil {
+	if f, err := medienOeffnen(film); err == nil {
 		f.Close()
 		t.Fatal("Datenbank als Mediendatei ausgeliefert")
 	}
@@ -36,8 +36,8 @@ func TestMedienOeffnenNieAusDemDatenordner(t *testing.T) {
 		f.Close()
 		t.Fatal("Datei im Datenordner direkt ausgeliefert")
 	}
-	echt := filepath.Join(medien, "echt.mp3")
-	_ = os.WriteFile(echt, []byte("ton"), 0o644)
+	echt := filepath.Join(medien, "echt.mkv")
+	_ = os.WriteFile(echt, []byte("bild"), 0o644)
 	f, err := medienOeffnen(echt)
 	if err != nil {
 		t.Fatalf("normale Mediendatei: %v", err)

@@ -137,9 +137,6 @@ type Scanner struct {
 	// Pause: auf einem NAS mit schwachem Prozessor hat die Wiedergabe
 	// Vorrang, der Durchlauf darf länger dauern.
 	Bremse func() bool
-	// NachMediathek läuft nach dem Durchlauf einer Musik- oder
-	// Fotobibliothek — dort stösst die API die Vorschaubilder an.
-	NachMediathek func(lib store.Library)
 }
 
 // VonSelbst kennzeichnet einen Durchlauf, der von selbst läuft, nicht
@@ -215,9 +212,10 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		return nil, fmt.Errorf("%s: %q ist kein Ordner", lib.Name, lib.Path)
 	}
 
-	// Musik und Fotos haben ihren eigenen Durchlauf (musik.go, fotos.go).
-	if lib.Kind == "music" || lib.Kind == "photo" {
-		return s.scanMediathek(ctx, lib)
+	// Lumen kennt nur Filme und Serien. Eine Bibliothek anderer Art (aus
+	// einer früheren Fassung) liest der Durchlauf nicht als Serien.
+	if lib.Kind != "movie" && lib.Kind != "series" {
+		return nil, fmt.Errorf("%s: unbekannte Art %q", lib.Name, lib.Kind)
 	}
 
 	// Erst zählen, dann arbeiten. Der Vorlauf ist in Sekundenbruchteilen

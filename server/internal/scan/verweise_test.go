@@ -28,17 +28,17 @@ func TestVerweisInDatenordner(t *testing.T) {
 		t.Fatal(err)
 	}
 	andere := t.TempDir() // eine zweite Freigabe
-	fremd := filepath.Join(andere, "film.mp3")
-	_ = os.WriteFile(fremd, []byte("ton"), 0o644)
+	fremd := filepath.Join(andere, "film.mkv")
+	_ = os.WriteFile(fremd, []byte("bild"), 0o644)
 
 	medien := t.TempDir()
-	echt := filepath.Join(medien, "Album", "01 - echt.mp3")
+	echt := filepath.Join(medien, "Filme", "01 - echt.mkv")
 	_ = os.MkdirAll(filepath.Dir(echt), 0o755)
-	_ = os.WriteFile(echt, []byte("ton"), 0o644)
-	if err := os.Symlink(geheim, filepath.Join(medien, "Album", "02 - datenbank.mp3")); err != nil {
+	_ = os.WriteFile(echt, []byte("bild"), 0o644)
+	if err := os.Symlink(geheim, filepath.Join(medien, "Filme", "02 - datenbank.mkv")); err != nil {
 		t.Skip("keine Verweise möglich:", err)
 	}
-	_ = os.Symlink(fremd, filepath.Join(medien, "Album", "03 - andere-freigabe.mp3"))
+	_ = os.Symlink(fremd, filepath.Join(medien, "Filme", "03 - andere-freigabe.mkv"))
 
 	ergebnis := map[string]bool{}
 	_ = filepath.WalkDir(medien, func(p string, d fs.DirEntry, err error) error {
@@ -47,7 +47,7 @@ func TestVerweisInDatenordner(t *testing.T) {
 		}
 		return nil
 	})
-	want := map[string]bool{"01 - echt.mp3": false, "02 - datenbank.mp3": true, "03 - andere-freigabe.mp3": false}
+	want := map[string]bool{"01 - echt.mkv": false, "02 - datenbank.mkv": true, "03 - andere-freigabe.mkv": false}
 	for name, w := range want {
 		if ergebnis[name] != w {
 			t.Errorf("%s: gesperrt=%v, erwartet %v", name, ergebnis[name], w)

@@ -33,13 +33,13 @@ func TestBibliothekNichtDoppelt(t *testing.T) {
 			t.Errorf("%s: %d, erwartet 409", p, c)
 		}
 	}
-	// Fotos in einem Unterordner der Serien-Mediathek: andere Dateien, erlaubt.
-	fotos := filepath.Join(h.root, "Fotos")
-	_ = os.MkdirAll(fotos, 0o755)
+	// Filme in einem Unterordner der Serien: Beide lesen Videos, abgelehnt.
+	filme := filepath.Join(h.root, "Filme")
+	_ = os.MkdirAll(filme, 0o755)
 	resp, _ := h.do("POST", "/api/v1/admin/libraries",
-		`{"name":"F","kind":"photo","path":"`+fotos+`","language":"de"}`, h.tok)
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Fotos im Unterordner: %d", resp.StatusCode)
+		`{"name":"F","kind":"movie","path":"`+filme+`","language":"de"}`, h.tok)
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("Filme im Unterordner der Serien: %d, erwartet 409", resp.StatusCode)
 	}
 	if !ordnerUeberschneiden("/a/b", "/a") || ordnerUeberschneiden("/a/bc", "/a/b") {
 		t.Error("ordnerUeberschneiden falsch")

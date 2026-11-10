@@ -32,11 +32,10 @@ FROM alpine:3.22
 
 # FFmpeg ist das Wichtigste, was Lumen zur Laufzeit braucht. tzdata, damit
 # Zeiten in der eigenen Zeitzone stimmen; ca-certificates für die
-# Metadaten-Quellen; libheif-tools für HEIC-Fotos vom iPhone. Die
-# VAAPI-Treiber (Intel/AMD) machen die Hardware-Beschleunigung möglich,
-# sobald /dev/dri durchgereicht wird — ohne Gerät schaden sie nicht. Den
-# Intel-Treiber gibt es nur für x86_64.
-RUN apk add --no-cache ffmpeg tzdata ca-certificates su-exec libheif-tools \
+# Metadaten-Quellen. Die VAAPI-Treiber (Intel/AMD) machen die
+# Hardware-Beschleunigung möglich, sobald /dev/dri durchgereicht wird —
+# ohne Gerät schaden sie nicht. Den Intel-Treiber gibt es nur für x86_64.
+RUN apk add --no-cache ffmpeg tzdata ca-certificates su-exec \
       libva mesa-va-gallium \
  && if [ "$(apk --print-arch)" = "x86_64" ]; then \
       apk add --no-cache intel-media-driver libva-intel-driver onevpl-intel-gpu || \

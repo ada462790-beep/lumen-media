@@ -21,7 +21,7 @@ import (
 type Library struct {
 	ID        string     `json:"id"`
 	Name      string     `json:"name"`
-	Kind      string     `json:"kind"` // movie | series | music | photo
+	Kind      string     `json:"kind"` // movie | series
 	Path      string     `json:"path"`
 	Language  string     `json:"language"`
 	ScannedAt *time.Time `json:"scannedAt,omitempty"`
@@ -104,9 +104,7 @@ func (s *Store) Libraries(ctx context.Context) ([]Library, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT l.id, l.name, l.kind, l.path, l.language, l.scanned_at,
 		        (SELECT count(*) FROM item i
-		          WHERE i.library_id = l.id AND i.kind IN ('movie','series'))
-		        + (SELECT count(*) FROM musik_titel m WHERE m.library_id = l.id AND m.fehlt_seit IS NULL)
-		        + (SELECT count(*) FROM foto f WHERE f.library_id = l.id AND f.fehlt_seit IS NULL) AS n,
+		          WHERE i.library_id = l.id AND i.kind IN ('movie','series')) AS n,
 		        l.scan_interval_min, COALESCE(l.scan_at, ''), COALESCE(l.last_result, '')
 		   FROM library l`)
 	if err != nil {

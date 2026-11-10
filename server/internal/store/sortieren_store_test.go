@@ -56,16 +56,12 @@ func TestUmbauAufStand9(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, q := range []string{
-		`INSERT INTO library (id,name,kind,path,language) VALUES ('lib','Filme','movie','/x','de'),
-		   ('mus','Musik','music','/m','de')`,
+		`INSERT INTO library (id,name,kind,path,language) VALUES ('lib','Filme','movie','/x','de')`,
 		// So schrieb die alte Fassung: ä → ae, Zahlen als Text.
 		`INSERT INTO item (id,library_id,kind,title,sort_title,added_at,updated_at) VALUES
 		   ('a','lib','movie','Teil 10','teil 10',1,1), ('b','lib','movie','Teil 2','teil 2',1,1),
 		   ('c','lib','movie','Ötzi','oetzi',1,1), ('d','lib','movie','Zorro','aaa zuerst',1,1)`,
 		`INSERT INTO feld_sperre (item_id, feld, anzeige) VALUES ('d','sortTitle','Aaa zuerst')`,
-		`INSERT INTO musik_titel (id,library_id,pfad,groesse,mtime,titel,titel_sort,interpret,album,hinzugefuegt)
-		   VALUES ('m1','mus','/m/1.flac',1,1,'Über','ueber','Die Ärzte','Ab 18',1)`,
-		`INSERT INTO musik_album (id,library_id,name,name_sort,hinzugefuegt) VALUES ('al','mus','The Wall','wall',1)`,
 		`PRAGMA user_version = 8`,
 	} {
 		if _, err := st.DB().Exec(q); err != nil {
@@ -92,12 +88,6 @@ func TestUmbauAufStand9(t *testing.T) {
 	}
 	if e := st.Sortiertitel(t.Context(), "d"); e != "Aaa zuerst" {
 		t.Errorf("eigener Sortiertitel nach dem Umbau: %q", e)
-	}
-	var ts, is, as, an string
-	_ = st.DB().QueryRow(`SELECT titel_sort, interpret_sort, album_sort FROM musik_titel WHERE id = 'm1'`).Scan(&ts, &is, &as)
-	_ = st.DB().QueryRow(`SELECT name_sort FROM musik_album WHERE id = 'al'`).Scan(&an)
-	if ts != "uber" || is != "arzte" || as != "ab 0000000018" || an != "wall" {
-		t.Errorf("Musik nach dem Umbau: %q %q %q %q", ts, is, as, an)
 	}
 }
 

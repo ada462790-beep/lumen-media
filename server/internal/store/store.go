@@ -123,7 +123,7 @@ func Open(path string) (*Store, error) {
 // SchemaStand zählt die Änderungen am Aufbau der Datenbank. Wer
 // nachruesten() erweitert, zählt ihn um eins hoch — dann sichert Lumen
 // die Datenbank, bevor es sie umbaut.
-const SchemaStand = 9
+const SchemaStand = 10
 
 // umbauen bringt Daten einer älteren Fassung auf den neuen Stand — jeder
 // Schritt genau einmal, je nach dem Stand, den die Datenbank mitbringt.
@@ -207,11 +207,19 @@ func umbauen(db *sql.DB) error {
 		}
 	}
 	// Stand 9: Neue Sortierschlüssel (sortieren.go) — natürliche
-	// Zahlenfolge, ä wie a, Artikel je Sprache — für alle Titel und alle
-	// Musik. Eigene Sortiertitel aus feld_sperre werden zu sort_eigen.
+	// Zahlenfolge, ä wie a, Artikel je Sprache — für alle Titel. Eigene
+	// Sortiertitel aus feld_sperre werden zu sort_eigen.
 	if stand < 9 {
 		if err := sortierungUmbauen(db); err != nil {
 			return fmt.Errorf("sortierschlüssel neu rechnen: %w", err)
+		}
+	}
+	// Stand 10: Lumen ist ein Server für Filme und Serien. Musik- und
+	// Fotobibliotheken samt allem, was daran hing, und ihre Tabellen
+	// fallen weg (musik_fotos_entfernen.go).
+	if stand < 10 {
+		if err := musikUndFotosEntfernen(db); err != nil {
+			return fmt.Errorf("musik und fotos entfernen: %w", err)
 		}
 	}
 	return nil
@@ -564,10 +572,6 @@ func nachruesten(db *sql.DB) error {
 		if _, err := db.Exec(stmt); err != nil {
 			return err
 		}
-	}
-	// Musik und Fotos (mediathek_schema.go).
-	if err := mediathekTabellen(db); err != nil {
-		return err
 	}
 	// Handbearbeitung, eigene Sammlungen, Untertitel (funktionen_schema.go).
 	return funktionenNachruesten(db)

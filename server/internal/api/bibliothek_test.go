@@ -52,14 +52,17 @@ func TestBibliothekMitUntauglichemPfad(t *testing.T) {
 	}
 
 	// Eine unbekannte Art wird abgelehnt, statt still als Serien zu gelten.
-	body, _ := json.Marshal(map[string]string{
-		"name": "Fotos", "kind": "photos", "path": t.TempDir()})
-	if resp, raw := h.do("POST", "/api/v1/admin/libraries", string(body), h.tok); resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("art „photos“ angenommen (%d): %s", resp.StatusCode, raw)
+	// Musik und Fotos gibt es nicht mehr: Lumen ist für Filme und Serien.
+	for _, art := range []string{"photos", "photo", "music"} {
+		body, _ := json.Marshal(map[string]string{
+			"name": "X", "kind": art, "path": t.TempDir()})
+		if resp, raw := h.do("POST", "/api/v1/admin/libraries", string(body), h.tok); resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("art %q angenommen (%d): %s", art, resp.StatusCode, raw)
+		}
 	}
 
 	// Und der taugliche Pfad geht weiterhin durch.
-	body, _ = json.Marshal(map[string]string{
+	body, _ := json.Marshal(map[string]string{
 		"name": "Filme", "kind": "movie", "path": t.TempDir()})
 	resp, raw := h.do("POST", "/api/v1/admin/libraries", string(body), h.tok)
 	if resp.StatusCode != http.StatusOK {

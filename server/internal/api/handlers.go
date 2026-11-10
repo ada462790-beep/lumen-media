@@ -1408,28 +1408,23 @@ func (s *Server) adminCreateLibrary(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	// Nur die Arten, die der Durchlauf kennt. Eine unbekannte („photos",
-	// „show") nahm der Server an und las den Ordner dann als Serien —
-	// Fotos und Musik tauchten als Titel auf, die Bereiche fehlten.
+	// Nur die Arten, die der Durchlauf kennt: Lumen ist ein Server für
+	// Filme und Serien. Eine unbekannte („photos", „show", „music") nahm
+	// der Server früher an und las den Ordner dann als Serien.
 	switch strings.TrimSpace(in.Kind) {
-	case "movie", "series", "music", "photo":
+	case "movie", "series":
 	default:
-		fail(w, http.StatusBadRequest, "unbekannte art — movie, series, music oder photo")
+		fail(w, http.StatusBadRequest, "unbekannte art — movie oder series")
 		return
 	}
 
 	// Derselbe Ordner zweimal (Doppelklick, nochmal versucht) oder ein
-	// Ordner in einem anderen, der dieselben Dateien liest: Sie gehörten
-	// dann zwei Bibliotheken, und das Löschen der einen leerte die andere.
-	// Verschachtelt mit anderer Art („/media" Filme, „/media/Fotos" Fotos)
-	// liest jede nur ihre Dateien — das bleibt erlaubt; Filme und Serien
-	// lesen aber beide Videos.
+	// Ordner in einem anderen: Filme und Serien lesen beide Videos, die
+	// Dateien gehörten dann zwei Bibliotheken, und das Löschen der einen
+	// leerte die andere.
 	if libs, err := s.st.Libraries(r.Context()); err == nil {
-		video := func(k string) bool { return k == "movie" || k == "series" }
-		neueArt := strings.TrimSpace(in.Kind)
 		for _, l := range libs {
-			gleicheDateien := l.Kind == neueArt || (video(l.Kind) && video(neueArt))
-			if ordnerGleich(l.Path, in.Path) || (gleicheDateien && ordnerUeberschneiden(l.Path, in.Path)) {
+			if ordnerGleich(l.Path, in.Path) || ordnerUeberschneiden(l.Path, in.Path) {
 				failW(w, http.StatusConflict,
 					"dieser ordner gehört schon zur bibliothek „{name}“ (oder liegt darin)", "name", l.Name)
 				return

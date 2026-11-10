@@ -30,10 +30,7 @@ import (
 // Reihenfolge von „Weiterschauen", die eigenen Einstellungen und die
 // Geräte eines Profils.
 var privateTables = []string{"progress", "rating", "watchlist", "favorit",
-	"playlist", "playlist_item", "progress_reihe", "prefs", "token",
-	// Musik: wie oft und in welcher Reihenfolge jemand gehört hat, Herzen
-	// und Wiedergabelisten (musik_privat.go).
-	"musik_hoerstand", "musik_hoerreihe", "musik_favorit", "musik_wiedergabeliste"}
+	"playlist", "playlist_item", "progress_reihe", "prefs", "token"}
 
 // kontoGebunden: die Abfrage legt sich auf genau ein Konto fest. Ein
 // blosses „account_id" im Text genügt nicht — „account_id IS NOT NULL"
@@ -148,7 +145,6 @@ func TestNoWatchHistoryTable(t *testing.T) {
 		"create table if not exists playback_event",
 		"create table if not exists view_log",
 		"create table if not exists listen_history",
-		"create table if not exists musik_verlauf",
 	} {
 		if strings.Contains(schema, forbidden) {
 			t.Errorf("das Schema legt einen Wiedergabe-Verlauf an: %q", forbidden)

@@ -10,9 +10,9 @@ package store
 // PIN zurücksetzen durch die Verwaltung — und was dabei vergessen wird.
 //
 // Die oberste Regel des Besitzers: Die Verwaltung sieht nie, wer was wann
-// wie lange schaut oder hört. Bis hierhin gab es dafür ein Loch: Die
+// wie lange schaut. Bis hierhin gab es dafür ein Loch: Die
 // Verwaltung setzte einem Profil eine neue PIN, meldete sich damit als
-// dieses Profil an und las Fortschritt, Merkliste und Hörstand. Das alte
+// dieses Profil an und las Fortschritt und Merkliste. Das alte
 // Token des Profils galt sogar weiter.
 //
 // Darum gilt jetzt: Wer die PIN eines anderen zurücksetzt, bekommt ein
@@ -78,8 +78,7 @@ func (s *Store) PinZuruecksetzen(ctx context.Context, accountID, kind, secret st
 
 // privatesVergessen löscht den privaten Stand eines Profils: Fortschritt,
 // Gesehen, die Reihenfolge von „Weiterschauen", Merkliste, Favoriten,
-// Bewertungen, den Hörstand samt Reihenfolge und Musik-Herzen, die
-// eigenen privaten Wiedergabelisten (Filme und Musik) und die Prefs, die
+// Bewertungen, die eigenen privaten Wiedergabelisten und die Prefs, die
 // etwas über das Schauen verraten.
 //
 // Geteilte und gemeinsame Listen bleiben stehen, mitsamt Inhalt: Sie sind
@@ -97,12 +96,8 @@ func privatesVergessen(ctx context.Context, t *sql.Tx, accountID string) error {
 		`DELETE FROM watchlist WHERE account_id = ?`,
 		`DELETE FROM favorit WHERE account_id = ?`,
 		`DELETE FROM rating WHERE account_id = ?`,
-		`DELETE FROM musik_hoerstand WHERE account_id = ?`,
-		`DELETE FROM musik_hoerreihe WHERE account_id = ?`,
-		`DELETE FROM musik_favorit WHERE account_id = ?`,
 		// Einträge fallen über ON DELETE CASCADE mit.
 		`DELETE FROM playlist WHERE account_id = ? AND shared = 0 AND collaborative = 0`,
-		`DELETE FROM musik_wiedergabeliste WHERE account_id = ? AND geteilt = 0 AND gemeinsam = 0`,
 	} {
 		if _, err := t.ExecContext(ctx, q, accountID); err != nil {
 			return err

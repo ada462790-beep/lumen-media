@@ -33,7 +33,7 @@ func DatenordnerSchuetzen(ordner string) {
 }
 
 // VerweisInDatenordner meldet einen symbolischen Verweis, der in Lumens
-// Datenordner zeigt. Solche Dateien nimmt Lumen nicht auf: Ein „Lied" als
+// Datenordner zeigt. Solche Dateien nimmt Lumen nicht auf: Ein „Film" als
 // Verweis auf /data/lumen.db hätte jedem Profil die ganze Datenbank zum
 // Herunterladen gegeben. Verweise anderswohin (auf eine zweite Freigabe,
 // ein anderes Volume) sind auf einem NAS üblich und bleiben erlaubt.

@@ -19,7 +19,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -63,9 +62,6 @@ type Server struct {
 	laeufe laufBuch
 	// Sprache des Servers und der Profile im Speicher (sprache.go).
 	sprachen sprachSpeicher
-	// Kurzlebige Umwandlungen beim Abspielen (kurzlebig.go).
-	kurzEinmal sync.Once
-	kurz       *kurzlebigeDateien
 }
 
 // SetzeGrund gibt den Kontext, der beim Herunterfahren endet.
@@ -368,8 +364,6 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/metadata/unmatched", admin(s.adminUnmatched))
 	mux.Handle("GET /api/v1/art/{item}/{kind}", auth(s.artwork))
 
-	// Musik und Fotos (mediathek.go).
-	s.mediathekRouten(mux)
 	// Handbearbeitung, Sammlungen, Übernahme, Untertitel (routen_funktionen.go).
 	s.routenFunktionen(mux)
 

@@ -372,7 +372,6 @@ func TestPinZuruecksetzenVergisstVerlauf(t *testing.T) {
 		_ = h.st.SetRating(ctx, konto, film, 4, false)
 		_ = h.st.SetPref(ctx, konto, "spuren:serie1", `{"ton":"de"}`)
 		_ = h.st.SetPref(ctx, konto, "sprache", "de-CH")
-		_ = h.st.MusikFavoritSetzen(ctx, konto, "album", "a1", true)
 	}
 	privat, _ := h.st.ListeAnlegen(ctx, lea.ID, "Nur für mich")
 	_ = h.st.ListeHinzufuegen(ctx, lea.ID, privat.ID, film)
@@ -380,7 +379,6 @@ func TestPinZuruecksetzenVergisstVerlauf(t *testing.T) {
 	ja := true
 	_ = h.st.ListeAendern(ctx, lea.ID, geteilt.ID, nil, &ja, &ja)
 	_ = h.st.ListeHinzufuegen(ctx, mia.ID, geteilt.ID, zweiter)
-	mlist, _ := h.st.MusikListeAnlegen(ctx, lea.ID, "Joggen")
 
 	// Eine laufende Wiedergabe von Lea.
 	h.live.Start(&stream.Session{AccountID: lea.ID, DeviceName: "iPad", FileID: "f", Mode: "direct"})
@@ -412,18 +410,12 @@ func TestPinZuruecksetzenVergisstVerlauf(t *testing.T) {
 	if r, _ := h.st.RatingsFor(ctx, lea.ID, []string{film}); len(r) != 0 {
 		t.Fatalf("Bewertung: %v", r)
 	}
-	if m, _ := h.st.MusikFavoriten(ctx, lea.ID); len(m["album"]) != 0 {
-		t.Fatalf("Musik-Favoriten: %v", m)
-	}
 	prefs, _ := h.st.Prefs(ctx, lea.ID)
 	if _, da := prefs["spuren:serie1"]; da || prefs["sprache"] != "de-CH" {
 		t.Fatalf("Prefs: %v", prefs)
 	}
 	if _, err := h.st.Liste(ctx, lea.ID, privat.ID); err == nil {
 		t.Fatal("private Liste noch da")
-	}
-	if _, err := h.st.MusikListeHolen(ctx, lea.ID, mlist.ID); err == nil {
-		t.Fatal("private Musikliste noch da")
 	}
 	// … die geteilte Liste mitsamt dem, was Mia hineingelegt hat, bleibt.
 	if l, err := h.st.Liste(ctx, mia.ID, geteilt.ID); err != nil || len(l.ItemIDs) != 1 {

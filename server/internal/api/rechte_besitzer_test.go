@@ -32,8 +32,8 @@ func (h *harness) mitverwalter(name string) (tok, code string) {
 }
 
 // Besitzer-Einstellungen ändert ein Mitverwalter nicht: OpenSubtitles
-// (Schlüssel, Konto) und ob Fotos ihren Aufnahmeort zeigen. Lesen darf
-// er, aber ohne den Benutzernamen des OpenSubtitles-Kontos.
+// (Schlüssel, Konto). Lesen darf er, aber ohne den Benutzernamen des
+// OpenSubtitles-Kontos.
 func TestMitverwalterNurLesend(t *testing.T) {
 	h := newHarness(t)
 	if resp, raw := h.do("PUT", "/api/v1/admin/untertitel", `{"benutzer":"alex-os"}`, h.tok); resp.StatusCode != 200 {
@@ -43,7 +43,6 @@ func TestMitverwalterNurLesend(t *testing.T) {
 	for _, weg := range []struct{ methode, pfad, rumpf string }{
 		{"PUT", "/api/v1/admin/untertitel", `{"benutzer":"jonas"}`},
 		{"POST", "/api/v1/admin/untertitel", `{"benutzer":"jonas"}`},
-		{"PUT", "/api/v1/admin/mediathek", `{"fotoOrtZeigen":true}`},
 	} {
 		if resp, _ := h.do(weg.methode, weg.pfad, weg.rumpf, mtok); resp.StatusCode != http.StatusNotFound {
 			t.Errorf("%s %s für Mitverwalter: %d", weg.methode, weg.pfad, resp.StatusCode)
@@ -56,9 +55,6 @@ func TestMitverwalterNurLesend(t *testing.T) {
 	_, raw = h.do("GET", "/api/v1/admin/untertitel", "", h.tok)
 	if !strings.Contains(string(raw), "alex-os") || !strings.Contains(string(raw), `"darfAendern":true`) {
 		t.Fatalf("Besitzer liest: %s", raw)
-	}
-	if h.st.Setting(t.Context(), einstellungFotoOrt, "0") != "0" {
-		t.Fatal("Mitverwalter hat den Aufnahmeort umgestellt")
 	}
 }
 
