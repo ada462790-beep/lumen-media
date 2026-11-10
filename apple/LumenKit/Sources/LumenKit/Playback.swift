@@ -154,6 +154,10 @@ public final class Playback {
     private var reportedFinished = false
     @ObservationIgnored private var cues: [Untertitel] = []
     @ObservationIgnored private var cuesFuer: Int?
+    /// Die Spur, die gerade geholt wird — oder auf die gewartet wird, weil
+    /// der Server sie noch aus der Datei zieht. Damit ein zweites Wählen
+    /// keine zweite Abfrage startet.
+    @ObservationIgnored private var untertitelLaedt: Int?
 
     public init(client: APIClient) { self.client = client }
 
@@ -633,6 +637,7 @@ public final class Playback {
         untertitelText = nil
         cues = []
         cuesFuer = nil
+        untertitelLaedt = nil
         laeuftUeberHLS = false
         intro = nil
         creditsMs = nil
@@ -691,21 +696,47 @@ public final class Playback {
     /// das Menü zeigt keine Untertitel an.
     public var zeigtUntertitelSelbst: Bool { !(nativeUntertitel && laeuftUeberHLS) }
 
+    /// Wie oft nach einer Spur gefragt wird, die der Server noch aus der
+    /// Datei zieht. Je Frage wartet er bis zu 20 Sekunden, dazu 3 Sekunden
+    /// Pause (Retry-After) — zusammen gut zehn Minuten.
+    private static let untertitelVersuche = 30
+
     private func ladeUntertitel(_ index: Int) {
-        guard zeigtUntertitelSelbst, let file, cuesFuer != index else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let vtt = try await self.client.untertitel(fileId: file.id, spur: index)
-                guard self.untertitelSpur == index, self.file?.id == file.id else { return }
-                self.cues = Untertitel.lesen(vtt)
-                self.cuesFuer = index
-            } catch {
-                // Lassen sich die Untertitel nicht lesen, bleibt es still
-                // aus — ein Fehler, der das Bild überdeckt, wäre schlimmer.
-                guard self.untertitelSpur == index else { return }
-                self.untertitelSpur = nil
-                self.untertitelText = nil
+        guard zeigtUntertitelSelbst, let file, cuesFuer != index, untertitelLaedt != index else { return }
+        untertitelLaedt = index
+        Task { [weak self, client] in
+            var versuch = 0
+            while true {
+                do {
+                    let vtt = try await client.untertitel(fileId: file.id, spur: index)
+                    guard let self else { return }
+                    if self.untertitelLaedt == index { self.untertitelLaedt = nil }
+                    guard self.untertitelSpur == index, self.file?.id == file.id else { return }
+                    self.cues = Untertitel.lesen(vtt)
+                    self.cuesFuer = index
+                    return
+                } catch let fehler as LumenError
+                            where fehler.code == APIClient.untertitelWirdVorbereitet
+                                && versuch < Playback.untertitelVersuche {
+                    // Noch nicht fertig: nicht als geladen merken, später
+                    // noch einmal — solange diese Spur gewählt bleibt.
+                    versuch += 1
+                    try? await Task.sleep(for: .seconds(3))
+                    guard let self, !Task.isCancelled,
+                          self.untertitelSpur == index, self.file?.id == file.id else {
+                        if let self, self.untertitelLaedt == index { self.untertitelLaedt = nil }
+                        return
+                    }
+                } catch {
+                    // Lassen sich die Untertitel nicht lesen, bleibt es still
+                    // aus — ein Fehler, der das Bild überdeckt, wäre schlimmer.
+                    guard let self else { return }
+                    if self.untertitelLaedt == index { self.untertitelLaedt = nil }
+                    guard self.untertitelSpur == index else { return }
+                    self.untertitelSpur = nil
+                    self.untertitelText = nil
+                    return
+                }
             }
         }
     }
