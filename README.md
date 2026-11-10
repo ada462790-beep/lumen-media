@@ -457,12 +457,20 @@ So geht es:
   /api/v1/admin/items/{folge}/intro`) oder an der Serie.
 
 Die Arbeit läuft wie Vorschaubilder und Untertitel: nacheinander, mit
-niedrigster Rechen- und Plattenpriorität, nie während eine Umwandlung
-läuft, und jede Datei genau einmal — das Ergebnis steht in der Datenbank
-und gilt, bis sich die Datei ändert. Je Folge sind es auf einem
-schwachen NAS einige Sekunden bis wenige Dutzend, vor allem fürs Lesen
-von der Platte. Ein- und ausschalten und sehen, wie weit sie ist, kann man
-in der Verwaltung unter „Umwandeln".
+niedrigster Rechen- und Plattenpriorität, und jede Datei genau einmal —
+das Ergebnis steht in der Datenbank und gilt, bis sich die Datei ändert.
+Sie wartet, solange irgendetwas abgespielt wird (auch direkt oder im
+Browser), und läuft ab Werk nur nachts zwischen 1 und 7 Uhr (Uhr des
+Servers). Je Folge sind es auf einem schwachen NAS einige Sekunden bis
+wenige Dutzend, vor allem fürs Lesen von der Platte. Ein- und ausschalten,
+„Nur nachts (1–7 Uhr)" abwählen und sehen, wie weit sie ist, kann man in
+der Verwaltung unter „Umwandeln".
+
+Fehlt eine Datei gerade (Netzlaufwerk nicht eingehängt), überspringt die
+Erkennung sie, ohne etwas zu speichern. Lässt sich eine Datei nicht lesen
+oder dauert es zu lange, versucht sie es später noch einmal — nach einer
+Stunde, nach sechs, nach einem Tag, danach wöchentlich. Im Protokoll steht
+je Durchgang höchstens eine Zeile mit den Zahlen, ohne Dateinamen.
 
 Grenzen:
 

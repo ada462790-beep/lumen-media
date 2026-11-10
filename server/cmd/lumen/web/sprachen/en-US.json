@@ -1245,5 +1245,7 @@
  "Wochenende (Samstag und Sonntag)": "Weekend (Saturday and Sunday)",
  "heute {von} bis {bis}": "today {von} to {bis}",
  "{genutzt} von {budget} Min. gebraucht": "{genutzt} of {budget} min used",
- "{name} hat heute 30 Minuten mehr.": "{name} has 30 more minutes today."
+ "{name} hat heute 30 Minuten mehr.": "{name} has 30 more minutes today.",
+ "Nur nachts (1–7 Uhr)": "Only at night (1–7 am)",
+ "Die Erkennung liest jede Folge an. Sie wartet ausserdem, solange etwas abgespielt wird.": "Detection reads part of every episode. It also waits while anything is playing."
 }

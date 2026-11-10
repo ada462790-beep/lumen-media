@@ -11,5 +11,7 @@
  "So heisst der Server in den Apps, wenn jemand mehrere gespeichert hat.": "So heißt der Server in den Apps, wenn jemand mehrere gespeichert hat.",
  "Verwaltet mit — alles ausser Gruppen, Rechten, Updates": "Verwaltet mit — alles außer Gruppen, Rechten, Updates",
  "Von aussen erreichbar": "Von außen erreichbar",
- "0 heisst: ohne Tagesgrenze.": "0 heißt: ohne Tagesgrenze."
+ "0 heisst: ohne Tagesgrenze.": "0 heißt: ohne Tagesgrenze.",
+ "Die Erkennung liest jede Folge an. Sie wartet ausserdem, solange etwas abgespielt wird.": "Die Erkennung liest jede Folge an. Sie wartet außerdem, solange etwas abgespielt wird.",
+ "Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag — ausser mitten in einem Zeitfenster über Mitternacht, das zählt bis zu seinem Ende zum Vortag. Die Verwaltung sieht die Minuten nur ungefähr, in Viertelstunden. Mit einer Tagesgrenze gibt es keine Downloads.": "Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag — außer mitten in einem Zeitfenster über Mitternacht, das zählt bis zu seinem Ende zum Vortag. Die Verwaltung sieht die Minuten nur ungefähr, in Viertelstunden. Mit einer Tagesgrenze gibt es keine Downloads."
 }

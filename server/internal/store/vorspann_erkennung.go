@@ -22,17 +22,23 @@ package store
 //
 // Keine Zeitstempel: Wann eine Datei untersucht wurde, hängt nur an der
 // festen Reihenfolge des Durchgangs, nicht daran, was jemand schaut —
-// trotzdem steht es nirgends.
+// trotzdem steht es nirgends. Einzige Ausnahme: Liess sich eine Datei
+// nicht lesen, steht da, ab wann es einen neuen Versuch gibt (wieder_ab,
+// immer länger: ErkennungPause). Auch das hängt nur an der Datei.
 
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"strings"
+	"time"
 )
 
-// vorspannErkennungTabellen legt die Tabelle an (Schema-Stand 11). Eigene
-// Funktion, damit sie beim Zusammenführen mit anderen Änderungen am
-// Schema als Ganzes umgezählt werden kann.
+// vorspannErkennungTabellen legt die Tabelle an (Schema-Stand 11; die
+// Spalten versuche und wieder_ab kamen mit Stand 13). Eigene Funktion,
+// damit sie beim Zusammenführen mit anderen Änderungen am Schema als
+// Ganzes umgezählt werden kann.
 func vorspannErkennungTabellen(db *sql.DB) error {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS vorspann_erkannt (
 	   file_id        TEXT PRIMARY KEY REFERENCES media_file(id) ON DELETE CASCADE,
@@ -46,8 +52,21 @@ func vorspannErkennungTabellen(db *sql.DB) error {
 	   intro_bis_ms   INTEGER,
 	   intro_sicher   REAL,
 	   abspann_ab_ms  INTEGER,
-	   abspann_sicher REAL)`)
-	return err
+	   abspann_sicher REAL,
+	   versuche       INTEGER NOT NULL DEFAULT 0, -- wie oft es hintereinander nicht ging
+	   wieder_ab      INTEGER)                     -- Unix-Sekunden: neuer Versuch ab da`)
+	if err != nil {
+		return err
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE vorspann_erkannt ADD COLUMN versuche INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE vorspann_erkannt ADD COLUMN wieder_ab INTEGER`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
+	return nil
 }
 
 // Stände einer Untersuchung.
@@ -55,8 +74,24 @@ const (
 	ErkanntFertig  = "fertig"
 	ErkanntEinsam  = "einsam"   // keine andere Folge zum Vergleichen — wieder, wenn eine dazukommt
 	ErkanntOhneTon = "ohne_ton" // keine Tonspur
-	ErkanntFehler  = "fehler"   // liess sich nicht lesen — erst wieder, wenn die Datei sich ändert
+	ErkanntFehler  = "fehler"   // liess sich nicht lesen — wieder nach ErkennungPause oder wenn die Datei sich ändert
 )
+
+// ErkennungPause: so lange nach dem n-ten Fehlschlag hintereinander bis
+// zum nächsten Versuch — eine Stunde, sechs, einen Tag, dann wöchentlich.
+// Ein Netzlaufwerk, das kurz weg war, verliert so nichts für immer, und
+// eine wirklich kaputte Datei wird nicht bei jedem Durchgang neu gelesen.
+func ErkennungPause(n int) time.Duration {
+	switch {
+	case n <= 1:
+		return time.Hour
+	case n == 2:
+		return 6 * time.Hour
+	case n == 3:
+		return 24 * time.Hour
+	}
+	return 7 * 24 * time.Hour
+}
 
 // Erkennung ist das Ergebnis für eine Datei.
 type Erkennung struct {
@@ -74,8 +109,35 @@ type Erkennung struct {
 	AbspannSich   float64
 }
 
-// ErkennungSetzen speichert das Ergebnis einer Untersuchung.
+// ErkennungSetzen speichert das Ergebnis einer Untersuchung. Für
+// Fehlschläge gibt es ErkennungFehlgeschlagen.
 func (s *Store) ErkennungSetzen(ctx context.Context, e Erkennung) error {
+	return s.erkennungSchreiben(ctx, e, 0, nil)
+}
+
+// ErkennungFehlgeschlagen: die Datei liess sich nicht lesen. Gespeichert
+// wird „fehler" mit dem Zeitpunkt des nächsten Versuchs; war es schon beim
+// letzten Mal ein Fehler (an derselben Datei), wird die Pause länger.
+// Gibt die Zahl der Fehlschläge hintereinander zurück.
+func (s *Store) ErkennungFehlgeschlagen(ctx context.Context, e Erkennung, jetzt time.Time) (int, error) {
+	var alt Erkennung
+	var versuche int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT groesse, mtime, fassung, stand, versuche FROM vorspann_erkannt WHERE file_id = ?`, e.FileID).
+		Scan(&alt.Groesse, &alt.MTime, &alt.Fassung, &alt.Stand, &versuche)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	n := 1
+	if err == nil && alt.Stand == ErkanntFehler && alt.Groesse == e.Groesse && alt.MTime == e.MTime && alt.Fassung == e.Fassung {
+		n = versuche + 1
+	}
+	e.Stand = ErkanntFehler
+	wieder := jetzt.Add(ErkennungPause(n)).Unix()
+	return n, s.erkennungSchreiben(ctx, e, n, &wieder)
+}
+
+func (s *Store) erkennungSchreiben(ctx context.Context, e Erkennung, versuche int, wiederAb *int64) error {
 	nullWenn := func(sicher float64, v int64) any {
 		if sicher <= 0 {
 			return nil
@@ -90,16 +152,17 @@ func (s *Store) ErkennungSetzen(ctx context.Context, e Erkennung) error {
 	}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO vorspann_erkannt (file_id, groesse, mtime, fassung, stand, partner, folgen,
-		    intro_von_ms, intro_bis_ms, intro_sicher, abspann_ab_ms, abspann_sicher)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+		    intro_von_ms, intro_bis_ms, intro_sicher, abspann_ab_ms, abspann_sicher, versuche, wieder_ab)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT (file_id) DO UPDATE SET groesse = excluded.groesse, mtime = excluded.mtime,
 		    fassung = excluded.fassung, stand = excluded.stand, partner = excluded.partner,
 		    folgen = excluded.folgen, intro_von_ms = excluded.intro_von_ms,
 		    intro_bis_ms = excluded.intro_bis_ms, intro_sicher = excluded.intro_sicher,
-		    abspann_ab_ms = excluded.abspann_ab_ms, abspann_sicher = excluded.abspann_sicher`,
+		    abspann_ab_ms = excluded.abspann_ab_ms, abspann_sicher = excluded.abspann_sicher,
+		    versuche = excluded.versuche, wieder_ab = excluded.wieder_ab`,
 		e.FileID, e.Groesse, e.MTime, e.Fassung, e.Stand, e.Partner, e.Folgen,
 		nullWenn(e.VorspannSich, e.VorspannVonMS), nullWenn(e.VorspannSich, e.VorspannBisMS), nullSicher(e.VorspannSich),
-		nullWenn(e.AbspannSich, e.AbspannAbMS), nullSicher(e.AbspannSich))
+		nullWenn(e.AbspannSich, e.AbspannAbMS), nullSicher(e.AbspannSich), versuche, wiederAb)
 	return err
 }
 
@@ -131,9 +194,11 @@ func (s *Store) Erkannt(ctx context.Context, fileID string, groesse, mtime int64
 
 // erkennungOffen ist die Bedingung „diese Datei muss (wieder) untersucht
 // werden" — f: media_file, v: vorspann_erkannt, st: die Staffel.
+// Parameter: die Fassung des Verfahrens, dann jetzt (Unix-Sekunden).
 const erkennungOffen = `(v.file_id IS NULL OR v.groesse <> f.size_bytes OR v.mtime <> f.mtime OR v.fassung <> ?
 	OR (v.stand = 'einsam' AND v.folgen <> (SELECT COUNT(*) FROM item e2 JOIN item s2 ON s2.id = e2.parent_id
-	                                        WHERE s2.parent_id = st.parent_id AND e2.kind = 'episode')))`
+	                                        WHERE s2.parent_id = st.parent_id AND e2.kind = 'episode'))
+	OR (v.stand = 'fehler' AND COALESCE(v.wieder_ab, 0) <= ?))`
 
 // erkennungDateien: Folgen-Dateien, die für die Erkennung in Frage kommen —
 // vorhanden, erster Teil, mindestens fünf Minuten lang.
@@ -145,10 +210,18 @@ const erkennungDateien = `FROM media_file f
 
 // ErkennungOffeneSerien nennt bis zu limit Serien, in denen mindestens
 // eine Datei noch zu untersuchen ist — die mit den neuesten Dateien zuerst.
-func (s *Store) ErkennungOffeneSerien(ctx context.Context, fassung, limit int) ([]string, error) {
+// ausser: Serien, die in diesem Durchgang schon dran waren (etwa weil ihre
+// Dateien gerade nicht erreichbar sind) — sonst verstellten sie den Blick
+// auf die übrigen.
+func (s *Store) ErkennungOffeneSerien(ctx context.Context, fassung, limit int, ausser ...string) ([]string, error) {
+	if ausser == nil {
+		ausser = []string{}
+	}
+	liste, _ := json.Marshal(ausser)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT st.parent_id `+erkennungDateien+` AND st.parent_id IS NOT NULL AND `+erkennungOffen+`
-		  GROUP BY st.parent_id ORDER BY MAX(f.rowid) DESC LIMIT ?`, fassung, limit)
+		    AND st.parent_id NOT IN (SELECT value FROM json_each(?))
+		  GROUP BY st.parent_id ORDER BY MAX(f.rowid) DESC LIMIT ?`, fassung, time.Now().Unix(), string(liste), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +258,7 @@ func (s *Store) ErkennungSerie(ctx context.Context, serieID string, fassung int)
 		 `+erkennungDateien+` AND st.parent_id = ?
 		  ORDER BY COALESCE(st.season_no, 0), COALESCE(e.episode_no, 0), e.id,
 		           f.id = COALESCE(e.bevorzugte_datei, '') DESC, COALESCE(f.height, 0) DESC, f.id`,
-		fassung, serieID)
+		fassung, time.Now().Unix(), serieID)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +293,7 @@ func (s *Store) ErkennungZaehlen(ctx context.Context, fassung int, mindest float
 		return z, err
 	}
 	err = s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) `+erkennungDateien+` AND `+erkennungOffen, fassung).Scan(&z.Offen)
+		`SELECT COUNT(*) `+erkennungDateien+` AND `+erkennungOffen, fassung, time.Now().Unix()).Scan(&z.Offen)
 	return z, err
 }
 

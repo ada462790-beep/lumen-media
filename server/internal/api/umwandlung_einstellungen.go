@@ -122,6 +122,7 @@ func (s *Server) adminUmwandlungSetzen(w http.ResponseWriter, r *http.Request) {
 		Trickplay             *bool   `json:"trickplay"`
 		UntertitelVorbereiten *bool   `json:"untertitelVorbereiten"`
 		VorspannErkennen      *bool   `json:"vorspannErkennen"`
+		VorspannNurNachts     *bool   `json:"vorspannNurNachts"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -163,6 +164,12 @@ func (s *Server) adminUmwandlungSetzen(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.VorspannErkennen != nil {
 		if err := s.st.SetSetting(ctx, einstErkennung, janein(*in.VorspannErkennen)); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	if in.VorspannNurNachts != nil {
+		if err := s.st.SetSetting(ctx, einstErkennungNachts, janein(*in.VorspannNurNachts)); err != nil {
 			failErr(w, err)
 			return
 		}

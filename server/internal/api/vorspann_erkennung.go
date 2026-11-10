@@ -12,15 +12,24 @@ package api
 //
 //   - eine Datei zugleich, FFmpeg mit niedrigster Rechen- und
 //     Plattenpriorität und einem Faden (vorspann.AusDatei);
-//   - Wiedergabe hat Vorrang: Läuft eine Umwandlung, wird vor jedem
-//     Lesen gewartet;
+//   - Wiedergabe hat Vorrang: Läuft irgendeine Wiedergabe (auch direkt
+//     oder im Browser), wird vor jedem Lesen gewartet — gelesen wird
+//     dieselbe Platte;
+//   - ab Werk nur nachts (01:00–07:00 Ortszeit des Servers), damit ein
+//     Update mit vielen Folgen nicht abends die Platte beschäftigt; die
+//     Verwaltung kann „jederzeit" wählen;
 //   - feste Reihenfolge (Serien mit den neuesten Dateien zuerst), nie
 //     „die Folge, die gerade jemand schaut" — sonst verriete die
 //     Reihenfolge der Ergebnisse, was jemand schaut;
 //   - jede Datei wird einmal untersucht; das Ergebnis steht in der
 //     Datenbank (store/vorspann_erkennung.go) und gilt, bis sich die
 //     Datei ändert. Beim Herunterfahren bricht der Durchgang ab und macht
-//     beim nächsten Mal dort weiter.
+//     beim nächsten Mal dort weiter;
+//   - fehlt eine Datei gerade (Netzlaufwerk nicht eingehängt), wird sie
+//     übersprungen und nichts gespeichert. Liess sie sich nicht lesen
+//     (auch: zu lange gebraucht), gibt es später einen neuen Versuch, mit
+//     immer längerer Pause (store.ErkennungPause). Ins Protokoll kommt je
+//     Durchgang höchstens eine Zeile mit Zahlen — keine Pfade.
 //
 // Je Folge werden zwei Stücke gelesen: die ersten zehn Minuten und die
 // letzten fünf (bei kurzen Folgen weniger). Verglichen wird mit bis zu
@@ -31,17 +40,45 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	"lumen/internal/store"
-	"lumen/internal/stream"
 	"lumen/internal/vorspann"
 )
 
-const einstErkennung = "umwandlung.vorspann_erkennen"
+const (
+	einstErkennung = "umwandlung.vorspann_erkennen"
+	// einstErkennungNachts: „1" (ab Werk) = nur zwischen erkennungNachtVon
+	// und erkennungNachtBis Uhr, „0" = jederzeit.
+	einstErkennungNachts = "umwandlung.vorspann_nachts"
+	erkennungNachtVon    = 1
+	erkennungNachtBis    = 7
+)
 
 func (s *Server) erkennungAn(ctx context.Context) bool {
 	return s.st.Setting(ctx, einstErkennung, "1") == "1"
+}
+
+func (s *Server) erkennungNurNachts(ctx context.Context) bool {
+	return s.st.Setting(ctx, einstErkennungNachts, "1") == "1"
+}
+
+// erkennungJetztErlaubt: Ist „nur nachts" eingestellt, nur zwischen 01:00
+// und 07:00 Ortszeit des Servers.
+func (s *Server) erkennungJetztErlaubt(ctx context.Context) bool {
+	if !s.erkennungNurNachts(ctx) {
+		return true
+	}
+	h := s.uhr().Hour()
+	return h >= erkennungNachtVon && h < erkennungNachtBis
+}
+
+// erkennungLauf zählt, was ein Durchgang nicht lesen konnte — für die
+// eine Zeile im Protokoll am Ende.
+type erkennungLauf struct {
+	fehlen, fehler int
 }
 
 // Wie viele Nachbarn je Folge, wie viele Abdrücke im Speicher.
@@ -58,7 +95,7 @@ const (
 // nicht tagelang auf die Vorschaubilder (Minuten je Datei), und
 // umgekehrt.
 func (s *Server) erkennungDurchgang(ctx context.Context, hoechstens time.Duration) {
-	if !s.erkennungAn(ctx) || s.ff == nil || !s.ff.Available() {
+	if !s.erkennungAn(ctx) || !s.erkennungJetztErlaubt(ctx) || s.ff == nil || !s.ff.Available() {
 		return
 	}
 	var bis time.Time
@@ -66,14 +103,26 @@ func (s *Server) erkennungDurchgang(ctx context.Context, hoechstens time.Duratio
 		bis = time.Now().Add(hoechstens)
 	}
 	gesehen := map[string]bool{}
+	var schon []string
 	untersucht := 0
+	lauf := &erkennungLauf{}
 	defer func() {
-		if untersucht > 0 && ctx.Err() == nil {
+		if ctx.Err() != nil {
+			return
+		}
+		if untersucht > 0 {
 			s.log.Info("Vorspann-Erkennung", "folgen", untersucht)
+		}
+		// Eine Zeile je Durchgang, nur Zahlen: welche Folge es war, steht
+		// nirgends.
+		if lauf.fehlen > 0 || lauf.fehler > 0 {
+			s.st.Log(ctx, "warn", "vorbereiten", fmt.Sprintf(
+				"Vorspann-Erkennung: %d Dateien gerade nicht erreichbar, %d nicht lesbar — später neuer Versuch",
+				lauf.fehlen, lauf.fehler))
 		}
 	}()
 	for {
-		serien, err := s.st.ErkennungOffeneSerien(ctx, vorspann.Fassung, erkennungJeAbfrage)
+		serien, err := s.st.ErkennungOffeneSerien(ctx, vorspann.Fassung, erkennungJeAbfrage, schon...)
 		if err != nil || len(serien) == 0 {
 			return
 		}
@@ -83,7 +132,8 @@ func (s *Server) erkennungDurchgang(ctx context.Context, hoechstens time.Duratio
 				continue
 			}
 			gesehen[id], neu = true, true
-			n, weiter := s.erkennungSerie(ctx, id, bis)
+			schon = append(schon, id)
+			n, weiter := s.erkennungSerie(ctx, id, bis, lauf)
 			untersucht += n
 			if !weiter {
 				return
@@ -97,28 +147,38 @@ func (s *Server) erkennungDurchgang(ctx context.Context, hoechstens time.Duratio
 	}
 }
 
-// erkennungWarten: Wiedergabe hat Vorrang. false, wenn Lumen herunterfährt.
+// erkennungWarten: Wiedergabe hat Vorrang — jede, nicht nur Umwandlungen:
+// Auch eine direkte Wiedergabe liest von derselben Platte. false, wenn
+// Lumen herunterfährt oder das Nachtfenster vorbei ist (dann geht es in
+// der nächsten Nacht weiter).
 func (s *Server) erkennungWarten(ctx context.Context) bool {
-	for s.live != nil && s.live.Load().Transcodes > 0 {
+	for s.live != nil && s.live.Load().Total > 0 {
 		select {
-		case <-time.After(30 * time.Second):
+		case <-time.After(erkennungWarteTakt):
 		case <-ctx.Done():
 			return false
 		}
 	}
-	return ctx.Err() == nil
+	return ctx.Err() == nil && s.erkennungJetztErlaubt(ctx)
 }
+
+// erkennungWarteTakt: so oft sieht die Erkennung nach, ob die Wiedergabe
+// vorbei ist. Tests verkürzen ihn.
+var erkennungWarteTakt = 30 * time.Second
 
 // abdruecke einer Datei: Anfang und Ende.
 type abdruecke struct {
 	anfang, ende *vorspann.Abdruck
 	err          error
+	// fehlt: Die Datei ist gerade nicht da (Laufwerk weg) — kein Ergebnis,
+	// nichts speichern.
+	fehlt bool
 }
 
 // erkennungSerie untersucht die offenen Folgen einer Serie. Gibt zurück,
 // wie viele es waren, und ob weitergemacht werden soll (false: Lumen
 // fährt herunter oder die Zeit bis „bis" ist um).
-func (s *Server) erkennungSerie(ctx context.Context, serieID string, bis time.Time) (int, bool) {
+func (s *Server) erkennungSerie(ctx context.Context, serieID string, bis time.Time, lauf *erkennungLauf) (int, bool) {
 	dateien, err := s.st.ErkennungSerie(ctx, serieID, vorspann.Fassung)
 	if err != nil || len(dateien) == 0 {
 		return 0, ctx.Err() == nil
@@ -147,6 +207,13 @@ func (s *Server) erkennungSerie(ctx context.Context, serieID string, bis time.Ti
 			return nil, false
 		}
 		a := &abdruecke{}
+		// Wie dateiVorbereiten: Ist die Datei gerade nicht da, gar nicht
+		// erst lesen — und nichts für immer festhalten.
+		if info, err := os.Stat(d.Path); err != nil || !info.Mode().IsRegular() {
+			a.fehlt = true
+			vorrat[d.FileID], reihe = a, append(reihe, d.FileID)
+			return a, true
+		}
 		dauer := float64(d.DurationMS) / 1000
 		ab, laenge := vorspann.AnfangFenster(dauer)
 		a.anfang, a.err = vorspann.AusDatei(ctx, s.ff.FFmpegPath, d.Path, ab, laenge)
@@ -191,16 +258,21 @@ func (s *Server) erkennungSerie(ctx context.Context, serieID string, bis time.Ti
 		if !weiter {
 			return n, false
 		}
+		if a.fehlt {
+			lauf.fehlen++
+			continue
+		}
 		if a.err != nil {
-			erg.Stand = store.ErkanntFehler
+			var err error
 			if errors.Is(a.err, vorspann.ErrOhneTon) {
 				erg.Stand = store.ErkanntOhneTon
+				err = s.st.ErkennungSetzen(ctx, erg)
 			} else {
-				// Ins Protokoll: dass es nicht ging, nicht bei welcher Folge.
-				s.st.Log(ctx, "warn", "vorbereiten",
-					"Vorspann-Erkennung: eine Datei liess sich nicht lesen — "+stream.Bereinigt(a.err.Error()))
+				// Auch eine Zeitüberschreitung: später noch einmal.
+				lauf.fehler++
+				_, err = s.st.ErkennungFehlgeschlagen(ctx, erg, time.Now())
 			}
-			if err := s.st.ErkennungSetzen(ctx, erg); err != nil {
+			if err != nil {
 				return n, ctx.Err() == nil
 			}
 			n++
@@ -214,7 +286,7 @@ func (s *Server) erkennungSerie(ctx context.Context, serieID string, bis time.Ti
 			if !weiter {
 				return n, false
 			}
-			if pa.err != nil {
+			if pa.err != nil || pa.fehlt {
 				continue
 			}
 			folgen = append(folgen, &vorspann.Folge{Schluessel: p.FileID, Dauer: float64(p.DurationMS) / 1000,
@@ -287,7 +359,7 @@ func (s *Server) erkanntFuer(ctx context.Context, f *store.MediaFile) (vor *stor
 // erkennungZustand: für die Verwaltung (adminUmwandlung).
 func (s *Server) erkennungZustand(ctx context.Context) map[string]any {
 	z, _ := s.st.ErkennungZaehlen(ctx, vorspann.Fassung, vorspann.Mindestsicherheit)
-	return map[string]any{"an": s.erkennungAn(ctx), "untersucht": z.Untersucht,
+	return map[string]any{"an": s.erkennungAn(ctx), "nurNachts": s.erkennungNurNachts(ctx), "untersucht": z.Untersucht,
 		"mitVorspann": z.MitVorspann, "mitAbspann": z.MitAbspann, "offen": z.Offen}
 }
 

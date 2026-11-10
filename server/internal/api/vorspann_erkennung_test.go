@@ -14,10 +14,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"lumen/internal/store"
+	"lumen/internal/stream"
 	"lumen/internal/vorspann"
 )
 
@@ -292,6 +294,7 @@ func TestErkennungMitFFmpeg(t *testing.T) {
 	t.Logf("Testvideos: %v", time.Since(start).Round(time.Millisecond))
 
 	start = time.Now()
+	_ = h.st.SetSetting(ctx, einstErkennungNachts, "0") // jederzeit, nicht nur nachts
 	h.api.erkennungDurchgang(ctx, 0)
 	t.Logf("Erkennung: %v für %d Folgen", time.Since(start).Round(time.Millisecond), len(folgen))
 
@@ -320,5 +323,120 @@ func TestErkennungMitFFmpeg(t *testing.T) {
 	// Ein zweiter Durchgang liest nichts mehr.
 	if s, _ := h.st.ErkennungOffeneSerien(ctx, vorspann.Fassung, 10); len(s) != 0 {
 		t.Errorf("nach dem Durchgang noch offen: %v", s)
+	}
+}
+
+// Fehlt eine Datei (Netzlaufwerk weg), wird nichts gespeichert. Liess sie
+// sich nicht lesen, gibt es später einen neuen Versuch mit immer längerer
+// Pause — und ins Protokoll kommt je Durchgang eine Zeile ohne Pfad.
+func TestErkennungFehlerNichtFuerImmer(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	if h.api.ff == nil || !h.api.ff.Available() {
+		t.Skip("kein FFmpeg")
+	}
+	_ = h.st.SetSetting(ctx, einstErkennungNachts, "0")
+	_, _, folgen := h.serie()
+	// Zwei Folgen: eine Datei aus Nullen (FFmpeg kann sie nicht lesen),
+	// eine, die gleich verschwindet.
+	kaputt := h.folgeMitDatei(folgen[0], "kaputt.mkv", 1_500_000)
+	weg := h.folgeMitDatei(folgen[1], "weg.mkv", 1_500_000)
+	if err := os.Remove(weg.Path); err != nil {
+		t.Fatal(err)
+	}
+	h.api.erkennungDurchgang(ctx, 0)
+
+	if e, _ := h.st.Erkannt(ctx, weg.ID, weg.SizeBytes, weg.MTime, vorspann.Fassung); e != nil {
+		t.Fatalf("fehlende Datei gespeichert: %+v", e)
+	}
+	e, _ := h.st.Erkannt(ctx, kaputt.ID, kaputt.SizeBytes, kaputt.MTime, vorspann.Fassung)
+	if e == nil || e.Stand != store.ErkanntFehler {
+		t.Fatalf("kaputte Datei: %+v", e)
+	}
+	var versuche int
+	var wieder int64
+	_ = h.st.DB().QueryRow(`SELECT versuche, wieder_ab FROM vorspann_erkannt WHERE file_id = ?`, kaputt.ID).Scan(&versuche, &wieder)
+	if versuche != 1 || wieder < time.Now().Add(50*time.Minute).Unix() || wieder > time.Now().Add(70*time.Minute).Unix() {
+		t.Fatalf("erster Fehlschlag: %d Versuche, wieder in %v", versuche, time.Until(time.Unix(wieder, 0)))
+	}
+	// Bis zur Pause ist die Datei nicht offen; danach wieder, und die
+	// nächste Pause ist länger.
+	if z, _ := h.st.ErkennungZaehlen(ctx, vorspann.Fassung, vorspann.Mindestsicherheit); z.Offen != 1 {
+		t.Fatalf("offen während der Pause: %+v (nur die fehlende)", z)
+	}
+	_, _ = h.st.DB().Exec(`UPDATE vorspann_erkannt SET wieder_ab = 0 WHERE file_id = ?`, kaputt.ID)
+	h.api.erkennungDurchgang(ctx, 0)
+	_ = h.st.DB().QueryRow(`SELECT versuche, wieder_ab FROM vorspann_erkannt WHERE file_id = ?`, kaputt.ID).Scan(&versuche, &wieder)
+	if versuche != 2 || time.Until(time.Unix(wieder, 0)) < 5*time.Hour {
+		t.Fatalf("zweiter Fehlschlag: %d Versuche, wieder in %v", versuche, time.Until(time.Unix(wieder, 0)))
+	}
+	// Protokoll: Zahlen, keine Pfade, eine Zeile je Durchgang.
+	zeilen, _ := h.st.RecentLog(ctx, "all", 50)
+	n := 0
+	for _, z := range zeilen {
+		if strings.Contains(z.Message, "Vorspann-Erkennung") {
+			n++
+			if strings.Contains(z.Message, ".mkv") || strings.Contains(z.Message, h.root) {
+				t.Errorf("Pfad im Protokoll: %s", z.Message)
+			}
+		}
+	}
+	if n != 2 {
+		t.Errorf("%d Zeilen im Protokoll, erwartet eine je Durchgang", n)
+	}
+	for i, d := range []time.Duration{time.Hour, 6 * time.Hour, 24 * time.Hour, 7 * 24 * time.Hour, 7 * 24 * time.Hour} {
+		if got := store.ErkennungPause(i + 1); got != d {
+			t.Errorf("Pause nach %d: %v", i+1, got)
+		}
+	}
+}
+
+// Läuft irgendeine Wiedergabe — auch direkt —, wartet die Erkennung; und
+// ab Werk nur nachts.
+func TestErkennungWartetUndNurNachts(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	loc := time.Local
+	uhr := time.Date(2026, 11, 10, 3, 0, 0, 0, loc)
+	h.api.jetzt = func() time.Time { return uhr }
+	if !h.api.erkennungJetztErlaubt(ctx) {
+		t.Fatal("03:00 ist nachts")
+	}
+	uhr = time.Date(2026, 11, 10, 20, 0, 0, 0, loc)
+	if h.api.erkennungJetztErlaubt(ctx) {
+		t.Fatal("20:00 ist nicht nachts")
+	}
+	_ = h.st.SetSetting(ctx, einstErkennungNachts, "0")
+	if !h.api.erkennungJetztErlaubt(ctx) {
+		t.Fatal("jederzeit eingestellt")
+	}
+	resp, raw := h.do("GET", "/api/v1/admin/umwandlung", "", h.tok)
+	if resp.StatusCode != 200 || !strings.Contains(string(raw), `"nurNachts":false`) {
+		t.Fatalf("Verwaltung: %d %s", resp.StatusCode, raw)
+	}
+	if resp, raw := h.do("PUT", "/api/v1/admin/umwandlung", `{"vorspannNurNachts":true}`, h.tok); resp.StatusCode != 200 || !strings.Contains(string(raw), `"nurNachts":true`) {
+		t.Fatalf("setzen: %d %s", resp.StatusCode, raw)
+	}
+	_ = h.st.SetSetting(ctx, einstErkennungNachts, "0")
+
+	alt := erkennungWarteTakt
+	erkennungWarteTakt = 10 * time.Millisecond
+	defer func() { erkennungWarteTakt = alt }()
+	sess := h.live.Start(&stream.Session{AccountID: h.ownerID(), DeviceName: "Mac", Mode: "direct"})
+	fertig := make(chan bool, 1)
+	go func() { fertig <- h.api.erkennungWarten(ctx) }()
+	select {
+	case <-fertig:
+		t.Fatal("wartet nicht auf eine direkte Wiedergabe")
+	case <-time.After(100 * time.Millisecond):
+	}
+	h.live.End(sess.ID)
+	select {
+	case weiter := <-fertig:
+		if !weiter {
+			t.Fatal("nach der Wiedergabe nicht weiter")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("wartet nach der Wiedergabe noch")
 	}
 }

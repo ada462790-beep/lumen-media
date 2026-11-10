@@ -4339,6 +4339,10 @@ function viewAdminUmwandlung() {
           <span style="flex:1"><span class="t-body" id="uw-vorspann">${tr('Vorspann und Abspann erkennen')}</span>
             <span class="t-caption c-2" style="display:block">${esc(tr('{n} Folgen untersucht.', { n: erkennung.untersucht || 0 }))} ${esc(tr('Vorspann in {n} erkannt.', { n: erkennung.mitVorspann || 0 }))}</span></span>
           <button type="button" class="switch" role="switch" aria-checked="${!!erkennung.an}" data-sw="1" data-feld="vorspann" aria-labelledby="uw-vorspann"><i></i></button></div>
+        <div class="row" style="min-height:52px;gap:12px">
+          <span style="flex:1"><span class="t-body" id="uw-vorspann-nachts">${tr('Nur nachts (1–7 Uhr)')}</span>
+            <span class="t-caption c-2" style="display:block">${esc(tr('Die Erkennung liest jede Folge an. Sie wartet ausserdem, solange etwas abgespielt wird.'))}</span></span>
+          <button type="button" class="switch" role="switch" aria-checked="${erkennung.nurNachts !== false}" data-sw="1" data-feld="vorspann-nachts" aria-labelledby="uw-vorspann-nachts"><i></i></button></div>
       </div></section>
       <p class="t-sub c-2" style="margin:16px 2px 0;max-width:760px">${esc(tonemap)}
         ${esc(tr('Höchstens {n} Umwandlungen laufen gleichzeitig.', { n: d.maxUmwandlungen || 2 }))}
@@ -5222,7 +5226,8 @@ async function formularAbschicken(e) {
 
   if (f.id === 'umwandlungform') {
     const an = name => f.querySelector(`[data-feld="${name}"]`)?.getAttribute('aria-checked') === 'true';
-    const e = { trickplay: an('trickplay'), untertitelVorbereiten: an('untertitel'), vorspannErkennen: an('vorspann') };
+    const e = { trickplay: an('trickplay'), untertitelVorbereiten: an('untertitel'), vorspannErkennen: an('vorspann'),
+      vorspannNurNachts: an('vorspann-nachts') };
     if (!f.hardware.disabled) e.hardware = f.hardware.value;
     try { S.data = await api.adminUmwandlungSetzen(e); toast(tr('Gespeichert')); return render(); }
     catch (err) { return toast(err.message); }

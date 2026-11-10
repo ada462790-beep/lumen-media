@@ -132,7 +132,11 @@ func Open(path string) (*Store, error) {
 //
 // Stand 12: Bildschirmzeit (bildschirmzeit.go, bildschirmzeitNachruesten)
 // — zwei neue Tabellen, nichts umzurechnen.
-const SchemaStand = 12
+//
+// Stand 13: vorspann_erkannt bekommt versuche und wieder_ab
+// (vorspannErkennungTabellen): Lesefehler gelten nicht mehr für immer.
+// Alte Fehler-Zeilen haben kein wieder_ab und kommen einmal neu dran.
+const SchemaStand = 13
 
 // umbauOffenEndung: die Marke neben der Datenbank, solange ein Umbau
 // nicht ganz durch ist (vorDemNachruesten).
@@ -288,6 +292,8 @@ func umbauen(db *sql.DB) error {
 	// Stand 12: Bildschirmzeit (bildschirmzeit.go) — zwei neue Tabellen,
 	// angelegt in bildschirmzeitNachruesten; an den Daten ändert sich
 	// nichts. Der Stand zählt trotzdem hoch, damit vorher gesichert wird.
+	// Stand 13: zwei neue Spalten in vorspann_erkannt (nachgerüstet in
+	// vorspannErkennungTabellen), nichts umzurechnen.
 	return nil
 }
 
