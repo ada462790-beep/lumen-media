@@ -497,7 +497,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 		}
 		if err == nil && alt.LibraryID == lib.ID && alt.Kind == "movie" {
 			if !erkannt && g.Title != "" && alt.Title != title {
-				alt.Title, alt.SortTitle = title, store.SortKey(title)
+				alt.Title = title
 				if g.Year > 0 {
 					alt.Year = g.Year
 				}
@@ -610,7 +610,7 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 		if jahr > 0 {
 			series.Year = jahr
 		}
-		series.Title, series.SortTitle = title, store.SortKey(title)
+		series.Title = title
 		series.MatchState = "pending"
 		if err := s.st.UpsertItem(ctx, series); err != nil {
 			return 0, 0, err

@@ -115,7 +115,7 @@ func (t *TMDb) SeriesDetails(ctx context.Context, seriesID string) (*Candidate, 
 	}
 	c := Candidate{
 		SourceID: fmt.Sprint(d.ID), Source: "tmdb",
-		Title: d.Name, Original: d.OriginalName, Overview: d.Overview,
+		Title: d.Name, Original: d.OriginalName, Sprache: d.OriginalLang, Overview: d.Overview,
 		Premiered: d.FirstAirDate, Year: yearOf(d.FirstAirDate), Popularity: d.Popularity,
 		PosterURL:   t.image(d.PosterPath, "w500"),
 		BackdropURL: t.image(d.BackdropPath, "w1280"),
@@ -160,7 +160,7 @@ func (t *TMDb) SearchSeriesJahr(ctx context.Context, title string, year int) ([]
 	for _, s := range res.Results {
 		out = append(out, Candidate{
 			SourceID: fmt.Sprint(s.ID), Source: "tmdb",
-			Title: s.Name, Original: s.OriginalName,
+			Title: s.Name, Original: s.OriginalName, Sprache: s.OriginalLang,
 			Overview: s.Overview, Premiered: s.FirstAirDate,
 			Year: yearOf(s.FirstAirDate), Popularity: s.Popularity,
 			PosterURL:   t.image(s.PosterPath, "w500"),
@@ -311,6 +311,7 @@ type tmdbMovie struct {
 	ID            int     `json:"id"`
 	Title         string  `json:"title"`
 	OriginalTitle string  `json:"original_title"`
+	OriginalLang  string  `json:"original_language"`
 	Overview      string  `json:"overview"`
 	ReleaseDate   string  `json:"release_date"`
 	PosterPath    string  `json:"poster_path"`
@@ -322,6 +323,7 @@ type tmdbSeries struct {
 	ID           int     `json:"id"`
 	Name         string  `json:"name"`
 	OriginalName string  `json:"original_name"`
+	OriginalLang string  `json:"original_language"`
 	Overview     string  `json:"overview"`
 	FirstAirDate string  `json:"first_air_date"`
 	PosterPath   string  `json:"poster_path"`
@@ -334,7 +336,7 @@ type tmdbSeries struct {
 func (t *TMDb) movie(m tmdbMovie) Candidate {
 	return Candidate{
 		SourceID: fmt.Sprint(m.ID), Source: "tmdb",
-		Title: m.Title, Original: m.OriginalTitle, Overview: m.Overview,
+		Title: m.Title, Original: m.OriginalTitle, Sprache: m.OriginalLang, Overview: m.Overview,
 		Premiered: m.ReleaseDate, Year: yearOf(m.ReleaseDate),
 		Popularity:  m.Popularity,
 		PosterURL:   t.image(m.PosterPath, "w500"),

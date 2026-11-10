@@ -92,11 +92,11 @@ func (s *Store) Sperren(ctx context.Context, itemID string) (map[string]bool, er
 	return sperrenLesen(ctx, s.db, itemID)
 }
 
-// Sortiertitel gibt den von Hand eingetragenen Sortiertitel — oder "".
+// Sortiertitel gibt den eigenen Sortiertitel — von Hand eingetragen oder
+// aus der NFO — oder "".
 func (s *Store) Sortiertitel(ctx context.Context, itemID string) string {
 	var v sql.NullString
-	_ = s.db.QueryRowContext(ctx,
-		`SELECT anzeige FROM feld_sperre WHERE item_id = ? AND feld = ?`, itemID, FeldSortiertitel).Scan(&v)
+	_ = s.db.QueryRowContext(ctx, `SELECT sort_eigen FROM item WHERE id = ?`, itemID).Scan(&v)
 	return v.String
 }
 
@@ -118,21 +118,16 @@ func sperrenAnwenden(ctx context.Context, t *sql.Tx, it *Item) error {
 	if err != nil {
 		return err
 	}
-	var altSort string
-	_ = t.QueryRowContext(ctx, `SELECT sort_title FROM item WHERE id = ?`, it.ID).Scan(&altSort)
-
 	if gesperrt[FeldTitel] {
 		it.Title = alt.Title
 	}
 	if gesperrt[FeldOriginaltitel] {
 		it.OriginalTitle = alt.OriginalTitle
 	}
-	switch {
-	case gesperrt[FeldSortiertitel]:
-		it.SortTitle = altSort
-	case gesperrt[FeldTitel]:
-		// Der Titel bleibt, also auch seine Einordnung im Alphabet.
-		it.SortTitle = SortKey(it.Title)
+	if gesperrt[FeldSortiertitel] {
+		// Der eigene Sortiertitel bleibt — auch gegen einen aus der NFO.
+		// Den Schlüssel rechnet UpsertItem daraus neu.
+		it.SortEigen = alt.SortEigen
 	}
 	if gesperrt[FeldJahr] {
 		it.Year = alt.Year
@@ -236,33 +231,23 @@ func (s *Store) MetadatenVonHand(ctx context.Context, itemID string, h Handbearb
 			if err := setze("title", it.Title, FeldTitel); err != nil {
 				return err
 			}
-			// Ohne eigenen Sortiertitel folgt die Einordnung dem Titel.
-			if h.SortTitle == nil && !gesperrt(ctx, t, itemID, FeldSortiertitel) {
-				if _, err := t.ExecContext(ctx, `UPDATE item SET sort_title = ? WHERE id = ?`,
-					SortKey(it.Title), itemID); err != nil {
-					return err
-				}
-			}
 		}
+		// Ohne eigenen Sortiertitel folgt die Einordnung dem Titel; den
+		// Schlüssel rechnet sortierungNachrechnen unten neu.
 		if h.SortTitle != nil {
-			if strings.TrimSpace(*h.SortTitle) == "" {
+			eigen := strings.TrimSpace(*h.SortTitle)
+			if _, err := t.ExecContext(ctx, `UPDATE item SET sort_eigen = ? WHERE id = ?`,
+				nullStr(eigen), itemID); err != nil {
+				return err
+			}
+			if eigen == "" {
 				// Leer: zurück zur Einordnung nach dem Titel, ohne Sperre.
-				if _, err := t.ExecContext(ctx, `UPDATE item SET sort_title = ? WHERE id = ?`,
-					SortKey(it.Title), itemID); err != nil {
-					return err
-				}
 				if _, err := t.ExecContext(ctx, `DELETE FROM feld_sperre WHERE item_id = ? AND feld = ?`,
 					itemID, FeldSortiertitel); err != nil {
 					return err
 				}
-			} else {
-				if _, err := t.ExecContext(ctx, `UPDATE item SET sort_title = ? WHERE id = ?`,
-					SortKey(*h.SortTitle), itemID); err != nil {
-					return err
-				}
-				if err := sperren(FeldSortiertitel, *h.SortTitle); err != nil {
-					return err
-				}
+			} else if err := sperren(FeldSortiertitel, eigen); err != nil {
+				return err
 			}
 		}
 		if h.OriginalTitle != nil {
@@ -358,6 +343,11 @@ func (s *Store) MetadatenVonHand(ctx context.Context, itemID string, h Handbearb
 		if _, err := t.ExecContext(ctx, `UPDATE item SET match_state = ?, updated_at = ? WHERE id = ?`,
 			neu, time.Now().Unix(), itemID); err != nil {
 			return err
+		}
+		if h.Title != nil || h.SortTitle != nil || h.OriginalTitle != nil {
+			if err := sortierungNachrechnen(ctx, t, itemID); err != nil {
+				return err
+			}
 		}
 
 		// Suchtext nachführen — sonst fände die Suche den neuen Titel nicht.

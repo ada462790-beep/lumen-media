@@ -394,7 +394,11 @@ func (r *Resolver) apply(it *store.Item, c *Candidate) {
 	if c.IMDbID != "" {
 		it.IMDbID = c.IMDbID
 	}
-	it.SortTitle = store.SortKey(it.Title)
+	if c.Sprache != "" {
+		it.Sprache = c.Sprache
+	}
+	// Den Sortierschlüssel rechnet UpsertItem — aus dem eigenen
+	// Sortiertitel (von Hand oder aus der NFO), wenn es einen gibt.
 }
 
 // ---------------------------------------------------------------- Bilder

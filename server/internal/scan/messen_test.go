@@ -146,7 +146,7 @@ func TestSerieBleibtNachUmbenennung(t *testing.T) {
 	}
 	// TMDb benennt um.
 	s := serien[0]
-	s.Title, s.SortTitle, s.MatchState = "9-1-1 Notruf L.A.", store.SortKey("9-1-1 Notruf L.A."), "matched"
+	s.Title, s.MatchState = "9-1-1 Notruf L.A.", "matched"
 	_ = st.UpsertItem(ctx, &s)
 	for i := 0; i < 3; i++ {
 		if _, err := sc.Scan(ctx, *lib); err != nil {

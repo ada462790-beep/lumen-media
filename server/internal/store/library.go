@@ -46,12 +46,19 @@ type ScanErgebnis struct {
 }
 
 type Item struct {
-	ID            string `json:"id"`
-	LibraryID     string `json:"libraryId"`
-	Kind          string `json:"kind"`
-	ParentID      string `json:"parentId,omitempty"`
-	Title         string `json:"title"`
-	SortTitle     string `json:"-"`
+	ID        string `json:"id"`
+	LibraryID string `json:"libraryId"`
+	Kind      string `json:"kind"`
+	ParentID  string `json:"parentId,omitempty"`
+	Title     string `json:"title"`
+	// SortTitle ist der Schlüssel, nach dem sortiert wird (sortieren.go).
+	// UpsertItem rechnet ihn selbst; was hier vorher steht, zählt nicht.
+	SortTitle string `json:"-"`
+	// SortEigen: ein eigener Sortiertitel, von Hand oder aus der NFO
+	// („Herr der Ringe 1"). Leer = nach dem Titel.
+	SortEigen string `json:"-"`
+	// Sprache: die Originalsprache, wenn eine Quelle sie kennt („en").
+	Sprache       string `json:"-"`
 	OriginalTitle string `json:"originalTitle,omitempty"`
 	Year          int    `json:"year,omitempty"`
 	SeasonNo      int    `json:"seasonNo,omitempty"`
@@ -255,7 +262,7 @@ const itemCols = `id, library_id, kind, COALESCE(parent_id,''), title, sort_titl
 	COALESCE(episode_no,0), COALESCE(overview,''), COALESCE(age_rating,''),
 	age_years, COALESCE(runtime_ms,0), COALESCE(premiered,''), COALESCE(imdb_id,''),
 	COALESCE(imdb_rating,0), COALESCE(imdb_votes,0), match_state, added_at,
-	end_year, laeuft_noch, rt_wertung`
+	end_year, laeuft_noch, rt_wertung, COALESCE(sort_eigen,''), COALESCE(sprache_original,'')`
 
 func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
@@ -264,7 +271,8 @@ func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	err := sc.Scan(&it.ID, &it.LibraryID, &it.Kind, &it.ParentID, &it.Title, &it.SortTitle,
 		&it.OriginalTitle, &it.Year, &it.SeasonNo, &it.EpisodeNo, &it.Overview,
 		&it.AgeRating, &age, &it.RuntimeMS, &it.Premiered, &it.IMDbID,
-		&it.IMDbRating, &it.IMDbVotes, &it.MatchState, &added, &ende, &laeuft, &tomaten)
+		&it.IMDbRating, &it.IMDbVotes, &it.MatchState, &added, &ende, &laeuft, &tomaten,
+		&it.SortEigen, &it.Sprache)
 	if err != nil {
 		return nil, err
 	}
@@ -294,9 +302,6 @@ func (s *Store) UpsertItem(ctx context.Context, it *Item) error {
 	if it.ID == "" {
 		it.ID = newID("it")
 	}
-	if it.SortTitle == "" {
-		it.SortTitle = SortKey(it.Title)
-	}
 	if it.MatchState == "" {
 		it.MatchState = "pending"
 	}
@@ -307,14 +312,19 @@ func (s *Store) UpsertItem(ctx context.Context, it *Item) error {
 		if err := sperrenAnwenden(ctx, t, it); err != nil {
 			return err
 		}
+		if err := sortierungSetzen(ctx, t, it); err != nil {
+			return err
+		}
 		_, err := t.ExecContext(ctx,
 			`INSERT INTO item (id, library_id, kind, parent_id, title, sort_title,
 			    original_title, year, season_no, episode_no, overview, age_rating,
 			    age_years, runtime_ms, premiered, imdb_id, imdb_rating, imdb_votes,
-			    added_at, updated_at, match_state, titel_klein, original_klein, zuletzt_neu)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+			    added_at, updated_at, match_state, titel_klein, original_klein, zuletzt_neu,
+			    sort_eigen, sprache_original)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 			 ON CONFLICT (id) DO UPDATE SET
 			   title=excluded.title, sort_title=excluded.sort_title,
+			   sort_eigen=excluded.sort_eigen, sprache_original=excluded.sprache_original,
 			   titel_klein=excluded.titel_klein, original_klein=excluded.original_klein,
 			   original_title=excluded.original_title, year=excluded.year,
 			   overview=excluded.overview, age_rating=excluded.age_rating,
@@ -327,7 +337,8 @@ func (s *Store) UpsertItem(ctx context.Context, it *Item) error {
 			nullInt(it.EpisodeNo), nullStr(it.Overview), nullStr(it.AgeRating),
 			it.AgeYears, nullInt64(it.RuntimeMS), nullStr(it.Premiered),
 			nullStr(it.IMDbID), nullFloat(it.IMDbRating), nullInt(it.IMDbVotes),
-			now, now, it.MatchState, titelKlein(it.Title), nullStr(titelKlein(it.OriginalTitle)), now)
+			now, now, it.MatchState, titelKlein(it.Title), nullStr(titelKlein(it.OriginalTitle)), now,
+			nullStr(strings.TrimSpace(it.SortEigen)), nullStr(it.Sprache))
 		if err != nil {
 			return err
 		}
@@ -919,20 +930,9 @@ func (s *Store) UnmatchedCount(ctx context.Context) int {
 
 // ---------------------------------------------------------------- Hilfen
 
-// SortKey schiebt Artikel nach hinten, damit „Die Bucht" unter B einsortiert
-// wird — so, wie es jemand im Regal suchen würde.
-func SortKey(title string) string {
-	t := strings.ToLower(strings.TrimSpace(title))
-	for _, a := range []string{"der ", "die ", "das ", "the ", "ein ", "eine ", "a ", "an "} {
-		if strings.HasPrefix(t, a) {
-			return fold(strings.TrimPrefix(t, a))
-		}
-	}
-	return fold(t)
-}
-
 // fold macht Umlaute und Akzente suchbar: „Grüsse" findet man auch als
-// „grusse", und „Amélie" als „amelie".
+// „grusse", und „Amélie" als „amelie". Nur für die Suche — sortiert wird
+// nach Sortierschluessel (sortieren.go), dort zählt ä wie a.
 func fold(s string) string {
 	r := strings.NewReplacer(
 		"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss",

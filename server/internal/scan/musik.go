@@ -48,6 +48,9 @@ type MusikTags struct {
 	Bitrate        int
 	Abtastrate     int
 	HatCover       bool
+	// Sortier-Tags (TITLESORT, ARTISTSORT, ALBUMSORT, ALBUMARTISTSORT):
+	// „Beatles, The" oder „Bowie, David" — leer, wenn die Datei keine hat.
+	TitelSort, InterpretSort, AlbumSort, AlbumInterpretSort string
 }
 
 // MusikProber liest Tags. Der Scanner fragt per Typprüfung danach, damit
@@ -277,6 +280,8 @@ func musikTitelAus(ctx context.Context, mp MusikProber, pfad, rel string) *store
 			t.Track, t.Disc, t.Jahr, t.Genre, t.Komponist = tags.Track, tags.Disc, tags.Jahr, tags.Genre, tags.Komponist
 			t.DauerMS, t.Compilation, t.Explizit = tags.DauerMS, tags.Compilation, tags.Explizit
 			t.Codec, t.Bitrate, t.Abtastrate, t.HatCover = tags.Codec, tags.Bitrate, tags.Abtastrate, tags.HatCover
+			t.TitelSortTag, t.InterpretSortTag = tags.TitelSort, tags.InterpretSort
+			t.AlbumSortTag, t.AlbumInterpretSortTag = tags.AlbumSort, tags.AlbumInterpretSort
 			if tags.Container != "" {
 				t.Container = tags.Container
 			}
@@ -496,6 +501,26 @@ func AlbumAusTiteln(libraryID, relOrdner, name string, titel []store.MusikTitel)
 	}
 	if !a.Compilation {
 		a.InterpretID = store.InterpretID(a.Interpret)
+	}
+	// Sortieren nach den Sortier-Tags der Titel: der häufigste Schlüssel
+	// des Albumnamens, und der des Interpreten von einem Titel, an dem er
+	// als Albuminterpret (sonst als Interpret) steht.
+	a.NameSchluessel, _ = haeufig(func(t store.MusikTitel) string { return t.AlbumSchluessel })
+	if a.Interpret != "" {
+		for _, t := range titel {
+			if t.AlbumInterpretSchluessel != "" && strings.EqualFold(strings.TrimSpace(t.AlbumInterpret), a.Interpret) {
+				a.InterpretSchluessel = t.AlbumInterpretSchluessel
+				break
+			}
+		}
+		if a.InterpretSchluessel == "" {
+			for _, t := range titel {
+				if t.InterpretSchluessel != "" && strings.EqualFold(strings.TrimSpace(t.Interpret), a.Interpret) {
+					a.InterpretSchluessel = t.InterpretSchluessel
+					break
+				}
+			}
+		}
 	}
 	return a
 }

@@ -49,6 +49,9 @@ func TestNFOAus(t *testing.T) {
 			NFO{Art: "episodedetails", Titel: "Fernweh", Jahr: 1984, Premiere: "1984-09-16", Inhalt: "Paul.", Staffel: 1, Folge: 3}},
 		{"XML mit angehängter Adresse", `<movie><title>Brazil</title></movie>
 https://www.themoviedb.org/movie/68-brazil`, NFO{Art: "movie", Titel: "Brazil", TMDb: "68"}},
+		{"mit Sortiertitel", `<movie><title>Der Herr der Ringe: Die Gefährten</title>
+<sorttitle>Herr der Ringe 1</sorttitle></movie>`, NFO{Art: "movie", Titel: "Der Herr der Ringe: Die Gefährten",
+			Sortiertitel: "Herr der Ringe 1"}},
 		{"nur eine Adresse", `https://www.imdb.com/title/tt0088846/`, NFO{IMDb: "tt0088846"}},
 		{"Latin-1", "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><movie><title>Sch\xf6ne T\xfcte</title></movie>",
 			NFO{Art: "movie", Titel: "Schöne Tüte"}},
@@ -84,6 +87,13 @@ func TestVollstaendigUndAnwenden(t *testing.T) {
 	n.Anwenden(it, func(s string) *int { v := 16; return &v })
 	if it.Title != "A" || it.Overview != "B" || it.Year != 2000 || it.AgeRating != "16" || *it.AgeYears != 16 || it.IMDbID != "tt1" {
 		t.Errorf("%+v", it)
+	}
+	if it.SortEigen != "" {
+		t.Errorf("ohne <sorttitle> kein eigener Sortiertitel: %q", it.SortEigen)
+	}
+	(&NFO{Sortiertitel: "Herr der Ringe 1"}).Anwenden(it, nil)
+	if it.SortEigen != "Herr der Ringe 1" {
+		t.Errorf("Sortiertitel aus der NFO: %q", it.SortEigen)
 	}
 }
 

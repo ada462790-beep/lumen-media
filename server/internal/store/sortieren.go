@@ -25,6 +25,9 @@ package store
 //   - Zahlen zählen als Zahlen: „Teil 2" vor „Teil 10".
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -212,4 +215,131 @@ func Buchstabe(schluessel string) string {
 		return strings.ToUpper(schluessel[:1])
 	}
 	return "#"
+}
+
+// sortierungSetzen rechnet vor dem Schreiben den Schlüssel eines Titels:
+// aus dem eigenen Sortiertitel, sonst aus dem Titel, in der Sprache, die
+// SortierSprache wählt. Bringt der Aufrufer keinen eigenen Sortiertitel
+// und keine Originalsprache mit, gelten die gespeicherten — der Scanner
+// kennt beide nicht und soll sie nicht löschen.
+func sortierungSetzen(ctx context.Context, q abfrager, it *Item) error {
+	var bib, eigen, sprache sql.NullString
+	err := q.QueryRowContext(ctx,
+		`SELECT l.language, i.sort_eigen, i.sprache_original
+		   FROM library l LEFT JOIN item i ON i.id = ?
+		  WHERE l.id = ?`, it.ID, it.LibraryID).Scan(&bib, &eigen, &sprache)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if strings.TrimSpace(it.SortEigen) == "" {
+		it.SortEigen = eigen.String
+	}
+	if it.Sprache == "" {
+		it.Sprache = sprache.String
+	}
+	it.SortTitle = schluesselFuer(it, bib.String)
+	return nil
+}
+
+// schluesselFuer: der Schlüssel eines Titels in einer Bibliothek dieser
+// Sprache.
+func schluesselFuer(it *Item, bibliothek string) string {
+	basis := strings.TrimSpace(it.SortEigen)
+	if basis == "" {
+		basis = it.Title
+	}
+	return Sortierschluessel(basis, SortierSprache(bibliothek, it.Sprache, it.Title, it.OriginalTitle))
+}
+
+// sortierungNachrechnen setzt den Schlüssel eines gespeicherten Titels
+// neu — nach einer Bearbeitung von Hand.
+func sortierungNachrechnen(ctx context.Context, t *sql.Tx, itemID string) error {
+	it, err := scanItem(t.QueryRowContext(ctx, `SELECT `+itemCols+` FROM item WHERE id = ?`, itemID))
+	if err != nil {
+		return err
+	}
+	var bib string
+	_ = t.QueryRowContext(ctx, `SELECT language FROM library WHERE id = ?`, it.LibraryID).Scan(&bib)
+	_, err = t.ExecContext(ctx, `UPDATE item SET sort_title = ? WHERE id = ?`, schluesselFuer(it, bib), itemID)
+	return err
+}
+
+// sortierungUmbauen rechnet für alle Titel und alle Musik die Schlüssel
+// neu (Umbau auf Stand 9). Ein von Hand eingetragener Sortiertitel stand
+// bisher nur in feld_sperre.anzeige; er wird zu sort_eigen.
+//
+// In Häppchen zu tausend Zeilen gelesen, aber in einer Transaktion
+// geschrieben: Bricht der Umbau ab, bleibt alles beim Alten, und beim
+// nächsten Start beginnt er von vorn.
+func sortierungUmbauen(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`UPDATE item SET sort_eigen = (SELECT x.anzeige FROM feld_sperre x
+	                        WHERE x.item_id = item.id AND x.feld = 'sortTitle')
+	                       WHERE sort_eigen IS NULL AND EXISTS (SELECT 1 FROM feld_sperre x
+	                        WHERE x.item_id = item.id AND x.feld = 'sortTitle' AND COALESCE(x.anzeige,'') != '')`); err != nil {
+		return err
+	}
+	sprachen := map[string]string{}
+	if err := zeilenLesen(tx, `SELECT id, language FROM library`, func(r *sql.Rows) error {
+		var id, l string
+		if err := r.Scan(&id, &l); err != nil {
+			return err
+		}
+		sprachen[id] = l
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	type neu struct{ id, schluessel string }
+	letzte := ""
+	for {
+		var stapel []neu
+		err := zeilenLesen(tx, `SELECT id, library_id, title, COALESCE(original_title,''),
+		       COALESCE(sort_eigen,''), COALESCE(sprache_original,'')
+		  FROM item WHERE id > ? ORDER BY id LIMIT 1000`, func(r *sql.Rows) error {
+			var it Item
+			if err := r.Scan(&it.ID, &it.LibraryID, &it.Title, &it.OriginalTitle, &it.SortEigen, &it.Sprache); err != nil {
+				return err
+			}
+			stapel = append(stapel, neu{it.ID, schluesselFuer(&it, sprachen[it.LibraryID])})
+			return nil
+		}, letzte)
+		if err != nil {
+			return err
+		}
+		if len(stapel) == 0 {
+			break
+		}
+		for _, n := range stapel {
+			if _, err := tx.Exec(`UPDATE item SET sort_title = ? WHERE id = ?`, n.schluessel, n.id); err != nil {
+				return err
+			}
+		}
+		letzte = stapel[len(stapel)-1].id
+	}
+	if err := musikSortierungUmbauen(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// zeilenLesen liest eine Abfrage ganz und schliesst sie wieder, bevor
+// in derselben Transaktion geschrieben wird.
+func zeilenLesen(tx *sql.Tx, q string, fn func(*sql.Rows) error, args ...any) error {
+	rows, err := tx.Query(q, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := fn(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
