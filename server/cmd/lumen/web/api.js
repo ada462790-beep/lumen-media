@@ -423,6 +423,15 @@ export const api = {
   adminLog(level)  { return this.call('/admin/log?limit=200' + (level && level !== 'all' ? '&level=' + level : '')); },
   adminCleanup()   { return this.call('/admin/cleanup'); },
   adminAccounts()  { return this.call('/admin/accounts'); },
+  /* Bildschirmzeit (bildschirmzeit.js): der eigene Stand, und für die
+     Verwaltung Regel und „heute einmalig mehr". */
+  meineBildschirmzeit() { return this.call('/me/bildschirmzeit'); },
+  adminBildschirmzeit(id, regel) {
+    return this.call(`/admin/accounts/${encodeURIComponent(id)}/bildschirmzeit`, { method: 'PUT', body: regel });
+  },
+  adminBildschirmzeitGeschenk(id, minuten) {
+    return this.call(`/admin/accounts/${encodeURIComponent(id)}/bildschirmzeit/geschenk`, { method: 'POST', body: { minuten } });
+  },
   adminSetLimits(id, limits, libraries) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: { limits, libraries } });
   },

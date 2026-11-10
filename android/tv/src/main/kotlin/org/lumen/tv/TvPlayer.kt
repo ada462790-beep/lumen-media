@@ -511,6 +511,23 @@ private fun TvWiedergabe(
                             }
                             return
                         }
+                        // 403 mitten im Film: meist ist die Bildschirmzeit des
+                        // Kinderprofils um. Der Plan sagt, warum — dessen Satz
+                        // zeigen und anhalten.
+                        if (zugriffAbgewiesen(error)) {
+                            val p = this@apply
+                            p.pause()
+                            val dateiJetzt = datei
+                            scope.launch {
+                                val grund = dateiJetzt?.let { d ->
+                                    withContext(Dispatchers.IO) {
+                                        try { client.plan(d.id); null } catch (e: LumenException) { e.message }
+                                    }
+                                }
+                                fehler = grund ?: tx(R.string.der_strom_ist_abgerissen_x, error.errorCodeName)
+                            }
+                            return
+                        }
                         fehler = tx(R.string.der_strom_ist_abgerissen_x, error.errorCodeName)
                     }
 
@@ -1384,3 +1401,13 @@ private fun TvTrickplay(trickplay: Trickplay, blattUrl: (Int) -> String?, sekund
                  .padding(horizontal = 10.dp, vertical = 3.dp))
     }
 }
+
+/**
+ * Ob der Abspieler an einer 403 gescheitert ist — meist ist dann die
+ * Bildschirmzeit des Kinderprofils um; der Plan nennt den Grund.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal fun zugriffAbgewiesen(error: androidx.media3.common.PlaybackException): Boolean =
+    generateSequence<Throwable>(error) { it.cause }.any {
+        it is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && it.responseCode == 403
+    }

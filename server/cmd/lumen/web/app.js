@@ -23,6 +23,8 @@ import { T, altersOptionen, schutzText, falschMeldung, frage, schutzDialog, mitt
 import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBearbeiten, folgeBearbeiten,
   einstellungenUmzug, metadatenUntertitel, playerUntertitelEintrag, utStand, utStandLaden,
   sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter } from './funktionen.js';
+// Bildschirmzeit der Kinderprofile (durchgesetzt vom Server).
+import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -822,7 +824,8 @@ async function fetchFor(view) {
     }
     case 'wishes':    return { wishes: await api.wishes() };
     case 'settings':  {
-      const [devices, playbacks] = await Promise.all([api.devices(), api.myPlaybacks().catch(() => [])]);
+      const [devices, playbacks] = await Promise.all([api.devices(), api.myPlaybacks().catch(() => []),
+        S.me?.account?.isKid ? bzLaden() : null]);
       return { devices, playbacks };
     }
     case 'admin':     return { ...await api.adminOverview(),
@@ -2211,7 +2214,9 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       fromSec = startGesamt - vorher;
     }
 
-    const plan = await api.plan(file.id).catch(() => null);
+    // Ist die Bildschirmzeit um, sagt es schon der Plan — dann gar nicht
+    // erst den Player öffnen.
+    const plan = await api.plan(file.id).catch(e => { if (e?.code === 'bildschirmzeit') throw e; return null; });
     const dur = (file.durationMs || it.runtimeMs || 0) / 1000;
 
     let start = fromSec != null ? fromSec : (it.resumeMs ? it.resumeMs / 1000 : 0);
@@ -2268,9 +2273,16 @@ async function startPlayer(itemId, fromSec, fileId = null) {
     }
     S.view = 'player';
     render();          // baut den Player auf, mountPlayer hängt sich ein
+    // Kinderprofil: leise Bescheid geben, wenn die Zeit knapp wird.
+    if (S.me?.account?.isKid) {
+      const p = S.playing;
+      bzLaden().then(() => bzBeimSchauen(() => S.playing === p && S.view === 'player',
+        async meldung => { await stopPlayer(); bzSchluss(meldung); }));
+    }
     await openStream(start);
   } catch (e) {
     S.playing = null;
+    if (e?.code === 'bildschirmzeit') return bzSchluss(e.message);
     toast(e.message || tr('Wiedergabe nicht möglich.'));
   }
 }
@@ -2362,6 +2374,10 @@ async function stromAbgerissen(p, lief) {
     case 'wiedergabe_beendet':
       toast(tr('Die Wiedergabe wurde beendet.'));
       return stopPlayer();
+    case 'bildschirmzeit':
+      // Die Zeit ist um (Fenster zu oder Tagesgrenze erreicht).
+      await stopPlayer();
+      return bzSchluss(g.error);
     case 'fehler':
       p.paused = true; patchChrome(); showChrome(true);
       return toast(g.error ? g.error.charAt(0).toUpperCase() + g.error.slice(1) + '.' : tr('Wiedergabe nicht möglich.'));
@@ -3500,9 +3516,13 @@ function viewSettings() {
             ${segment(tr('Darstellung'), [['dunkel', tr('Dunkel')], ['hell', tr('Hell')], ['auto', tr('Wie das Gerät')]].map(([v, n]) =>
               ({ name: n, an: darstellung() === v, attr: `data-darstellung="${v}"` })))}
             </div>`, tr('Gilt für diesen Browser.'))}
+        ${a.isKid && bzStand()?.aktiv ? grp(tr('Bildschirmzeit'), bzIchZeile(),
+          tr('Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.')) : ''}
         ${grp(tr('Privatsphäre'),
           swRow(tr('Bewertungen im Haushalt zeigen'), prefs.shareRatings === '1', null, 'shareRatings'),
-          tr('Dein Verlauf und deine Bewertungen gehören dir. Auch der Besitzer des Servers kann nicht sehen, wann oder wie lange du etwas schaust.'))}
+          a.isKid && bzStand()?.aktiv
+            ? tr('Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur, wie viele Minuten Bildschirmzeit du heute gebraucht hast — nicht, was du geschaut hast.')
+            : tr('Dein Verlauf und deine Bewertungen gehören dir. Auch der Besitzer des Servers kann nicht sehen, wann oder wie lange du etwas schaust.'))}
       </div>
       <div>
         ${grp(tr('Profil schützen'),
@@ -4463,9 +4483,10 @@ function viewAccounts() {
       <div style="flex:1;min-width:180px">
         <div class="t-body">${esc(a.name)}</div>
         <div class="t-caption c-2">${a.isOwner ? tr('Besitzer') : ROLLEN_GRUPPEN[a.groupId] ? esc(rollenName(a.groupId)) : a.isKid ? esc(tr(T.kinderprofilBis, { n: a.limits.maxAge })) : tr('Haushalt')}${a.groupName && !ROLLEN_GRUPPEN[a.groupId] ? ` ${tr('· Gruppe „{groupName}“', { groupName: esc(a.groupName) })}` : ''}
-          · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}</div>
+          · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
+      ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
       ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
         <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
@@ -4697,6 +4718,11 @@ app.addEventListener('click', async e => {
       if (war && S.me.account.lockKind !== 'none') return go('admin');
       return render();
     }
+    return;
+  }
+  if ((n = hit('data-bildschirmzeit'))) {
+    const a = (S.data?.accounts || []).find(x => x.id === n.dataset.bildschirmzeit);
+    if (a) bzBearbeiten(a, () => { if (S.view === 'accounts') load(); });
     return;
   }
   if ((n = hit('data-pinreset'))) {

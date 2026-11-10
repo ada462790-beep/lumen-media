@@ -580,6 +580,11 @@ public final class Playback {
         let stelle = player.currentTime().seconds
         wiedergabeAbbauen()
         do {
+            // Erst fragen, ob es überhaupt noch geht: Ist die Bildschirmzeit
+            // eines Kinderprofils um, beendet der Server die Wiedergabe, und
+            // der Plan antwortet mit seiner Meldung („morgen ab 07:00 …").
+            _ = try await client.plan(fileId: file.id)
+            guard gilt(meiner) else { return }
             try await schluesselFrisch()
             guard gilt(meiner) else { return }
             let url = await client.streamURL(for: file, plan: plan, spur: tonspur)

@@ -430,9 +430,11 @@ private fun Wiedergabe(
         val f = alle.dateien[stelle.teil]
         // Mit dem Plan ein frischer Medienschlüssel: der Film läuft Stunden,
         // und der Abspieler lädt die ganze Zeit mit derselben Adresse nach.
-        val pl = model.fetch { it.wiedergabeVorbereiten(f.id) }
+        // Lehnt der Server ab (etwa: Bildschirmzeit um), steht sein Satz da.
+        val vorbereitet = model.abfragen { it.wiedergabeVorbereiten(f.id) }
+        val pl = vorbereitet.wert
         if (pl == null) {
-            fehler = tx(R.string.der_server_konnte_die_wiedergabe)
+            fehler = vorbereitet.fehler ?: tx(R.string.der_server_konnte_die_wiedergabe)
             return@LaunchedEffect
         }
         detail = d
@@ -502,6 +504,19 @@ private fun Wiedergabe(
                                 val erneuert = withContext(Dispatchers.IO) { model.client.wiedergabeSchluesselErneuern() }
                                 if (erneuert) laden(p, stelle)
                                 else fehler = tx(R.string.der_strom_ist_abgerissen_x, error.errorCodeName)
+                            }
+                            return
+                        }
+                        // 403 mitten im Film: meist ist die Bildschirmzeit des
+                        // Kinderprofils um. Der Plan sagt, warum — dessen Satz
+                        // zeigen und anhalten.
+                        if (zugriffAbgewiesen(error)) {
+                            val p = this@apply
+                            p.pause()
+                            val dateiJetzt = datei
+                            scope.launch {
+                                val grund = dateiJetzt?.let { d -> model.abfragen { it.plan(d.id) }.fehler }
+                                fehler = grund ?: tx(R.string.der_strom_ist_abgerissen_x, error.errorCodeName)
                             }
                             return
                         }
@@ -886,4 +901,14 @@ private fun Wiedergabe(
 internal fun medienSchluesselAbgewiesen(error: androidx.media3.common.PlaybackException): Boolean =
     generateSequence<Throwable>(error) { it.cause }.any {
         it is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && it.responseCode == 401
+    }
+
+/**
+ * Ob der Abspieler an einer 403 gescheitert ist — meist ist dann die
+ * Bildschirmzeit des Kinderprofils um; der Plan nennt den Grund.
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+internal fun zugriffAbgewiesen(error: androidx.media3.common.PlaybackException): Boolean =
+    generateSequence<Throwable>(error) { it.cause }.any {
+        it is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && it.responseCode == 403
     }

@@ -55,6 +55,7 @@ Prüfen: `python3 tools/sprache_pruefen.py` (läuft auch in der CI).
 | Besitzer              | Owner                   | Owner                   |
 | Haushalt              | Household               | Household               |
 | Kinderprofil          | Kids Profile            | Kids Profile            |
+| Bildschirmzeit        | Screen Time             | Screen Time             |
 | bis FSK 12            | up to age 12            | up to age 12            |
 | Mediathek             | Library                 | Library                 |
 | Bibliothek(en)        | Library / Libraries     | Library / Libraries     |

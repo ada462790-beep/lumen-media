@@ -354,7 +354,12 @@ public actor APIClient {
     static let bekannteCodes: Set<String> = [
         "falsch", "verwaltung_braucht_sperre", "kein_download", "zu_viele_downloads",
         "wird_vorbereitet",  // = untertitelWirdVorbereitet
+        "bildschirmzeit",    // = bildschirmzeit
     ]
+
+    /// Die Bildschirmzeit des Kinderprofils ist um (HTTP 403). Die Meldung
+    /// des Servers sagt, ab wann es weitergeht — die App zeigt sie, wie sie ist.
+    public static let bildschirmzeit = "bildschirmzeit"  // sprache: fest (Kennung des Servers)
 
     /// Die Untertitelspur wird noch aus der Datei gezogen (202, bei HLS 503).
     public static let untertitelWirdVorbereitet = "wird_vorbereitet"

@@ -279,7 +279,7 @@
   },
   "dieser ordner gehört schon zur bibliothek „{name}“ (oder liegt darin)": "This folder already belongs to the library “{name}” (or is inside it).",
   "wähle eine bibliothek, die du verwaltest": "Choose a library you manage.",
-  "Bildschirmzeit gibt es nur für Kinderprofile.": "Screen time is only available for kids’ profiles.",
+  "Bildschirmzeit gibt es nur für Kinderprofile.": "Screen Time is only available for Kids Profiles.",
   "Bitte die Uhrzeiten als 07:30 schreiben.": "Please write times like 07:30.",
   "Die Tagesgrenze liegt zwischen 0 und 1440 Minuten.": "The daily limit must be between 0 and 1440 minutes.",
   "Für das Zeitfenster braucht es von und bis — oder beides leer für den ganzen Tag.": "The time window needs both a start and an end — or leave both empty for the whole day.",

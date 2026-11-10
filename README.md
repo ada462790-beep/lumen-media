@@ -391,6 +391,31 @@ wird nicht gespeichert, und die Verwaltung sieht davon nichts.
 Rechte können Grenzen nie lockerer machen. Wer verwaltet, braucht eine PIN
 und hat selbst keine Grenzen.
 
+**Bildschirmzeit für Kinderprofile.** Unter Verwaltung › Konten ›
+„Bildschirmzeit" bekommt ein Kinderprofil je ein Zeitfenster und eine
+Tagesgrenze für Schultage (Montag bis Freitag) und das Wochenende — etwa
+„Schultage 07:00–19:30, höchstens 90 Minuten; Wochenende 08:00–20:30,
+120 Minuten". Ein Fenster darf über Mitternacht gehen (18:00–02:00). Die
+Verwaltung sieht „heute genutzt: 47 von 90 Min." und kann mit einem Klick
+„heute einmalig 30 Min. mehr" geben.
+
+- Durchgesetzt wird auf dem Server, nicht in den Apps: Ausserhalb der Zeit
+  beginnt keine Wiedergabe und kein Download (HTTP 403, Code
+  `bildschirmzeit`, mit einem Satz wie „Für heute ist Schluss — morgen ab
+  07:00 geht es weiter."). Läuft gerade etwas, endet es nach einer Minute
+  Nachfrist; Browser, iPhone, Apple TV und Android zeigen dann die Meldung.
+- Gezählt wird nur Video, solange es wirklich läuft (eine Pause zählt
+  nicht). Zwei Geräte gleichzeitig zählen einmal — Bildschirmzeit ist
+  Uhrzeit, nicht die Summe der Geräte.
+- Es gilt die Uhr des Servers (Zeitzone aus `TZ`); um Mitternacht beginnt
+  ein neuer Tag. Die Uhr eines Geräts zählt nie.
+- Das Kind sieht unter „Ich", wie viel heute noch geht, und beim Schauen
+  einen leisen Hinweis bei zehn und bei zwei Minuten.
+- Gespeichert wird je Profil nur die Zahl für heute — kein Titel, keine
+  Uhrzeit, kein Verlauf. Was in diesen Minuten lief, sieht niemand.
+- Was offline von einem Download läuft, sieht der Server nicht; Downloads
+  sind für Kinderprofile ab Werk aus.
+
 ### Vorspann und Abspann erkennen
 
 Folgen einer Staffel teilen sich die Titelmusik. Lumen hört sich darum im
@@ -772,6 +797,7 @@ Das ist kein Abschnitt in den Einstellungen, sondern die Bauweise:
 | Keine Uhrzeiten, die mit Schauen zusammenhängen | Der Fortschritt trägt eine laufende Nummer statt einer Uhrzeit; Geräte merken sich nur den Tag |
 | Das Protokoll ist kein Verlauf | Beim Abspielen steht dort nur „Umwandlung gestartet" und der technische Grund — kein Gerät, keine Person, keine Datei |
 | Bewertungen nur mit Freigabe | Ohne Häkchen taucht nichts im Haushalt auf |
+| Bildschirmzeit ist kein Verlauf | Je Kinderprofil steht nur eine Zahl für heute in der Datenbank; ein Test verlangt, dass jede Abfrage darauf genau ein Konto nennt, und gestern wird beim Zählen gelöscht |
 
 Wer das ändern will, muss Tests löschen. Das soll man merken.
 

@@ -127,3 +127,18 @@ dialog.fenster.light .fenster-fuss { background: rgb(250, 250, 252) }
 .sammlung-zeile-knoepfe { display: flex; gap: 4px; flex: none }
 .sammlung-zeile-knoepfe .btn { width: 30px; height: 30px; border-radius: 50%; background: var(--fill) }
 .durch-regel { font-size: 11px; color: var(--label-3) }
+
+/* Bildschirmzeit (bildschirmzeit.js): zwei Tagesarten im Fenster, und die
+   Seite über dem Player, wenn die Zeit um ist. */
+.bz-art { border: 0; margin: 12px 0 0; padding: 12px 14px 4px; border-radius: 14px; background: var(--fill) }
+.bz-art legend { float: left; width: 100%; padding: 0; margin: 0 0 4px }
+.bz-art legend + * { clear: both }
+.bz-zeiten { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px }
+.bz-schluss { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: rgba(0, 0, 0, .82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  font-family: var(--font); color: #fff; animation: bz-ein .3s var(--ease) both }
+@keyframes bz-ein { from { opacity: 0 } to { opacity: 1 } }
+.bz-schluss-karte { max-width: 440px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px }
+.bz-schluss-karte svg { color: #ffd60a }
+.bz-schluss-karte h2 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em }
+.bz-schluss-karte p { margin: 0 0 10px; font-size: 19px; line-height: 1.45; color: rgba(255, 255, 255, .86) }

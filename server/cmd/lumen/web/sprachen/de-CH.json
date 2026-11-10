@@ -157,5 +157,9 @@
  "Vorspann in {n} erkannt.": {
   "one": "Vorspann in {n} erkannt.",
   "other": "Vorspann in {n} erkannt."
+ },
+ "Noch {n} Minuten Bildschirmzeit.": {
+  "one": "Noch {n} Minute Bildschirmzeit.",
+  "other": "Noch {n} Minuten Bildschirmzeit."
  }
 }
