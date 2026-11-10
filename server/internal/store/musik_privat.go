@@ -201,8 +201,7 @@ func (s *Store) MusikListen(ctx context.Context, accountID string) ([]MusikListe
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT l.id, l.name, l.account_id, a.name, a.avatar, l.geteilt, l.gemeinsam
 		   FROM musik_wiedergabeliste l JOIN account a ON a.id = l.account_id
-		  WHERE l.account_id = ? OR l.geteilt = 1
-		  ORDER BY CASE WHEN l.account_id = ? THEN 0 ELSE 1 END, l.name COLLATE NOCASE`, accountID, accountID)
+		  WHERE l.account_id = ? OR l.geteilt = 1`, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,6 +215,11 @@ func (s *Store) MusikListen(ctx context.Context, accountID string) ([]MusikListe
 		out = append(out, *l)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	nachNamenSortieren(out, func(l *MusikListe) string { return l.Name }, func(l *MusikListe) string { return l.ID },
+		func(l *MusikListe) bool { return l.Meine })
 	return out, s.musikListenAnzahl(ctx, out)
 }
 

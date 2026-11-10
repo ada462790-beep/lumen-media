@@ -17,26 +17,46 @@ import Observation
 
 // MARK: - Raster
 
-/// Wie das Raster sortiert ist — dieselben vier Wege wie im
-/// Browser (app.js: SORTIERUNGEN). Der Rohwert ist, was der Server als
-/// `sort` versteht.
+/// Wie das Raster sortiert ist — dieselben Wege wie im Browser
+/// (app.js: SORTIERUNGEN). Der Rohwert ist, was der Server als `sort`
+/// versteht; die Richtung geht getrennt als `dir` mit.
 public enum Sortierung: String, CaseIterable, Identifiable, Sendable {
     case titel = "title"
     case hinzugefuegt = "added"
-    case neueste = "year"
-    case aelteste = "year-asc"
+    case erschienen = "premiered"
+    case bewertung = "rating"
+    case laufzeit = "runtime"
+    case zuletztGesehen = "lastwatched"
+    case ungesehen = "unwatched"
+    case zufall = "random"
 
     public var id: String { rawValue }
 
-    /// „A–Z", „Neu hinzugefügt", „Neueste Filme", „Älteste Serien" — bei
-    /// Serien hiesse „Neueste Filme" etwas anderes, als gemeint ist.
+    /// Die Sortierungen, die es für diese Art gibt — die Laufzeit nur bei Filmen.
+    public static func faelle(kind: String) -> [Sortierung] {
+        kind == "movie" ? allCases : allCases.filter { $0 != .laufzeit }
+    }
+
+    /// „Titel", „Hinzugefügt", „Erscheinungsdatum" … — wie im Browser.
     public func name(kind: String) -> String {
-        let serien = kind == "series"
         switch self {
-        case .titel: return String(localized: "A–Z", bundle: .lumenKit, locale: .lumen)
-        case .hinzugefuegt: return String(localized: "Neu hinzugefügt", bundle: .lumenKit, locale: .lumen)
-        case .neueste: return serien ? String(localized: "Neueste Serien", bundle: .lumenKit, locale: .lumen) : String(localized: "Neueste Filme", bundle: .lumenKit, locale: .lumen)
-        case .aelteste: return serien ? String(localized: "Älteste Serien", bundle: .lumenKit, locale: .lumen) : String(localized: "Älteste Filme", bundle: .lumenKit, locale: .lumen)
+        case .titel: return String(localized: "Titel", bundle: .lumenKit, locale: .lumen)
+        case .hinzugefuegt: return String(localized: "Hinzugefügt", bundle: .lumenKit, locale: .lumen)
+        case .erschienen: return String(localized: "Erscheinungsdatum", bundle: .lumenKit, locale: .lumen)
+        case .bewertung: return String(localized: "Bewertung", bundle: .lumenKit, locale: .lumen)
+        case .laufzeit: return String(localized: "Laufzeit", bundle: .lumenKit, locale: .lumen)
+        case .zuletztGesehen: return String(localized: "Zuletzt gesehen", bundle: .lumenKit, locale: .lumen)
+        case .ungesehen: return String(localized: "Ungesehene zuerst", bundle: .lumenKit, locale: .lumen)
+        case .zufall: return String(localized: "Zufällig", bundle: .lumenKit, locale: .lumen)
+        }
+    }
+
+    /// Die Richtung, die eine Sortierung von sich aus hat: Titel von A,
+    /// Hinzugefügt, Erscheinen und Bewertung das Neueste oder Beste zuerst.
+    public var vorgabeAbsteigend: Bool {
+        switch self {
+        case .hinzugefuegt, .erschienen, .bewertung, .zuletztGesehen: true
+        case .titel, .laufzeit, .ungesehen, .zufall: false
         }
     }
 
@@ -45,10 +65,41 @@ public enum Sortierung: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .titel: "textformat"
         case .hinzugefuegt: "clock"
-        case .neueste: "arrow.down"
-        case .aelteste: "arrow.up"
+        case .erschienen: "calendar"
+        case .bewertung: "star"
+        case .laufzeit: "timer"
+        case .zuletztGesehen: "eye"
+        case .ungesehen: "eye.slash"
+        case .zufall: "shuffle"
         }
     }
+
+    /// Der Schlüssel in den Einstellungen des Profils: `sort.movie`, `sort.series`.
+    public static func prefSchluessel(kind: String) -> String { "sort." + kind }
+
+    /// Liest „title:asc" — wie Browser und Android es ins Profil schreiben.
+    /// Unbekanntes gibt nil; die Laufzeit gibt es bei Serien nicht.
+    public static func aus(_ wert: String?, kind: String) -> (Sortierung, Bool)? {
+        guard let wert, !wert.isEmpty else { return nil }
+        let teile = wert.split(separator: ":", maxSplits: 1).map(String.init)
+        guard let art = Sortierung(rawValue: teile[0]), faelle(kind: kind).contains(art) else { return nil }
+        let ab: Bool
+        switch teile.count > 1 ? teile[1] : "" {
+        case "asc": ab = false
+        case "desc": ab = true
+        default: ab = art.vorgabeAbsteigend
+        }
+        return (art, ab)
+    }
+
+    /// „title:asc" — zum Merken.
+    public func wert(absteigend: Bool) -> String { rawValue + (absteigend ? ":desc" : ":asc") }
+}
+
+/// „Aufsteigend" oder „Absteigend" — für VoiceOver am Knopf der Richtung.
+public func richtungName(absteigend: Bool) -> String {
+    absteigend ? String(localized: "Absteigend", bundle: .lumenKit, locale: .lumen)
+        : String(localized: "Aufsteigend", bundle: .lumenKit, locale: .lumen)
 }
 
 /// Die Leiste „# A B C …" über dem Raster.
@@ -78,9 +129,10 @@ public enum Buchstaben {
 /// Raster wie der Browser seitenweise (`APIClient.seite`), und der Server
 /// nennt die Genres über alle Titel der Art.
 ///
-/// Dazu kommen Sortierung und Buchstabe. Die Leiste der
-/// Buchstaben gibt es nur bei A–Z: nach „Neu hinzugefügt" sortiert,
-/// spränge ein Buchstabe ins Leere.
+/// Dazu kommen Sortierung, Richtung und Buchstabe. Die Leiste der
+/// Buchstaben gibt es nur nach Titel: nach „Hinzugefügt" sortiert,
+/// spränge ein Buchstabe ins Leere. Die Wahl gilt je Art und wird im
+/// Profil gemerkt (`sort.movie`, `sort.series`), wie im Browser.
 @MainActor
 @Observable
 public final class Raster {
@@ -90,6 +142,8 @@ public final class Raster {
     /// Das gewählte Genre. nil heisst: alle.
     public private(set) var genre: String?
     public private(set) var sortierung: Sortierung = .titel
+    /// Die Richtung: absteigend heisst Z bis A, das Neueste zuerst.
+    public private(set) var absteigend = false
     /// Der gewählte Anfangsbuchstabe („A" … „Z", oder die Raute). nil heisst: alle.
     public private(set) var buchstabe: String?
     /// Wie viele Titel mit welchem Buchstaben anfangen — für das gewählte
@@ -112,18 +166,46 @@ public final class Raster {
     public static let vorlauf = 12
 
     private let client: APIClient
+    /// Wohin eine neue Wahl geht: ins Profil (über die Session) und auf
+    /// dem Gerät — damit sie auch ohne Verbindung beim nächsten Mal gilt.
+    private let merken: ((String, String) -> Void)?
+    private let speicher: UserDefaults?
+    /// Der Samen der zufälligen Reihenfolge, wie ihn der Server zur ersten
+    /// Seite nennt — das Nachladen setzt dieselbe Mischung fort.
+    @ObservationIgnored private var samen: Int64?
     /// Zählt jedes neue Laden hoch. Kommt eine alte Antwort zu spät — ein
     /// anderes Genre war schneller gewählt —, wird sie verworfen.
     @ObservationIgnored private var stand = 0
 
-    public init(client: APIClient, kind: String, genre: String? = nil) {
+    /// `gemerkt` ist, was im Profil steht (`prefs["sort.movie"]`, etwa
+    /// „added:desc"); fehlt es, gilt, was auf dem Gerät in `speicher`
+    /// steht, sonst Titel aufsteigend. `merken` bekommt Schlüssel und Wert
+    /// einer neuen Wahl, um sie ins Profil zu schreiben.
+    public init(client: APIClient, kind: String, genre: String? = nil,
+                gemerkt: String? = nil, speicher: UserDefaults? = nil,
+                merken: ((String, String) -> Void)? = nil) {
         self.client = client
         self.kind = kind
         self.genre = genre
+        self.speicher = speicher
+        self.merken = merken
+        let schluessel = Sortierung.prefSchluessel(kind: kind)
+        if let wahl = Sortierung.aus(gemerkt, kind: kind)
+            ?? Sortierung.aus(speicher?.string(forKey: "lumen." + schluessel), kind: kind) {
+            sortierung = wahl.0
+            absteigend = wahl.1
+        }
     }
 
-    /// Ob die Leiste der Buchstaben gezeigt wird.
+    /// Ob die Leiste der Buchstaben gezeigt wird — nur nach Titel, in
+    /// beiden Richtungen.
     public var zeigtBuchstaben: Bool { sortierung == .titel && !buchstaben.isEmpty }
+
+    /// Die Buchstaben in der Reihenfolge des Rasters: absteigend von Z
+    /// nach A, die Raute (Zahlen) dann am Ende.
+    public var buchstabenReihe: [String] {
+        absteigend ? Array(Buchstaben.alle.dropFirst().reversed()) + [Buchstaben.raute] : Buchstaben.alle
+    }
 
     /// Wie viele Titel mit diesem Buchstaben anfangen. 0 heisst: Knopf grau.
     public func anzahl(_ buchstabe: String) -> Int { buchstaben[buchstabe] ?? 0 }
@@ -136,11 +218,28 @@ public final class Raster {
         await vonVorn(buchstabenAuch: true)
     }
 
-    /// Anders sortieren. Der Buchstabe gilt danach nicht mehr.
+    /// Anders sortieren, in der üblichen Richtung dieser Sortierung. Der
+    /// Buchstabe gilt danach nicht mehr.
     public func sortieren(_ neu: Sortierung) async {
         guard neu != sortierung else { return }
         sortierung = neu
+        absteigend = neu.vorgabeAbsteigend
+        await nachWahl()
+    }
+
+    /// Die Richtung umkehren — bei „Zufällig" neu mischen.
+    public func richtungUmkehren() async {
+        if sortierung != .zufall { absteigend.toggle() }
+        await nachWahl()
+    }
+
+    private func nachWahl() async {
         buchstabe = nil
+        samen = nil
+        let schluessel = Sortierung.prefSchluessel(kind: kind)
+        let wert = sortierung.wert(absteigend: absteigend)
+        speicher?.set(wert, forKey: "lumen." + schluessel)
+        merken?(schluessel, wert)
         await vonVorn(buchstabenAuch: true)
     }
 
@@ -162,9 +261,11 @@ public final class Raster {
         error = nil
         do {
             let seite = try await client.seite(kind: kind, genre: genre, sort: sortierung.rawValue,
-                                               buchstabe: buchstabe,
+                                               dir: absteigend ? "desc" : "asc",
+                                               buchstabe: sortierung == .titel ? buchstabe : nil,
                                                limit: Self.seitengroesse, offset: 0)
             guard meiner == stand else { return }
+            samen = seite.seed
             items = seite.items
             if let neu = seite.genres { genres = neu }
             gesamt = seite.gesamt
@@ -195,7 +296,8 @@ public final class Raster {
         laedt = true
         do {
             let seite = try await client.seite(kind: kind, genre: genre, sort: sortierung.rawValue,
-                                               buchstabe: buchstabe,
+                                               dir: absteigend ? "desc" : "asc", seed: samen,
+                                               buchstabe: sortierung == .titel ? buchstabe : nil,
                                                limit: Self.seitengroesse, offset: items.count)
             guard meiner == stand else { return }
             // Kam inzwischen ein Titel dazu, verschiebt sich die Seite um

@@ -113,12 +113,17 @@ internal object KernUebersetzer : Uebersetzer {
         Tx.SPUR_ERZWUNGEN -> R.string.kern_spur_erzwungen
         Tx.SPUR_HOERGESCHAEDIGT -> R.string.kern_spur_hoergeschaedigt
         Tx.SPUR_DATEI -> R.string.kern_spur_datei
-        Tx.SORT_AZ -> R.string.kern_sort_az
+        Tx.SORT_TITEL -> R.string.kern_sort_titel
         Tx.SORT_HINZUGEFUEGT -> R.string.kern_sort_hinzugefuegt
-        Tx.SORT_NEUESTE_FILME -> R.string.kern_sort_neueste_filme
-        Tx.SORT_NEUESTE_SERIEN -> R.string.kern_sort_neueste_serien
-        Tx.SORT_AELTESTE_FILME -> R.string.kern_sort_aelteste_filme
-        Tx.SORT_AELTESTE_SERIEN -> R.string.kern_sort_aelteste_serien
+        Tx.SORT_ERSCHIENEN -> R.string.kern_sort_erschienen
+        Tx.SORT_BEWERTUNG -> R.string.kern_sort_bewertung
+        Tx.SORT_LAUFZEIT -> R.string.kern_sort_laufzeit
+        Tx.SORT_ZULETZT_GESEHEN -> R.string.kern_sort_zuletzt_gesehen
+        Tx.SORT_UNGESEHEN -> R.string.kern_sort_ungesehen
+        Tx.SORT_ZUFALL -> R.string.kern_sort_zufall
+        Tx.SORT_AUFSTEIGEND -> R.string.kern_sort_aufsteigend
+        Tx.SORT_ABSTEIGEND -> R.string.kern_sort_absteigend
+        Tx.SORT_NEU_MISCHEN -> R.string.kern_sort_neu_mischen
         Tx.PIN -> R.string.kern_pin
         Tx.PASSWORT -> R.string.kern_passwort
         Tx.OHNE -> R.string.kern_ohne

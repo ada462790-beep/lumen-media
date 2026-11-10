@@ -344,6 +344,25 @@ final class AmStueckTests: XCTestCase {
         XCTAssertNil(AmStueck.folgeDanach("gibts_nicht", in: folgen))
     }
 
+    /// Specials und Folgen ohne Nummer stehen zuletzt — wie auf dem Server
+    /// und im Browser.
+    func testSpecialsUndOhneNummerZuletzt() throws {
+        let folgen = [
+            try titel("s0f1", "episode", staffel: 0, folge: 1),
+            try titel("s1ohne", "episode", staffel: 1),
+            try titel("s1f2", "episode", staffel: 1, folge: 2),
+            try titel("s2f1", "episode", staffel: 2, folge: 1),
+            try titel("s1f1", "episode", staffel: 1, folge: 1),
+        ]
+        XCTAssertEqual(AmStueck.geordnet(folgen).map(\.id), ["s1f1", "s1f2", "s1ohne", "s2f1", "s0f1"])
+        XCTAssertNil(AmStueck.folgeDanach("s2f1", in: folgen), "nach der letzten Folge nicht in die Specials")
+        XCTAssertEqual(AmStueck.ersteOffene(in: folgen)?.id, "s1f1")
+        let nurSpecials = [try titel("s0f2", "episode", staffel: 0, folge: 2),
+                           try titel("s0f1", "episode", staffel: 0, folge: 1)]
+        XCTAssertEqual(AmStueck.ersteOffene(in: nurSpecials)?.id, "s0f1")
+        XCTAssertEqual(AmStueck.folgeDanach("s0f1", in: nurSpecials)?.id, "s0f2")
+    }
+
     /// Eine Liste am Stück: Filme spielen sich selbst, eine Serie ihre
     /// erste offene Folge, eine Serie ohne Folgen und eine Staffel werden
     /// übersprungen. Die Schleife unten tut, was `Abspielfolge` tut — nur

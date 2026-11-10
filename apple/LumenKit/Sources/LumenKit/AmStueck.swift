@@ -38,16 +38,21 @@ public enum AmStueck {
         prefs?["autoplay"] != "0"
     }
 
-    /// Staffeln nach Nummer, Folgen nach Staffel und Folge. Bei gleicher
-    /// Nummer bleibt es bei der Reihenfolge des Servers — `sorted` allein
-    /// verspricht das nicht.
+    /// Staffeln nach Nummer, Folgen nach Staffel und Folge — dieselbe
+    /// Reihenfolge wie auf dem Server (store.folgenOrdnung) und in allen
+    /// anderen Apps: die Specials (Staffel 0) zuletzt, Folgen ohne Nummer
+    /// am Ende ihrer Staffel. Bei Gleichstand bleibt es bei der Reihenfolge
+    /// des Servers — `sorted` allein verspricht das nicht.
     public static func geordnet(_ titel: [Item]) -> [Item] {
-        titel.enumerated().sorted { a, b in
-            let sa = a.element.seasonNo ?? 0
-            let sb = b.element.seasonNo ?? 0
+        // 0 oder fehlend zählt hinter jeder Nummer.
+        func rang(_ n: Int?) -> Int {
+            if let n, n > 0 { return n }
+            return Int.max
+        }
+        return titel.enumerated().sorted { a, b in
+            let sa = rang(a.element.seasonNo), sb = rang(b.element.seasonNo)
             if sa != sb { return sa < sb }
-            let ea = a.element.episodeNo ?? 0
-            let eb = b.element.episodeNo ?? 0
+            let ea = rang(a.element.episodeNo), eb = rang(b.element.episodeNo)
             if ea != eb { return ea < eb }
             return a.offset < b.offset
         }.map { $0.element }
@@ -56,18 +61,29 @@ public enum AmStueck {
     /// Die erste Folge, die noch nicht fertig geschaut ist. Ist alles
     /// gesehen, die allererste — eine Liste, die man nochmals schaut,
     /// beginnt die Serie von vorn, wie die Filme darin auch.
+    ///
+    /// Specials zählen dabei nur, wenn die Serie sonst keine Folgen hat —
+    /// wie „Als Nächstes" auf dem Server: Ein Making-of soll sich nicht
+    /// zwischen zwei Folgen schieben.
     public static func ersteOffene(in folgen: [Item]) -> Item? {
-        let reihe = geordnet(folgen)
+        let alle = geordnet(folgen)
+        let regulaer = alle.filter(istRegulaer)
+        let reihe = regulaer.isEmpty ? alle : regulaer
         return reihe.first { !$0.isSeen } ?? reihe.first
     }
 
     /// Die Folge nach dieser, in der Reihenfolge von Staffel und Folge.
+    /// Von einer regulären Staffel geht es nicht von selbst in die Specials.
     public static func folgeDanach(_ id: String, in folgen: [Item]) -> Item? {
         let reihe = geordnet(folgen)
         guard let i = reihe.firstIndex(where: { $0.id == id }), i + 1 < reihe.count
         else { return nil }
+        if istRegulaer(reihe[i]) && !istRegulaer(reihe[i + 1]) { return nil }
         return reihe[i + 1]
     }
+
+    /// Eine Folge aus einer regulären Staffel, kein Special.
+    static func istRegulaer(_ folge: Item) -> Bool { (folge.seasonNo ?? 0) > 0 }
 
     /// Was nach dem Eintrag `index` als Nächstes läuft. nil heisst: von
     /// vorn, also der erste Eintrag selbst.

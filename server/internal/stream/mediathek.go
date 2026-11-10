@@ -136,6 +136,11 @@ func (f *FFmpeg) MusikTags(ctx context.Context, path string) (*scan.MusikTags, e
 		Compilation:    wahr(ersterTag(t, "compilation", "tcmp", "cpil")),
 		Explizit:       ersterTag(t, "itunesadvisory", "rtng") == "1" || wahr(ersterTag(t, "explicit")),
 		Container:      strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), "."),
+		// Vorbis/FLAC, ID3v2 (so benennt FFmpeg TSOT/TSOP/TSOA/TSO2) und MP4.
+		TitelSort:          ersterTag(t, "titlesort", "title-sort", "sort_name", "tsot"),
+		InterpretSort:      ersterTag(t, "artistsort", "artist-sort", "sort_artist", "tsop"),
+		AlbumSort:          ersterTag(t, "albumsort", "album-sort", "sort_album", "tsoa"),
+		AlbumInterpretSort: ersterTag(t, "albumartistsort", "album_artist-sort", "albumartist-sort", "sort_album_artist", "tso2"),
 	}
 	if d, err := strconv.ParseFloat(p.Format.Duration, 64); err == nil {
 		m.DauerMS = int64(d * 1000)

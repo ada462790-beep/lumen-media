@@ -7,7 +7,10 @@
 
 package store
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 // mediathekTabellen legt die Tabellen für Musik und Fotos an. Sie hängt an
 // nachruesten(): wer Lumen schon eingerichtet hat, bekommt sie beim
@@ -160,6 +163,19 @@ func mediathekTabellen(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS foto_lib ON foto (library_id)`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	// Musik: Schlüssel für die Sortierung nach Interpret und Album
+	// (sortieren.go) — statt lower() bei jeder Abfrage, das nur A–Z kennt.
+	// Nachgerüstet wie in nachruesten(): steht die Spalte schon da, ist
+	// „duplicate column" kein Fehler.
+	for _, stmt := range []string{
+		`ALTER TABLE musik_titel ADD COLUMN interpret_sort TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE musik_titel ADD COLUMN album_sort TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE musik_titel ADD COLUMN albuminterpret_sort TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			return err
 		}
 	}

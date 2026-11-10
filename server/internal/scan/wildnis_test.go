@@ -304,9 +304,9 @@ func TestWildnisSerienbibliothek(t *testing.T) {
 	if filme, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Kinds: []string{"movie"}, Limit: 50}); len(filme) != 0 {
 		t.Errorf("Filme in der Serienbibliothek: %v", titles(filme))
 	}
-	want := map[string][]int{ // Titel → Staffelnummern
+	want := map[string][]int{ // Titel → Staffelnummern (Specials zuletzt)
 		"FBI": {6, 7}, "The Great Game": {1}, "Incorporated": {1},
-		"His Dark Materials": {2, 3}, "Doctor Who": {0, 1}, "Sherlock": {0, 1},
+		"His Dark Materials": {2, 3}, "Doctor Who": {1, 0}, "Sherlock": {1, 0},
 		"Arrow": {1}, "Fallout": {1}, "Avatar: Herr der Elemente": {1},
 	}
 	serien, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Kinds: []string{"series"}, Limit: 50})

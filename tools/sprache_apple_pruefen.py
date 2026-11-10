@@ -559,6 +559,8 @@ KENNUNGEN = {
     "iphone", "ipad", "desktopcomputer", "globe", "house", "magnifyingglass",
     "bookmark", "heart", "bell", "gearshape", "textformat", "clock",
     "taeglich", "player", "code", "profil", "untertitel",
+    # Sortierung: SF-Symbole und die Richtung, wie der Server sie versteht
+    "calendar", "star", "timer", "eye", "shuffle", "asc", "desc",
 }
 # Wo ein kleingeschriebenes Literal als Wert dasteht.
 # UIKit nimmt Titel wörtlich, nicht als LocalizedStringKey: UIMenu(title:

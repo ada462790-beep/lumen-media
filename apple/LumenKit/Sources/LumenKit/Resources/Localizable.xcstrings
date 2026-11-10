@@ -1253,34 +1253,6 @@
         }
       }
     },
-    "A–Z": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A–Z"
-          }
-        },
-        "de-AT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A–Z"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A–Z"
-          }
-        },
-        "en-GB": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A–Z"
-          }
-        }
-      }
-    },
     "Buchstabe %@": {
       "localizations": {
         "de": {
@@ -2093,34 +2065,6 @@
         }
       }
     },
-    "Neu hinzugefügt": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neu hinzugefügt"
-          }
-        },
-        "de-AT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neu hinzugefügt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recently Added"
-          }
-        },
-        "en-GB": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recently Added"
-          }
-        }
-      }
-    },
     "Neue Folge": {
       "localizations": {
         "de-CH": {
@@ -2179,62 +2123,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Latest"
-          }
-        }
-      }
-    },
-    "Neueste Filme": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neueste Filme"
-          }
-        },
-        "de-AT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neueste Filme"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Newest Movies"
-          }
-        },
-        "en-GB": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Newest Films"
-          }
-        }
-      }
-    },
-    "Neueste Serien": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neueste Serien"
-          }
-        },
-        "de-AT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neueste Serien"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Newest Shows"
-          }
-        },
-        "en-GB": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Newest Programmes"
           }
         }
       }
@@ -3929,58 +3817,282 @@
         }
       }
     },
-    "Älteste Filme": {
+    "Titel": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Älteste Filme"
+            "value": "Titel"
           }
         },
         "de-AT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Älteste Filme"
+            "value": "Titel"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oldest Movies"
+            "value": "Title"
           }
         },
         "en-GB": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oldest Films"
+            "value": "Title"
           }
         }
       }
     },
-    "Älteste Serien": {
+    "Hinzugefügt": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Älteste Serien"
+            "value": "Hinzugefügt"
           }
         },
         "de-AT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Älteste Serien"
+            "value": "Hinzugefügt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oldest Shows"
+            "value": "Date Added"
           }
         },
         "en-GB": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oldest Programmes"
+            "value": "Date Added"
+          }
+        }
+      }
+    },
+    "Erscheinungsdatum": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erscheinungsdatum"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erscheinungsdatum"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release Date"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release Date"
+          }
+        }
+      }
+    },
+    "Bewertung": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewertung"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewertung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rating"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rating"
+          }
+        }
+      }
+    },
+    "Laufzeit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laufzeit"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laufzeit"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runtime"
+          }
+        }
+      }
+    },
+    "Zuletzt gesehen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuletzt gesehen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuletzt gesehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last Watched"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last Watched"
+          }
+        }
+      }
+    },
+    "Ungesehene zuerst": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungesehene zuerst"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungesehene zuerst"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unwatched First"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unwatched First"
+          }
+        }
+      }
+    },
+    "Zufällig": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zufällig"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zufällig"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Random"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Random"
+          }
+        }
+      }
+    },
+    "Absteigend": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Absteigend"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Absteigend"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descending"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descending"
+          }
+        }
+      }
+    },
+    "Aufsteigend": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufsteigend"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufsteigend"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ascending"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ascending"
           }
         }
       }

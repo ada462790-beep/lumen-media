@@ -219,10 +219,20 @@ final class RasterAnfragenTests: XCTestCase {
     }
 
     func testSortierungen() {
-        XCTAssertEqual(Sortierung.allCases.map(\.rawValue), ["title", "added", "year", "year-asc"])
-        XCTAssertEqual(Sortierung.titel.name(kind: "movie"), "A–Z")
-        XCTAssertEqual(Sortierung.neueste.name(kind: "movie"), "Neueste Filme")
-        XCTAssertEqual(Sortierung.aelteste.name(kind: "series"), "Älteste Serien")
+        XCTAssertEqual(Sortierung.allCases.map(\.rawValue),
+                       ["title", "added", "premiered", "rating", "runtime", "lastwatched", "unwatched", "random"])
+        XCTAssertEqual(Sortierung.faelle(kind: "series").count, 7, "keine Laufzeit bei Serien")
+        XCTAssertEqual(Sortierung.titel.name(kind: "movie"), "Titel")
+        XCTAssertEqual(Sortierung.ungesehen.name(kind: "series"), "Ungesehene zuerst")
+        XCTAssertFalse(Sortierung.titel.vorgabeAbsteigend)
+        XCTAssertTrue(Sortierung.hinzugefuegt.vorgabeAbsteigend)
+        // Was Browser und Android ins Profil schreiben.
+        XCTAssertEqual(Sortierung.aus("added:asc", kind: "movie")?.0, .hinzugefuegt)
+        XCTAssertEqual(Sortierung.aus("added:asc", kind: "movie")?.1, false)
+        XCTAssertEqual(Sortierung.aus("rating", kind: "movie")?.1, true)
+        XCTAssertNil(Sortierung.aus("runtime:asc", kind: "series"))
+        XCTAssertNil(Sortierung.aus("year", kind: "movie"))
+        XCTAssertEqual(Sortierung.titel.wert(absteigend: true), "title:desc")
         XCTAssertEqual(Buchstaben.alle.count, 27)
         XCTAssertEqual(Buchstaben.alle.first, Buchstaben.raute)
         XCTAssertEqual(Buchstaben.alle.last, "Z")
@@ -302,15 +312,33 @@ final class RasterAnfragenTests: XCTestCase {
         XCTAssertEqual(abfrage(Aufzeichner.mitschnitt.alle.first)["buchstabe"], "A")
         XCTAssertEqual(raster.zeile, "1 Titel · A")
 
-        // Anders sortiert: kein Buchstabe mehr, keine Leiste.
+        // Anders sortiert: kein Buchstabe mehr, keine Leiste, die übliche
+        // Richtung — und die Wahl wird gemerkt.
         Aufzeichner.mitschnitt.leeren()
         await raster.sortieren(.hinzugefuegt)
         XCTAssertNil(raster.buchstabe)
         XCTAssertFalse(raster.zeigtBuchstaben)
         let q = abfrage(Aufzeichner.mitschnitt.alle.first)
         XCTAssertEqual(q["sort"], "added")
+        XCTAssertEqual(q["dir"], "desc")
         XCTAssertNil(q["buchstabe"])
         XCTAssertEqual(Aufzeichner.mitschnitt.alle.count, 1, "ohne A–Z keine Zahlen")
+    }
+
+    @MainActor
+    func testRasterMerktSortierung() async throws {
+        var gemerkt: [String: String] = [:]
+        let raster = Raster(client: Aufzeichner.client(), kind: "series", gemerkt: "title:desc",
+                            merken: { gemerkt[$0] = $1 })
+        XCTAssertEqual(raster.sortierung, .titel)
+        XCTAssertTrue(raster.absteigend)
+        XCTAssertEqual(raster.buchstabenReihe.first, "Z")
+        XCTAssertEqual(raster.buchstabenReihe.last, Buchstaben.raute)
+        Aufzeichner.mitschnitt.leeren()
+        await raster.richtungUmkehren()
+        XCTAssertFalse(raster.absteigend)
+        XCTAssertEqual(gemerkt["sort.series"], "title:asc")
+        XCTAssertEqual(abfrage(Aufzeichner.mitschnitt.alle.first)["dir"], "asc")
     }
 }
 

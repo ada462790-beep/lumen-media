@@ -10941,6 +10941,34 @@
         }
       }
     },
+    "Neu mischen" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu mischen"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu mischen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Again"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shuffle Again"
+          }
+        }
+      }
+    },
     "Neue Bibliotheken legst du im Browser an — dort lässt sich der Ordner anklicken, statt den Pfad abzutippen." : {
       "localizations" : {
         "de" : {
@@ -13293,6 +13321,34 @@
         }
       }
     },
+    "Richtung" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Richtung"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Richtung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Order"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Order"
+          }
+        }
+      }
+    },
     "Schutz" : {
       "localizations" : {
         "de" : {
@@ -14021,30 +14077,30 @@
         }
       }
     },
-    "Sortieren: %@" : {
+    "Sortieren: %@, %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sortieren: %@"
+            "value" : "Sortieren: %@, %@"
           }
         },
         "de-AT" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sortieren: %@"
+            "value" : "Sortieren: %@, %@"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sort: %@"
+            "value" : "Sort: %@, %@"
           }
         },
         "en-GB" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sort: %@"
+            "value" : "Sort: %@, %@"
           }
         }
       }

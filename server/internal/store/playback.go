@@ -533,7 +533,7 @@ func (s *Store) RemoveFromWatchlist(ctx context.Context, accountID, itemID strin
 
 func (s *Store) WatchlistIDs(ctx context.Context, accountID string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT item_id FROM watchlist WHERE account_id = ? ORDER BY added_at DESC`, accountID)
+		`SELECT item_id FROM watchlist WHERE account_id = ? ORDER BY added_at DESC, rowid DESC`, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -657,6 +657,38 @@ func (s *Store) AngefangeneIDs(ctx context.Context, accountID string) ([]string,
 		if serie != "" && !serien[serie] {
 			serien[serie] = true
 			out = append(out, serie)
+		}
+	}
+	return out, rows.Err()
+}
+
+// ZuletztGesehen: für jeden Titel, zu dem dieses Profil einen Stand hat,
+// dessen laufende Nummer (grösser = später) — Serien über ihre zuletzt
+// geschaute Folge. Für die Sortierung „Zuletzt gesehen". Keine Uhrzeit,
+// nur die Reihenfolge, und nur die eigene; das Grösste je Serie wird in
+// Go gesucht, nicht mit max() über die private Tabelle.
+func (s *Store) ZuletztGesehen(ctx context.Context, accountID string) (map[string]int64, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT p.item_id, p.reihenfolge, COALESCE(st.parent_id,'')
+		   FROM progress p LEFT JOIN item e ON e.id = p.item_id AND e.kind = 'episode'
+		   LEFT JOIN item st ON st.id = e.parent_id
+		  WHERE p.account_id = ?`, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int64{}
+	for rows.Next() {
+		var id, serie string
+		var r int64
+		if err := rows.Scan(&id, &r, &serie); err != nil {
+			return nil, err
+		}
+		if r > out[id] {
+			out[id] = r
+		}
+		if serie != "" && r > out[serie] {
+			out[serie] = r
 		}
 	}
 	return out, rows.Err()

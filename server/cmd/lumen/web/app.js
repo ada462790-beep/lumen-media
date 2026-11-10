@@ -148,6 +148,9 @@ const I = {
   liste: '<path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4.6" cy="6" r=".9"/><circle cx="4.6" cy="12" r=".9"/><circle cx="4.6" cy="18" r=".9"/>',
   hoch: '<path d="M6 15l6-6 6 6"/>',
   runter: '<path d="M6 9l6 6 6-6"/>',
+  aufsteigend: '<path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/>',
+  absteigend: '<path d="M12 5v14M6.5 13.5 12 19l5.5-5.5"/>',
+  mischen: '<path d="M3.5 7H7l10 10h3.5M3.5 17H7L17 7h3.5M18 4.5 20.5 7 18 9.5M18 14.5l2.5 2.5-2.5 2.5"/>',
   trash: '<path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M10 11v6M14 11v6"/>',
 };
 const PLAY = s => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.8v14.4c0 .8.9 1.3 1.6.9l11.3-7.2c.6-.4.6-1.4 0-1.8L8.6 3.9C7.9 3.5 7 4 7 4.8z"/></svg>`;
@@ -660,7 +663,6 @@ async function go(view, opts = {}) {
   const stand = opts.ausVerlauf ? (verlaufsStand.get(opts.schluessel) || opts.stand || null) : null;
   if (stand) {
     if (stand.filter) S.filter = stand.filter;
-    if (stand.sortierung !== undefined) S.sortierung = stand.sortierung;
     if (stand.buchstabe !== undefined) S.buchstabe = stand.buchstabe;
     if (stand.favArt !== undefined) S.favArt = stand.favArt;
   }
@@ -782,8 +784,9 @@ async function fetchFor(view) {
     case 'movies':
     case 'series': {
       const kind = view === 'movies' ? 'movie' : 'series', genre = S.filter === 'Alle' ? '' : S.filter;
+      const { key, dir } = sortierungFuer(view);
       const [seite, buchstaben] = await Promise.all([
-        api.seite({ kind, genre, sort: S.sortierung, buchstabe: S.buchstabe }),
+        api.seite({ kind, genre, sort: key, dir, buchstabe: key === 'title' ? S.buchstabe : '' }),
         api.buchstaben(kind, genre).catch(() => ({}))]);
       return { ...seite, buchstaben };
     }
@@ -811,7 +814,9 @@ async function fetchFor(view) {
       const d = await api.item(S.id);
       // Bei einer Serie gleich die Folgen der ersten Staffel dazu — die
       // Seite soll nicht mit einer leeren Liste aufgehen.
-      const staffeln = (d.seasons || []).slice().sort((a, b) => staffelOrdnung(a) - staffelOrdnung(b));
+      // Die Reihenfolge kommt vom Server, auf allen Geräten gleich:
+      // Specials zuletzt.
+      const staffeln = d.seasons || [];
       if (staffeln.length) {
         d.seasons = staffeln;
         // Welche Staffel offen ist: die zuletzt gewählte (nach einem Haken
@@ -1223,11 +1228,47 @@ function viewHome() {
 }
 
 // Sortieren und nach Buchstaben springen.
-// Je Art eigene Wörter: „Neueste Serien" ist in jeder Sprache ein eigener
-// Text, kein ausgetauschtes Wort in „Neueste Filme".
-const SORTIERUNGEN = serien => [['title', 'A–Z'], ['added', tr('Neu hinzugefügt')],
-  ['year', serien ? tr('Neueste Serien') : tr('Neueste Filme')], ['year-asc', serien ? tr('Älteste Serien') : tr('Älteste Filme')]];
+// Die Wahl gilt je Ansicht und steht im Profil (sort.movie, sort.series
+// als „schlüssel:richtung") — so ist sie beim nächsten Mal und auf dem
+// nächsten Gerät wieder da. Die Richtung, die eine Sortierung von sich
+// aus hat: Titel von A, Hinzugefügt und Erscheinen das Neueste zuerst.
+const SORTIER_ART = { movies: 'movie', series: 'series' };
+const SORTIER_VORGABE = { title: 'asc', added: 'desc', premiered: 'desc', rating: 'desc', runtime: 'asc',
+  lastwatched: 'desc', unwatched: 'asc', random: 'asc' };
+const SORTIERUNGEN = serien => [['title', tr('Titel')], ['added', tr('Hinzugefügt')],
+  ['premiered', tr('Erscheinungsdatum')], ['rating', tr('Bewertung')], ...(serien ? [] : [['runtime', tr('Laufzeit')]]),
+  ['lastwatched', tr('Zuletzt gesehen')], ['unwatched', tr('Ungesehene zuerst')], ['random', tr('Zufällig')]];
 const BUCHSTABEN = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+
+function sortierungFuer(view) {
+  const gemerkt = (S.me?.prefs || {})['sort.' + SORTIER_ART[view]] || '';
+  let [key, dir] = gemerkt.split(':');
+  if (!(key in SORTIER_VORGABE) || (key === 'runtime' && view !== 'movies')) key = 'title';
+  if (dir !== 'asc' && dir !== 'desc') dir = SORTIER_VORGABE[key];
+  return { key, dir };
+}
+
+function sortierungWaehlen(view, key, dir) {
+  if (!SORTIER_ART[view]) return;
+  S.buchstabe = '';
+  // merken trägt die Wahl auch gleich in S.me.prefs ein.
+  merken('sort.' + SORTIER_ART[view], key + ':' + dir);
+  return load();
+}
+
+// Die Auswahl: ein Aufklappmenü statt acht Knöpfen — passt auch auf ein
+// Telefon — und daneben die Richtung (bei „Zufällig": neu mischen).
+function sortierWahl(view) {
+  const { key, dir } = sortierungFuer(view);
+  const optionen = SORTIERUNGEN(view === 'series').map(([k, n]) =>
+    `<option value="${k}"${k === key ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  const richtung = dir === 'asc' ? tr('Aufsteigend') : tr('Absteigend');
+  const knopf = key === 'random'
+    ? `<button type="button" class="sortier-knopf" data-sortmischen aria-label="${tr('Neu mischen')}" title="${tr('Neu mischen')}">${svg(I.mischen, 17, 2)}</button>`
+    : `<button type="button" class="sortier-knopf" data-sortrichtung aria-label="${richtung}" title="${richtung}">${svg(dir === 'asc' ? I.aufsteigend : I.absteigend, 17, 2)}</button>`;
+  return `<div class="sortier-leiste" role="group" aria-label="${tr('Sortieren')}">
+    <span class="sortier-wahl"><select data-sortwahl aria-label="${tr('Sortieren')}">${optionen}</select>${svg(I.runter, 14, 2.2)}</span>${knopf}</div>`;
+}
 
 function viewGrid(title) {
   const d = S.data || {};
@@ -1235,15 +1276,17 @@ function viewGrid(title) {
   const genres = d.genres || [];
   const vorhanden = d.buchstaben || {};
   const serien = S.view === 'shows' || S.view === 'series';
-  const sortierung = segment(tr('Sortieren'), SORTIERUNGEN(serien).map(([k, n]) =>
-    ({ name: n, an: (S.sortierung || 'title') === k, attr: `data-sortierung="${k}"` })), 'segment--rollen');
+  const sortierung = sortierWahl(S.view);
+  const { key, dir } = sortierungFuer(S.view);
   const gesamt = d.gesamt ?? items.length;
-  // Die Leiste nur bei A–Z: bei „neu hinzugefügt" springt ein Buchstabe ins Leere.
-  // Und nicht, wenn es gar keine Titel gibt — 27 graue Knöpfe sagen nichts.
-  const leiste = (S.sortierung || 'title') === 'title' && (gesamt || S.buchstabe) ? `
+  // Die Leiste nur nach Titel: bei „Hinzugefügt" springt ein Buchstabe ins
+  // Leere. Absteigend von Z nach A, wie das Raster. Und nicht, wenn es gar
+  // keine Titel gibt — 27 graue Knöpfe sagen nichts.
+  const buchstaben = dir === 'desc' ? [...BUCHSTABEN.slice(1).reverse(), '#'] : BUCHSTABEN;
+  const leiste = key === 'title' && (gesamt || S.buchstabe) ? `
     <nav aria-label="${tr('Nach Anfangsbuchstaben')}" class="az-leiste">
       <button class="tab-pill" aria-pressed="${!S.buchstabe}" data-buchstabe="" style="min-width:38px">${tr('Alle')}</button>
-      ${BUCHSTABEN.map(b => `<button class="tab-pill" aria-pressed="${S.buchstabe === b}" data-buchstabe="${b}"
+      ${buchstaben.map(b => `<button class="tab-pill" aria-pressed="${S.buchstabe === b}" data-buchstabe="${b}"
         style="min-width:30px;padding:0 8px"${vorhanden[b] ? '' : ' disabled'}
         aria-label="${b === '#' ? tr('Zahlen und Zeichen') : tr('Buchstabe {b}', { b })}${vorhanden[b] ? ', ' + tr('{n} Titel', { n: vorhanden[b] }) : ''}">${b}</button>`).join('')}
     </nav>` : '';
@@ -1285,8 +1328,11 @@ function mehrLadenEinrichten() {
     laeuft = true;
     try {
       const kind = S.view === 'movies' ? 'movie' : 'series';
+      const { key, dir } = sortierungFuer(S.view);
+      // Bei „Zufällig" mit dem Samen der ersten Seite — sonst käme beim
+      // Nachladen eine neue Mischung und Titel doppelt.
       const naechste = await api.seite({ kind, genre: S.filter === 'Alle' ? '' : S.filter,
-        sort: S.sortierung, buchstabe: S.buchstabe, offset: d.offset + d.items.length });
+        sort: key, dir, seed: d.seed || 0, buchstabe: key === 'title' ? S.buchstabe : '', offset: d.offset + d.items.length });
       if (S.data !== d) return; // inzwischen woanders
       d.items.push(...naechste.items);
       d.weiter = naechste.weiter;
@@ -1447,8 +1493,6 @@ function viewPerson() {
     <div style="height:40px"></div></div>`);
 }
 
-// Specials (Staffel 0) ans Ende, der Rest der Reihe nach.
-const staffelOrdnung = st => (st.seasonNo || 0) === 0 ? 1e6 : (st.seasonNo || 0);
 
 // Dateigrösse einheitlich: ab 1 GB mit einer Nachkommastelle, darunter MB.
 function groesse(bytes) {
@@ -1901,11 +1945,11 @@ async function folgenLaden(p, staffelId) {
     let f = p.folgen;
     if (!f) {
       const serie = p.seriesId ? await api.item(p.seriesId) : null;
-      const seasons = (serie?.seasons || []).slice().sort((a, b) => staffelOrdnung(a) - staffelOrdnung(b));
+      const seasons = serie?.seasons || [];
       f = { seasons, staffel: p.parentId, episodes: [] };
     }
     f.staffel = staffelId || f.staffel;
-    f.episodes = (await api.children(f.staffel).catch(() => [])).slice().sort(nachFolge);
+    f.episodes = await api.children(f.staffel).catch(() => []);
     p.folgen = f;
   } finally { p.folgenLaedt = false; }
   p.spurenHtml = '';
@@ -2906,7 +2950,11 @@ async function markDoneAndLeave() {
  * Einstellungen tat im Browser nichts.
  */
 
-const nachFolge = (a, b) => (a.seasonNo - b.seasonNo) || (a.episodeNo - b.episodeNo);
+// Staffeln und Folgen kommen vom Server schon in der einen Reihenfolge,
+// die alle Geräte zeigen: Staffel (Specials zuletzt), Folgennummer (ohne
+// Nummer zuletzt). Weiter geht es über Staffelgrenzen nur in den
+// regulären Staffeln — ein Making-of soll nicht von selbst starten.
+const regulaer = st => (st.seasonNo || 0) > 0;
 
 // Die Folge, mit der es in einer Serie weitergeht: die nach der zuletzt
 // geschauten (oder die angefangene) — das weiss der Server, und er sagt
@@ -2918,10 +2966,10 @@ async function ersteOffeneFolge(serieId) {
     if (w?.item?.id) return w.item;
   } catch {}
   const d = await api.item(serieId);
-  const staffeln = (d.seasons || []).slice().sort((a, b) => (a.seasonNo || 0) - (b.seasonNo || 0));
+  const staffeln = (d.seasons || []).filter(regulaer);
   let erste = null;
   for (const st of staffeln) {
-    const folgen = (await api.children(st.id).catch(() => [])).slice().sort(nachFolge);
+    const folgen = await api.children(st.id).catch(() => []);
     if (!erste && folgen.length) erste = folgen[0];
     const offen = folgen.find(f => !f.finished);
     if (offen) return offen;
@@ -2932,16 +2980,17 @@ async function ersteOffeneFolge(serieId) {
 // Die Folge nach dieser — auch über das Ende einer Staffel hinweg.
 async function folgeDanach(folgeId, staffelId) {
   if (!staffelId) return null;
-  const folgen = (await api.children(staffelId).catch(() => [])).slice().sort(nachFolge);
+  const folgen = await api.children(staffelId).catch(() => []);
   const i = folgen.findIndex(f => f.id === folgeId);
   if (i >= 0 && i + 1 < folgen.length) return folgen[i + 1];
   const staffel = (await api.item(staffelId).catch(() => null))?.item;
   if (!staffel?.parentId) return null;
   const serie = await api.item(staffel.parentId).catch(() => null);
-  const staffeln = (serie?.seasons || []).slice().sort((a, b) => (a.seasonNo || 0) - (b.seasonNo || 0));
+  const staffeln = serie?.seasons || [];
   const j = staffeln.findIndex(x => x.id === staffelId);
-  for (const st of staffeln.slice(j + 1)) {
-    const f = (await api.children(st.id).catch(() => [])).slice().sort(nachFolge);
+  if (j < 0 || !regulaer(staffeln[j])) return null;
+  for (const st of staffeln.slice(j + 1).filter(regulaer)) {
+    const f = await api.children(st.id).catch(() => []);
     if (f.length) return f[0];
   }
   return null;
@@ -4763,7 +4812,12 @@ app.addEventListener('click', async e => {
       return load();
     } catch (err) { return toast(err.message); }
   }
-  if ((n = hit('data-sortierung'))) { S.sortierung = n.dataset.sortierung; S.buchstabe = ''; return load(); }
+  if (hit('data-sortrichtung')) {
+    const { key, dir } = sortierungFuer(S.view);
+    return sortierungWaehlen(S.view, key, dir === 'asc' ? 'desc' : 'asc');
+  }
+  // Neu mischen: ohne Samen fragen, der Server würfelt einen neuen.
+  if (hit('data-sortmischen')) return load();
   if ((n = hit('data-buchstabe'))) { S.buchstabe = n.dataset.buchstabe; return load(); }
   if ((n = hit('data-fassungmenu'))) {
     S.fassungMenu = S.fassungMenu === n.dataset.fassungmenu ? null : n.dataset.fassungmenu;
@@ -5360,6 +5414,10 @@ app.addEventListener('change', async e => {
     await sprachWechseln(z.value);
     return;
   }
+  if (z.matches && z.matches('select[data-sortwahl]')) {
+    // Eine neue Sortierung beginnt in ihrer üblichen Richtung.
+    return sortierungWaehlen(S.view, z.value, SORTIER_VORGABE[z.value] || 'asc');
+  }
   if (z.matches && z.matches('select[data-prefsprache]')) {
     try {
       S.me = await api.updateMe({ prefs: { sprache: z.value } });
@@ -5651,7 +5709,7 @@ function standMerken(inVerlauf = true) {
     scroll: seite ? Math.round(seite.scrollTop) : 0,
     reihen: [...app.querySelectorAll('.rail')].map(r => Math.round(r.scrollLeft)),
     fokusId: letzteKarte || verlaufsStand.get(aktSchluessel)?.fokusId || null,
-    filter: S.filter, sortierung: S.sortierung, buchstabe: S.buchstabe, favArt: S.favArt,
+    filter: S.filter, buchstabe: S.buchstabe, favArt: S.favArt,
   };
   verlaufsStand.set(aktSchluessel, stand);
   if (inVerlauf) {

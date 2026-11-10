@@ -31,22 +31,24 @@ import (
 
 // NFO ist, was Lumen aus einer NFO-Datei braucht.
 type NFO struct {
-	Art           string   `json:"art"` // movie | tvshow | episodedetails | season
-	Titel         string   `json:"titel,omitempty"`
-	Originaltitel string   `json:"originaltitel,omitempty"`
-	Jahr          int      `json:"jahr,omitempty"`
-	Premiere      string   `json:"premiere,omitempty"` // JJJJ-MM-TT
-	Inhalt        string   `json:"inhalt,omitempty"`
-	Genres        []string `json:"genres,omitempty"`
-	Freigabe      string   `json:"freigabe,omitempty"`
-	Bewertung     float64  `json:"bewertung,omitempty"`
-	Stimmen       int      `json:"stimmen,omitempty"`
-	LaufzeitMin   int      `json:"laufzeitMin,omitempty"`
-	Staffel       int      `json:"staffel,omitempty"`
-	Folge         int      `json:"folge,omitempty"`
-	TMDb          string   `json:"tmdb,omitempty"`
-	IMDb          string   `json:"imdb,omitempty"`
-	TVDb          string   `json:"tvdb,omitempty"`
+	Art           string `json:"art"` // movie | tvshow | episodedetails | season
+	Titel         string `json:"titel,omitempty"`
+	Originaltitel string `json:"originaltitel,omitempty"`
+	// Sortiertitel: <sorttitle>, wie Kodi und Emby ihn schreiben.
+	Sortiertitel string   `json:"sortiertitel,omitempty"`
+	Jahr         int      `json:"jahr,omitempty"`
+	Premiere     string   `json:"premiere,omitempty"` // JJJJ-MM-TT
+	Inhalt       string   `json:"inhalt,omitempty"`
+	Genres       []string `json:"genres,omitempty"`
+	Freigabe     string   `json:"freigabe,omitempty"`
+	Bewertung    float64  `json:"bewertung,omitempty"`
+	Stimmen      int      `json:"stimmen,omitempty"`
+	LaufzeitMin  int      `json:"laufzeitMin,omitempty"`
+	Staffel      int      `json:"staffel,omitempty"`
+	Folge        int      `json:"folge,omitempty"`
+	TMDb         string   `json:"tmdb,omitempty"`
+	IMDb         string   `json:"imdb,omitempty"`
+	TVDb         string   `json:"tvdb,omitempty"`
 }
 
 // HatKennung: Mit einer Kennung lässt sich der Titel ohne Suche zuordnen.
@@ -70,7 +72,9 @@ func (n *NFO) Vollstaendig() bool {
 func (n *NFO) Anwenden(it *store.Item, alter func(string) *int) {
 	if n.Titel != "" {
 		it.Title = n.Titel
-		it.SortTitle = store.SortKey(n.Titel)
+	}
+	if n.Sortiertitel != "" {
+		it.SortEigen = n.Sortiertitel
 	}
 	if n.Originaltitel != "" {
 		it.OriginalTitle = n.Originaltitel
@@ -111,6 +115,7 @@ type roh struct {
 	XMLName       xml.Name
 	Title         string   `xml:"title"`
 	OriginalTitle string   `xml:"originaltitle"`
+	SortTitle     string   `xml:"sorttitle"`
 	Year          string   `xml:"year"`
 	Premiered     string   `xml:"premiered"`
 	Aired         string   `xml:"aired"`
@@ -187,6 +192,7 @@ func NFOAus(daten []byte) (*NFO, error) {
 		Art:           strings.ToLower(r.XMLName.Local),
 		Titel:         strings.TrimSpace(r.Title),
 		Originaltitel: strings.TrimSpace(r.OriginalTitle),
+		Sortiertitel:  strings.TrimSpace(r.SortTitle),
 		Inhalt:        strings.TrimSpace(r.Plot),
 	}
 	switch n.Art {

@@ -25,10 +25,13 @@ import (
 
 // Candidate ist ein Treffer einer Quelle.
 type Candidate struct {
-	SourceID  string
-	Source    string // tmdb | tvdb | omdb
-	Title     string
-	Original  string
+	SourceID string
+	Source   string // tmdb | tvdb | omdb
+	Title    string
+	Original string
+	// Sprache: die Originalsprache („en", „fr" …) — nach ihr wird
+	// sortiert, wenn der Titel der Originaltitel ist.
+	Sprache   string
 	Year      int
 	Overview  string
 	Premiered string

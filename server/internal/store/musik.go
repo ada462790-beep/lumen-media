@@ -16,6 +16,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 )
@@ -47,6 +48,12 @@ type MusikTitel struct {
 	HatCover       bool      `json:"-"`
 	Hinzugefuegt   time.Time `json:"hinzugefuegt"`
 	Fehlt          bool      `json:"fehlt,omitempty"`
+	// Sortier-Tags aus der Datei (TITLESORT, ARTISTSORT, ALBUMSORT,
+	// ALBUMARTISTSORT) — nur beim Speichern; leer heisst: nach dem Namen.
+	TitelSortTag, InterpretSortTag, AlbumSortTag, AlbumInterpretSortTag string `json:"-"`
+	// Die gespeicherten Schlüssel (sortieren.go) — nur beim Lesen, für das
+	// Bilden der Alben.
+	InterpretSchluessel, AlbumSchluessel, AlbumInterpretSchluessel string `json:"-"`
 }
 
 type MusikAlbum struct {
@@ -62,6 +69,8 @@ type MusikAlbum struct {
 	Anzahl       int       `json:"anzahl"`
 	DauerMS      int64     `json:"dauerMs"`
 	Hinzugefuegt time.Time `json:"hinzugefuegt"`
+	// Schlüssel aus den Sortier-Tags der Titel; leer = aus dem Namen.
+	NameSchluessel, InterpretSchluessel string `json:"-"`
 }
 
 type MusikInterpret struct {
@@ -104,9 +113,18 @@ func AlbumID(libraryID, ordner, album string) string {
 	return "al" + hex.EncodeToString(h[:8])
 }
 
-// MusikSortKey: Artikel nach hinten, wie bei Filmen — „The Beatles" steht
-// unter B.
-func MusikSortKey(s string) string { return SortKey(s) }
+// MusikSortKey: der Sortierschlüssel wie bei Filmen — „The Beatles" steht
+// unter B, „Die Ärzte" unter A. Musik hat keine Sprache; es gelten die
+// deutschen und englischen Artikel.
+func MusikSortKey(s string) string { return Sortierschluessel(s, "") }
+
+// musikSchluessel: aus dem Sortier-Tag, wenn es einen gibt, sonst aus dem Namen.
+func musikSchluessel(tag, name string) string {
+	if strings.TrimSpace(tag) != "" {
+		return MusikSortKey(tag)
+	}
+	return MusikSortKey(name)
+}
 
 // titelBedingung: sichtbar für diese Person, und die Datei ist da.
 func (v MusikSicht) titelBedingung(alias string) (string, []any) {
@@ -179,8 +197,9 @@ func (s *Store) MusikTitelSpeichern(ctx context.Context, t *MusikTitel) (neu boo
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO musik_titel (id, library_id, album_id, pfad, groesse, mtime, titel, titel_sort,
 		   interpret, albuminterpret, album, track, disc, jahr, genre, komponist, dauer_ms,
-		   compilation, explizit, codec, container, bitrate, abtastrate, hat_cover, hinzugefuegt, fehlt_seit)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)
+		   compilation, explizit, codec, container, bitrate, abtastrate, hat_cover, hinzugefuegt, fehlt_seit,
+		   interpret_sort, album_sort, albuminterpret_sort)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?,?,?)
 		 ON CONFLICT (pfad) DO UPDATE SET
 		   library_id=excluded.library_id, groesse=excluded.groesse, mtime=excluded.mtime,
 		   titel=excluded.titel, titel_sort=excluded.titel_sort, interpret=excluded.interpret,
@@ -188,11 +207,15 @@ func (s *Store) MusikTitelSpeichern(ctx context.Context, t *MusikTitel) (neu boo
 		   disc=excluded.disc, jahr=excluded.jahr, genre=excluded.genre, komponist=excluded.komponist,
 		   dauer_ms=excluded.dauer_ms, compilation=excluded.compilation, explizit=excluded.explizit,
 		   codec=excluded.codec, container=excluded.container, bitrate=excluded.bitrate,
-		   abtastrate=excluded.abtastrate, hat_cover=excluded.hat_cover, fehlt_seit=NULL`,
-		t.ID, t.LibraryID, t.AlbumID, t.Pfad, t.Groesse, t.MTime, t.Titel, MusikSortKey(t.Titel),
+		   abtastrate=excluded.abtastrate, hat_cover=excluded.hat_cover, fehlt_seit=NULL,
+		   interpret_sort=excluded.interpret_sort, album_sort=excluded.album_sort,
+		   albuminterpret_sort=excluded.albuminterpret_sort`,
+		t.ID, t.LibraryID, t.AlbumID, t.Pfad, t.Groesse, t.MTime, t.Titel, musikSchluessel(t.TitelSortTag, t.Titel),
 		t.Interpret, t.AlbumInterpret, t.Album, t.Track, t.Disc, t.Jahr, t.Genre, t.Komponist, t.DauerMS,
 		b2i(t.Compilation), b2i(t.Explizit), t.Codec, t.Container, t.Bitrate, t.Abtastrate,
-		b2i(t.HatCover), t.Hinzugefuegt.Unix())
+		b2i(t.HatCover), t.Hinzugefuegt.Unix(),
+		musikSchluessel(t.InterpretSortTag, t.Interpret), musikSchluessel(t.AlbumSortTag, t.Album),
+		musikSchluessel(t.AlbumInterpretSortTag, t.AlbumInterpret))
 	return neu, err
 }
 
@@ -258,7 +281,7 @@ func (s *Store) MusikAlbenSetzen(ctx context.Context, libraryID string, alben []
 				   interpret=excluded.interpret, interpret_id=excluded.interpret_id, jahr=excluded.jahr,
 				   genre=excluded.genre, compilation=excluded.compilation, cover_quelle=excluded.cover_quelle,
 				   titel_anzahl=excluded.titel_anzahl, dauer_ms=excluded.dauer_ms`,
-				a.ID, libraryID, a.Name, MusikSortKey(a.Name), a.Interpret, a.InterpretID, a.Jahr, a.Genre,
+				a.ID, libraryID, a.Name, schluesselOder(a.NameSchluessel, a.Name), a.Interpret, a.InterpretID, a.Jahr, a.Genre,
 				b2i(a.Compilation), a.CoverQuelle, a.Anzahl, a.DauerMS, hinzu); err != nil {
 				return err
 			}
@@ -266,7 +289,7 @@ func (s *Store) MusikAlbenSetzen(ctx context.Context, libraryID string, alben []
 				if _, err := t.ExecContext(ctx,
 					`INSERT INTO musik_interpret (id, name, name_sort) VALUES (?,?,?)
 					 ON CONFLICT (id) DO UPDATE SET name=excluded.name, name_sort=excluded.name_sort`,
-					a.InterpretID, a.Interpret, MusikSortKey(a.Interpret)); err != nil {
+					a.InterpretID, a.Interpret, schluesselOder(a.InterpretSchluessel, a.Interpret)); err != nil {
 					return err
 				}
 			}
@@ -292,12 +315,55 @@ func (s *Store) MusikAlbenSetzen(ctx context.Context, libraryID string, alben []
 	})
 }
 
+// schluesselOder: der schon gerechnete Schlüssel, sonst der aus dem Namen.
+func schluesselOder(schluessel, name string) string {
+	if schluessel != "" {
+		return schluessel
+	}
+	return MusikSortKey(name)
+}
+
+// musikSortierungUmbauen rechnet die Schlüssel aller Musik neu (Umbau auf
+// Stand 9). Sortier-Tags kannte die alte Fassung nicht; sie kommen beim
+// nächsten Durchlauf für jede geänderte Datei dazu.
+func musikSortierungUmbauen(tx *sql.Tx) error {
+	type zeile struct{ id, a, b, c, d string }
+	for _, tab := range []struct{ lesen, schreiben string }{
+		{`SELECT id, titel, interpret, album, albuminterpret FROM musik_titel`,
+			`UPDATE musik_titel SET titel_sort = ?, interpret_sort = ?, album_sort = ?, albuminterpret_sort = ? WHERE id = ?`},
+		{`SELECT id, name, '', '', '' FROM musik_album`, `UPDATE musik_album SET name_sort = ? WHERE id = ?`},
+		{`SELECT id, name, '', '', '' FROM musik_interpret`, `UPDATE musik_interpret SET name_sort = ? WHERE id = ?`},
+	} {
+		var alle []zeile
+		if err := zeilenLesen(tx, tab.lesen, func(r *sql.Rows) error {
+			var z zeile
+			if err := r.Scan(&z.id, &z.a, &z.b, &z.c, &z.d); err != nil {
+				return err
+			}
+			alle = append(alle, z)
+			return nil
+		}); err != nil {
+			return err
+		}
+		for _, z := range alle {
+			args := []any{MusikSortKey(z.a)}
+			if strings.HasPrefix(tab.lesen, "SELECT id, titel") {
+				args = append(args, MusikSortKey(z.b), MusikSortKey(z.c), MusikSortKey(z.d))
+			}
+			if _, err := tx.Exec(tab.schreiben, append(args, z.id)...); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------- Lesen
 
 const musikTitelCols = `t.id, t.library_id, t.album_id, t.pfad, t.groesse, t.mtime, t.titel, t.interpret,
 	t.albuminterpret, t.album, t.track, t.disc, t.jahr, t.genre, t.komponist, t.dauer_ms, t.compilation,
 	t.explizit, t.codec, t.container, t.bitrate, t.abtastrate, t.hat_cover, t.hinzugefuegt,
-	t.fehlt_seit IS NOT NULL`
+	t.fehlt_seit IS NOT NULL, t.interpret_sort, t.album_sort, t.albuminterpret_sort`
 
 func scanMusikTitel(rows *sql.Rows) ([]MusikTitel, error) {
 	out := []MusikTitel{}
@@ -308,7 +374,7 @@ func scanMusikTitel(rows *sql.Rows) ([]MusikTitel, error) {
 		if err := rows.Scan(&t.ID, &t.LibraryID, &t.AlbumID, &t.Pfad, &t.Groesse, &t.MTime, &t.Titel,
 			&t.Interpret, &t.AlbumInterpret, &t.Album, &t.Track, &t.Disc, &t.Jahr, &t.Genre, &t.Komponist,
 			&t.DauerMS, &comp, &expl, &t.Codec, &t.Container, &t.Bitrate, &t.Abtastrate, &cover, &hinzu,
-			&t.Fehlt); err != nil {
+			&t.Fehlt, &t.InterpretSchluessel, &t.AlbumSchluessel, &t.AlbumInterpretSchluessel); err != nil {
 			return nil, err
 		}
 		t.Compilation, t.Explizit, t.HatCover = comp == 1, expl == 1, cover == 1
@@ -352,11 +418,11 @@ type MusikAlbenAbfrage struct {
 func musikAlbenOrdnung(s string) string {
 	switch s {
 	case "interpret":
-		return `a.compilation, (SELECT name_sort FROM musik_interpret i WHERE i.id = a.interpret_id), a.jahr, a.name_sort`
+		return `a.compilation, (SELECT name_sort FROM musik_interpret i WHERE i.id = a.interpret_id), a.jahr, a.name_sort, a.id`
 	case "jahr":
-		return `a.jahr DESC, a.name_sort`
+		return `a.jahr DESC, a.name_sort, a.id`
 	case "neu":
-		return `a.hinzugefuegt DESC, a.name_sort`
+		return `a.hinzugefuegt DESC, a.name_sort, a.id`
 	default:
 		return `a.name_sort, a.id`
 	}
@@ -413,7 +479,7 @@ func (s *Store) MusikAlbum(ctx context.Context, v MusikSicht, id string) (*Musik
 	}
 	tw, targs := v.titelBedingung("t")
 	trows, err := s.db.QueryContext(ctx, `SELECT `+musikTitelCols+` FROM musik_titel t WHERE t.album_id = ? AND `+tw+
-		` ORDER BY t.disc, t.track, t.titel_sort`, append([]any{id}, targs...)...)
+		` ORDER BY t.disc, t.track, t.titel_sort, t.id`, append([]any{id}, targs...)...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -513,18 +579,19 @@ func musikTitelOrdnung(s string, ab bool) string {
 	}
 	switch s {
 	case "interpret":
-		return `lower(t.interpret)` + r + `, lower(t.album), t.disc, t.track`
+		return `t.interpret_sort` + r + `, t.album_sort, t.disc, t.track, t.titel_sort, t.id`
 	case "album":
-		return `lower(t.album)` + r + `, t.disc, t.track`
+		return `t.album_sort` + r + `, t.disc, t.track, t.titel_sort, t.id`
 	case "jahr":
-		return `t.jahr` + r + `, lower(t.album), t.disc, t.track`
+		// Ohne Jahr immer ans Ende, egal in welche Richtung.
+		return `t.jahr = 0, t.jahr` + r + `, t.album_sort, t.disc, t.track, t.titel_sort, t.id`
 	case "dauer":
-		return `t.dauer_ms` + r + `, t.titel_sort`
+		return `t.dauer_ms` + r + `, t.titel_sort, t.id`
 	case "neu":
 		if ab {
-			return `t.hinzugefuegt ASC, t.titel_sort`
+			return `t.hinzugefuegt ASC, t.titel_sort, t.id`
 		}
-		return `t.hinzugefuegt DESC, t.titel_sort`
+		return `t.hinzugefuegt DESC, t.titel_sort, t.id`
 	default:
 		return `t.titel_sort` + r + `, t.id`
 	}
@@ -568,7 +635,7 @@ func (s *Store) MusikInterpreten(ctx context.Context, v MusikSicht) ([]MusikInte
 		          ORDER BY a2.jahr DESC LIMIT 1)
 		   FROM musik_interpret i JOIN musik_album a ON a.interpret_id = i.id
 		  WHERE a.compilation = 0 AND `+w+`
-		  GROUP BY i.id ORDER BY i.name_sort`, args...)
+		  GROUP BY i.id ORDER BY i.name_sort, i.id`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +690,7 @@ func (s *Store) MusikErscheintAuf(ctx context.Context, v MusikSicht, interpretID
 	rows, err := s.db.QueryContext(ctx, `SELECT `+musikAlbumCols+` FROM musik_album a
 		 WHERE a.interpret_id != ? AND a.id IN (SELECT t.album_id FROM musik_titel t
 		       WHERE t.interpret = ? COLLATE NOCASE AND `+tw+`)
-		 ORDER BY a.jahr DESC, a.name_sort`, append([]any{interpretID, name}, args...)...)
+		 ORDER BY a.jahr DESC, a.name_sort, a.id`, append([]any{interpretID, name}, args...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -638,7 +705,7 @@ func (s *Store) MusikGenres(ctx context.Context, v MusikSicht) ([]MusikGenre, er
 		`SELECT a.genre, count(*), (SELECT a2.id FROM musik_album a2 WHERE a2.genre = a.genre AND a2.cover_quelle != ''
 		          ORDER BY a2.hinzugefuegt DESC LIMIT 1)
 		   FROM musik_album a WHERE a.genre != '' AND `+w+`
-		  GROUP BY a.genre COLLATE NOCASE ORDER BY lower(a.genre)`, args...)
+		  GROUP BY a.genre COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -653,7 +720,19 @@ func (s *Store) MusikGenres(ctx context.Context, v MusikSicht) ([]MusikGenre, er
 		g.CoverAlbum = cover.String
 		out = append(out, g)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// In Go sortiert: lower() in SQLite kennt nur A–Z, „Électro" stünde
+	// sonst hinter „Zydeco".
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := MusikSortKey(out[i].Name), MusikSortKey(out[j].Name)
+		if a != b {
+			return a < b
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
 }
 
 // MusikZaehlen: wie viel Musik die Person sehen kann — für die Startseite.
@@ -685,7 +764,7 @@ func (s *Store) MusikSuche(ctx context.Context, v MusikSicht, text string, limit
 	}
 	w, args := v.albumBedingung("a")
 	rows, err := s.db.QueryContext(ctx, `SELECT `+musikAlbumCols+` FROM musik_album a
-		 WHERE (lower(a.name) LIKE ? OR lower(a.interpret) LIKE ?) AND `+w+` ORDER BY a.name_sort LIMIT ?`,
+		 WHERE (lower(a.name) LIKE ? OR lower(a.interpret) LIKE ?) AND `+w+` ORDER BY a.name_sort, a.id LIMIT ?`,
 		append(append([]any{muster, muster}, args...), limit)...)
 	if err != nil {
 		return nil, nil, nil, err
@@ -698,7 +777,7 @@ func (s *Store) MusikSuche(ctx context.Context, v MusikSicht, text string, limit
 	tw, targs := v.titelBedingung("t")
 	trows, err := s.db.QueryContext(ctx, `SELECT `+musikTitelCols+` FROM musik_titel t
 		 WHERE (lower(t.titel) LIKE ? OR lower(t.interpret) LIKE ? OR lower(t.komponist) LIKE ?) AND `+tw+`
-		 ORDER BY CASE WHEN lower(t.titel) LIKE ? THEN 0 ELSE 1 END, t.titel_sort LIMIT ?`,
+		 ORDER BY CASE WHEN lower(t.titel) LIKE ? THEN 0 ELSE 1 END, t.titel_sort, t.id LIMIT ?`,
 		append(append([]any{muster, muster, muster}, targs...), muster, limit)...)
 	if err != nil {
 		return nil, nil, nil, err

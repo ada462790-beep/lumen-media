@@ -531,6 +531,21 @@ a.nav:hover:not([aria-current=page]) { background:var(--fill) }
 .segment-knopf:hover:not([aria-pressed=true]):not([aria-current=page]) { background:var(--fill) }
 .row .segment { margin:0 }
 
+/* Sortieren: ein Aufklappmenü in der Spur des Segmented Control, daneben
+   die Richtung als eigener Knopf — wie „Sortieren nach" im Finder. Passt
+   auch auf ein Telefon, wo acht Knöpfe nebeneinander nicht passten. */
+.sortier-leiste { display:flex; align-items:center; gap:6px; margin:10px 0 14px; max-width:100% }
+.sortier-wahl { position:relative; display:inline-flex; align-items:center; min-width:0; border-radius:9px; background:var(--fill) }
+.sortier-wahl select { appearance:none; -webkit-appearance:none; min-width:0; max-width:100%; min-height:32px; margin:0;
+                       padding:0 30px 0 12px; border:0; border-radius:9px; background:none; color:var(--label);
+                       font:inherit; font-size:14px; font-weight:600; cursor:pointer; text-overflow:ellipsis }
+.sortier-wahl svg { position:absolute; right:10px; pointer-events:none; color:var(--label-2) }
+.sortier-knopf { flex:none; display:inline-grid; place-items:center; width:32px; height:32px; padding:0; border:0;
+                 border-radius:9px; background:var(--fill); color:var(--label); cursor:pointer }
+.sortier-wahl:hover, .sortier-knopf:hover { background:var(--fill-2) }
+.sortier-wahl:focus-within { box-shadow:0 0 0 3px var(--fokus) }
+.sortier-wahl select:focus-visible { outline:none }
+
 /* Genre-Knöpfe: eine Zeile, waagerecht zu wischen — kein Umbruch. */
 .chips--rollen { display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; margin:0 0 14px; padding:2px 0; scrollbar-width:none }
 .chips--rollen .tab-pill { flex:none; white-space:nowrap; background:var(--fill) }
@@ -644,6 +659,8 @@ html.hell, .lumen.light, dialog.lumen.light { color-scheme:light }
 /* ---- Finger statt Maus: Tippflächen mindestens 44 px ------------------- */
 @media (pointer: coarse) {
   .tab-pill, .segment-knopf, .btn-pill, .mehr-eintrag { min-height:44px }
+  .sortier-wahl select { min-height:44px }
+  .sortier-knopf { width:44px; height:44px }
   .btn-round.sm { width:44px; height:44px }
   .az-leiste { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; margin-right:-16px; padding-right:16px }
   .az-leiste::-webkit-scrollbar { display:none }

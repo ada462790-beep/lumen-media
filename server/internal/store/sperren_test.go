@@ -47,7 +47,6 @@ func TestHandbearbeitungUeberlebtNeuLaden(t *testing.T) {
 	quelle.Premiered = "1999-05-01"
 	quelle.AgeRating, quelle.AgeYears = "18", zeiger(18)
 	quelle.MatchState = "unmatched"
-	quelle.SortTitle = SortKey(quelle.Title)
 	if err := s.UpsertItem(ctx, quelle); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +126,9 @@ func TestSortiertitelVonHand(t *testing.T) {
 		t.Fatal(err)
 	}
 	a2, _ := s.Item(ctx, a.ID)
-	a2.Title, a2.SortTitle = "Zorro (Neu)", SortKey("Zorro (Neu)")
+	// Eine Quelle (etwa eine NFO) bringt einen anderen Sortiertitel: Der
+	// von Hand eingetragene bleibt.
+	a2.Title, a2.SortEigen = "Zorro (Neu)", "Zzz"
 	_ = s.UpsertItem(ctx, a2)
 	liste, _ := s.Query(ctx, Query{Libraries: []string{"lib"}, Sort: "title"})
 	if len(liste) != 2 || liste[0].ID != a.ID {

@@ -622,28 +622,52 @@ struct BrowseView: View {
         }
         .task {
             guard raster == nil else { return }
-            let neu = Raster(client: session.client, kind: kind, genre: startGenre)
+            let neu = Raster(client: session.client, kind: kind, genre: startGenre,
+                             gemerkt: session.me?.prefs[Sortierung.prefSchluessel(kind: kind)],
+                             speicher: .standard,
+                             merken: { schluessel, wert in
+                                 Task { await session.prefsSetzen([schluessel: wert]) }
+                             })
             raster = neu
             await neu.laden(genre: startGenre)
         }
         .refreshable { await raster?.neu() }
     }
 
-    /// Die vier Sortierungen als Auswahl mit Haken.
+    /// Die Sortierungen als Auswahl mit Haken, darunter die Richtung —
+    /// wie „Sortieren nach" in den Apps von Apple. Bei „Zufällig" steht
+    /// dort „Neu mischen".
     private func sortierMenue(_ raster: Raster) -> some View {
         Menu {
             Picker("Sortieren", selection: Binding(
                 get: { raster.sortierung },
                 set: { neu in Task { await raster.sortieren(neu) } })) {
-                ForEach(Sortierung.allCases) { art in
+                ForEach(Sortierung.faelle(kind: kind)) { art in
                     Label(art.name(kind: kind), systemImage: art.symbol).tag(art)
                 }
             }
             .pickerStyle(.inline)
+            Section {
+                if raster.sortierung == .zufall {
+                    Button {
+                        Task { await raster.richtungUmkehren() }
+                    } label: {
+                        Label("Neu mischen", systemImage: "shuffle")
+                    }
+                } else {
+                    Picker("Richtung", selection: Binding(
+                        get: { raster.absteigend },
+                        set: { neu in if neu != raster.absteigend { Task { await raster.richtungUmkehren() } } })) {
+                        Label(richtungName(absteigend: false), systemImage: "arrow.up").tag(false)
+                        Label(richtungName(absteigend: true), systemImage: "arrow.down").tag(true)
+                    }
+                    .pickerStyle(.inline)
+                }
+            }
         } label: {
             Label("Sortieren", systemImage: "arrow.up.arrow.down")
         }
-        .accessibilityLabel("Sortieren: \(raster.sortierung.name(kind: kind))")
+        .accessibilityLabel("Sortieren: \(raster.sortierung.name(kind: kind)), \(richtungName(absteigend: raster.absteigend))")
     }
 }
 
@@ -658,7 +682,7 @@ struct BuchstabenLeiste: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
                 knopf(nil, text: String(localized: "Alle", bundle: .lumen, locale: .lumen))
-                ForEach(Buchstaben.alle, id: \.self) { b in
+                ForEach(raster.buchstabenReihe, id: \.self) { b in
                     knopf(b, text: b)
                 }
             }

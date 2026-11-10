@@ -39,6 +39,9 @@ var prefsBekannt = map[string]bool{
 	"sprache": true, "tonSprache": true, "untertitel": true, "utGroesse": true, "utHintergrund": true,
 	"autoplay": true, "skipIntro": true, "shareRatings": true, "nochDaFrage": true,
 	"utSuchSprachen": true, "newsSeen": true,
+	// Die gewählte Sortierung je Ansicht, als „schlüssel:richtung"
+	// („title:asc", „added:desc").
+	"sort.movie": true, "sort.series": true, "sort.watchlist": true, "sort.favorites": true,
 }
 
 func prefSchluesselGueltig(k string) bool {

@@ -123,7 +123,7 @@ func Open(path string) (*Store, error) {
 // SchemaStand zählt die Änderungen am Aufbau der Datenbank. Wer
 // nachruesten() erweitert, zählt ihn um eins hoch — dann sichert Lumen
 // die Datenbank, bevor es sie umbaut.
-const SchemaStand = 8
+const SchemaStand = 9
 
 // umbauen bringt Daten einer älteren Fassung auf den neuen Stand — jeder
 // Schritt genau einmal, je nach dem Stand, den die Datenbank mitbringt.
@@ -204,6 +204,14 @@ func umbauen(db *sql.DB) error {
 	if stand < 8 {
 		if err := kinderErkennen(db); err != nil {
 			return fmt.Errorf("kinderprofile erkennen: %w", err)
+		}
+	}
+	// Stand 9: Neue Sortierschlüssel (sortieren.go) — natürliche
+	// Zahlenfolge, ä wie a, Artikel je Sprache — für alle Titel und alle
+	// Musik. Eigene Sortiertitel aus feld_sperre werden zu sort_eigen.
+	if stand < 9 {
+		if err := sortierungUmbauen(db); err != nil {
+			return fmt.Errorf("sortierschlüssel neu rechnen: %w", err)
 		}
 	}
 	return nil
@@ -484,6 +492,11 @@ func nachruesten(db *sql.DB) error {
 		// Wann zuletzt etwas Neues kam: bei Filmen das Hinzufügen, bei
 		// Serien die neueste Folge. Danach sortiert „Zuletzt hinzugefügt".
 		`ALTER TABLE item ADD COLUMN zuletzt_neu INTEGER`,
+		// Ein eigener Sortiertitel (von Hand oder <sorttitle> aus der NFO)
+		// und die Originalsprache — aus beiden rechnet sortieren.go den
+		// Schlüssel in sort_title.
+		`ALTER TABLE item ADD COLUMN sort_eigen TEXT`,
+		`ALTER TABLE item ADD COLUMN sprache_original TEXT`,
 	} {
 		if _, err := db.Exec(stmt); err != nil &&
 			!strings.Contains(err.Error(), "duplicate column") {
@@ -520,11 +533,18 @@ func nachruesten(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS item_titel_klein ON item (library_id, kind, titel_klein)`,
 		// Für das Raster: je Sortierung ein Index, damit SQLite nur die
 		// gezeigte Seite liest, statt alle Titel einer Art zu sortieren
-		// („USE TEMP B-TREE FOR ORDER BY").
-		`CREATE INDEX IF NOT EXISTS item_sort_titel ON item (kind, sort_title)`,
-		`CREATE INDEX IF NOT EXISTS item_sort_neu ON item (kind, zuletzt_neu)`,
-		`CREATE INDEX IF NOT EXISTS item_sort_jahr ON item (kind, year DESC, sort_title)`,
-		`CREATE INDEX IF NOT EXISTS item_sort_wertung ON item (kind, imdb_rating DESC, sort_title)`,
+		// („USE TEMP B-TREE FOR ORDER BY"). Jeder endet mit sort_title und
+		// id wie die Sortierung selbst (sqlOrdnung in sortieren.go); die
+		// Ausdrücke müssen dort und hier gleich lauten.
+		`DROP INDEX IF EXISTS item_sort_titel`,
+		`DROP INDEX IF EXISTS item_sort_neu`,
+		`DROP INDEX IF EXISTS item_sort_jahr`,
+		`DROP INDEX IF EXISTS item_sort_wertung`,
+		`CREATE INDEX IF NOT EXISTS item_ord_titel ON item (kind, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_neu ON item (kind, zuletzt_neu DESC, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_erschienen ON item (kind, COALESCE(premiered, CAST(year AS TEXT)) DESC, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_wertung ON item (kind, imdb_rating DESC, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_laufzeit ON item (kind, runtime_ms IS NULL, runtime_ms, sort_title, id)`,
 		// Dateien, die gerade fehlen (Verwaltung → Aufräumen); fast alle
 		// Zeilen haben hier NULL und stehen gar nicht im Index.
 		// Was noch nachzuschlagen ist und was nicht erkannt wurde: Die

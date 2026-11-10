@@ -126,12 +126,17 @@ enum class Tx(val vorgabe: String) {
     SPUR_DATEI("Datei"),
 
     // Sortierung
-    SORT_AZ("A–Z"),
-    SORT_HINZUGEFUEGT("Neu hinzugefügt"),
-    SORT_NEUESTE_FILME("Neueste Filme"),
-    SORT_NEUESTE_SERIEN("Neueste Serien"),
-    SORT_AELTESTE_FILME("Älteste Filme"),
-    SORT_AELTESTE_SERIEN("Älteste Serien"),
+    SORT_TITEL("Titel"),
+    SORT_HINZUGEFUEGT("Hinzugefügt"),
+    SORT_ERSCHIENEN("Erscheinungsdatum"),
+    SORT_BEWERTUNG("Bewertung"),
+    SORT_LAUFZEIT("Laufzeit"),
+    SORT_ZULETZT_GESEHEN("Zuletzt gesehen"),
+    SORT_UNGESEHEN("Ungesehene zuerst"),
+    SORT_ZUFALL("Zufällig"),
+    SORT_AUFSTEIGEND("Aufsteigend"),
+    SORT_ABSTEIGEND("Absteigend"),
+    SORT_NEU_MISCHEN("Neu mischen"),
 
     // Schutz und Einladung
     PIN("PIN"),
