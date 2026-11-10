@@ -123,7 +123,11 @@ func Open(path string) (*Store, error) {
 // SchemaStand zählt die Änderungen am Aufbau der Datenbank. Wer
 // nachruesten() erweitert, zählt ihn um eins hoch — dann sichert Lumen
 // die Datenbank, bevor es sie umbaut.
-const SchemaStand = 10
+//
+// Stand 12: Tabelle vorspann_erkannt (vorspann_erkennung.go,
+// vorspannErkennungTabellen) — neu angelegt, nichts umzurechnen. (Stand 11
+// ist für die Bildschirmzeit der Kinderprofile vorgesehen.)
+const SchemaStand = 12
 
 // umbauen bringt Daten einer älteren Fassung auf den neuen Stand — jeder
 // Schritt genau einmal, je nach dem Stand, den die Datenbank mitbringt.
@@ -572,6 +576,10 @@ func nachruesten(db *sql.DB) error {
 		if _, err := db.Exec(stmt); err != nil {
 			return err
 		}
+	}
+	// Automatisch erkannter Vorspann und Abspann (vorspann_erkennung.go).
+	if err := vorspannErkennungTabellen(db); err != nil {
+		return err
 	}
 	// Handbearbeitung, eigene Sammlungen, Untertitel (funktionen_schema.go).
 	return funktionenNachruesten(db)

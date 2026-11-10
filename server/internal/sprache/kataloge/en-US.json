@@ -135,7 +135,7 @@
     "other": "The server is already converting {n} videos — it can’t handle more at once. Try again in a moment, or watch on a device that can play the file directly."
   },
   "der titel hat nur diese eine datei": "This title only has this one file.",
-  "der vorspann wird an der serie markiert": "Intros are marked on the show.",
+  "der vorspann wird an der serie oder an einer folge markiert": "Intros are marked on the show or on a single episode.",
   "die Adresse antwortete mit {status}": "The address responded with {status}.",
   "die Verwaltung ist gesperrt": "Admin is locked.",
   "die datei ist nicht mehr da": "The file is no longer there.",

@@ -358,14 +358,30 @@ func spurName(t store.Track) string {
 // ---------------------------------------------------------------- Vorspann und Abspann
 
 // vorspannUndAbspann sagt dem Player, wo bei einer Folge der Vorspann
-// liegt und wo der Abspann beginnt — aus den Kapiteln der Datei, oder
-// der Vorspann aus der Markierung an der Serie.
+// liegt und wo der Abspann beginnt. Was gilt, in dieser Reihenfolge:
+//
+//	Vorspann: von Hand an der Folge markiert → Kapitel der Datei →
+//	          von Hand an der Serie markiert → automatisch erkannt
+//	Abspann:  Kapitel der Datei → automatisch erkannt
+//
+// Von Hand schlägt alles Erkannte. Die Markierung an der Serie gilt für
+// alle Folgen gleich und steht darum hinter den Kapiteln, die zur
+// einzelnen Datei gehören (wie bisher). Automatisch Erkanntes kommt nur
+// zum Zug, wo sonst nichts ist, und nur ab der Mindestsicherheit
+// (vorspann_erkennung.go).
 func (s *Server) vorspannUndAbspann(ctx context.Context, it *store.Item, files []store.MediaFile) (vor *store.Vorspann, abspannAbMS int64) {
-	for _, f := range files {
-		if f.Missing {
-			continue
+	var erste *store.MediaFile
+	mehrteilig := false
+	for i := range files {
+		if files[i].PartNo > 1 {
+			mehrteilig = true
 		}
-		for _, c := range f.Kapitel {
+		if erste == nil && !files[i].Missing {
+			erste = &files[i]
+		}
+	}
+	if erste != nil {
+		for _, c := range erste.Kapitel {
 			switch c.Kind {
 			case "intro":
 				if vor == nil {
@@ -377,27 +393,45 @@ func (s *Server) vorspannUndAbspann(ctx context.Context, it *store.Item, files [
 				}
 			}
 		}
-		break
 	}
-	if vor == nil && it.Kind == "episode" {
+	if it.Kind != "episode" {
+		return vor, abspannAbMS
+	}
+	if v, _ := s.st.VorspannDerFolge(ctx, it.ID); v != nil {
+		vor = v
+	}
+	if vor == nil {
 		// Die Serie steht zwei Stufen über der Folge (Folge → Staffel → Serie).
 		if staffel, err := s.st.Item(ctx, it.ParentID); err == nil && staffel.ParentID != "" {
 			vor, _ = s.st.VorspannDerSerie(ctx, staffel.ParentID)
 		}
 	}
+	if erste != nil && (vor == nil || abspannAbMS == 0) {
+		autoVor, autoAb := s.erkanntFuer(ctx, erste)
+		if vor == nil {
+			vor = autoVor
+		}
+		// Bei einer Folge in mehreren Dateien ist das Ende der ersten
+		// nicht das Ende der Folge.
+		if abspannAbMS == 0 && !mehrteilig {
+			abspannAbMS = autoAb
+		}
+	}
 	return vor, abspannAbMS
 }
 
-// adminVorspannSetzen markiert den Vorspann einer Serie — wer die
-// Verwaltung darf, darf das; es gilt für alle, die die Serie schauen.
+// adminVorspannSetzen markiert den Vorspann einer Serie oder einer
+// einzelnen Folge — wer die Verwaltung darf, darf das; es gilt für alle,
+// die die Serie schauen. Die Markierung an der Folge geht allem anderen
+// vor (vorspannUndAbspann), etwa wenn die Erkennung danebenlag.
 func (s *Server) adminVorspannSetzen(w http.ResponseWriter, r *http.Request) {
 	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
 	if err != nil {
 		failErr(w, err)
 		return
 	}
-	if it.Kind != "series" {
-		fail(w, http.StatusBadRequest, "der vorspann wird an der serie markiert")
+	if it.Kind != "series" && it.Kind != "episode" {
+		fail(w, http.StatusBadRequest, "der vorspann wird an der serie oder an einer folge markiert")
 		return
 	}
 	var in struct {

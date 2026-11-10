@@ -26,6 +26,9 @@ package api
 //   - was fertig ist, liegt auf der Platte und wird nie neu gemacht;
 //   - was zu einer Datei gehört, die es nicht mehr gibt, wird weggeräumt.
 //
+// Dazwischen läuft die Erkennung von Vorspann und Abspann
+// (vorspann_erkennung.go) nach denselben Regeln.
+//
 // Datenschutz: Die Dateien tragen keine Zeit (zeitlos) und Namen ohne
 // Titel, nur die Kennung der Datei. Untertitel, die erst beim Abspielen
 // entstehen, kommen nicht auf die Platte, sondern in den Arbeitsspeicher
@@ -99,6 +102,9 @@ func (s *Server) hintergrundArbeit(ctx context.Context) {
 // hintergrundDurchgang geht einmal über alle Dateien.
 func (s *Server) hintergrundDurchgang(ctx context.Context) {
 	s.vorratAufraeumen(ctx)
+	// Vorspann und Abspann erkennen (vorspann_erkennung.go): zuerst ein
+	// Stück, dann zwischendurch weiter, am Ende den Rest.
+	s.erkennungDurchgang(ctx, erkennungStueck)
 	ids, err := s.st.VorhandeneDateien(ctx)
 	if err != nil {
 		return
@@ -108,7 +114,11 @@ func (s *Server) hintergrundDurchgang(ctx context.Context) {
 			return
 		}
 		if i >= len(ids) {
+			s.erkennungDurchgang(ctx, 0)
 			return
+		}
+		if i > 0 && i%erkennungAlle == 0 {
+			s.erkennungDurchgang(ctx, erkennungStueck)
 		}
 		// Wiedergabe hat Vorrang: warten, bis keine Umwandlung mehr läuft.
 		if s.live != nil && s.live.Load().Transcodes > 0 {

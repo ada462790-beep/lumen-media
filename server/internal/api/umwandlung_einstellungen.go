@@ -8,7 +8,7 @@
 package api
 
 // Einstellungen rund ums Umwandeln: Hardware-Beschleunigung, Vorschau-
-// bilder beim Spulen, Untertitel vorbereiten. Nur der Besitzer, nur in der
+// bilder beim Spulen, Untertitel vorbereiten, Vorspann erkennen. Nur der Besitzer, nur in der
 // Verwaltung (Desktop-Browser und Mac-App).
 
 import (
@@ -111,6 +111,7 @@ func (s *Server) adminUmwandlung(w http.ResponseWriter, r *http.Request) {
 		"trickplay":             s.trickplayAn(r.Context()),
 		"untertitelVorbereiten": s.untertitelVorbereitenAn(r.Context()),
 		"vorrat":                s.vorratZaehlen(),
+		"vorspannErkennung":     s.erkennungZustand(r.Context()),
 	})
 }
 
@@ -120,6 +121,7 @@ func (s *Server) adminUmwandlungSetzen(w http.ResponseWriter, r *http.Request) {
 		Hardware              *string `json:"hardware"`
 		Trickplay             *bool   `json:"trickplay"`
 		UntertitelVorbereiten *bool   `json:"untertitelVorbereiten"`
+		VorspannErkennen      *bool   `json:"vorspannErkennen"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -159,7 +161,14 @@ func (s *Server) adminUmwandlungSetzen(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if (in.Trickplay != nil && *in.Trickplay) || (in.UntertitelVorbereiten != nil && *in.UntertitelVorbereiten) {
+	if in.VorspannErkennen != nil {
+		if err := s.st.SetSetting(ctx, einstErkennung, janein(*in.VorspannErkennen)); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	if (in.Trickplay != nil && *in.Trickplay) || (in.UntertitelVorbereiten != nil && *in.UntertitelVorbereiten) ||
+		(in.VorspannErkennen != nil && *in.VorspannErkennen) {
 		s.hintergrundAnstossen()
 	}
 	s.adminUmwandlung(w, r)
