@@ -688,8 +688,7 @@ func (r *Resolver) Zuweisen(ctx context.Context, it *store.Item, sourceID string
 		if err := r.saveArtwork(ctx, it.ID, gewaehlt); err != nil {
 			return err
 		}
-		_, err = r.ResolvePending(ctx, it.LibraryID, 500)
-		return err
+		return r.titelNachholen(ctx, it.ID)
 	}
 	return fmt.Errorf("für %s lässt sich nichts zuweisen", it.Kind)
 }
@@ -700,8 +699,44 @@ func (r *Resolver) NeuLaden(ctx context.Context, it *store.Item) error {
 	if _, err := r.st.MetadatenZuruecksetzen(ctx, "", it.ID); err != nil {
 		return err
 	}
-	_, err := r.ResolvePending(ctx, it.LibraryID, 500)
-	return err
+	return r.titelNachholen(ctx, it.ID)
+}
+
+// titelNachholen holt die Metadaten eines Titels und seiner Folgen — alle,
+// nicht nur die, die zufällig unter den ersten 500 der Mediathek stehen.
+//
+// Die ersten 50 gleich (die Seite zeigt danach den richtigen Stand), den
+// Rest einer langen Serie im Hintergrund — die Anfrage soll nicht minutenlang
+// hängen.
+func (r *Resolver) titelNachholen(ctx context.Context, id string) error {
+	wartet, err := r.st.PendingUnter(ctx, id)
+	if err != nil {
+		return err
+	}
+	holen := func(ctx context.Context, liste []store.Item) {
+		for i := range liste {
+			if ctx.Err() != nil {
+				return
+			}
+			if err := r.resolveOne(ctx, &liste[i]); err != nil && err != errUnmatched {
+				r.st.Log(ctx, "warn", "metadaten", fmt.Sprintf("%s: %v", liste[i].Title, err))
+			}
+		}
+	}
+	const sofort = 50
+	if len(wartet) <= sofort {
+		holen(ctx, wartet)
+		r.ReihenBilderHolen(ctx)
+		return ctx.Err()
+	}
+	holen(ctx, wartet[:sofort])
+	rest := wartet[sofort:]
+	go func() {
+		bg := context.WithoutCancel(ctx)
+		holen(bg, rest)
+		r.ReihenBilderHolen(bg)
+	}()
+	return ctx.Err()
 }
 
 // SerienZeitraeumeNachholen fragt für Serien, deren Zeitraum fehlt (aus

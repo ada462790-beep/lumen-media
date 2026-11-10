@@ -1089,6 +1089,31 @@ func (s *Store) SetArtwork(ctx context.Context, itemID, kind, path, sourceURL st
 	return err
 }
 
+// PendingUnter sind die wartenden Titel eines Films oder einer Serie samt
+// deren Folgen — für „Zuweisen" und „Neu laden", die genau diesen Titel
+// meinen und nicht die ersten paar hundert der ganzen Mediathek.
+func (s *Store) PendingUnter(ctx context.Context, id string) ([]Item, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+itemCols+` FROM item i
+		WHERE i.match_state = 'pending' AND i.kind != 'season'
+		  AND (i.id = ? OR i.parent_id = ?
+		       OR i.parent_id IN (SELECT id FROM item WHERE parent_id = ?))
+		ORDER BY CASE i.kind WHEN 'series' THEN 0 WHEN 'movie' THEN 1 ELSE 2 END,
+		         i.season_no, i.episode_no, i.id`, id, id, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Item{}
+	for rows.Next() {
+		it, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *it)
+	}
+	return out, rows.Err()
+}
+
 // BildQuelle ist die Adresse, von der das gespeicherte Bild stammt ("" wenn
 // keins da ist).
 func (s *Store) BildQuelle(ctx context.Context, itemID, kind string) string {
