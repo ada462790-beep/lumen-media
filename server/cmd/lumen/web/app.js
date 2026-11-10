@@ -3521,7 +3521,7 @@ function viewSettings() {
         ${grp(tr('Privatsphäre'),
           swRow(tr('Bewertungen im Haushalt zeigen'), prefs.shareRatings === '1', null, 'shareRatings'),
           a.isKid && bzStand()?.aktiv
-            ? tr('Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur, wie viele Minuten Bildschirmzeit du heute gebraucht hast — nicht, was du geschaut hast.')
+            ? tr('Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur ungefähr, in Viertelstunden, wie viel Bildschirmzeit du heute gebraucht hast — nicht, was du geschaut hast, und nicht, wann.')
             : tr('Dein Verlauf und deine Bewertungen gehören dir. Auch der Besitzer des Servers kann nicht sehen, wann oder wie lange du etwas schaust.'))}
       </div>
       <div>

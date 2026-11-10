@@ -26,7 +26,7 @@ keine Abfrage dafür. Tests im Code schlagen fehl, sobald jemand das ändert.
 | Wünsche („bitte diesen Film besorgen") | damit der Besitzer sie erfüllen kann | ja, mit deinem Namen — das ist der Sinn eines Wunsches |
 | Neuigkeiten („2 neue Folgen") | für dich | **nein** |
 | Einstellungen (Untertitel-Stil, Sprache …) | für dich | **nein** |
-| Nur bei Kinderprofilen mit Bildschirmzeit: die Regel (Zeitfenster, Minuten am Tag) und **eine Zahl für heute** — wie viele Minuten schon geschaut sind; gestern wird gelöscht | damit die Bildschirmzeit gilt | Regel und Minuten von heute ja — **nicht**, was in diesen Minuten lief |
+| Nur bei Kinderprofilen mit Bildschirmzeit: die Regel (Zeitfenster, Minuten am Tag) und **eine Zahl für heute** — wie viele Sekunden schon geschaut sind; ältere Tage werden gelöscht (gestern spätestens am Tag danach) | damit die Bildschirmzeit gilt | die Regel ja, die Minuten von heute nur **ungefähr, in Viertelstunden abgerundet** — so lässt sich auch durch wiederholtes Nachsehen nicht ablesen, wann geschaut wurde; **nicht**, was in diesen Minuten lief |
 
 Was Lumen **nicht** speichert: wann du etwas geschaut hast, wie lange
 (ausser den Minuten von heute bei einer Bildschirmzeit, siehe oben), wie

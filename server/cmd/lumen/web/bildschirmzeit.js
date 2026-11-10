@@ -10,7 +10,9 @@
  * Durchgesetzt wird sie auf dem Server (api/bildschirmzeit.go) — die
  * Oberfläche zeigt nur:
  *   - in der Verwaltung (Konten): die Regel bearbeiten, „heute genutzt:
- *     47 von 90 Min." und „heute einmalig 30 Min. mehr";
+ *     ungefähr 45 von 90 Min." (der Server rundet auf Viertelstunden ab,
+ *     damit sich aus der Liste nicht ablesen lässt, wann das Kind schaut)
+ *     und „heute einmalig 30 Min. mehr";
  *   - dem Kind: unter „Ich", wie viel heute noch geht; beim Schauen einen
  *     leisen Hinweis, wenn es weniger als zehn Minuten sind; und eine
  *     freundliche Seite über dem Player, wenn die Zeit um ist.
@@ -27,8 +29,8 @@ export function bzKontoText(a) {
   const b = a?.bildschirmzeit;
   if (!b || !b.regel?.aktiv) return '';
   return b.budgetMinuten
-    ? tr('Bildschirmzeit heute: {genutzt} von {budget} Min.', { genutzt: b.genutztMinuten, budget: b.budgetMinuten })
-    : tr('Bildschirmzeit heute: {genutzt} Min.', { genutzt: b.genutztMinuten });
+    ? tr('Bildschirmzeit heute: ungefähr {genutzt} von {budget} Min.', { genutzt: b.genutztMinuten, budget: b.budgetMinuten })
+    : tr('Bildschirmzeit heute: ungefähr {genutzt} Min.', { genutzt: b.genutztMinuten });
 }
 
 function tagesart(name, titel, r) {
@@ -41,7 +43,7 @@ function tagesart(name, titel, r) {
       <div class="ff"><div class="ff-kopf"><label for="bz-${name}-von">${tr('Ab')}</label></div>
         <input id="bz-${name}-von" name="${name}-von" type="time" value="${escH(r.von || '07:00')}"></div>
       <div class="ff"><div class="ff-kopf"><label for="bz-${name}-bis">${tr('Bis')}</label></div>
-        <input id="bz-${name}-bis" name="${name}-bis" type="time" value="${escH(r.bis === '24:00' ? '23:59' : r.bis || '19:30')}"></div>
+        <input id="bz-${name}-bis" name="${name}-bis" type="time" value="${escH(r.bis === '24:00' ? '00:00' : r.bis || '19:30')}"></div>
     </div>
     <div class="ff"><div class="ff-kopf"><label for="bz-${name}-min">${tr('Höchstens Minuten am Tag')}</label></div>
       <input id="bz-${name}-min" name="${name}-min" type="number" min="0" max="1440" step="5" value="${Number(r.minuten) || 0}">
@@ -49,11 +51,16 @@ function tagesart(name, titel, r) {
   </fieldset>`;
 }
 
+/* Ein Zeitfeld kennt kein „24:00": Bis Mitternacht steht dort als 00:00
+   und geht als 24:00 zurück — so bleibt die Regel beim erneuten Speichern
+   genau dieselbe (früher wurde daraus 23:59). */
+const bisAus = v => (v === '00:00' ? '24:00' : v);
+
 function regelAus(form) {
   const fd = new FormData(form);
   const art = name => fd.get(name + '-ganz')
     ? { von: '', bis: '', minuten: Number(fd.get(name + '-min')) || 0 }
-    : { von: String(fd.get(name + '-von') || ''), bis: String(fd.get(name + '-bis') || ''), minuten: Number(fd.get(name + '-min')) || 0 };
+    : { von: String(fd.get(name + '-von') || ''), bis: bisAus(String(fd.get(name + '-bis') || '')), minuten: Number(fd.get(name + '-min')) || 0 };
   return { aktiv: !!fd.get('aktiv'), schultage: art('schultage'), wochenende: art('wochenende') };
 }
 
@@ -61,8 +68,8 @@ function standText(b) {
   if (!b) return '';
   if (!b.regel?.aktiv) return tr('Ausgeschaltet — es gilt keine Bildschirmzeit.');
   return b.budgetMinuten
-    ? tr('Heute genutzt: {genutzt} von {budget} Min.', { genutzt: b.genutztMinuten, budget: b.budgetMinuten })
-    : tr('Heute genutzt: {genutzt} Min.', { genutzt: b.genutztMinuten });
+    ? tr('Heute genutzt: ungefähr {genutzt} von {budget} Min. (in Viertelstunden abgerundet)', { genutzt: b.genutztMinuten, budget: b.budgetMinuten })
+    : tr('Heute genutzt: ungefähr {genutzt} Min. (in Viertelstunden abgerundet)', { genutzt: b.genutztMinuten });
 }
 
 /* Das Fenster zum Einstellen. nachher() lädt die Kontenliste neu. */
@@ -75,7 +82,7 @@ export function bzBearbeiten(konto, nachher) {
       <form autocomplete="off" data-bz-form>
         <label class="wahl-check"><input type="checkbox" name="aktiv"${r.aktiv ? ' checked' : ''}>
           <span style="flex:1">${tr('Bildschirmzeit einschalten')}</span></label>
-        <p class="ff-hinweis" style="margin:4px 0 12px">${tr('Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag.')}</p>
+        <p class="ff-hinweis" style="margin:4px 0 12px">${tr('Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag — ausser mitten in einem Zeitfenster über Mitternacht, das zählt bis zu seinem Ende zum Vortag. Die Verwaltung sieht die Minuten nur ungefähr, in Viertelstunden. Mit einer Tagesgrenze gibt es keine Downloads.')}</p>
         ${tagesart('schultage', tr('Schultage (Montag bis Freitag)'), r.schultage)}
         ${tagesart('wochenende', tr('Wochenende (Samstag und Sonntag)'), r.wochenende)}
         <p class="ff-hinweis">${tr('Liegt „Bis" vor „Ab", geht die Zeit über Mitternacht.')}</p>
