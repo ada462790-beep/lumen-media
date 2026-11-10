@@ -397,7 +397,37 @@ public final class Playback {
             }
         }
 
+        Self.tonFuerFilmeEinschalten()
         player.play()
+    }
+
+    /// Die Audio-Sitzung auf „Film" stellen, bevor das Bild läuft.
+    ///
+    /// Ohne das gilt die Vorgabe des Systems (`.soloAmbient`): Mit dem
+    /// Stummschalter am iPhone bliebe der Film stumm, beim Sperren hielte
+    /// er an, und Bild-in-Bild ginge gar nicht — trotz `UIBackgroundModes:
+    /// audio` in der Info.plist. Auf dem Apple TV schadet es nicht und gibt
+    /// den Ton richtig an AirPlay und HomePod weiter. Der Mac kennt keine
+    /// Audio-Sitzung.
+    private static func tonFuerFilmeEinschalten() {
+        #if os(iOS) || os(tvOS)
+        let sitzung = AVAudioSession.sharedInstance()
+        do {
+            try sitzung.setCategory(.playback, mode: .moviePlayback)
+            try sitzung.setActive(true)
+        } catch {
+            // Geht es nicht, spielt der Film trotzdem — nur eben mit dem
+            // Verhalten von vorher. Kein Grund, die Wiedergabe abzubrechen.
+        }
+        #endif
+    }
+
+    /// Nach dem Schliessen: die Sitzung wieder freigeben, damit etwa die
+    /// Musik weiterspielt, die vor dem Film lief.
+    private static func tonFuerFilmeAusschalten() {
+        #if os(iOS) || os(tvOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 
     private func hlsSitzungMerken(_ adressen: [String], fileId: String) {
@@ -458,6 +488,7 @@ public final class Playback {
         lauf &+= 1
         isPreparing = false
         await aufraeumen()
+        Self.tonFuerFilmeAusschalten()
     }
 
     /// Den Stand jetzt sichern — die App geht in den Hintergrund, und ob
