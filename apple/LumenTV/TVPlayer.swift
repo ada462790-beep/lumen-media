@@ -157,7 +157,7 @@ struct TVPlayerView: View {
                     Task { await playback.waehleTon(spur.index) }
                 }
             }
-            elemente.append(UIMenu(title: "Tonspur", image: UIImage(systemName: "waveform"),
+            elemente.append(UIMenu(title: String(localized: "Tonspur", bundle: .lumen, locale: .lumen), image: UIImage(systemName: "waveform"),
                                    children: aktionen))
         }
 
@@ -171,7 +171,7 @@ struct TVPlayerView: View {
                     Task { @MainActor in playback.waehleUntertitel(spur.index) }
                 }
             }
-            elemente.append(UIMenu(title: "Untertitel", image: UIImage(systemName: "captions.bubble"),
+            elemente.append(UIMenu(title: String(localized: "Untertitel", bundle: .lumen, locale: .lumen), image: UIImage(systemName: "captions.bubble"),
                                    children: aktionen))
         }
 
@@ -209,7 +209,7 @@ struct TVPlayerView: View {
                             ? [UIAction(title: String(localized: "Keine Folgen", bundle: .lumen, locale: .lumen), attributes: .disabled) { _ in } as UIMenuElement]
                             : aktionen)
         }
-        return UIMenu(title: "Folgen", image: UIImage(systemName: "list.bullet"), children: staffeln)
+        return UIMenu(title: String(localized: "Folgen", bundle: .lumen, locale: .lumen), image: UIImage(systemName: "list.bullet"), children: staffeln)
     }
 
     /// Der Vorspann einer Serie, für alle: Beginn merken, Ende setzen —
@@ -252,7 +252,7 @@ struct TVPlayerView: View {
                 }
             })
         }
-        return UIMenu(title: "Vorspann (für alle)", image: UIImage(systemName: "scissors"), children: kinder)
+        return UIMenu(title: String(localized: "Vorspann (für alle)", bundle: .lumen, locale: .lumen), image: UIImage(systemName: "scissors"), children: kinder)
     }
 
     /// Die Knöpfe rechts unten: „Vorspann überspringen", und im Abspann
@@ -266,7 +266,7 @@ struct TVPlayerView: View {
             })
         }
         if let folge, folge.imAbspann, folge.naechster != nil {
-            out.append(UIAction(title: "Jetzt abspielen", image: UIImage(systemName: "play.fill")) { _ in
+            out.append(UIAction(title: String(localized: "Jetzt abspielen", bundle: .lumen, locale: .lumen), image: UIImage(systemName: "play.fill")) { _ in
                 Task { await folge.jetzt() }
             })
             out.append(UIAction(title: String(localized: "Abbrechen", bundle: .lumen, locale: .lumen)) { _ in
@@ -274,7 +274,7 @@ struct TVPlayerView: View {
             })
         } else if let folge, playback.item?.kind == "episode" {
             // „Nächste Folge" — sofort, ohne auf den Abspann zu warten.
-            out.append(UIAction(title: "Nächste Folge", image: UIImage(systemName: "forward.end.fill")) { _ in
+            out.append(UIAction(title: String(localized: "Nächste Folge", bundle: .lumen, locale: .lumen), image: UIImage(systemName: "forward.end.fill")) { _ in
                 Task {
                     if !(await folge.naechsteFolge()) { await melde(String(localized: "Das war die letzte Folge.", bundle: .lumen, locale: .lumen)) }
                 }

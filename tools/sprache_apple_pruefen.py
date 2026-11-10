@@ -561,6 +561,12 @@ KENNUNGEN = {
     "taeglich", "player", "code", "profil", "untertitel",
 }
 # Wo ein kleingeschriebenes Literal als Wert dasteht.
+# UIKit nimmt Titel wörtlich, nicht als LocalizedStringKey: UIMenu(title:
+# "Tonspur") bliebe in jeder Sprache deutsch — auch ein einzelnes Wort, das
+# sonst nicht nach Satz aussieht. Darum hier jedes Literal mit Buchstaben.
+UIKIT_TITEL = re.compile(
+    r"\b(?:UIMenu|UIAction|UIAlertAction|UIAlertController|UICommand)\(.*\b(?:title|subtitle|message):\s*$")
+
 WERT_STELLE = re.compile(r"(\breturn|\?|\s:|\bcase\b[^\n]*:|\bdefault:|[^=!<>]=|\.append\()\s*$")
 
 # Literale, die absichtlich nicht übersetzt werden: Eigennamen, Formate.
@@ -654,6 +660,10 @@ def pruefen(liste: bool = False) -> int:
                 z = zeile_von(lit)
                 spalte = z.find(lit.roh)
                 als_wert = spalte >= 0 and bool(WERT_STELLE.search(z[:spalte]))
+                if (spalte >= 0 and UIKIT_TITEL.search(z[:spalte])
+                        and re.search(r"[A-Za-zÄÖÜäöü]", woertlich)):
+                    fest.append(lit)
+                    continue
                 if not sieht_sichtbar_aus(woertlich, als_wert) or text.strip() in ABSICHTLICH:
                     continue
                 z = zeile_von(lit)
