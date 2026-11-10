@@ -32,6 +32,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"lumen/internal/store"
@@ -96,24 +97,43 @@ func (s *Server) sammlungInhalt(r *http.Request, x *store.Sammlung) ([]view, err
 	}
 	switch x.Sortierung {
 	case "jahr":
-		// Ohne Jahr ans Ende; bei gleichem Jahr nach Titel.
+		// Nach Erscheinen (Datum, sonst Jahr) wie die Filmreihen; ohne
+		// beides ans Ende, bei Gleichstand nach Titel.
 		sort.SliceStable(out, func(i, j int) bool {
-			a, b := out[i].Year, out[j].Year
-			if a == 0 {
-				a = 99999
-			}
-			if b == 0 {
-				b = 99999
+			a, b := erschienen(out[i].Item), erschienen(out[j].Item)
+			if (a == "") != (b == "") {
+				return b == ""
 			}
 			if a != b {
 				return a < b
 			}
-			return out[i].SortTitle < out[j].SortTitle
+			if out[i].SortTitle != out[j].SortTitle {
+				return out[i].SortTitle < out[j].SortTitle
+			}
+			return out[i].ID < out[j].ID
 		})
 	case "titel":
-		sort.SliceStable(out, func(i, j int) bool { return out[i].SortTitle < out[j].SortTitle })
+		sort.SliceStable(out, func(i, j int) bool {
+			if out[i].SortTitle != out[j].SortTitle {
+				return out[i].SortTitle < out[j].SortTitle
+			}
+			return out[i].ID < out[j].ID
+		})
 	}
 	return out, nil
+}
+
+// erschienen: das Erscheinungsdatum, ersatzweise das Jahr — als Text wie
+// in der Datenbank (store.erschienenAusdruck), damit „2001" vor
+// „2001-12-19" steht.
+func erschienen(it store.Item) string {
+	if it.Premiered != "" {
+		return it.Premiered
+	}
+	if it.Year > 0 {
+		return strconv.Itoa(it.Year)
+	}
+	return ""
 }
 
 func (s *Server) sammlungAntwortBauen(r *http.Request, x *store.Sammlung, items []view, alle bool) sammlungAntwort {

@@ -533,11 +533,18 @@ func nachruesten(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS item_titel_klein ON item (library_id, kind, titel_klein)`,
 		// Für das Raster: je Sortierung ein Index, damit SQLite nur die
 		// gezeigte Seite liest, statt alle Titel einer Art zu sortieren
-		// („USE TEMP B-TREE FOR ORDER BY").
-		`CREATE INDEX IF NOT EXISTS item_sort_titel ON item (kind, sort_title)`,
-		`CREATE INDEX IF NOT EXISTS item_sort_neu ON item (kind, zuletzt_neu)`,
-		`CREATE INDEX IF NOT EXISTS item_sort_jahr ON item (kind, year DESC, sort_title)`,
-		`CREATE INDEX IF NOT EXISTS item_sort_wertung ON item (kind, imdb_rating DESC, sort_title)`,
+		// („USE TEMP B-TREE FOR ORDER BY"). Jeder endet mit sort_title und
+		// id wie die Sortierung selbst (sqlOrdnung in sortieren.go); die
+		// Ausdrücke müssen dort und hier gleich lauten.
+		`DROP INDEX IF EXISTS item_sort_titel`,
+		`DROP INDEX IF EXISTS item_sort_neu`,
+		`DROP INDEX IF EXISTS item_sort_jahr`,
+		`DROP INDEX IF EXISTS item_sort_wertung`,
+		`CREATE INDEX IF NOT EXISTS item_ord_titel ON item (kind, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_neu ON item (kind, zuletzt_neu DESC, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_erschienen ON item (kind, COALESCE(premiered, CAST(year AS TEXT)) DESC, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_wertung ON item (kind, imdb_rating DESC, sort_title, id)`,
+		`CREATE INDEX IF NOT EXISTS item_ord_laufzeit ON item (kind, runtime_ms IS NULL, runtime_ms, sort_title, id)`,
 		// Dateien, die gerade fehlen (Verwaltung → Aufräumen); fast alle
 		// Zeilen haben hier NULL und stehen gar nicht im Index.
 		// Was noch nachzuschlagen ist und was nicht erkannt wurde: Die

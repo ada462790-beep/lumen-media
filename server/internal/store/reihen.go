@@ -234,7 +234,6 @@ func (s *Store) Reihen(ctx context.Context, auchAufgeloeste bool) ([]Reihe, erro
 	if !auchAufgeloeste {
 		q += ` WHERE c.hidden = 0`
 	}
-	q += ` ORDER BY c.name COLLATE NOCASE`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -252,6 +251,7 @@ func (s *Store) Reihen(ctx context.Context, auchAufgeloeste bool) ([]Reihe, erro
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	nachNamenSortieren(out, func(r *Reihe) string { return r.Name }, func(r *Reihe) string { return r.ID }, nil)
 	for i := range out {
 		if out[i].ItemIDs, err = s.reiheFilme(ctx, out[i].ID); err != nil {
 			return nil, err
@@ -263,7 +263,7 @@ func (s *Store) Reihen(ctx context.Context, auchAufgeloeste bool) ([]Reihe, erro
 func (s *Store) reiheFilme(ctx context.Context, id string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT ci.item_id FROM collection_item ci JOIN item i ON i.id = ci.item_id
-		  WHERE ci.collection_id = ? ORDER BY ci.ord, i.sort_title`, id)
+		  WHERE ci.collection_id = ? ORDER BY `+reihenOrdnung, id)
 	if err != nil {
 		return nil, err
 	}

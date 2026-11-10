@@ -92,7 +92,7 @@ func (s *Store) Gruppen(ctx context.Context) ([]Gruppe, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT g.id, g.name, g.verwaltung, g.limits,
 		        (SELECT count(*) FROM account a WHERE a.group_id = g.id AND a.disabled = 0)
-		   FROM gruppe g ORDER BY g.name`)
+		   FROM gruppe g`)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +113,7 @@ func (s *Store) Gruppen(ctx context.Context) ([]Gruppe, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	nachNamenSortieren(out, func(g *Gruppe) string { return g.Name }, func(g *Gruppe) string { return g.ID }, nil)
 	for i := range out {
 		if out[i].Libraries, err = s.gruppenBibliotheken(ctx, out[i].ID); err != nil {
 			return nil, err

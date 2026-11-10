@@ -108,7 +108,7 @@ func (s *Store) Libraries(ctx context.Context) ([]Library, error) {
 		        + (SELECT count(*) FROM musik_titel m WHERE m.library_id = l.id AND m.fehlt_seit IS NULL)
 		        + (SELECT count(*) FROM foto f WHERE f.library_id = l.id AND f.fehlt_seit IS NULL) AS n,
 		        l.scan_interval_min, COALESCE(l.scan_at, ''), COALESCE(l.last_result, '')
-		   FROM library l ORDER BY l.name`)
+		   FROM library l`)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,11 @@ func (s *Store) Libraries(ctx context.Context) ([]Library, error) {
 		}
 		out = append(out, l)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	nachNamenSortieren(out, func(l *Library) string { return l.Name }, func(l *Library) string { return l.ID }, nil)
+	return out, nil
 }
 
 func (s *Store) MarkScanned(ctx context.Context, libraryID string) error {
@@ -413,10 +417,20 @@ type Query struct {
 	JahrVon, JahrBis int
 	MaxAge           int // 0 = ohne Grenze, ausser MitAltersgrenze ist gesetzt
 	AllowUnrated     bool
-	Sort             string // added | title | year | rating
-	Limit            int
-	Offset           int
-	IDs              []string
+	// Sort: eine der rasterSortierungen (sortieren.go), „liste" (in der
+	// Reihenfolge von IDs) oder „relevanz" (Suchtreffer nach Güte, Text).
+	Sort string
+	// Richtung: „asc", „desc" oder leer für die Vorgabe der Sortierung.
+	Richtung string
+	// Seed: der Samen für „random" — dieselbe Zahl gibt dieselbe
+	// Reihenfolge, damit Nachladen keine Titel doppelt bringt.
+	Seed int64
+	// Konto: das Profil, für das „lastwatched" und „unwatched" gelten.
+	// Gelesen wird nur dessen eigener Stand (playback.go).
+	Konto  string
+	Limit  int
+	Offset int
+	IDs    []string
 	// NotIDs: diese Titel bleiben draussen — etwa alles, was schon angefangen wurde.
 	NotIDs []string
 	// Buchstabe: nur Titel, die damit anfangen („a" … „z"), „#" für alles
@@ -516,27 +530,17 @@ func (s *Store) Query(ctx context.Context, q Query) ([]Item, error) {
 		return []Item{}, nil
 	}
 
-	// Jede Sortierung ausser „random" und „year-asc" hat einen eigenen
-	// Index (kind, …) — siehe nachruesten(). SQLite liest dann nur die eine
+	// Jede Sortierung hat für ihre übliche Richtung einen eigenen Index
+	// (kind, …) — siehe nachruesten(). SQLite liest dann nur die eine
 	// Seite, die gezeigt wird, statt alle Titel einer Art zu sortieren.
-	order := `i.sort_title`
-	switch q.Sort {
-	case "added":
-		// Bei Serien zählt die neueste Folge: Kommt zu einer alten Serie
-		// eine neue Staffel, steht sie wieder vorn. Das steht
-		// fertig in zuletzt_neu (UpsertItem führt es nach); vorher wurde
-		// es bei jeder Abfrage für jede Serie über alle Folgen gesucht.
-		order = `i.zuletzt_neu DESC`
-	case "year":
-		order = `i.year DESC, i.sort_title`
-	case "rating":
-		order = `i.imdb_rating DESC, i.sort_title`
-	case "random":
-		order = `random()`
-	case "year-asc":
-		order = `COALESCE(i.year, 9999) ASC, i.sort_title`
-	case "title-desc":
-		order = `i.sort_title DESC`
+	// „Hinzugefügt" sortiert nach zuletzt_neu: Bei Serien zählt die
+	// neueste Folge (UpsertItem führt es nach).
+	schluessel, absteigend, _ := SortierungDeuten(q.Sort, q.Richtung)
+	order := sqlOrdnung(schluessel, absteigend)
+	if q.Sort == "relevanz" && strings.TrimSpace(q.Text) != "" {
+		var rargs []any
+		order, rargs = relevanzOrdnung(strings.TrimSpace(q.Text))
+		args = append(args, rargs...)
 	}
 	if q.Sort == "liste" && len(q.IDs) > 0 && len(q.IDs) <= 2000 {
 		// In der Reihenfolge der Kennungen (Merkliste, Favoriten).
@@ -556,6 +560,9 @@ func (s *Store) Query(ctx context.Context, q Query) ([]Item, error) {
 	}
 	if q.Limit <= 0 || q.Limit > hoechstens {
 		q.Limit = 200
+	}
+	if q.Sort != "liste" && q.Sort != "relevanz" && rasterSortierungen[schluessel].inGo {
+		return s.queryInGo(ctx, q, where, args, schluessel, absteigend)
 	}
 
 	sqlText := `SELECT ` + itemCols + ` FROM item i WHERE ` + strings.Join(where, " AND ") +
@@ -618,11 +625,12 @@ func (s *Store) TitelGleich(ctx context.Context, libraryID, kind, title string, 
 // titelKlein ist die Form, unter der TitelGleich sucht.
 func titelKlein(t string) string { return strings.ToLower(strings.TrimSpace(t)) }
 
-// Children liefert Staffeln einer Serie oder Folgen einer Staffel.
+// Children liefert Staffeln einer Serie oder Folgen einer Staffel — in
+// derselben Reihenfolge wie FolgenVon (folgenOrdnung).
 func (s *Store) Children(ctx context.Context, parentID string) ([]Item, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+itemCols+` FROM item i WHERE parent_id = ?
-		  ORDER BY COALESCE(season_no,0), COALESCE(episode_no,0)`, parentID)
+		  ORDER BY `+folgenOrdnung, parentID)
 	if err != nil {
 		return nil, err
 	}
@@ -1209,8 +1217,19 @@ func (s *Store) genresZu(ctx context.Context, q Query, limit int) ([]string, err
 		}
 		out = append(out, n)
 	}
-	sort.Strings(out)
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Die Knöpfe nach dem Alphabet, wie es ein Mensch liest: „Émotion"
+	// bei E, nicht hinter Z.
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := Sortierschluessel(out[i], ""), Sortierschluessel(out[j], "")
+		if a != b {
+			return a < b
+		}
+		return out[i] < out[j]
+	})
+	return out, nil
 }
 
 // Besetzung: wer in einem Titel mitspielt.

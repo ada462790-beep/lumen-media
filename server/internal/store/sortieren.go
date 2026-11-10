@@ -28,7 +28,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"math/rand"
+	"sort"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -342,4 +345,251 @@ func zeilenLesen(tx *sql.Tx, q string, fn func(*sql.Rows) error, args ...any) er
 		}
 	}
 	return rows.Err()
+}
+
+// nachNamenSortieren ordnet eine kleine Liste (Profile, Bibliotheken,
+// Gruppen, Reihen, Wiedergabelisten) nach dem Namen, wie ihn ein Mensch
+// sucht — in Go, weil ORDER BY name in SQLite nur A–Z kennt. vorn holt,
+// wenn gesetzt, Einträge an den Anfang (der Besitzer, die eigenen
+// Listen). Bei gleichem Namen entscheidet die Kennung.
+func nachNamenSortieren[T any](liste []T, name, id func(*T) string, vorn func(*T) bool) {
+	sort.SliceStable(liste, func(i, j int) bool {
+		a, b := &liste[i], &liste[j]
+		if vorn != nil && vorn(a) != vorn(b) {
+			return vorn(a)
+		}
+		ka, kb := Sortierschluessel(name(a), ""), Sortierschluessel(name(b), "")
+		if ka != kb {
+			return ka < kb
+		}
+		return id(a) < id(b)
+	})
+}
+
+// ---------------------------------------------------------------- Raster
+
+// erschienenAusdruck: das Erscheinungsdatum, ersatzweise das Jahr. Als
+// Text, damit „2001" und „2001-12-19" vergleichbar bleiben (eine Zahl
+// stünde in SQLite vor jedem Text). Der Index item_ord_erschienen trägt
+// genau diesen Ausdruck — wer ihn ändert, ändert beide.
+const erschienenAusdruck = `COALESCE(i.premiered, CAST(i.year AS TEXT))`
+
+// rasterSortierung beschreibt eine Sortierung des Rasters.
+type rasterSortierung struct {
+	spalte string // leer = nach dem Titel
+	ab     bool   // Vorgabe: absteigend (Neuestes, Bestes zuerst)
+	inGo   bool   // in Go sortiert, nicht in SQL (zufällig, je Profil)
+}
+
+// rasterSortierungen sind alle Sortierungen, die die Apps wählen können.
+// Nur was hier steht, gelangt in eine Abfrage — was eine App schickt,
+// wird nachgeschlagen, nie eingesetzt.
+var rasterSortierungen = map[string]rasterSortierung{
+	"title":       {},
+	"added":       {spalte: "i.zuletzt_neu", ab: true},
+	"premiered":   {spalte: erschienenAusdruck, ab: true},
+	"rating":      {spalte: "i.imdb_rating", ab: true},
+	"runtime":     {spalte: "i.runtime_ms"},
+	"lastwatched": {ab: true, inGo: true},
+	"unwatched":   {inGo: true},
+	"random":      {inGo: true},
+}
+
+// SortierungDeuten macht aus sort und dir einer Anfrage die Sortierung
+// und ihre Richtung. Die alten Werte gelten weiter, damit ältere Apps
+// nicht brechen: year (= premiered), year-asc, title-desc. ok ist falsch,
+// wenn die Sortierung oder die Richtung unbekannt ist — dann gilt Titel
+// aufsteigend.
+func SortierungDeuten(sortierung, richtung string) (schluessel string, absteigend, ok bool) {
+	switch sortierung {
+	case "":
+		sortierung = "title"
+	case "year":
+		sortierung = "premiered"
+	case "year-asc":
+		sortierung = "premiered"
+		if richtung == "" {
+			richtung = "asc"
+		}
+	case "title-desc":
+		sortierung = "title"
+		if richtung == "" {
+			richtung = "desc"
+		}
+	}
+	r, bekannt := rasterSortierungen[sortierung]
+	if !bekannt {
+		return "title", false, false
+	}
+	switch richtung {
+	case "":
+		return sortierung, r.ab, true
+	case "asc":
+		return sortierung, false, true
+	case "desc":
+		return sortierung, true, true
+	}
+	return sortierung, r.ab, false
+}
+
+// sqlOrdnung: ORDER BY für eine Sortierung, die SQL selbst kann. Am Ende
+// steht immer etwas Eindeutiges (die Kennung) — sonst dürfte SQLite
+// gleiche Werte von Seite zu Seite anders ordnen, und beim Nachladen
+// kämen Titel doppelt oder gar nicht. Leere Werte (kein Datum, keine
+// Wertung) stehen in beiden Richtungen am Ende. Für die übliche Richtung
+// gibt es je einen passenden Index (nachruesten).
+func sqlOrdnung(schluessel string, absteigend bool) string {
+	r := rasterSortierungen[schluessel]
+	if r.spalte == "" {
+		if absteigend {
+			return `i.sort_title DESC, i.id DESC`
+		}
+		return `i.sort_title, i.id`
+	}
+	if absteigend {
+		return r.spalte + ` DESC, i.sort_title, i.id`
+	}
+	return r.spalte + ` IS NULL, ` + r.spalte + `, i.sort_title, i.id`
+}
+
+// relevanzOrdnung: Suchtreffer nach Güte — genau der Titel (dann genau
+// ohne Artikel: „The Matrix" für „Matrix"), dann Titel, die so anfangen, dann solche, in denen ein Wort so anfängt, dann der
+// Rest; darin nach Titel. „Matrix" findet „Matrix" vor „Animatrix".
+func relevanzOrdnung(text string) (string, []any) {
+	k := titelKlein(text)
+	sk := Sortierschluessel(text, "")
+	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return `CASE WHEN i.titel_klein = ? OR i.original_klein = ? THEN 0
+	             WHEN i.sort_title = ? THEN 1
+	             WHEN i.titel_klein LIKE ? ESCAPE '\' OR i.sort_title LIKE ? ESCAPE '\' THEN 2
+	             WHEN ' ' || i.titel_klein LIKE ? ESCAPE '\' OR ' ' || i.original_klein LIKE ? ESCAPE '\' THEN 3
+	             ELSE 4 END, i.sort_title, i.id`,
+		[]any{k, k, sk, esc.Replace(k) + "%", esc.Replace(sk) + "%",
+			"% " + esc.Replace(k) + "%", "% " + esc.Replace(k) + "%"}
+}
+
+// folgenOrdnung: die eine Reihenfolge für Staffeln und Folgen, überall
+// gleich (Children, FolgenVon, und so auch in allen Apps): Staffel, die
+// Specials (Staffel 0) zuletzt; Folgennummer, Folgen ohne Nummer zuletzt;
+// dann Erstausstrahlung und Kennung.
+const folgenOrdnung = `COALESCE(i.season_no,0) = 0, COALESCE(i.season_no,0),
+	COALESCE(i.episode_no,0) = 0, COALESCE(i.episode_no,0),
+	i.premiered IS NULL, i.premiered, i.id`
+
+// reihenOrdnung: Filme einer Reihe nach Erscheinen (Datum, sonst Jahr),
+// ohne beides zuletzt; bei Gleichstand nach Titel.
+const reihenOrdnung = erschienenAusdruck + ` IS NULL, ` + erschienenAusdruck + `, i.sort_title, i.id`
+
+// queryInGo ordnet in Go, was SQL nicht kann: zufällig mit festem Samen
+// (damit das Nachladen dieselbe Reihenfolge fortsetzt), nach dem, was
+// dieses Profil zuletzt gesehen hat, und Ungesehenes zuerst. Gelesen
+// werden dafür nur Kennung und Schlüssel aller passenden Titel — die
+// Bedingung (Freigaben, Altersgrenze, Filter) ist dieselbe wie sonst.
+func (s *Store) queryInGo(ctx context.Context, q Query, where []string, args []any, schluessel string, absteigend bool) ([]Item, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT i.id, i.sort_title FROM item i WHERE `+strings.Join(where, " AND ")+` ORDER BY i.sort_title, i.id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	type zeile struct {
+		id, schluessel string
+		rang           int64
+		hat            bool
+	}
+	var alle []zeile
+	for rows.Next() {
+		var z zeile
+		if err := rows.Scan(&z.id, &z.schluessel); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		alle = append(alle, z)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	switch {
+	case schluessel == "random":
+		samen := q.Seed
+		if samen == 0 {
+			samen = time.Now().UnixNano()
+		}
+		rand.New(rand.NewSource(samen)).Shuffle(len(alle), func(i, j int) { alle[i], alle[j] = alle[j], alle[i] })
+	case q.Konto == "":
+		// Ohne Profil gibt es nichts Eigenes — dann nach Titel.
+	case schluessel == "lastwatched":
+		zuletzt, err := s.ZuletztGesehen(ctx, q.Konto)
+		if err != nil {
+			return nil, err
+		}
+		for i := range alle {
+			alle[i].rang, alle[i].hat = zuletzt[alle[i].id]
+		}
+		sort.SliceStable(alle, func(i, j int) bool {
+			a, b := alle[i], alle[j]
+			if a.hat != b.hat {
+				return a.hat // nie Gesehenes am Ende, in jeder Richtung
+			}
+			if a.rang != b.rang {
+				return (a.rang > b.rang) == absteigend
+			}
+			return false // schon nach Titel geordnet
+		})
+	case schluessel == "unwatched":
+		gesehen, err := s.GesehenIDs(ctx, q.Konto)
+		if err != nil {
+			return nil, err
+		}
+		fertig := make(map[string]bool, len(gesehen))
+		for _, id := range gesehen {
+			fertig[id] = true
+		}
+		for i := range alle {
+			alle[i].hat = fertig[alle[i].id]
+		}
+		if absteigend {
+			// Absteigend heisst hier: der Titel von Z nach A, Ungesehenes
+			// bleibt vorn.
+			for i, j := 0, len(alle)-1; i < j; i, j = i+1, j-1 {
+				alle[i], alle[j] = alle[j], alle[i]
+			}
+		}
+		sort.SliceStable(alle, func(i, j int) bool { return !alle[i].hat && alle[j].hat })
+	}
+
+	von := min(max(q.Offset, 0), len(alle))
+	bis := min(von+q.Limit, len(alle))
+	seite := alle[von:bis]
+	if len(seite) == 0 {
+		return []Item{}, nil
+	}
+	ids := make([]string, len(seite))
+	for i, z := range seite {
+		ids[i] = z.id
+	}
+	trows, err := s.db.QueryContext(ctx, `SELECT `+itemCols+` FROM item i WHERE i.id IN (`+placeholders(len(ids))+`)`, toAny(ids)...)
+	if err != nil {
+		return nil, err
+	}
+	defer trows.Close()
+	nach := map[string]Item{}
+	for trows.Next() {
+		it, err := scanItem(trows)
+		if err != nil {
+			return nil, err
+		}
+		nach[it.ID] = *it
+	}
+	if err := trows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]Item, 0, len(ids))
+	for _, id := range ids {
+		if it, ok := nach[id]; ok {
+			out = append(out, it)
+		}
+	}
+	return out, nil
 }

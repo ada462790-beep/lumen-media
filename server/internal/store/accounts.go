@@ -258,7 +258,7 @@ func scanAccount(sc interface{ Scan(...any) error }) (*Account, error) {
 // sehen darf — Name und Bild, sonst nichts.
 func (s *Store) Accounts(ctx context.Context) ([]Account, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+accCols+accVon+` WHERE a.disabled = 0 ORDER BY a.is_owner DESC, a.name`)
+		`SELECT `+accCols+accVon+` WHERE a.disabled = 0`)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,13 @@ func (s *Store) Accounts(ctx context.Context) ([]Account, error) {
 		}
 		out = append(out, *a)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Der Besitzer zuerst, dann nach Namen (sortieren.go).
+	nachNamenSortieren(out, func(a *Account) string { return a.Name }, func(a *Account) string { return a.ID },
+		func(a *Account) bool { return a.IsOwner })
+	return out, nil
 }
 
 func (s *Store) Account(ctx context.Context, id string) (*Account, error) {

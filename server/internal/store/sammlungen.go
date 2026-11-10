@@ -95,7 +95,7 @@ func scanSammlung(sc interface{ Scan(...any) error }) (*Sammlung, error) {
 // Sammlungen liefert alle Sammlungen samt ihrer von Hand gewählten Titel,
 // nach Namen sortiert.
 func (s *Store) Sammlungen(ctx context.Context) ([]Sammlung, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+sammlungCols+` FROM sammlung ORDER BY lower(name), id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+sammlungCols+` FROM sammlung`)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +112,7 @@ func (s *Store) Sammlungen(ctx context.Context) ([]Sammlung, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	nachNamenSortieren(out, func(x *Sammlung) string { return x.Name }, func(x *Sammlung) string { return x.ID }, nil)
 	// Alle Titel auf einmal, nicht Sammlung für Sammlung.
 	titel, err := s.db.QueryContext(ctx,
 		`SELECT sammlung_id, item_id FROM sammlung_titel ORDER BY sammlung_id, ord, item_id`)

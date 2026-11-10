@@ -35,6 +35,11 @@ func (s *Server) suche(w http.ResponseWriter, r *http.Request) {
 	tq := q
 	tq.Text, tq.Genre, tq.Person, tq.JahrVon, tq.JahrBis = d.Text, d.Genre, d.Person, d.JahrVon, d.JahrBis
 	tq.Limit = min(max(qInt(r, "limit", 60), 1), 200)
+	if d.Text != "" {
+		// Genau der Titel zuerst, dann Titel, die so anfangen, dann der
+		// Rest — „Matrix" vor „Animatrix".
+		tq.Sort = "relevanz"
+	}
 	if k := r.URL.Query().Get("kind"); k != "" {
 		tq.Kinds = strings.Split(k, ",")
 	}

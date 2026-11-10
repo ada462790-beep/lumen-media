@@ -68,9 +68,7 @@ func scanListe(sc interface{ Scan(...any) error }, ich string) (*Liste, error) {
 func (s *Store) Listen(ctx context.Context, ich string) ([]Liste, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+listeCols+` FROM playlist p JOIN account a ON a.id = p.account_id
-		  WHERE p.account_id = ? OR p.shared = 1
-		  ORDER BY CASE WHEN p.account_id = ? THEN 0 ELSE 1 END, p.name COLLATE NOCASE`,
-		ich, ich)
+		  WHERE p.account_id = ? OR p.shared = 1`, ich)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +81,12 @@ func (s *Store) Listen(ctx context.Context, ich string) ([]Liste, error) {
 		}
 		out = append(out, *l)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	nachNamenSortieren(out, func(l *Liste) string { return l.Name }, func(l *Liste) string { return l.ID },
+		func(l *Liste) bool { return l.Meine })
+	return out, nil
 }
 
 // Liste holt eine Liste samt Titeln — oder ErrNotFound, wenn es sie

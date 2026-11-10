@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -592,13 +593,51 @@ func (s *Server) itemsSeite(w http.ResponseWriter, r *http.Request, q store.Quer
 		failErr(w, err)
 		return
 	}
-	ok(w, map[string]any{
+	body := map[string]any{
 		"items":  out,
 		"gesamt": gesamt,
 		"offset": q.Offset,
 		"weiter": q.Offset+len(out) < gesamt,
 		"genres": genres,
-	})
+	}
+	if q.Seed != 0 {
+		// Der Samen der zufälligen Reihenfolge: Wer ihn beim Nachladen
+		// mitschickt, bekommt die Fortsetzung derselben Reihenfolge.
+		body["seed"] = q.Seed
+	}
+	ok(w, body)
+}
+
+// sortierungLesen liest sort, dir und seed einer Anfrage. Erlaubt sind
+// nur die Sortierungen, die der Store kennt (store.SortierungDeuten, mit
+// den alten Werten year, year-asc und title-desc); Unbekanntes heisst
+// Titel. „Zuletzt gesehen" und „Ungesehene zuerst" gelten immer für das
+// anfragende Profil — ein anderes lässt sich nicht angeben.
+func sortierungLesen(r *http.Request, q *store.Query) {
+	qs := r.URL.Query()
+	sortierung, richtung := qs.Get("sort"), qs.Get("dir")
+	if sortierung == "liste" {
+		q.Sort = sortierung
+		return
+	}
+	schluessel, absteigend, gueltig := store.SortierungDeuten(sortierung, richtung)
+	if !gueltig {
+		schluessel, absteigend, _ = store.SortierungDeuten("", "")
+	}
+	q.Sort, q.Richtung = schluessel, "asc"
+	if absteigend {
+		q.Richtung = "desc"
+	}
+	if sortierung == "" {
+		q.Sort, q.Richtung = "", "" // keine Wahl: der Aufrufer entscheidet
+	}
+	q.Konto = accountOf(r).ID
+	if schluessel == "random" {
+		q.Seed, _ = strconv.ParseInt(qs.Get("seed"), 10, 64)
+		if q.Seed <= 0 {
+			q.Seed = rand.Int63n(1<<31) + 1
+		}
+	}
 }
 
 func (s *Server) items(w http.ResponseWriter, r *http.Request) {
@@ -615,7 +654,7 @@ func (s *Server) items(w http.ResponseWriter, r *http.Request) {
 	q.Person = r.URL.Query().Get("person")
 	q.JahrVon = qInt(r, "jahrVon", 0)
 	q.JahrBis = qInt(r, "jahrBis", 0)
-	q.Sort = r.URL.Query().Get("sort")
+	sortierungLesen(r, &q)
 	q.Buchstabe = r.URL.Query().Get("buchstabe")
 	q.Limit = qInt(r, "limit", 100)
 	// ?liste=merkliste oder ?liste=favoriten: nur die eigenen. Vorher holte

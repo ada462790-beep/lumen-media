@@ -59,7 +59,14 @@ func (s *Store) SerienFolgen(ctx context.Context, seriesIDs []string) (map[strin
 			if folgen[i].Staffel != folgen[j].Staffel {
 				return folgen[i].Staffel < folgen[j].Staffel
 			}
-			return folgen[i].Nr < folgen[j].Nr
+			// Folgen ohne Nummer zuletzt, wie überall (folgenOrdnung).
+			if (folgen[i].Nr == 0) != (folgen[j].Nr == 0) {
+				return folgen[j].Nr == 0
+			}
+			if folgen[i].Nr != folgen[j].Nr {
+				return folgen[i].Nr < folgen[j].Nr
+			}
+			return folgen[i].ID < folgen[j].ID
 		})
 	}
 	return out, nil
@@ -70,15 +77,14 @@ func (s *Store) SerienFolgen(ctx context.Context, seriesIDs []string) (map[strin
 // Staffel; -1 heisst alle, die Specials eingeschlossen — wer eine ganze
 // Serie als gesehen markiert, meint auch die Extras.
 func (s *Store) FolgenVon(ctx context.Context, id string, staffel int) ([]Item, error) {
-	q := `SELECT ` + itemCols + ` FROM item WHERE kind = 'episode' AND (parent_id = ? OR parent_id IN
-	        (SELECT id FROM item WHERE kind = 'season' AND parent_id = ?`
+	q := `SELECT ` + itemCols + ` FROM item i WHERE i.kind = 'episode' AND (i.parent_id = ? OR i.parent_id IN
+	        (SELECT st.id FROM item st WHERE st.kind = 'season' AND st.parent_id = ?`
 	args := []any{id, id}
 	if staffel >= 0 {
-		q += ` AND COALESCE(season_no,0) = ?`
+		q += ` AND COALESCE(st.season_no,0) = ?`
 		args = append(args, staffel)
 	}
-	q += `)) ORDER BY CASE WHEN COALESCE(season_no,0) = 0 THEN 1 ELSE 0 END,
-	        COALESCE(season_no,0), COALESCE(episode_no,0)`
+	q += `)) ORDER BY ` + folgenOrdnung
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
