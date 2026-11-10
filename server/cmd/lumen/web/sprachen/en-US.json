@@ -444,7 +444,6 @@
  "Löschen": "Delete",
  "Mac": "Mac",
  "Markiert": "Marked",
- "Markierung entfernen": "Remove Marker",
  "Markierung entfernt": "Marker removed",
  "Maschinell übersetzt": "Machine-translated",
  "Mbit/s": "Mbps",
@@ -1247,5 +1246,16 @@
  "{genutzt} von {budget} Min. gebraucht": "{genutzt} of {budget} min used",
  "{name} hat heute 30 Minuten mehr.": "{name} has 30 more minutes today.",
  "Nur nachts (1–7 Uhr)": "Only at night (1–7 am)",
- "Die Erkennung liest jede Folge an. Sie wartet ausserdem, solange etwas abgespielt wird.": "Detection reads part of every episode. It also waits while anything is playing."
+ "Die Erkennung liest jede Folge an. Sie wartet ausserdem, solange etwas abgespielt wird.": "Detection reads part of every episode. It also waits while anything is playing.",
+ "Kein Vorspann (von Hand)": "No intro (set manually)",
+ "Kein Vorspann bei dieser Folge": "No intro in this episode",
+ "Kein Vorspann bei dieser Serie": "No intro in this series",
+ "Abspann für alle": "End credits for everyone",
+ "Abspann ab {zeit}": "End credits from {zeit}",
+ "Kein Abspann (von Hand)": "No end credits (set manually)",
+ "Abspann beginnt hier (diese Folge)": "End credits start here (this episode)",
+ "Kein Abspann bei dieser Folge": "No end credits in this episode",
+ "Kein Abspann bei dieser Serie": "No end credits in this series",
+ "Markierungen dieser Folge entfernen": "Remove this episode’s markers",
+ "Markierungen der Serie entfernen": "Remove the series’ markers"
 }

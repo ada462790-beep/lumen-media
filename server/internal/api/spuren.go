@@ -357,73 +357,151 @@ func spurName(t store.Track) string {
 
 // ---------------------------------------------------------------- Vorspann und Abspann
 
-// vorspannUndAbspann sagt dem Player, wo bei einer Folge der Vorspann
-// liegt und wo der Abspann beginnt. Was gilt, in dieser Reihenfolge:
-//
-//	Vorspann: von Hand an der Folge markiert → Kapitel der Datei →
-//	          von Hand an der Serie markiert → automatisch erkannt
-//	Abspann:  Kapitel der Datei → automatisch erkannt
-//
-// Von Hand schlägt alles Erkannte. Die Markierung an der Serie gilt für
-// alle Folgen gleich und steht darum hinter den Kapiteln, die zur
-// einzelnen Datei gehören (wie bisher). Automatisch Erkanntes kommt nur
-// zum Zug, wo sonst nichts ist, und nur ab der Mindestsicherheit
-// (vorspann_erkennung.go).
-func (s *Server) vorspannUndAbspann(ctx context.Context, it *store.Item, files []store.MediaFile) (vor *store.Vorspann, abspannAbMS int64) {
-	var erste *store.MediaFile
+// vorspannDatei: Vorspann und Abspann für eine bestimmte Datei.
+type vorspannDatei struct {
+	Intro     *store.Vorspann `json:"intro,omitempty"`
+	CreditsMS int64           `json:"creditsMs,omitempty"`
+}
+
+// vorgabenVonHand: was jemand mit Verwaltungsrechten an der Folge und an
+// der Serie gesetzt hat.
+type vorgabenVonHand struct {
+	folgeVor, serieVor   *store.Vorspann
+	folgeAb, serieAb     int64
+	folgeAbDa, serieAbDa bool
+}
+
+func (s *Server) vorgabenVonHand(ctx context.Context, it *store.Item) vorgabenVonHand {
+	var v vorgabenVonHand
+	if it.Kind != "episode" {
+		return v
+	}
+	v.folgeVor, _ = s.st.VorspannDerFolge(ctx, it.ID)
+	v.folgeAb, v.folgeAbDa, _ = s.st.AbspannVonHand(ctx, it.ID)
+	// Die Serie steht zwei Stufen über der Folge (Folge → Staffel → Serie).
+	if staffel, err := s.st.Item(ctx, it.ParentID); err == nil && staffel.ParentID != "" {
+		v.serieVor, _ = s.st.VorspannDerSerie(ctx, staffel.ParentID)
+		v.serieAb, v.serieAbDa, _ = s.st.AbspannVonHand(ctx, staffel.ParentID)
+	}
+	return v
+}
+
+// vorspannJeDatei: Vorspann und Abspann je vorhandener Datei (erster Teil
+// jeder Fassung). Kapitel und Erkanntes gehören zur Datei — läuft eine
+// andere Fassung als die erste, gelten deren Zeiten.
+func (s *Server) vorspannJeDatei(ctx context.Context, it *store.Item, files []store.MediaFile) map[string]vorspannDatei {
 	mehrteilig := false
 	for i := range files {
 		if files[i].PartNo > 1 {
 			mehrteilig = true
 		}
-		if erste == nil && !files[i].Missing {
-			erste = &files[i]
-		}
 	}
-	if erste != nil {
-		for _, c := range erste.Kapitel {
-			switch c.Kind {
-			case "intro":
-				if vor == nil {
-					vor = &store.Vorspann{VonMS: c.StartMS, BisMS: c.EndMS, Quelle: "kapitel"}
-				}
-			case "credits":
-				if abspannAbMS == 0 || c.StartMS < abspannAbMS {
-					abspannAbMS = c.StartMS
-				}
+	v := s.vorgabenVonHand(ctx, it)
+	out := map[string]vorspannDatei{}
+	for i := range files {
+		if files[i].Missing || files[i].PartNo > 1 {
+			continue
+		}
+		vor, ab := s.vorspannUndAbspannDatei(ctx, it, &files[i], mehrteilig, v)
+		out[files[i].ID] = vorspannDatei{Intro: vor, CreditsMS: ab}
+	}
+	return out
+}
+
+// vorspannUndAbspannDatei: was für diese Datei gilt, in dieser
+// Reihenfolge:
+//
+//	Vorspann: von Hand an der Folge (Spanne oder „keiner") →
+//	          „keiner" an der Serie → Kapitel der Datei →
+//	          von Hand an der Serie markiert → automatisch erkannt
+//	Abspann:  von Hand an der Folge (Beginn oder „keiner") →
+//	          „keiner" an der Serie → Kapitel der Datei → automatisch erkannt
+//
+// Von Hand schlägt alles Erkannte. Die Markierung an der Serie gilt für
+// alle Folgen gleich und steht darum hinter den Kapiteln, die zur
+// einzelnen Datei gehören (wie bisher) — nur „keiner" an der Serie
+// schaltet auch Kapitel und Erkennung ab: Liegen sie bei einer Serie
+// immer daneben, soll man das einmal sagen können. Automatisch Erkanntes
+// kommt nur zum Zug, wo sonst nichts ist, und nur ab der Mindestsicherheit
+// (vorspann_erkennung.go).
+func (s *Server) vorspannUndAbspannDatei(ctx context.Context, it *store.Item, f *store.MediaFile, mehrteilig bool, v vorgabenVonHand) (vor *store.Vorspann, abspannAbMS int64) {
+	vorFest, abFest := false, false
+	switch {
+	case v.folgeVor != nil:
+		vorFest = true
+		if !v.folgeVor.Keiner {
+			vor = v.folgeVor
+		}
+	case v.serieVor != nil && v.serieVor.Keiner:
+		vorFest = true
+	}
+	switch {
+	case v.folgeAbDa:
+		abFest, abspannAbMS = true, v.folgeAb
+	case v.serieAbDa && v.serieAb == 0:
+		abFest = true
+	}
+	for _, c := range f.Kapitel {
+		switch c.Kind {
+		case "intro":
+			if !vorFest && vor == nil {
+				vor = &store.Vorspann{VonMS: c.StartMS, BisMS: c.EndMS, Quelle: "kapitel"}
+			}
+		case "credits":
+			if !abFest && (abspannAbMS == 0 || c.StartMS < abspannAbMS) {
+				abspannAbMS = c.StartMS
 			}
 		}
 	}
 	if it.Kind != "episode" {
 		return vor, abspannAbMS
 	}
-	if v, _ := s.st.VorspannDerFolge(ctx, it.ID); v != nil {
-		vor = v
+	if !vorFest && vor == nil && v.serieVor != nil {
+		vor = v.serieVor
 	}
-	if vor == nil {
-		// Die Serie steht zwei Stufen über der Folge (Folge → Staffel → Serie).
-		if staffel, err := s.st.Item(ctx, it.ParentID); err == nil && staffel.ParentID != "" {
-			vor, _ = s.st.VorspannDerSerie(ctx, staffel.ParentID)
-		}
-	}
-	if erste != nil && (vor == nil || abspannAbMS == 0) {
-		autoVor, autoAb := s.erkanntFuer(ctx, erste)
-		if vor == nil {
+	if (!vorFest && vor == nil) || (!abFest && abspannAbMS == 0) {
+		autoVor, autoAb := s.erkanntFuer(ctx, f)
+		if !vorFest && vor == nil {
 			vor = autoVor
 		}
 		// Bei einer Folge in mehreren Dateien ist das Ende der ersten
 		// nicht das Ende der Folge.
-		if abspannAbMS == 0 && !mehrteilig {
+		if !abFest && abspannAbMS == 0 && !mehrteilig {
 			abspannAbMS = autoAb
 		}
 	}
 	return vor, abspannAbMS
 }
 
+// text: was von Hand gesetzt ist, für das Menü der Verwaltung im
+// Player — je "", "keiner" oder "zeit".
+func (v vorgabenVonHand) text() map[string]string {
+	vt := func(x *store.Vorspann) string {
+		switch {
+		case x == nil:
+			return ""
+		case x.Keiner:
+			return "keiner"
+		}
+		return "zeit"
+	}
+	at := func(ab int64, da bool) string {
+		switch {
+		case !da:
+			return ""
+		case ab == 0:
+			return "keiner"
+		}
+		return "zeit"
+	}
+	return map[string]string{"folgeVorspann": vt(v.folgeVor), "serieVorspann": vt(v.serieVor),
+		"folgeAbspann": at(v.folgeAb, v.folgeAbDa), "serieAbspann": at(v.serieAb, v.serieAbDa)}
+}
+
 // adminVorspannSetzen markiert den Vorspann einer Serie oder einer
 // einzelnen Folge — wer die Verwaltung darf, darf das; es gilt für alle,
 // die die Serie schauen. Die Markierung an der Folge geht allem anderen
-// vor (vorspannUndAbspann), etwa wenn die Erkennung danebenlag.
+// vor (vorspannUndAbspannDatei), etwa wenn die Erkennung danebenlag.
 func (s *Server) adminVorspannSetzen(w http.ResponseWriter, r *http.Request) {
 	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
 	if err != nil {
@@ -435,13 +513,19 @@ func (s *Server) adminVorspannSetzen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		VonMS int64 `json:"vonMs"`
-		BisMS int64 `json:"bisMs"`
+		VonMS  int64 `json:"vonMs"`
+		BisMS  int64 `json:"bisMs"`
+		Keiner bool  `json:"keiner"` // „kein Vorspann": auch Kapitel und Erkennung nicht
 	}
 	if !readJSON(w, r, &in) {
 		return
 	}
-	if err := s.st.VorspannSetzen(r.Context(), it.ID, in.VonMS, in.BisMS); err != nil {
+	if in.Keiner {
+		err = s.st.VorspannKeiner(r.Context(), it.ID)
+	} else {
+		err = s.st.VorspannSetzen(r.Context(), it.ID, in.VonMS, in.BisMS)
+	}
+	if err != nil {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -449,7 +533,58 @@ func (s *Server) adminVorspannSetzen(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) adminVorspannLoeschen(w http.ResponseWriter, r *http.Request) {
-	if err := s.st.VorspannLoeschen(r.Context(), r.PathValue("id")); err != nil {
+	it, err := s.visibleItem(r, r.PathValue("id"))
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	if err := s.st.VorspannLoeschen(r.Context(), it.ID); err != nil {
+		failErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// adminAbspannSetzen: PUT /admin/items/{id}/abspann — an einer Folge
+// {"abMs": …} (Beginn von Hand) oder {"keiner": true}; an einer Serie nur
+// {"keiner": true}: Dann sucht der Player bei keiner Folge einen Abspann,
+// und „Als Nächstes" kommt erst kurz vor Schluss.
+func (s *Server) adminAbspannSetzen(w http.ResponseWriter, r *http.Request) {
+	it, err := s.visibleItem(r, r.PathValue("id"))
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	var in struct {
+		AbMS   int64 `json:"abMs"`
+		Keiner bool  `json:"keiner"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	switch {
+	case it.Kind == "series" && in.Keiner, it.Kind == "episode" && in.Keiner:
+		err = s.st.AbspannSetzen(r.Context(), it.ID, 0)
+	case it.Kind == "episode" && in.AbMS > 0:
+		err = s.st.AbspannSetzen(r.Context(), it.ID, in.AbMS)
+	default:
+		fail(w, http.StatusBadRequest, "den abspann setzt man an einer folge, „kein abspann“ auch an der serie")
+		return
+	}
+	if err != nil {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) adminAbspannLoeschen(w http.ResponseWriter, r *http.Request) {
+	it, err := s.visibleItem(r, r.PathValue("id"))
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	if err := s.st.AbspannLoeschen(r.Context(), it.ID); err != nil {
 		failErr(w, err)
 		return
 	}

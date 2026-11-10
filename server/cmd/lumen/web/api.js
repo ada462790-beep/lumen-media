@@ -309,6 +309,20 @@ export const api = {
   adminClearIntro(seriesId) {
     return this.call(`/admin/items/${encodeURIComponent(seriesId)}/intro`, { method: 'DELETE' });
   },
+  /* „Kein Vorspann" an einer Serie oder Folge: auch Kapitel und Erkennung nicht. */
+  adminKeinIntro(id) {
+    return this.call(`/admin/items/${encodeURIComponent(id)}/intro`, { method: 'PUT', body: { keiner: true } });
+  },
+  /* Abspann von Hand: Beginn an einer Folge, oder „kein Abspann" (Folge oder Serie). */
+  adminSetAbspann(folgeId, abMs) {
+    return this.call(`/admin/items/${encodeURIComponent(folgeId)}/abspann`, { method: 'PUT', body: { abMs } });
+  },
+  adminKeinAbspann(id) {
+    return this.call(`/admin/items/${encodeURIComponent(id)}/abspann`, { method: 'PUT', body: { keiner: true } });
+  },
+  adminClearAbspann(id) {
+    return this.call(`/admin/items/${encodeURIComponent(id)}/abspann`, { method: 'DELETE' });
+  },
 
   artURL(itemId, kind = 'poster') {
     if (!this.mediaKey) return '';

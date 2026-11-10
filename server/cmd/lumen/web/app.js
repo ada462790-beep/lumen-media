@@ -1887,16 +1887,68 @@ function spurenPanel(p) {
     }
     if (S.me?.account?.isAdmin && p.kind === 'episode' && p.seriesId) {
       const m = p.introMarke;
-      const stand = p.intro ? `<div class="spuren-hinweis">${p.intro.quelle === 'kapitel' ? tr('Aus den Kapiteln der Datei') : p.intro.quelle === 'automatisch' ? tr('Automatisch erkannt') : tr('Markiert')}: ${clock(p.intro.vonMs / 1000)}–${clock(p.intro.bisMs / 1000)}</div>` : '';
+      const vh = p.vonHand || {};
+      const knopf = (attr, text) => `<button class="spur" ${attr}><span class="spur-name">${text}</span></button>`;
+      const stand = p.intro ? `<div class="spuren-hinweis">${p.intro.quelle === 'kapitel' ? tr('Aus den Kapiteln der Datei') : p.intro.quelle === 'automatisch' ? tr('Automatisch erkannt') : tr('Markiert')}: ${clock(p.intro.vonMs / 1000)}–${clock(p.intro.bisMs / 1000)}</div>`
+        : (vh.folgeVorspann === 'keiner' || vh.serieVorspann === 'keiner') ? `<div class="spuren-hinweis">${tr('Kein Vorspann (von Hand)')}</div>` : '';
       html += abschnitt(tr('Vorspann für alle'), stand + (m == null
-        ? `<button class="spur" data-intro-von><span class="spur-name">${tr('Vorspann beginnt hier')}</span></button>`
+        ? knopf('data-intro-von', tr('Vorspann beginnt hier'))
         : `<div class="spuren-hinweis">${tr('Beginn bei {zeit} gemerkt', { zeit: clock(m) })}</div>
-           <button class="spur" data-intro-bis><span class="spur-name">${tr('… und endet hier')}</span></button>
-           <button class="spur" data-intro-abbruch><span class="spur-name">${tr('Abbrechen')}</span></button>`)
-        + (p.intro?.quelle === 'serie' ? `<button class="spur" data-intro-weg><span class="spur-name">${tr('Markierung entfernen')}</span></button>` : ''));
+           ${knopf('data-intro-bis', tr('… und endet hier'))}
+           ${knopf('data-intro-abbruch', tr('Abbrechen'))}`)
+        + (vh.folgeVorspann !== 'keiner' ? knopf('data-vonhand="intro:folge:keiner"', tr('Kein Vorspann bei dieser Folge')) : '')
+        + (vh.serieVorspann !== 'keiner' ? knopf('data-vonhand="intro:serie:keiner"', tr('Kein Vorspann bei dieser Serie')) : ''));
+      const abStand = p.creditsMs ? `<div class="spuren-hinweis">${tr('Abspann ab {zeit}', { zeit: clock(p.creditsMs / 1000) })}</div>`
+        : (vh.folgeAbspann === 'keiner' || vh.serieAbspann === 'keiner') ? `<div class="spuren-hinweis">${tr('Kein Abspann (von Hand)')}</div>` : '';
+      html += abschnitt(tr('Abspann für alle'), abStand
+        + knopf('data-vonhand="abspann:folge:hier"', tr('Abspann beginnt hier (diese Folge)'))
+        + (vh.folgeAbspann !== 'keiner' ? knopf('data-vonhand="abspann:folge:keiner"', tr('Kein Abspann bei dieser Folge')) : '')
+        + (vh.serieAbspann !== 'keiner' ? knopf('data-vonhand="abspann:serie:keiner"', tr('Kein Abspann bei dieser Serie')) : '')
+        + (vh.folgeVorspann || vh.folgeAbspann ? knopf('data-vonhand="weg:folge"', tr('Markierungen dieser Folge entfernen')) : '')
+        + (vh.serieVorspann || vh.serieAbspann ? knopf('data-vonhand="weg:serie"', tr('Markierungen der Serie entfernen')) : ''));
     }
   }
   return `<div class="spuren" role="menu">${html}</div>`;
+}
+
+/* Vorspann und Abspann für die Datei, die läuft: aus jeDatei, wenn der
+   Server die Folge in mehreren Fassungen kennt, sonst wie bisher. */
+function vorspannFuer(d, fileId) {
+  const jd = d.jeDatei?.[fileId];
+  return jd ? { intro: jd.intro || null, creditsMs: jd.creditsMs || 0 }
+    : { intro: d.intro || null, creditsMs: d.creditsMs || 0 };
+}
+
+/* Nach einer Änderung von Hand: die Zeiten neu vom Server holen — was
+   gilt, entscheidet er (Folge vor Serie, Kapitel, Erkanntes). */
+async function vorspannNeuLaden(p) {
+  const d = await api.item(p.itemId).catch(() => null);
+  if (!d || S.playing !== p) return;
+  Object.assign(p, vorspannFuer(d, (p.teile ? p.teile[0] : p.fileId)), { vonHand: d.vonHand || null });
+}
+
+/* Die Knöpfe „Kein Vorspann …", „Abspann beginnt hier" usw. im Menü der
+   Verwaltung. art:wo:was, etwa „intro:serie:keiner". */
+async function vonHandSetzen(wert) {
+  const p = S.playing;
+  if (!p) return;
+  const [art, wo, was] = wert.split(':');
+  const id = wo === 'serie' ? p.seriesId : p.itemId;
+  try {
+    if (art === 'weg') {
+      await api.adminClearIntro(id);
+      await api.adminClearAbspann(id);
+    } else if (art === 'intro') {
+      await api.adminKeinIntro(id);
+    } else if (was === 'hier') {
+      await api.adminSetAbspann(id, Math.round((p.offset + p.current) * 1000));
+    } else {
+      await api.adminKeinAbspann(id);
+    }
+    await vorspannNeuLaden(p);
+    toast(art === 'weg' ? tr('Markierung entfernt') : tr('Gespeichert'));
+    patchChrome();
+  } catch (err) { toast(err.message); }
 }
 
 /* Die Folgen im Player: Staffeln als Pillen, darunter die Folgen mit
@@ -2245,7 +2297,10 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       tracks: file.tracks || [],
       spur: -1, untertitel: null, spurenOffen: false,
       // Vorspann und Abspann, falls bekannt — für „Überspringen" und „Als Nächstes".
-      intro: d.intro || null, creditsMs: d.creditsMs || 0, seriesId: d.seriesId || null,
+      // Je Fassung eigene Zeiten (jeDatei): Kapitel und Erkanntes gehören
+      // zur Datei, die wirklich läuft.
+      ...vorspannFuer(d, (teile[0] || file).id), seriesId: d.seriesId || null,
+      vonHand: d.vonHand || null,
       seriesTitle: it.seriesTitle || '',
       introUebersprungen: false, naechsterAngeboten: false,
       // Tempo gilt für die Sitzung am Stück (die nächste Folge läuft gleich
@@ -4621,17 +4676,13 @@ app.addEventListener('click', async e => {
     const von = Math.round(p.introMarke * 1000), bis = Math.round((p.offset + p.current) * 1000);
     try {
       await api.adminSetIntro(p.seriesId, von, bis);
-      p.intro = { vonMs: von, bisMs: bis, quelle: 'serie' }; p.introMarke = null; p.introUebersprungen = false;
+      p.introMarke = null; p.introUebersprungen = false;
+      await vorspannNeuLaden(p);
       toast(tr('Vorspann für die ganze Serie gemerkt')); patchChrome();
     } catch (err) { toast(err.message); }
     return;
   }
-  if (hit('data-intro-weg')) {
-    const p = S.playing;
-    try { await api.adminClearIntro(p.seriesId); p.intro = null; toast(tr('Markierung entfernt')); patchChrome(); }
-    catch (err) { toast(err.message); }
-    return;
-  }
+  if ((n = hit('data-vonhand'))) return vonHandSetzen(n.dataset.vonhand);
   if (hit('data-liste-abspielen')) {
     const items = S.data?.items || [];
     S.warteschlange = { name: S.data?.name || tr('Liste'), ids: items.map(x => x.id), items, i: -1,

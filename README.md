@@ -452,9 +452,17 @@ So geht es:
   als eines, das in die Handlung springt.
 - Was gilt, in dieser Reihenfolge: Vorspann von Hand an der Folge
   markiert, Kapitel der Datei, von Hand an der Serie markiert, erkannt.
-  Beim Abspann: Kapitel, dann erkannt. Liegt die Erkennung bei einer Folge
-  daneben, markiert man den Vorspann an der Folge (`PUT
-  /api/v1/admin/items/{folge}/intro`) oder an der Serie.
+  Beim Abspann: von Hand an der Folge, Kapitel, dann erkannt. Liegt die
+  Erkennung bei einer Folge daneben, markiert man den Vorspann an der Folge
+  (`PUT /api/v1/admin/items/{folge}/intro`) oder an der Serie. Wer die
+  Verwaltung darf, findet im Player der Web-App unter den Spuren auch
+  „Kein Vorspann bei dieser Folge/Serie", „Abspann beginnt hier" und „Kein
+  Abspann bei dieser Folge/Serie" (`{"keiner": true}` an `…/intro` oder
+  `…/abspann`): „keiner" an der Serie schaltet auch Kapitel und Erkennung
+  ab. Die Apps bekommen dann einfach keinen Vorspann oder Abspann.
+- Hat eine Folge mehrere Fassungen, gelten Kapitel und Erkanntes der
+  Datei, die läuft (`jeDatei` in der Antwort von `/items/{id}`); oben in
+  der Antwort stehen wie bisher die Zeiten der ersten Datei.
 
 Die Arbeit läuft wie Vorschaubilder und Untertitel: nacheinander, mit
 niedrigster Rechen- und Plattenpriorität, und jede Datei genau einmal —

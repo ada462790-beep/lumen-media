@@ -136,6 +136,7 @@ func Open(path string) (*Store, error) {
 // Stand 13: vorspann_erkannt bekommt versuche und wieder_ab
 // (vorspannErkennungTabellen): Lesefehler gelten nicht mehr für immer.
 // Alte Fehler-Zeilen haben kein wieder_ab und kommen einmal neu dran.
+// Dazu die Tabelle abspann (spuren.go): Abspann von Hand oder „keiner".
 const SchemaStand = 13
 
 // umbauOffenEndung: die Marke neben der Datenbank, solange ein Umbau
@@ -666,8 +667,12 @@ func nachruesten(db *sql.DB) error {
 			return err
 		}
 	}
-	// Automatisch erkannter Vorspann und Abspann (vorspann_erkennung.go).
+	// Automatisch erkannter Vorspann und Abspann (vorspann_erkennung.go),
+	// Abspann von Hand (spuren.go, Stand 13).
 	if err := vorspannErkennungTabellen(db); err != nil {
+		return err
+	}
+	if _, err := db.Exec(abspannTabelle); err != nil {
 		return err
 	}
 	// Bildschirmzeit (bildschirmzeit.go, Stand 12).

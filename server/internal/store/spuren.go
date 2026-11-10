@@ -229,20 +229,34 @@ func (s *Store) Kapitel(ctx context.Context, fileID string) ([]Chapter, error) {
 // Vorspann ist die Spanne, die „Vorspann überspringen" überspringt. Hat
 // die Datei ein Kapitel dafür, zählt das; sonst, was jemand mit Zugang
 // zur Verwaltung für die ganze Serie markiert hat.
+//
+// Keiner: Von Hand „kein Vorspann" gesetzt (an der Serie oder an der
+// Folge) — dann gibt es keinen Knopf, auch nicht aus Kapiteln oder der
+// Erkennung. Gespeichert als Spanne 0–0.
 type Vorspann struct {
 	VonMS  int64  `json:"vonMs"`
 	BisMS  int64  `json:"bisMs"`
-	Quelle string `json:"quelle"` // kapitel | serie
+	Quelle string `json:"quelle"` // folge | kapitel | serie | automatisch
+	Keiner bool   `json:"keiner,omitempty"`
 }
 
 func (s *Store) VorspannSetzen(ctx context.Context, seriesID string, von, bis int64) error {
-	if bis <= von || bis-von > 10*60*1000 {
+	if von < 0 || bis <= von || bis-von > 10*60*1000 {
 		return errors.New("ein vorspann dauert zwischen einer sekunde und zehn minuten")
 	}
+	return s.vorspannSchreiben(ctx, seriesID, von, bis)
+}
+
+// VorspannKeiner merkt sich „kein Vorspann" für eine Serie oder Folge.
+func (s *Store) VorspannKeiner(ctx context.Context, itemID string) error {
+	return s.vorspannSchreiben(ctx, itemID, 0, 0)
+}
+
+func (s *Store) vorspannSchreiben(ctx context.Context, itemID string, von, bis int64) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO vorspann (item_id, von_ms, bis_ms) VALUES (?,?,?)
 		 ON CONFLICT (item_id) DO UPDATE SET von_ms = excluded.von_ms, bis_ms = excluded.bis_ms`,
-		seriesID, von, bis)
+		itemID, von, bis)
 	return err
 }
 
@@ -251,7 +265,8 @@ func (s *Store) VorspannLoeschen(ctx context.Context, seriesID string) error {
 	return err
 }
 
-// VorspannDerSerie liefert die markierte Spanne — oder nil.
+// VorspannDerSerie liefert die markierte Spanne — oder nil. „Kein
+// Vorspann" kommt mit Keiner zurück.
 func (s *Store) VorspannDerSerie(ctx context.Context, seriesID string) (*Vorspann, error) {
 	var v Vorspann
 	err := s.db.QueryRowContext(ctx,
@@ -260,7 +275,43 @@ func (s *Store) VorspannDerSerie(ctx context.Context, seriesID string) (*Vorspan
 		return nil, nil
 	}
 	v.Quelle = "serie"
+	v.Keiner = v.VonMS == 0 && v.BisMS == 0
 	return &v, err
+}
+
+// ---------------------------------------------------------------- Abspann von Hand
+
+// abspannTabelle: von Hand gesetzter Beginn des Abspanns je Serie oder
+// Folge; ab_ms = 0 heisst „kein Abspann" (nichts erkennen, „Als Nächstes"
+// erst kurz vor Schluss). Schema-Stand 13.
+const abspannTabelle = `CREATE TABLE IF NOT EXISTS abspann (
+	   item_id TEXT PRIMARY KEY,
+	   ab_ms   INTEGER NOT NULL)`
+
+// AbspannSetzen: abMS > 0 setzt den Beginn von Hand (nur an einer Folge
+// sinnvoll), 0 heisst „kein Abspann".
+func (s *Store) AbspannSetzen(ctx context.Context, itemID string, abMS int64) error {
+	if abMS < 0 || abMS > 24*3600*1000 {
+		return errors.New("der abspann beginnt irgendwo in der folge")
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO abspann (item_id, ab_ms) VALUES (?,?)
+		 ON CONFLICT (item_id) DO UPDATE SET ab_ms = excluded.ab_ms`, itemID, abMS)
+	return err
+}
+
+func (s *Store) AbspannLoeschen(ctx context.Context, itemID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM abspann WHERE item_id = ?`, itemID)
+	return err
+}
+
+// AbspannVonHand: gesetzt? und wenn ja, ab wann (0 = kein Abspann).
+func (s *Store) AbspannVonHand(ctx context.Context, itemID string) (abMS int64, gesetzt bool, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT ab_ms FROM abspann WHERE item_id = ?`, itemID).Scan(&abMS)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	return abMS, err == nil, err
 }
 
 // Gemessen ist das, was beim letzten Ausmessen einer Datei herauskam.

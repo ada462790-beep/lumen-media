@@ -291,5 +291,7 @@
   "Die Bildschirmzeit lässt sich gerade nicht prüfen. Bitte später nochmals versuchen.": "Screen time can’t be checked right now. Please try again later.",
   "Für heute ist Schluss — ab {zeit} geht es weiter.": "That’s it for today — you can watch again from {zeit}.",
   "Die Regel für die Bildschirmzeit liess sich nicht lesen. Bitte neu speichern.": "The screen time rule couldn’t be read. Please save it again.",
-  "Mit einer Tagesgrenze für die Bildschirmzeit lässt sich nichts herunterladen — was so läuft, könnte Lumen nicht zählen.": "Downloads aren’t available with a daily screen time limit — Lumen couldn’t count what plays that way."
+  "Mit einer Tagesgrenze für die Bildschirmzeit lässt sich nichts herunterladen — was so läuft, könnte Lumen nicht zählen.": "Downloads aren’t available with a daily screen time limit — Lumen couldn’t count what plays that way.",
+  "der abspann beginnt irgendwo in der folge": "the end credits have to start somewhere within the episode",
+  "den abspann setzt man an einer folge, „kein abspann“ auch an der serie": "end credits are set on an episode; “no end credits” can also be set on the series"
 }

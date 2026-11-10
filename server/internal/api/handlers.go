@@ -747,13 +747,26 @@ func (s *Server) item(w http.ResponseWriter, r *http.Request) {
 		body["links"] = l
 	}
 	if it.Kind == "episode" || it.Kind == "movie" {
-		if vor, abspann := s.vorspannUndAbspann(r.Context(), it, files); vor != nil || abspann > 0 {
-			if vor != nil {
-				body["intro"] = vor
+		je := s.vorspannJeDatei(r.Context(), it, files)
+		// Oben: für die erste vorhandene Datei (so lesen es die Apps);
+		// dazu je Fassung, damit der Player die Zeiten der Datei nimmt,
+		// die wirklich läuft.
+		for i := range files {
+			if e, da := je[files[i].ID]; da {
+				if e.Intro != nil {
+					body["intro"] = e.Intro
+				}
+				if e.CreditsMS > 0 {
+					body["creditsMs"] = e.CreditsMS
+				}
+				break
 			}
-			if abspann > 0 {
-				body["creditsMs"] = abspann
-			}
+		}
+		if len(je) > 1 {
+			body["jeDatei"] = je
+		}
+		if it.Kind == "episode" && accountOf(r).IsAdmin {
+			body["vonHand"] = s.vorgabenVonHand(r.Context(), it).text()
 		}
 		if it.Kind == "episode" {
 			if staffel, err := s.st.Item(r.Context(), it.ParentID); err == nil {

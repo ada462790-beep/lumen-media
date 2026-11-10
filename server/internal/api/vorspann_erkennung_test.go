@@ -440,3 +440,109 @@ func TestErkennungWartetUndNurNachts(t *testing.T) {
 		t.Fatal("wartet nach der Wiedergabe noch")
 	}
 }
+
+// „Kein Vorspann" und „kein Abspann" von Hand, an der Serie und an der
+// Folge, und ein Abspann-Beginn von Hand an der Folge.
+func TestVorspannUndAbspannVonHandAus(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	serie, _, folgen := h.serie()
+	folge := folgen[0]
+	f := h.folgeMitDatei(folge, "s01e01.mkv", 1_800_000)
+	if err := h.st.SpurenSetzen(ctx, f.ID, nil, []store.Chapter{
+		{Index: 0, StartMS: 0, EndMS: 30_000, Kind: "intro"},
+		{Index: 1, StartMS: 30_000, EndMS: 1_650_000, Kind: "normal"},
+		{Index: 2, StartMS: 1_650_000, EndMS: 1_800_000, Kind: "credits"}}); err != nil {
+		t.Fatal(err)
+	}
+	setzen := func(weg, body string) {
+		t.Helper()
+		if r, b := h.do("PUT", weg, body, h.tok); r.StatusCode != 204 {
+			t.Fatalf("%s %s: %d %s", weg, body, r.StatusCode, b)
+		}
+	}
+	// Kein Vorspann an der Serie schlägt auch die Kapitel; der Abspann bleibt.
+	setzen("/api/v1/admin/items/"+serie+"/intro", `{"keiner":true}`)
+	if a := h.introVon(folge); a.Intro != nil || a.CreditsMs != 1_650_000 {
+		t.Fatalf("kein Vorspann an der Serie: %+v", a)
+	}
+	// An der Folge markiert schlägt „keiner" an der Serie.
+	setzen("/api/v1/admin/items/"+folge+"/intro", `{"vonMs":5000,"bisMs":40000}`)
+	if a := h.introVon(folge); a.Intro == nil || a.Intro.Quelle != "folge" {
+		t.Fatalf("Folge vor Serie: %+v", a)
+	}
+	setzen("/api/v1/admin/items/"+folge+"/intro", `{"keiner":true}`)
+	if a := h.introVon(folge); a.Intro != nil {
+		t.Fatalf("kein Vorspann an der Folge: %+v", a)
+	}
+	// Kein Abspann an der Serie; an der Folge ein Beginn von Hand.
+	setzen("/api/v1/admin/items/"+serie+"/abspann", `{"keiner":true}`)
+	if a := h.introVon(folge); a.CreditsMs != 0 {
+		t.Fatalf("kein Abspann an der Serie: %+v", a)
+	}
+	setzen("/api/v1/admin/items/"+folge+"/abspann", `{"abMs":1700000}`)
+	if a := h.introVon(folge); a.CreditsMs != 1_700_000 {
+		t.Fatalf("Abspann von Hand: %+v", a)
+	}
+	// Die Verwaltung sieht, was von Hand gesetzt ist.
+	_, raw := h.do("GET", "/api/v1/items/"+folge, "", h.tok)
+	var mit struct{ VonHand map[string]string }
+	_ = json.Unmarshal(raw, &mit)
+	if mit.VonHand["serieVorspann"] != "keiner" || mit.VonHand["folgeVorspann"] != "keiner" ||
+		mit.VonHand["serieAbspann"] != "keiner" || mit.VonHand["folgeAbspann"] != "zeit" {
+		t.Fatalf("vonHand: %s", raw)
+	}
+	// Ein Abspann-Beginn an der Serie ergibt keinen Sinn.
+	if r, _ := h.do("PUT", "/api/v1/admin/items/"+serie+"/abspann", `{"abMs":1000}`, h.tok); r.StatusCode != 400 {
+		t.Fatalf("Abspann-Beginn an der Serie: %d", r.StatusCode)
+	}
+	// Alles weg: wieder die Kapitel.
+	for _, id := range []string{serie, folge} {
+		for _, art := range []string{"intro", "abspann"} {
+			if r, _ := h.do("DELETE", "/api/v1/admin/items/"+id+"/"+art, "", h.tok); r.StatusCode != 204 {
+				t.Fatalf("löschen %s %s: %d", id, art, r.StatusCode)
+			}
+		}
+	}
+	if a := h.introVon(folge); a.Intro == nil || a.Intro.Quelle != "kapitel" || a.CreditsMs != 1_650_000 {
+		t.Fatalf("nach dem Löschen: %+v", a)
+	}
+}
+
+// Zwei Fassungen einer Folge: Jede bekommt ihre eigenen erkannten Zeiten.
+func TestVorspannJeFassung(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	_, _, folgen := h.serie()
+	folge := folgen[0]
+	kurz := h.folgeMitDatei(folge, "s01e01 - Kino.mkv", 1_800_000)
+	lang := h.folgeMitDatei(folge, "s01e01 - Extended.mkv", 2_100_000)
+	for _, x := range []struct {
+		f       *store.MediaFile
+		von, ab int64
+	}{{kurz, 10_000, 1_700_000}, {lang, 70_000, 2_000_000}} {
+		if err := h.st.ErkennungSetzen(ctx, store.Erkennung{FileID: x.f.ID, Groesse: x.f.SizeBytes, MTime: x.f.MTime,
+			Fassung: vorspann.Fassung, Stand: store.ErkanntFertig, Partner: 4,
+			VorspannVonMS: x.von, VorspannBisMS: x.von + 40_000, VorspannSich: 0.9,
+			AbspannAbMS: x.ab, AbspannSich: 0.9}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, raw := h.do("GET", "/api/v1/items/"+folge, "", h.tok)
+	var a struct {
+		JeDatei map[string]struct {
+			Intro     *store.Vorspann
+			CreditsMs int64
+		}
+	}
+	if err := json.Unmarshal(raw, &a); err != nil {
+		t.Fatal(err)
+	}
+	k, l := a.JeDatei[kurz.ID], a.JeDatei[lang.ID]
+	if k.Intro == nil || k.Intro.VonMS != 10_000 || k.CreditsMs != 1_700_000 {
+		t.Fatalf("Kinofassung: %s", raw)
+	}
+	if l.Intro == nil || l.Intro.VonMS != 70_000 || l.CreditsMs != 2_000_000 {
+		t.Fatalf("lange Fassung: %s", raw)
+	}
+}

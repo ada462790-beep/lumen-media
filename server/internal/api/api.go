@@ -293,6 +293,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/admin/items/{id}/metadata/assign", admin(s.adminTitelZuweisen))
 	mux.Handle("PUT /api/v1/admin/items/{id}/intro", admin(s.adminVorspannSetzen))
 	mux.Handle("DELETE /api/v1/admin/items/{id}/intro", admin(s.adminVorspannLoeschen))
+	mux.Handle("PUT /api/v1/admin/items/{id}/abspann", admin(s.adminAbspannSetzen))
+	mux.Handle("DELETE /api/v1/admin/items/{id}/abspann", admin(s.adminAbspannLoeschen))
 	// Fassungen und Teile.
 	mux.Handle("PUT /api/v1/admin/items/{id}/fassung", admin(s.adminFassungWaehlen))
 	mux.Handle("POST /api/v1/admin/files/{id}/abtrennen", admin(s.adminDateiAbtrennen))
