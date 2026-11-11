@@ -4624,6 +4624,7 @@ function viewAccounts() {
       ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
       ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
       ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
+      ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
         <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
           ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]].map(([k, n]) =>
@@ -4851,6 +4852,16 @@ app.addEventListener('click', async e => {
       return render();
     }
     return;
+  }
+  if ((n = hit('data-kontoweg'))) {
+    const a = (S.data?.accounts || []).find(x => x.id === n.dataset.kontoweg);
+    if (!a) return;
+    const ok = await frage(tr('{name} entfernen?', { name: a.name }),
+      tr('Das Profil verschwindet von allen Geräten, samt Verlauf, Merkliste, Bewertungen und eigenen Listen. Was {name} in geteilte Listen anderer gelegt hat, bleibt dort. Das lässt sich nicht rückgängig machen.', { name: a.name }),
+      tr('Entfernen'));
+    if (!ok) return;
+    try { await api.adminDeleteAccount(a.id); toast(tr('{name} ist entfernt', { name: a.name })); return load(); }
+    catch (err) { if (!err?.abgebrochen) toast(err.message); return; }
   }
   if ((n = hit('data-grenzen'))) {
     const a = (S.data?.accounts || []).find(x => x.id === n.dataset.grenzen);

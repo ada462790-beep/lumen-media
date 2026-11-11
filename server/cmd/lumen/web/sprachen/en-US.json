@@ -1311,5 +1311,9 @@
  "Filmreihen und Sammlungen": "Franchises and Collections",
  "Mindestens eine Bibliothek – sonst sieht {name} nichts.": "At least one library – otherwise {name} sees nothing.",
  "Was {name} darf": "What {name} can do",
- "{name} gehört zur Gruppe „{gruppe}“. Solange gelten deren Bibliotheken und Grenzen; was du hier einstellst, gilt erst ohne Gruppe.": "{name} belongs to the group “{gruppe}”. While that’s the case, its libraries and limits apply; what you set here only applies without a group."
+ "{name} gehört zur Gruppe „{gruppe}“. Solange gelten deren Bibliotheken und Grenzen; was du hier einstellst, gilt erst ohne Gruppe.": "{name} belongs to the group “{gruppe}”. While that’s the case, its libraries and limits apply; what you set here only applies without a group.",
+ "{name} entfernen?": "Remove {name}?",
+ "Das Profil verschwindet von allen Geräten, samt Verlauf, Merkliste, Bewertungen und eigenen Listen. Was {name} in geteilte Listen anderer gelegt hat, bleibt dort. Das lässt sich nicht rückgängig machen.": "The profile disappears from all devices, along with its history, watchlist, ratings and own playlists. Anything {name} added to other people’s shared playlists stays there. This can’t be undone.",
+ "{name} ist entfernt": "{name} has been removed",
+ "Entfernen": "Remove"
 }
