@@ -125,6 +125,7 @@
     <string name="im_haushalt">Im Haushalt</string>
     <string name="im_haushalt_geteilt">Im Haushalt geteilt</string>
     <string name="im_haushalt_sichtbar">im Haushalt sichtbar</string>
+    <string name="liste_gemeinsam_zeile">alle dürfen mitschreiben</string>
     <string name="im_haushalt_zeigen">Im Haushalt zeigen</string>
     <string name="in_dieser_liste_ist_nichts">In dieser Liste ist nichts, was sich gerade abspielen lässt.</string>
     <string name="in_dieser_serie_liegt_noch">In dieser Serie liegt noch keine Folge, oder alle sind gesehen.</string>

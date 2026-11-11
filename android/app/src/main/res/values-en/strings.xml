@@ -124,6 +124,7 @@
     <string name="im_haushalt">In Your Household</string>
     <string name="im_haushalt_geteilt">Shared with Household</string>
     <string name="im_haushalt_sichtbar">visible to household</string>
+    <string name="liste_gemeinsam_zeile">everyone can edit</string>
     <string name="im_haushalt_zeigen">Show to Household</string>
     <string name="in_dieser_liste_ist_nichts">There’s nothing in this playlist that can be played right now.</string>
     <string name="in_dieser_serie_liegt_noch">This show has no episodes yet, or all have been watched.</string>

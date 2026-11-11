@@ -319,7 +319,7 @@ private fun ListenZeile(model: LumenViewModel, liste: Liste, onClick: () -> Unit
                 buildList {
                     add(liste.anzahlText)
                     if (!liste.meine) add(tx(R.string.von_x, liste.von.name))
-                    else if (liste.gemeinsam) add("gemeinsam")
+                    else if (liste.gemeinsam) add(tx(R.string.liste_gemeinsam_zeile))
                     else if (liste.geteilt) add(tx(R.string.im_haushalt_sichtbar))
                 }.joinToString(" · "),
                 fontSize = 13.sp, color = Lumen.label2, maxLines = 1)
