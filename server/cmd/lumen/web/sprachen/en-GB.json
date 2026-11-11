@@ -20,7 +20,6 @@
  "Filme und Serien": "Films and TV programmes",
  "Gelöscht wird nur die Sammlung — kein Film, keine Datei.": "Only the collection is deleted — no film, no file.",
  "Gesehen, Weiterschauen, Favoriten, Bewertungen": "Watched, Continue Watching, favourites, ratings",
- "Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. Auf der Titelseite unter „Anderen Titel zuweisen“ suchen — oder den Link von TMDb oder IMDb einfügen.": "The match was too uncertain here. Better nothing than the wrong film. Search under “Match a Different Title” on the title page — or paste a TMDb or IMDb link.",
  "Ist ein anderer Film — als eigenen Titel führen": "It’s a different film — keep it as a separate title",
  "Leg eine an — etwa „Weihnachtsfilme“ oder „Marvel in Reihenfolge“ — und füge auf der Seite eines Films „Zu Sammlung hinzufügen“ dazu.": "Create one — e.g. “Christmas Films” or “Marvel in Order” — and use “Add to Collection” on a film’s page.",
  "Lege eine Bibliothek an und zeige Lumen, wo deine Filme liegen.": "Create a library and show Lumen where your films are.",
@@ -69,5 +68,11 @@
  "Änderst du etwas am Quelltext, trag deine eigene Fundstelle über LUMEN_SOURCE_URL ein — das verlangt die Lizenz.": "If you change the source code, enter your own location via LUMEN_SOURCE_URL — the licence requires it.",
  "Zu den Favoriten hinzugefügt": "Added to Favourites",
  "Aus den Favoriten entfernt": "Removed from Favourites",
- "Wo deine Filme und Serien liegen": "Where your films and programmes are stored"
+ "Wo deine Filme und Serien liegen": "Where your films and programmes are stored",
+ "Gesehen, Weiterschauen, Favoriten, Bewertungen, Zuordnungen": "Watched, Continue Watching, favourites, ratings, matches",
+ "Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. „Suchen“ sucht frei bei TMDb, „ID eingeben“ nimmt eine IMDb-, TMDb- oder TheTVDB-Kennung oder einen Link. Zugewiesenes gilt als von Hand zugeordnet und bleibt so.": "The match was too uncertain here. Better nothing than the wrong film. “Search” searches TMDb freely, “Enter ID” takes an IMDb, TMDb or TheTVDB ID or a link. Whatever you assign counts as matched by hand and stays that way.",
+ "Kein Treffer passt gut genug — lieber nichts als der falsche Film.": "No result fits well enough — better nothing than the wrong film.",
+ "Ordner wie „Extras“, „Trailers“, „Featurettes“ liest Lumen nicht als Filme ein.": "Lumen doesn’t read folders like “Extras”, “Trailers”, “Featurettes” as films.",
+ "Der Name endet auf „-trailer“, „-sample“, „-featurette“ … oder ist nur „sample“. Heisst ein Film wirklich so, die Datei umbenennen.": "The name ends in “-trailer”, “-sample”, “-featurette” … or is just “sample”. If a film really has that name, rename the file.",
+ "Welcher Film und welche Serie zu welchem Eintrag gehört, so wie in {art} — gilt für alle Profile. Lumen findet die Titel über die Dateien.": "Which film and programme belong to which entry, as in {art} — applies to all profiles. Lumen finds the titles by their files."
 }

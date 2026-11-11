@@ -45,6 +45,18 @@ func main() {
 		emby.Film("e3", "Apocalypse Now", 1979, "/media/x.avi", 1, nil, map[string]any{"Rating": 10.0}),
 		emby.Film("e4", "Gibt es nicht", 1990, "/media/y.mkv", 1, nil, gesehen),
 	}
+	// Alle Filme der Mediathek mit ihren Kennungen — für „Zuordnungen
+	// übernehmen". Die Pfade sehen aus wie im Docker-Behälter von Emby.
+	e.Alle = []emby.Titel{
+		emby.Film("a1", "Meridian", 2016, "/media/filme/Meridian/Meridian.mkv", 0,
+			map[string]string{"Tmdb": "502"}, map[string]any{}),
+		emby.Film("a2", "Der Fund", 2003, "/media/filme/Der Fund (2003)/Der Fund (2003).mkv", 0,
+			map[string]string{"Imdb": "tt0120737"}, map[string]any{}),
+		emby.Film("a3", "Matrix", 1999, "/media/filme/Matrix (1999)/Matrix (1999).mkv", 0,
+			map[string]string{"Tmdb": "603", "Imdb": "tt0133093"}, map[string]any{}),
+		emby.Film("a4", "Gibt es nicht", 1990, "/media/filme/y.mkv", 0,
+			map[string]string{"Tmdb": "1"}, map[string]any{}),
+	}
 	if err := os.WriteFile(os.Args[1], []byte(fmt.Sprintf("OS=%s\nEMBY=%s\n", o.Adresse(), e.Adresse())), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

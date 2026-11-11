@@ -161,5 +161,13 @@
  "Noch {n} Minuten Bildschirmzeit.": {
   "one": "Noch {n} Minute Bildschirmzeit.",
   "other": "Noch {n} Minuten Bildschirmzeit."
+ },
+ "{n} Einträge": {
+  "one": "{n} Eintrag",
+  "other": "{n} Einträge"
+ },
+ "{n} Titel haben in {art} keine Kennung.": {
+  "one": "{n} Titel hat in {art} keine Kennung.",
+  "other": "{n} Titel haben in {art} keine Kennung."
  }
 }

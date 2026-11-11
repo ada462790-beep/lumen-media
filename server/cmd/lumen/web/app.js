@@ -3390,30 +3390,43 @@ function viewPlaylist() {
     <div style="height:40px"></div></div>`);
 }
 
-/* „Anderen Titel zuweisen": sucht bei der Quelle und lässt wählen. */
-async function zuweisenPanel(itemId, suche) {
-  const box = document.getElementById('zuweisen');
+/* „Anderen Titel zuweisen": sucht bei der Quelle und lässt wählen.
+   Auf der Titelseite im Feld #zuweisen, unter „Aufräumen" im Feld unter
+   dem jeweiligen Titel. modus 'id': gleich für eine Kennung oder einen
+   Link (IMDb, TMDb, TheTVDB) — die Antwort ist dann genau ein Eintrag
+   als Vorschau, der mit „Nehmen" zugewiesen wird. */
+function zuweisenBox(itemId) {
+  return document.querySelector(`[data-zuo-box="${CSS.escape(itemId)}"]`) || document.getElementById('zuweisen');
+}
+async function zuweisenPanel(itemId, suche, modus = 'suche') {
+  const box = zuweisenBox(itemId);
   if (!box) return;
+  const idModus = modus === 'id';
   box.innerHTML = `<div class="group group--inset listen-panel" style="max-width:640px">
-    <form id="zuweisenform" class="row" style="min-height:52px;gap:10px" autocomplete="off">
+    <form data-zuweisenform data-item="${esc(itemId)}" class="row" style="min-height:52px;gap:10px" autocomplete="off">
       <span style="color:var(--label-2);display:flex">${svg(I.search, 16, 2)}</span>
-      <input name="q" value="${esc(suche)}" placeholder="${tr('Titel suchen, oder Link von TMDb/IMDb einfügen …')}" aria-label="${tr('Suchen')}"
+      <input name="q" value="${esc(idModus ? '' : suche)}" placeholder="${idModus ? tr('tt0133093, TMDb-Nummer oder Link einfügen …') : tr('Titel suchen, oder Link/Kennung von TMDb, IMDb, TheTVDB einfügen …')}" aria-label="${idModus ? tr('Kennung oder Link') : tr('Suchen')}"
         style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:16px">
-      <input name="year" placeholder="${tr('Jahr')}" inputmode="numeric" aria-label="${tr('Jahr')}"
-        style="width:64px;border:0;outline:0;background:var(--fill);border-radius:8px;padding:4px 8px;color:var(--label);font:inherit;font-size:14px">
-      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px">${tr('Suchen')}</button>
-      <button type="button" class="btn btn-pill" style="height:30px;font-size:13px" data-zuweisen-aus>${tr('Zu')}</button></form>
-    <div id="treffer"><p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p></div></div>`;
+      ${idModus ? '' : `<input name="year" placeholder="${tr('Jahr')}" inputmode="numeric" aria-label="${tr('Jahr')}"
+        style="width:64px;border:0;outline:0;background:var(--fill);border-radius:8px;padding:4px 8px;color:var(--label);font:inherit;font-size:14px">`}
+      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px">${idModus ? tr('Laden') : tr('Suchen')}</button>
+      <button type="button" class="btn btn-pill" style="height:30px;font-size:13px" data-zuweisen-aus="${esc(itemId)}">${tr('Zu')}</button></form>
+    <div data-treffer-box>${idModus
+      ? `<p class="t-caption c-2" style="padding:10px 16px;margin:0;line-height:1.5">${tr('Möglich sind: IMDb-Kennung (tt…), TMDb-Nummer, TheTVDB-Nummer (tvdb:121361) oder ein Link von imdb.com, themoviedb.org oder thetvdb.com. Bei TheTVDB steht die Nummer auf der Seite der Serie unter „TheTVDB.com Series ID“.')}</p>`
+      : `<p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p>`}</div></div>`;
+  if (idModus) { box.querySelector('input[name=q]')?.focus(); return; }
   return zuweisenSuchen(itemId, suche, '');
 }
 async function zuweisenSuchen(itemId, q, year) {
-  const box = document.getElementById('treffer');
+  const box = zuweisenBox(itemId)?.querySelector('[data-treffer-box]');
   if (!box) return;
+  if (!q) return;
+  box.innerHTML = `<p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p>`;
   let t;
   try { t = await api.adminItemSearch(itemId, q, year); }
   catch (err) { box.innerHTML = `<p class="hint" style="padding:12px 16px;margin:0">${esc(err.message)}</p>`; return; }
   box.innerHTML = t.length ? t.map(x => `
-    <button class="row orow-link" style="width:100%;min-height:64px;text-align:left;gap:12px" data-treffer="${esc(x.sourceId)}">
+    <button class="row orow-link" style="width:100%;min-height:64px;text-align:left;gap:12px" data-treffer="${esc(x.sourceId)}" data-item="${esc(itemId)}">
       <div class="thumb" style="position:relative;width:40px;height:60px;border-radius:6px;overflow:hidden;flex:none;background:var(--fill)">
         ${x.poster ? `<img class="art-img" src="${esc(x.poster)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</div>
       <div style="flex:1;min-width:0">
@@ -4497,13 +4510,59 @@ function viewCleanup() {
       <span style="color:#ff9f0a;display:flex;flex:none">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
       <span class="mono c-2 clamp-1" style="flex:1">${esc(f.path)}</span></div>`).join('');
 
-  const unmatched = (d.unmatched || []).map(i => `
-    <button class="orow orow-link" style="width:100%;text-align:left" data-go="detail" data-id="${esc(i.id)}">
-      <div style="flex:1;min-width:0"><div class="t-body">${esc(i.title)}</div>
-        <div class="t-caption c-2">${i.year || tr('ohne Jahr')} · ${i.kind === 'movie' ? tr('Film') : i.kind === 'series' ? tr('Serie') : i.kind}</div>
-        ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;margin-top:3px;overflow-wrap:anywhere">${
-          esc(i.pfad.split('/').filter(Boolean).slice(-4).join(' / '))}</div>` : ''}</div>
-      <span class="t-caption" style="color:var(--accent)">${tr('Zuordnen')}</span></button>`).join('');
+  // Nicht erkannt: wonach Lumen gesucht hat (Titel und Jahr aus dem
+  // Dateinamen), warum es nicht gereicht hat, und gleich die Werkzeuge
+  // zum Zuordnen.
+  const GRUND = {
+    keine_treffer: tr('TMDb kennt keinen Titel mit diesem Namen.'),
+    unsicher: tr('Kein Treffer passt gut genug — lieber nichts als der falsche Film.'),
+    zu_nah: tr('Mehrere Treffer passen gleich gut (etwa eine Neuverfilmung).'),
+    fehler: tr('TMDb war nicht erreichbar — Lumen versucht es später noch einmal.'),
+  };
+  const kurzPfad = p => esc(p.split('/').filter(Boolean).slice(-4).join(' / '));
+  const zeileOffen = i => {
+    const g = i.grund || null;
+    const gesucht = (g?.gesucht || []).slice(0, 4).map(x => `„${esc(x)}“`).join(', ');
+    return `
+    <div class="orow" style="height:auto;padding:12px 16px;display:block">
+      <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div class="t-body">${esc(i.title)}${i.year ? ` <span class="c-2">(${i.year})</span>` : ''}
+            <span class="t-caption c-2">· ${i.kind === 'movie' ? tr('Film') : i.kind === 'series' ? tr('Serie') : esc(i.kind)}</span></div>
+          ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
+          <div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${g
+            ? `${GRUND[g.art] || ''}${gesucht ? ' ' + tr('Gesucht: {was}.', { was: gesucht }) : ''}${g.vorschlag ? ' ' + tr('Am nächsten: {titel} ({prozent} %).', { titel: esc(g.vorschlag), prozent: Math.round((g.wert || 0) * 100) }) : ''}`
+            : i.matchState === 'pending' ? tr('Noch nicht geprüft.') : tr('Seit dem letzten Neustart nicht mehr geprüft.')}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap">
+          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:13px" data-zuo-id="${esc(i.id)}">${tr('ID eingeben')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:13px" data-go="detail" data-id="${esc(i.id)}">${tr('Öffnen')}</button>
+        </div>
+      </div>
+      <div data-zuo-box="${esc(i.id)}" style="margin-top:6px"></div>
+    </div>`;
+  };
+  const unmatched = (d.unmatched || []).map(zeileOffen).join('');
+  const ausstehend = (d.ausstehend || []).map(zeileOffen).join('');
+  const nUnmatched = d.offen?.unmatched ?? (d.unmatched || []).length;
+  const nAusstehend = d.offen?.pending ?? (d.ausstehend || []).length;
+
+  // Was der letzte Durchlauf mit Absicht ausgelassen hat.
+  const AUSLASS = {
+    beiwerk: [tr('Wie Beiwerk benannt'), tr('Der Name endet auf „-trailer“, „-sample“, „-featurette“ … oder ist nur „sample“. Heisst ein Film wirklich so, die Datei umbenennen.')],
+    beiwerk_ordner: [tr('Extras-Ordner'), tr('Ordner wie „Extras“, „Trailers“, „Featurettes“ liest Lumen nicht als Filme ein.')],
+    endung: [tr('Endung, die Lumen nicht abspielt'), tr('Etwa ISO-Abbilder, .strm oder .rmvb. In MKV oder MP4 umwandeln, dann kommen sie dazu.')],
+    unlesbar: [tr('Nicht lesbar'), tr('Lumen hat keine Leserechte (NAS-Gruppe prüfen) oder die Platte meldet einen Fehler.')],
+  };
+  const ausgelassen = (d.ausgelassen || []).map(b => b.liste.map(a => `
+    <details class="orow" style="height:auto;padding:12px 16px;display:block">
+      <summary style="cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+        <span class="t-body" style="flex:1">${esc((AUSLASS[a.grund] || [a.grund])[0])}</span>
+        <span class="t-caption c-2">${esc(b.name)} · ${tr('{n} Einträge', { n: a.anzahl })}</span></summary>
+      <p class="t-caption c-2" style="margin:6px 0">${esc((AUSLASS[a.grund] || ['', ''])[1])}</p>
+      <div class="mono c-2" style="font-size:11.5px;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
+    </details>`).join('')).join('');
 
   return shell(`<div class="wrap wrap--flat" style="max-width:900px">
     ${ohead(tr('Aufräumen'), tr('Filme in Teilen, fehlende Dateien, nicht erkannte Titel'))}
@@ -4513,9 +4572,17 @@ function viewCleanup() {
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: d.missing.length })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben stehen — eine abgehängte Platte soll die Mediathek nicht leeren.')}</p></section>` : ''}
-    ${unmatched ? `<section style="margin-top:22px"><div class="section-h">${tr('Nicht erkannt · {n}', { n: d.unmatched.length })}</div>
+    ${unmatched ? `<section style="margin-top:22px"><div class="section-h">${tr('Nicht erkannt · {n}', { n: nUnmatched })}</div>
       <div class="group group--inset">${unmatched}</div>
-      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. Auf der Titelseite unter „Anderen Titel zuweisen“ suchen — oder den Link von TMDb oder IMDb einfügen.')}</p></section>` : ''}
+      <p class="t-caption c-2" style="margin:8px 16px 0;line-height:1.5">${tr('Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. „Suchen“ sucht frei bei TMDb, „ID eingeben“ nimmt eine IMDb-, TMDb- oder TheTVDB-Kennung oder einen Link. Zugewiesenes gilt als von Hand zugeordnet und bleibt so.')}
+        ${tr('Tipp: Eine Kennung im Ordner- oder Dateinamen, etwa „Matrix (1999) {imdb-tt0133093}“, ordnet beim nächsten Durchlauf ohne Suche zu.')}</p>
+      <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
+    ${ausstehend ? `<section style="margin-top:22px"><div class="section-h">${tr('Wartet auf die Zuordnung · {n}', { n: nAusstehend })}</div>
+      <div class="group group--inset">${ausstehend}</div>
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Diese Titel prüft der nächste Metadaten-Durchgang.')}</p></section>` : ''}
+    ${ausgelassen ? `<section style="margin-top:22px"><div class="section-h">${tr('Ausgelassene Dateien')}</div>
+      <div class="group group--inset">${ausgelassen}</div>
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Was der letzte Durchlauf jeder Bibliothek mit Absicht ausgelassen hat. Die Liste gilt bis zum nächsten Durchlauf oder Neustart.')}</p></section>` : ''}
     ${aufgeloest.length ? `<section style="margin-top:22px"><div class="section-h">${tr('Aufgelöste Filmreihen · {n}', { n: aufgeloest.length })}</div>
       <div class="group group--inset">${aufgeloest.map(r => `
         <div class="orow" style="height:auto;padding:12px 16px">
@@ -4524,7 +4591,7 @@ function viewCleanup() {
           <button class="btn btn-pill btn-pill--fill" style="flex:none" data-reihe-zurueck="${esc(r.id)}">${tr('Wiederherstellen')}</button>
         </div>`).join('')}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Lumen bildet sie nicht wieder, bis du sie zurückholst.')}</p></section>` : ''}
-    ${!dup && !missing && !unmatched && !aufgeloest.length ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
+    ${!dup && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
     <div style="height:40px"></div></div>`);
 }
 
@@ -5064,10 +5131,12 @@ app.addEventListener('click', async e => {
     return load();
   }
   if ((n = hit('data-zuweisen'))) return zuweisenPanel(n.dataset.zuweisen, S.data?.item?.title || '');
-  if (hit('data-zuweisen-aus')) { const b = document.getElementById('zuweisen'); if (b) b.innerHTML = ''; return; }
+  if ((n = hit('data-zuo-suchen'))) return zuweisenPanel(n.dataset.zuoSuchen, n.dataset.titel || '');
+  if ((n = hit('data-zuo-id'))) return zuweisenPanel(n.dataset.zuoId, '', 'id');
+  if ((n = hit('data-zuweisen-aus'))) { const b = zuweisenBox(n.dataset.zuweisenAus); if (b) b.innerHTML = ''; return; }
   if ((n = hit('data-treffer'))) {
     toast(tr('Wird zugewiesen …'));
-    try { await api.adminItemAssign(S.id, n.dataset.treffer); } catch (err) { return toast(err.message); }
+    try { await api.adminItemAssign(n.dataset.item || S.id, n.dataset.treffer); } catch (err) { return toast(err.message); }
     toast(tr('Zugewiesen'));
     return load();
   }
@@ -5440,8 +5509,8 @@ async function formularAbschicken(e) {
     S.bearbeiten = null;
     return load();
   }
-  if (f.id === 'zuweisenform') {
-    return zuweisenSuchen(S.id, f.q.value.trim(), f.year.value.trim());
+  if (f.matches('[data-zuweisenform]')) {
+    return zuweisenSuchen(f.dataset.item, f.q.value.trim(), f.year ? f.year.value.trim() : '');
   }
   if (f.id === 'neuelisteform') {
     const name = f.name.value.trim();

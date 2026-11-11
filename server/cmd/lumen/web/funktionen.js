@@ -61,7 +61,7 @@ export function folgeBearbeiten(folge) {
 export function einstellungenUmzug() {
   return `<button class="btn row" style="width:100%;justify-content:flex-start;min-height:52px;gap:12px" data-fk-uebernahme>
       <span style="flex:1;text-align:left"><span class="t-body">${tr('Von Emby oder Jellyfin übernehmen')}</span>
-      <span class="t-caption c-2" style="display:block">${tr('Gesehen, Weiterschauen, Favoriten, Bewertungen')}</span></span>
+      <span class="t-caption c-2" style="display:block">${verwalten() ? tr('Gesehen, Weiterschauen, Favoriten, Bewertungen, Zuordnungen') : tr('Gesehen, Weiterschauen, Favoriten, Bewertungen')}</span></span>
       ${U.svg(U.I.chev, 14, 2.4)}</button>`;
 }
 

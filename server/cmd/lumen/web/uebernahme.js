@@ -10,10 +10,14 @@
  * Für jedes Profil selbst, auf jedem Gerät (auch dem Handy). Vier
  * Schritte: Adresse → Anmeldung → Vorschau → fertig. Die Verwaltung sieht
  * davon nichts; das Passwort geht nur einmal an den eigenen Lumen-Server,
- * der damit bei Emby anfragt und es danach vergisst. */
+ * der damit bei Emby anfragt und es danach vergisst.
+ *
+ * Wer die Mediathek verwaltet, kann am Schreibtisch zusätzlich die
+ * Zuordnungen (IMDb/TMDb/TVDb) der Filme und Serien übernehmen — das gilt
+ * dann für alle, nicht nur für das eigene Profil. */
 
 import { api } from './api.js';
-import { U, escH, fenster, meldung, fehlerText, beschaeftigt } from './fenster.js';
+import { U, escH, fenster, meldung, fehlerText, beschaeftigt, amSchreibtisch } from './fenster.js';
 import { tr, sprache } from './sprache.js';
 
 // Zahlen in der Schreibweise der Sprache (1’234 / 1.234 / 1,234).
@@ -33,6 +37,9 @@ export function uebernahmeOeffnen() {
     if (fertig) U.load?.();
   } });
   let server = null, adresse = '';
+  // Zuordnungen übernehmen: nur mit Verwaltungsrechten und am Schreibtisch.
+  const darfZuordnen = !!U.S?.me?.account?.isAdmin && amSchreibtisch();
+  let zuordnungen = false;
 
   const schritt1 = () => {
     d.inhalt.innerHTML = `${schritte(1)}
@@ -58,6 +65,9 @@ export function uebernahmeOeffnen() {
         <div class="ff"><div class="ff-kopf"><label for="ue-pw">${tr('Passwort')}</label></div>
           <input id="ue-pw" name="passwort" type="password" required autocomplete="off">
           <span class="ff-hinweis">${tr('Wird nur für diese Anmeldung gebraucht und nirgends gespeichert. Ein Konto ohne Passwort lässt sich nicht übernehmen – setze bei {art} zuerst eines.', { art: escH(server.art) })}</span></div>
+        ${darfZuordnen ? `<label class="wahl-check" style="margin-top:6px"><input type="checkbox" name="zuordnungen"${zuordnungen ? ' checked' : ''}>
+          <span style="flex:1">${tr('Zuordnungen (IMDb/TMDb/TVDb) übernehmen')}
+            <span class="ff-hinweis" style="display:block">${tr('Welcher Film und welche Serie zu welchem Eintrag gehört, so wie in {art} — gilt für alle Profile. Lumen findet die Titel über die Dateien.', { art: escH(server.art) })}</span></span></label>` : ''}
         <div data-meldung hidden></div>
         <div class="fenster-fuss">
           <button type="button" class="btn btn-pill btn-pill--fill" style="height:40px" data-ue-zurueck>${tr('Zurück')}</button>
@@ -73,8 +83,27 @@ export function uebernahmeOeffnen() {
       <p class="ff-hinweis">${tr('Bei grossen Mediatheken kann das eine Minute dauern.')}</p>`;
   };
 
+  // Die Zuordnungen in der Vorschau: Zahlen und zwei Schalter.
+  const zuordnungsTeil = z => {
+    if (!z) return '';
+    const fehlend = z.nichtGefunden ? `<details style="margin-top:6px"><summary class="t-caption c-2" style="cursor:pointer">${tr('{n} nicht in Lumen gefunden', { n: zahl(z.nichtGefunden) })}</summary>
+      <div class="fehlend">${(z.fehlend || []).map(escH).join('<br>')}${z.nichtGefunden > (z.fehlend || []).length ? '<br>…' : ''}</div>
+      <p class="ff-hinweis">${tr('Gesucht wird über den Dateipfad (Dateiname und Ordner). Liegt die Datei in Lumen anders oder fehlt sie, bleibt der Titel unverändert.')}</p></details>` : '';
+    return `<div class="t-sub c-2" style="margin:14px 0 4px">${tr('Zuordnungen (gilt für alle Profile):')}</div>
+      ${z.ohneQuelle ? `<div class="fenster-meldung fenster-meldung--info">${tr('In Lumen ist noch kein TMDb-Schlüssel eingerichtet (Verwaltung › Metadaten). Ohne ihn lassen sich keine Zuordnungen übernehmen.')}</div>` : `
+      <label class="wahl-check"><input type="checkbox" name="zuordnungen" ${z.neu || z.gesperrt ? 'checked' : 'disabled'}>
+        <span style="flex:1">${tr('IMDb/TMDb/TVDb übernehmen')}</span>
+        <span class="t-caption c-2">${z.neu ? tr('{n} neu', { n: zahl(z.neu) }) : '—'}${z.schonRichtig ? ' · ' + tr('{n} schon richtig', { n: zahl(z.schonRichtig) }) : ''}</span></label>
+      ${z.gesperrt ? `<label class="wahl-check"><input type="checkbox" name="ueberschreiben">
+        <span style="flex:1">${tr('Auch Titel überschreiben, die in Lumen von Hand zugewiesen sind')}</span>
+        <span class="t-caption c-2">${zahl(z.gesperrt)}</span></label>` : ''}`}
+      ${z.ohneKennung ? `<p class="ff-hinweis">${tr('{n} Titel haben in {art} keine Kennung.', { n: zahl(z.ohneKennung), art: escH(server?.art || '') })}</p>` : ''}
+      ${fehlend}`;
+  };
+
   const vorschau = st => {
     const v = st.vorschau, a = v.aenderungen || {};
+    const z = st.zuordnungen;
     const kachel = (n, text) => `<div class="zahl"><b>${zahl(n)}</b><span>${text}</span></div>`;
     const wahl = (name, text, n, neu) => `<label class="wahl-check"><input type="checkbox" name="${name}" ${n ? 'checked' : 'disabled'}>
       <span style="flex:1">${text}</span><span class="t-caption c-2">${neu ? tr('{n} neu', { n: zahl(neu) }) : n ? tr('schon in Lumen') : '—'}</span></label>`;
@@ -93,22 +122,39 @@ export function uebernahmeOeffnen() {
         ${v.nichtGefunden ? `<details style="margin-top:10px"><summary class="t-sub" style="cursor:pointer">${tr('{n} nicht in Lumen gefunden', { n: zahl(v.nichtGefunden) })}</summary>
           <div class="fehlend">${(v.fehlend || []).map(escH).join('<br>')}${v.nichtGefunden > (v.fehlend || []).length ? '<br>…' : ''}</div>
           <p class="ff-hinweis">${tr('Diese Titel gibt es in Lumen nicht — oder nicht in den Bibliotheken, die dein Profil sehen darf.')}</p></details>` : ''}
+        ${zuordnungsTeil(z)}
         <div data-meldung hidden></div>
         <div class="fenster-fuss">
           <button type="button" class="btn btn-pill btn-pill--fill" style="height:40px" data-fenster-zu>${tr('Abbrechen')}</button>
-          <button class="btn btn-primary" style="height:40px" data-laeuft="${tr('Übernimmt …')}"${v.gesehen + v.angefangen + v.favoriten + v.bewertungen ? '' : ' disabled'}>${tr('Übernehmen')}</button></div>
+          <button class="btn btn-primary" style="height:40px" data-laeuft="${tr('Übernimmt …')}"${v.gesehen + v.angefangen + v.favoriten + v.bewertungen || (z && !z.ohneQuelle && (z.neu || z.gesperrt)) ? '' : ' disabled'}>${tr('Übernehmen')}</button></div>
       </form>`;
   };
 
   const ergebnis = st => {
     const e = st.ergebnis || {};
+    const zs = st.zuordnungStand;
     fertig = true;
     const teile = [e.gesehen ? tr('{n} als gesehen', { n: zahl(e.gesehen) }) : '', e.angefangen ? tr('{n} zum Weiterschauen', { n: zahl(e.angefangen) }) : '',
       e.favoriten ? tr('{n} Favoriten', { n: zahl(e.favoriten) }) : '', e.bewertungen ? tr('{n} Bewertungen', { n: zahl(e.bewertungen) }) : ''].filter(Boolean);
+    const zText = !zs ? '' : zs.laeuft
+      ? `<div class="fenster-laden" role="status" aria-live="polite" style="margin-top:10px"><span class="spin"></span>
+          ${tr('Übernehme Zuordnungen … {fertig} von {gesamt}', { fertig: zahl(zs.fertig), gesamt: zahl(zs.gesamt) })}</div>
+         <p class="ff-hinweis">${tr('Das läuft auch weiter, wenn du das Fenster schliesst. Bilder und Folgen kommen danach im Hintergrund.')}</p>`
+      : `<div class="fenster-meldung fenster-meldung--gut" role="status" style="margin-top:10px">${tr('Zuordnungen: {neu} übernommen, {richtig} schon richtig, {hand} von Hand belassen, {fehler} nicht möglich.', {
+          neu: zahl(zs.uebernommen), richtig: zahl(zs.schonRichtig), hand: zahl(zs.gesperrt), fehler: zahl(zs.fehler) })}</div>`;
     d.inhalt.innerHTML = `${schritte(4)}
-      <div class="fenster-meldung fenster-meldung--gut" role="status">${teile.length ? tr('Übernommen: {was}.', { was: teile.join(', ') }) : tr('Es gab nichts Neues zu übernehmen.')}</div>
+      ${teile.length || !zs ? `<div class="fenster-meldung fenster-meldung--gut" role="status">${teile.length ? tr('Übernommen: {was}.', { was: teile.join(', ') }) : tr('Es gab nichts Neues zu übernehmen.')}</div>` : ''}
+      ${zText}
       <p class="ff-hinweis" style="margin-top:10px">${tr('Lumen hat sich bei {server} wieder abgemeldet und nichts davon aufbewahrt.', { server: escH(server?.art || tr('dem Server')) })}</p>
       <div class="fenster-fuss"><button class="btn btn-primary" style="height:40px" data-fenster-zu>${tr('Fertig')}</button></div>`;
+    // Während die Zuordnungen laufen: nachfragen.
+    if (zs?.laeuft) {
+      clearTimeout(lauf);
+      lauf = setTimeout(async () => {
+        if (!d.isConnected) return;
+        try { ergebnis(await api.call('/me/uebernahme')); } catch { /* beim nächsten Öffnen */ }
+      }, 1000);
+    }
   };
 
   const nachfragen = async () => {
@@ -140,14 +186,18 @@ export function uebernahmeOeffnen() {
       const benutzer = f.benutzer.value.trim();
       if (!benutzer) { meldung(d.inhalt, tr('Bitte den Benutzernamen angeben.')); return; }
       try {
+        zuordnungen = !!f.zuordnungen?.checked;
+        const body = { adresse, benutzer, passwort: f.passwort.value };
+        if (zuordnungen) body.zuordnungen = true;
         await beschaeftigt(f.querySelector('button:not([type=button])'), () =>
-          api.call('/me/uebernahme', { method: 'POST', body: { adresse, benutzer, passwort: f.passwort.value } }));
+          api.call('/me/uebernahme', { method: 'POST', body }));
         f.passwort.value = '';
         warten({ phase: 'verbinden' });
         lauf = setTimeout(nachfragen, 400);
       } catch (err) { meldung(d.inhalt, fehlerText(err)); }
     } else if (f.matches('[data-ue3]')) {
       const body = Object.fromEntries(['gesehen', 'angefangen', 'favoriten', 'bewertungen'].map(k => [k, !!f[k]?.checked]));
+      if (f.zuordnungen) { body.zuordnungen = !!f.zuordnungen.checked; body.ueberschreiben = !!f.ueberschreiben?.checked; }
       if (!Object.values(body).some(Boolean)) { meldung(d.inhalt, tr('Bitte mindestens eines auswählen.')); return; }
       try {
         let st;
