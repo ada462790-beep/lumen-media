@@ -20,6 +20,8 @@ struct TVProfilView: View {
     @State private var verlaufFragen = false
     /// Was gerade in diesem Profil läuft — auf welchem Gerät, nicht was.
     @State private var wiedergaben: [EigeneWiedergabe] = []
+    /// Wie viel Bildschirmzeit heute bleibt — nur bei Kinderprofilen.
+    @State private var bildschirmzeit: Bildschirmzeit?
 
     private var prefs: [String: String] { session.me?.prefs ?? [:] }
 
@@ -58,6 +60,8 @@ struct TVProfilView: View {
                     }
                 }
             }
+
+            BildschirmzeitAbschnitt(stand: bildschirmzeit)
 
             // Was nicht in die Leiste passt, und der eigene Schutz.
             TVIchBereiche()
@@ -191,7 +195,10 @@ struct TVProfilView: View {
             }
         }
         .navigationTitle("Profil")
-        .task { await wiedergabenLaden() }
+        .task {
+            await wiedergabenLaden()
+            bildschirmzeit = await BildschirmzeitAbschnitt.laden(session)
+        }
         .confirmationDialog("Verlauf löschen?", isPresented: $verlaufFragen) {
             Button("Löschen", role: .destructive) {
                 Task {

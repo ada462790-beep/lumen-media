@@ -229,9 +229,12 @@ public final class Playback {
             untertitelSpur = vor.untertitel
 
             // Der Vorspann liegt im ersten Teil, der Abspann im letzten —
-            // in den anderen wären die Marken falsch.
-            intro = stelle.teil == 0 ? detail.intro : nil
-            creditsMs = alle.istLetzter(stelle.teil) ? detail.creditsMs : nil
+            // in den anderen wären die Marken falsch. Und es gelten die
+            // Marken der Fassung, die wirklich läuft (`jeDatei`), nicht
+            // die der ersten.
+            let marken = detail.marken(fuer: erste.id)
+            intro = stelle.teil == 0 ? marken.intro : nil
+            creditsMs = alle.istLetzter(stelle.teil) ? marken.creditsMs : nil
             seriesId = detail.seriesId
 
             var start = stelle.imTeil

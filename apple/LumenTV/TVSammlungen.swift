@@ -97,6 +97,8 @@ struct TVStapelLabel: View {
     let zeile: String
     let bild: Item?
     var reihe: Reihe? = nil
+    /// Bei einer eigenen Sammlung zuerst ihr eigenes Bild.
+    var sammlung: Sammlung? = nil
     @State private var url: URL?
 
     var body: some View {
@@ -108,9 +110,13 @@ struct TVStapelLabel: View {
             Text(zeile).font(.caption).foregroundStyle(Theme.label2).lineLimit(1)
                 .frame(width: 260, alignment: .leading)
         }
-        .task(id: reihe?.id ?? bild?.id) {
+        .task(id: reihe?.id ?? sammlung?.id ?? bild?.id) {
             if let reihe {
                 url = await session.client.reiheBildURL(reihe)
+                return
+            }
+            if let sammlung {
+                url = await session.client.sammlungBildURL(sammlung)
                 return
             }
             guard let bild else { url = nil; return }
@@ -275,6 +281,82 @@ struct TVCollectionView: View {
         error = nil
         do { reihe = try await session.client.collection(reiheId) }
         catch { self.error = Session.text(error) }
+    }
+}
+
+// MARK: - Eine Sammlung
+
+/// Eine eigene Sammlung: Name, Anzahl, Beschreibung, darunter ihre Titel
+/// in der Reihenfolge, die die Verwaltung gewählt hat — Filme und Serien
+/// gemischt. Zusammenstellen geht nur im Browser.
+struct TVSammlungView: View {
+    @Environment(Session.self) private var session
+    let sammlungId: String
+    /// Der Name aus der Übersicht, damit der Titel nicht erst nach dem
+    /// Laden erscheint.
+    var name: String = ""
+
+    @State private var sammlung: Sammlung?
+    @State private var focused: Item?
+    @State private var playing: Abspielstart?
+    @State private var error: String?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            TVBackdrop(item: focused ?? sammlung?.items.first)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 40) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(sammlung?.name ?? name)
+                            .font(.system(size: 62, weight: .bold)).lineLimit(2)
+                        if let sammlung {
+                            Text(sammlung.anzahlText).font(.title3).foregroundStyle(Theme.label2)
+                        }
+                        if let text = sammlung?.beschreibungText {
+                            Text(text).font(.body).foregroundStyle(Theme.label2)
+                                .lineLimit(4).frame(maxWidth: 900, alignment: .leading)
+                        }
+                        if let focused {
+                            Text(zeile(focused)).font(.title3).foregroundStyle(Theme.label2)
+                                .lineLimit(1)
+                        }
+                        if let error {
+                            TVFehler(text: error) { await load() }
+                        }
+                    }
+                    .padding(.top, 60)
+
+                    if let sammlung, !sammlung.items.isEmpty {
+                        TVRail(title: String(localized: "Titel", bundle: .lumen, locale: .lumen), items: sammlung.items, focused: $focused, menu: { titel in
+                            tvKartenMenue(titel, session: session) { playing = $0 }
+                        })
+                    }
+                }
+                .padding(.horizontal, 60)
+                .padding(.bottom, 60)
+            }
+        }
+        .task { await load() }
+        .fullScreenCover(item: $playing) { s in
+            TVPlayerView(item: s.item, vonVorn: s.vonVorn).environment(session)
+        }
+        // Zurück aus dem Player: Haken auffrischen.
+        .onChange(of: playing == nil) { _, zu in
+            if zu { Task { await load() } }
+        }
+    }
+
+    /// „Die Bucht 2 · 2022 · 1 Std. 58 Min." — welcher Titel gerade den
+    /// Fokus hat, denn die Überschrift ist die der Sammlung.
+    private func zeile(_ item: Item) -> String {
+        [item.title, item.subtitleLine].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func load() async {
+        error = nil
+        do { sammlung = try await session.client.sammlung(sammlungId) }
+        catch { if !APIClient.istAbbruch(error) { self.error = Session.text(error) } }
     }
 }
 

@@ -508,9 +508,26 @@ public struct ItemDetail: Codable, Sendable {
     /// Titel, die zu diesem passen: dieselbe Reihe, geteilte Besetzung,
     /// gleiche Genres — nur aus dem, was dieses Profil sehen darf.
     public let similar: [Item]?
+    /// Vorspann und Abspann je Fassung, nach der Kennung ihrer (ersten)
+    /// Datei — nur, wenn es mehr als eine gibt. `intro` und `creditsMs`
+    /// oben gelten für die erste vorhandene Datei.
+    public let jeDatei: [String: VorspannDatei]?
 
     /// Die Datei, die sich abspielen lässt — fehlende übersprungen.
     public var playable: MediaFile? { files.first { !$0.isMissing } }
+
+    /// Vorspann und Abspann der Datei, die wirklich läuft: aus `jeDatei`,
+    /// wenn der Server sie für diese Datei nennt, sonst die Angaben oben.
+    public func marken(fuer fileId: String) -> (intro: Vorspann?, creditsMs: Int64?) {
+        if let je = jeDatei?[fileId] { return (je.intro, je.creditsMs) }
+        return (intro, creditsMs)
+    }
+}
+
+/// Vorspann und Abspann einer bestimmten Datei (`ItemDetail.jeDatei`).
+public struct VorspannDatei: Codable, Hashable, Sendable {
+    public let intro: Vorspann?
+    public let creditsMs: Int64?
 }
 
 /// Jemand aus der Besetzung eines Titels. `bild` ist ein Pfad wie
@@ -723,10 +740,21 @@ public struct Suchergebnis: Codable, Sendable {
     public let items: [Item]
     public let personen: [PersonTreffer]?
     public let genres: [String]?
+    /// Filmreihen und eigene Sammlungen, deren Name zur Eingabe passt —
+    /// „Harry Potter" findet die Reihe, nicht nur die einzelnen Filme.
+    /// Fehlen bei einem älteren Server.
+    public let reihen: [Reihe]?
+    public let sammlungen: [Sammlung]?
     public let deutung: Deutung?
 
     public var leer: Bool {
         items.isEmpty && (personen ?? []).isEmpty && (genres ?? []).isEmpty
+            && (reihen ?? []).isEmpty && (sammlungen ?? []).isEmpty
+    }
+
+    /// Gibt es Filmreihen oder Sammlungen zu zeigen?
+    public var hatReihenOderSammlungen: Bool {
+        !(reihen ?? []).isEmpty || !(sammlungen ?? []).isEmpty
     }
 
     /// „12 Treffer · mit Tom Hanks · 1990–1999"
@@ -734,6 +762,25 @@ public struct Suchergebnis: Codable, Sendable {
         var zeile = String(localized: "\(items.count) Treffer", bundle: .lumenKit, locale: .lumen)
         if let deutung, deutung.gedeutet { zeile += " · " + deutung.beschreibung }
         return zeile
+    }
+}
+
+extension Suchergebnis {
+    private enum Schluessel: String, CodingKey {
+        case items, personen, genres, reihen, sammlungen, deutung
+    }
+
+    /// Reihen und Sammlungen sind Beiwerk: passt dort etwas nicht, sollen
+    /// die Titel trotzdem erscheinen — darum `try?` statt eines Fehlers,
+    /// der die ganze Suche leer liesse.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Schluessel.self)
+        self.init(items: try c.decodeIfPresent([Item].self, forKey: .items) ?? [],
+                  personen: try c.decodeIfPresent([PersonTreffer].self, forKey: .personen),
+                  genres: try c.decodeIfPresent([String].self, forKey: .genres),
+                  reihen: try? c.decodeIfPresent([Reihe].self, forKey: .reihen),
+                  sammlungen: try? c.decodeIfPresent([Sammlung].self, forKey: .sammlungen),
+                  deutung: try? c.decodeIfPresent(Deutung.self, forKey: .deutung))
     }
 }
 
@@ -780,6 +827,119 @@ public struct Reihe: Codable, Identifiable, Hashable, Sendable {
     public var anzahlText: String {
         anzahl == 1 ? String(localized: "1 Film", bundle: .lumenKit, locale: .lumen)
             : String(localized: "\(anzahl) Filme", bundle: .lumenKit, locale: .lumen)
+    }
+}
+
+// MARK: - Eigene Sammlungen
+
+/// Eine eigene Sammlung (GET /sammlungen, /sammlungen/{id}): von der
+/// Verwaltung zusammengestellt — „Weihnachtsfilme", „Marvel in
+/// Reihenfolge". Jedes Profil sieht darin nur, was es ohnehin sehen darf.
+///
+/// In der Übersicht und in der Suche stehen nur die ersten Titel in
+/// `items` (für das Bild), `anzahl` zählt alle. `bild` ist ein eigenes
+/// Bild der Sammlung als Pfad auf dem Server; fehlt es, nehmen die Apps
+/// das Poster des ersten Titels — `APIClient.sammlungBildURL`.
+public struct Sammlung: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let beschreibung: String?
+    /// hand | jahr | titel — die Reihenfolge, in der `items` kommt.
+    public let sortierung: String?
+    public let aufStart: Bool?
+    public let bild: String?
+    public let anzahl: Int
+    public let items: [Item]
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, beschreibung, sortierung, aufStart, bild, anzahl, items
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        beschreibung = try c.decodeIfPresent(String.self, forKey: .beschreibung)
+        sortierung = try c.decodeIfPresent(String.self, forKey: .sortierung)
+        aufStart = try c.decodeIfPresent(Bool.self, forKey: .aufStart)
+        bild = try c.decodeIfPresent(String.self, forKey: .bild)
+        items = try c.decodeIfPresent([Item].self, forKey: .items) ?? []
+        anzahl = try c.decodeIfPresent(Int.self, forKey: .anzahl) ?? items.count
+    }
+
+    /// „5 Titel" — Filme und Serien gemischt.
+    public var anzahlText: String { String(localized: "\(anzahl) Titel", bundle: .lumenKit, locale: .lumen) }
+
+    /// Die Beschreibung, falls es eine gibt.
+    public var beschreibungText: String? {
+        guard let text = beschreibung?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+        return text
+    }
+}
+
+// MARK: - Bildschirmzeit
+
+/// Wie es um die Bildschirmzeit des eigenen Profils steht
+/// (GET /me/bildschirmzeit). `aktiv` ist nur bei Kinderprofilen mit einer
+/// Regel wahr; alles andere fehlt dann. Durchgesetzt wird die Grenze vom
+/// Server — die Apps zeigen nur, wie viel noch bleibt.
+public struct Bildschirmzeit: Codable, Hashable, Sendable {
+    public let aktiv: Bool
+    public let erlaubt: Bool?
+    public let genutztMinuten: Int?
+    public let budgetMinuten: Int?
+    public let restMinuten: Int?
+    /// „16:00" bis „19:00" — das Fenster für heute, falls es eines gibt.
+    public let von: String?
+    public let bis: String?
+    /// Der Satz des Servers, wenn es nicht (mehr) geht.
+    public let meldung: String?
+    public let weiterAb: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case aktiv, erlaubt, genutztMinuten, budgetMinuten, restMinuten, von, bis, meldung, weiterAb
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        aktiv = try c.decodeIfPresent(Bool.self, forKey: .aktiv) ?? false
+        erlaubt = try c.decodeIfPresent(Bool.self, forKey: .erlaubt)
+        genutztMinuten = try c.decodeIfPresent(Int.self, forKey: .genutztMinuten)
+        budgetMinuten = try c.decodeIfPresent(Int.self, forKey: .budgetMinuten)
+        restMinuten = try c.decodeIfPresent(Int.self, forKey: .restMinuten)
+        von = try c.decodeIfPresent(String.self, forKey: .von)
+        bis = try c.decodeIfPresent(String.self, forKey: .bis)
+        meldung = try c.decodeIfPresent(String.self, forKey: .meldung)
+        weiterAb = try c.decodeIfPresent(String.self, forKey: .weiterAb)
+    }
+
+    /// „Heute noch 25 Min.", „Heute ohne Grenze" oder der Satz des
+    /// Servers, wenn für heute Schluss ist — wie im Browser.
+    public var hauptzeile: String {
+        if erlaubt != true {
+            if let meldung, !meldung.isEmpty { return meldung }
+            return String(localized: "Für heute ist Schluss.", bundle: .lumenKit, locale: .lumen)
+        }
+        if let rest = restMinuten {
+            return String(localized: "Heute noch \(rest) Min.", bundle: .lumenKit, locale: .lumen)
+        }
+        return String(localized: "Heute ohne Grenze", bundle: .lumenKit, locale: .lumen)
+    }
+
+    /// „35 von 60 Min. gebraucht · heute 16:00 bis 19:00" — leer, wenn es
+    /// weder eine Grenze noch ein Fenster gibt.
+    public var nebenzeile: String {
+        var teile: [String] = []
+        if let budget = budgetMinuten, budget > 0 {
+            let genutzt = genutztMinuten ?? 0
+            teile.append(String(localized: "\(genutzt) von \(budget) Min. gebraucht", bundle: .lumenKit, locale: .lumen))
+        }
+        let fensterAnfang: String = von ?? ""
+        let fensterEnde: String = bis ?? ""
+        if !fensterAnfang.isEmpty, !fensterEnde.isEmpty {
+            teile.append(String(localized: "heute \(fensterAnfang) bis \(fensterEnde)", bundle: .lumenKit, locale: .lumen))
+        }
+        return teile.joined(separator: " · ")
     }
 }
 

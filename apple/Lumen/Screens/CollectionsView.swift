@@ -18,6 +18,10 @@ import LumenKit
 struct CollectionsView: View {
     @Environment(Session.self) private var session
     @State private var reihen: [Reihe] = []
+    /// Die eigenen Sammlungen — oben umschaltbar, wie im Browser. Ein
+    /// älterer Server kennt sie nicht; dann bleibt es bei den Reihen.
+    @State private var sammlungen: [Sammlung] = []
+    @State private var zeigtSammlungen = false
     @State private var loading = true
     @State private var error: String?
 
@@ -27,20 +31,35 @@ struct CollectionsView: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 24) {
-                ForEach(reihen) { reihe in
-                    NavigationLink {
-                        CollectionView(reiheId: reihe.id, name: reihe.name)
-                    } label: {
-                        CollectionCard(reihe: reihe)
+            VStack(alignment: .leading, spacing: 18) {
+                if !sammlungen.isEmpty {
+                    Picker("Filmreihen oder Sammlungen", selection: $zeigtSammlungen) {
+                        Text("Filmreihen").tag(false)
+                        Text("Sammlungen").tag(true)
                     }
-                    .buttonStyle(.plain)
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(maxWidth: 360)
+                }
+                if zeigtSammlungen {
+                    SammlungenRaster(sammlungen: sammlungen)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 24) {
+                        ForEach(reihen) { reihe in
+                            NavigationLink {
+                                CollectionView(reiheId: reihe.id, name: reihe.name)
+                            } label: {
+                                CollectionCard(reihe: reihe)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
             .padding(20)
         }
         .overlay {
-            if !loading && error == nil && reihen.isEmpty {
+            if !loading && error == nil && reihen.isEmpty && sammlungen.isEmpty {
                 ContentUnavailableView("Noch keine Filmreihen",
                     systemImage: "square.stack",
                     description: Text("Sobald zwei Filme einer Reihe in der Mediathek liegen, erscheinen sie hier."))
@@ -48,7 +67,7 @@ struct CollectionsView: View {
                 Loading(loading: loading, error: error, retry: load)
             }
         }
-        .navigationTitle("Filmreihen")
+        .navigationTitle(zeigtSammlungen ? Text("Sammlungen") : Text("Filmreihen"))
         .task { await load() }
         .refreshable { await load() }
     }
@@ -57,6 +76,10 @@ struct CollectionsView: View {
         error = nil
         do { reihen = try await session.client.collections() }
         catch { self.error = Session.text(error) }
+        // Beiwerk: fehlen die Sammlungen (älterer Server), bleibt es still.
+        sammlungen = (try? await session.client.sammlungen()) ?? []
+        if sammlungen.isEmpty { zeigtSammlungen = false }
+        else if reihen.isEmpty { zeigtSammlungen = true }
         loading = false
     }
 }

@@ -9,8 +9,8 @@ import SwiftUI
 import LumenKit
 
 // Die Suche auf dem Fernseher: oben die Tastatur des Systems, darunter wie
-// im Browser die Personen, die passen, die Genres, eine Zeile, wie die
-// Eingabe gedeutet wurde („12 Treffer · mit Tom Hanks · 1990–1999"), und
+// im Browser die Filmreihen und Sammlungen, die Personen, die passen, die
+// Genres, eine Zeile, wie die Eingabe gedeutet wurde („12 Treffer · mit Tom Hanks · 1990–1999"), und
 // die Titel. Findet sich nichts, ist der Wunsch einen Klick entfernt.
 
 struct TVSucheView: View {
@@ -59,6 +59,36 @@ struct TVSucheView: View {
 
     @ViewBuilder
     private func treffer(_ e: Suchergebnis) -> some View {
+        // Filmreihen und Sammlungen, deren Name passt — „Harry Potter"
+        // findet die Reihe, nicht nur die einzelnen Filme.
+        if e.hatReihenOderSammlungen {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Filmreihen und Sammlungen").font(.title2.weight(.semibold))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 40) {
+                        ForEach(e.reihen ?? []) { reihe in
+                            NavigationLink {
+                                TVCollectionView(reiheId: reihe.id, name: reihe.name)
+                            } label: {
+                                TVStapelLabel(titel: reihe.name, zeile: reihe.anzahlText,
+                                              bild: reihe.items.first, reihe: reihe)
+                            }
+                            .buttonStyle(.card)
+                        }
+                        ForEach(e.sammlungen ?? []) { sammlung in
+                            NavigationLink {
+                                TVSammlungView(sammlungId: sammlung.id, name: sammlung.name)
+                            } label: {
+                                TVStapelLabel(titel: sammlung.name, zeile: sammlung.anzahlText,
+                                              bild: sammlung.items.first, sammlung: sammlung)
+                            }
+                            .buttonStyle(.card)
+                        }
+                    }
+                    .padding(.vertical, 24)
+                }
+            }
+        }
         if let personen = e.personen, !personen.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Personen").font(.title2.weight(.semibold))

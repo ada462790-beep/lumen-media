@@ -655,7 +655,7 @@ public actor APIClient {
     public func search(_ text: String, limit: Int = 60) async throws -> Suchergebnis {
         let eingabe = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !eingabe.isEmpty else {
-            return Suchergebnis(items: [], personen: [], genres: [], deutung: nil)
+            return Suchergebnis(items: [], personen: [], genres: [], reihen: [], sammlungen: [], deutung: nil)
         }
         return try await get("/search", ["q": eingabe, "limit": String(limit)])
     }
@@ -712,6 +712,37 @@ public actor APIClient {
         }
         guard let erster = reihe.items.first else { return nil }
         return artworkURL(for: erster, wide: wide)
+    }
+
+    // MARK: - Eigene Sammlungen
+
+    /// Alle Sammlungen, aus denen dieses Profil etwas sehen darf — je mit
+    /// den ersten Titeln fürs Bild. Ein älterer Server kennt sie nicht
+    /// (404); die Ansichten zeigen dann einfach keine.
+    public func sammlungen() async throws -> [Sammlung] { try await get("/sammlungen") }
+
+    /// Eine Sammlung mit allen Titeln, die dieses Profil sehen darf.
+    public func sammlung(_ id: String) async throws -> Sammlung {
+        try await get("/sammlungen/\(id)")
+    }
+
+    /// Das Bild einer Sammlung: ihr eigenes, sonst das Poster des ersten
+    /// Titels. Das eigene liegt wie bei den Filmreihen unter der
+    /// Bilderroute der Titel, mit der Kennung der Sammlung.
+    public func sammlungBildURL(_ sammlung: Sammlung) -> URL? {
+        if sammlung.bild != nil {
+            return artworkURL(itemId: sammlung.id, kind: "poster")
+        }
+        guard let erster = sammlung.items.first else { return nil }
+        return artworkURL(for: erster)
+    }
+
+    // MARK: - Bildschirmzeit
+
+    /// Wie viel Bildschirmzeit dem eigenen Profil heute bleibt. Bei
+    /// Profilen ohne Regel `aktiv == false`.
+    public func bildschirmzeit() async throws -> Bildschirmzeit {
+        try await get("/me/bildschirmzeit")
     }
 
     // MARK: - Listen

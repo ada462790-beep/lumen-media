@@ -11,8 +11,8 @@ import LumenKit
 // Die Suche.
 //
 // Der Server deutet die Eingabe: „Komödie 90er" wird zu Genre und Jahren,
-// „Filme mit Tom Hanks" zu einer Person. Die Seite zeigt oben die
-// Personen, die zur Eingabe passen, darunter Genres als Chips, darunter
+// „Filme mit Tom Hanks" zu einer Person. Die Seite zeigt oben Filmreihen
+// und Sammlungen, deren Name passt, dann die Personen, die zur Eingabe passen, darunter Genres als Chips, darunter
 // die Titel — und sagt, wie gesucht wurde („12 Treffer · mit Tom Hanks").
 // Die Web-App macht es genauso (app.js: viewSearch, viewPerson).
 
@@ -36,6 +36,9 @@ struct SuchErgebnisse: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             if let ergebnis, geladenFuer == query.trimmingCharacters(in: .whitespacesAndNewlines) {
+                if ergebnis.hatReihenOderSammlungen {
+                    ReihenUndSammlungenReihe(reihen: ergebnis.reihen ?? [], sammlungen: ergebnis.sammlungen ?? [])
+                }
                 if let personen = ergebnis.personen, !personen.isEmpty {
                     PersonenReihe(personen: personen)
                 }

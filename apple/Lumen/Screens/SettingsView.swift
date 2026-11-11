@@ -28,6 +28,8 @@ struct SettingsView: View {
     @State private var geraeteFehler: String?
     @AppStorage(Darstellung.schluessel) private var darstellung = Darstellung.dunkel.rawValue
     @State private var spracheFehler: String?
+    /// Wie viel Bildschirmzeit heute bleibt — nur bei Kinderprofilen.
+    @State private var bildschirmzeit: Bildschirmzeit?
 
     private var account: Account? { session.me?.account }
 
@@ -63,6 +65,8 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            BildschirmzeitAbschnitt(stand: bildschirmzeit)
 
             Section("Wiedergabe") {
                 Toggle("Folgen automatisch weiter", isOn: pref("autoplay", default: true))
@@ -245,6 +249,7 @@ struct SettingsView: View {
                 if !APIClient.istAbbruch(error) { geraeteFehler = Session.text(error) }
             }
             await wiedergabenLaden()
+            bildschirmzeit = await BildschirmzeitAbschnitt.laden(session)
         }
         .confirmationDialog("Verlauf löschen?", isPresented: $confirmClearHistory) {
             Button("Löschen", role: .destructive) {

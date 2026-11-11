@@ -751,6 +751,24 @@ final class SpurenTests: XCTestCase {
         let ohne = try JSONDecoder.lumen.decode(ItemDetail.self, from: Data(#"{"item":\#(item),"files":[]}"#.utf8))
         XCTAssertNil(ohne.intro)
         XCTAssertNil(ohne.creditsMs)
+        XCTAssertNil(ohne.marken(fuer: "f_1").intro)
+    }
+
+    /// Mehrere Fassungen: es gelten die Marken der Datei, die läuft — und
+    /// neue Quellen („automatisch", „folge") lesen sich wie die alten.
+    func testVorspannJeDatei() throws {
+        let item = #"{"id":"ep_1","libraryId":"lib_1","kind":"episode","title":"X","matchState":"matched","addedAt":"2026-10-23T13:35:52+02:00"}"#
+        let json = #"{"item":\#(item),"files":[],"intro":{"vonMs":5000,"bisMs":65000,"quelle":"automatisch"},"creditsMs":2400000,"#
+            + #""jeDatei":{"f_1":{"intro":{"vonMs":5000,"bisMs":65000,"quelle":"automatisch"},"creditsMs":2400000},"#
+            + #""f_2":{"intro":{"vonMs":7000,"bisMs":70000,"quelle":"folge","neuesFeld":1},"creditsMs":2500000},"f_3":{}},"vonHand":"x"}"#
+        let detail = try JSONDecoder.lumen.decode(ItemDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(detail.intro?.quelle, "automatisch")
+        XCTAssertFalse(detail.intro?.vonSerie ?? true)
+        XCTAssertEqual(detail.marken(fuer: "f_2").intro?.vonMs, 7000)
+        XCTAssertEqual(detail.marken(fuer: "f_2").creditsMs, 2_500_000)
+        XCTAssertNil(detail.marken(fuer: "f_3").intro, "für diese Datei kennt der Server keinen Vorspann")
+        XCTAssertNil(detail.marken(fuer: "f_3").creditsMs)
+        XCTAssertEqual(detail.marken(fuer: "f_9").intro?.vonMs, 5000, "unbekannte Datei: die Angaben oben")
     }
 }
 
@@ -776,6 +794,51 @@ final class SucheTests: XCTestCase {
 
         let einJahr = Deutung(text: "bucht", genre: "Drama", person: nil, jahrVon: 2019, jahrBis: 2019)
         XCTAssertEqual(einJahr.beschreibung, "Drama · 2019 · „bucht“")
+    }
+
+    /// Filmreihen und eigene Sammlungen in der Suche — und ein älterer
+    /// Server, der sie nicht schickt.
+    func testSucheMitReihenUndSammlungen() throws {
+        let film = #"{"id":"it_1","libraryId":"lib_1","kind":"movie","title":"Alien","matchState":"matched","addedAt":"2026-10-23T13:35:52+02:00"}"#
+        let json = #"{"items":[],"personen":[],"genres":[],"#
+            + #""reihen":[{"id":"col_1","name":"Alien","source":"auto","anzahl":2,"items":[\#(film)]}],"#
+            + #""sammlungen":[{"id":"sm_1","name":"Weltraum","sortierung":"hand","aufStart":false,"anzahl":5,"bild":"/api/v1/art/sm_1/poster","items":[\#(film)],"regel":{"genre":"Science-Fiction"}}],"#
+            + #""deutung":null,"meintest":""}"#
+        let e = try JSONDecoder.lumen.decode(Suchergebnis.self, from: Data(json.utf8))
+        XCTAssertFalse(e.leer, "eine Reihe allein ist schon ein Treffer")
+        XCTAssertTrue(e.hatReihenOderSammlungen)
+        XCTAssertEqual(e.reihen?.first?.name, "Alien")
+        let sammlung = try XCTUnwrap(e.sammlungen?.first)
+        XCTAssertEqual(sammlung.anzahl, 5)
+        XCTAssertEqual(sammlung.anzahlText, "5 Titel")
+        XCTAssertNil(sammlung.beschreibungText)
+
+        // Eine Reihe, die nicht passt, nimmt der Suche nicht die Titel.
+        let kaputt = #"{"items":[\#(film)],"reihen":[{"name":"ohne Kennung"}],"sammlungen":"falsch"}"#
+        let k = try JSONDecoder.lumen.decode(Suchergebnis.self, from: Data(kaputt.utf8))
+        XCTAssertEqual(k.items.count, 1)
+        XCTAssertNil(k.reihen)
+        XCTAssertNil(k.sammlungen)
+        XCTAssertFalse(k.hatReihenOderSammlungen)
+    }
+
+    /// Die Bildschirmzeit eines Kinderprofils — und eines Profils ohne Regel.
+    func testBildschirmzeit() throws {
+        let rest = try JSONDecoder.lumen.decode(Bildschirmzeit.self, from: Data(
+            #"{"aktiv":true,"erlaubt":true,"genutztMinuten":35,"budgetMinuten":60,"restMinuten":25,"von":"16:00","bis":"19:00"}"#.utf8))
+        XCTAssertEqual(rest.hauptzeile, "Heute noch 25 Min.")
+        XCTAssertEqual(rest.nebenzeile, "35 von 60 Min. gebraucht · heute 16:00 bis 19:00")
+
+        let schluss = try JSONDecoder.lumen.decode(Bildschirmzeit.self, from: Data(
+            #"{"aktiv":true,"erlaubt":false,"genutztMinuten":60,"budgetMinuten":60,"meldung":"Für heute ist die Zeit um.","weiterAb":"2026-11-12T06:00:00+01:00"}"#.utf8))
+        XCTAssertEqual(schluss.hauptzeile, "Für heute ist die Zeit um.")
+
+        let frei = try JSONDecoder.lumen.decode(Bildschirmzeit.self, from: Data(#"{"aktiv":true,"erlaubt":true,"genutztMinuten":10}"#.utf8))
+        XCTAssertEqual(frei.hauptzeile, "Heute ohne Grenze")
+        XCTAssertEqual(frei.nebenzeile, "")
+
+        let aus = try JSONDecoder.lumen.decode(Bildschirmzeit.self, from: Data(#"{"aktiv":false}"#.utf8))
+        XCTAssertFalse(aus.aktiv)
     }
 
     /// Der Stand einer Serie — nur eigene Folgen, nur für dieses Profil.

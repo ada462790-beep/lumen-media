@@ -20,6 +20,8 @@ struct IchView: View {
     @Environment(Session.self) private var session
 
     private var ungelesen: Int { session.me?.ungelesen ?? 0 }
+    /// Wie viel Bildschirmzeit heute bleibt — nur bei Kinderprofilen.
+    @State private var bildschirmzeit: Bildschirmzeit?
 
     var body: some View {
         List {
@@ -38,6 +40,8 @@ struct IchView: View {
                     }
                 }
             }
+
+            BildschirmzeitAbschnitt(stand: bildschirmzeit)
 
             Section {
                 NavigationLink { WatchlistView() } label: {
@@ -80,6 +84,9 @@ struct IchView: View {
         }
         .navigationTitle("Ich")
         // Den Zähler der Neuigkeiten auffrischen, wenn man hereinschaut.
-        .task { await session.refreshMe() }
+        .task {
+            await session.refreshMe()
+            bildschirmzeit = await BildschirmzeitAbschnitt.laden(session)
+        }
     }
 }

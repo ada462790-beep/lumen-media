@@ -4096,6 +4096,146 @@
           }
         }
       }
+    },
+    "Für heute ist Schluss.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für heute ist Schluss."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für heute ist Schluss."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That’s it for today."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That’s it for today."
+          }
+        }
+      }
+    },
+    "Heute noch %lld Min.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute noch %lld Min."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute noch %lld Min."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min left today"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min left today"
+          }
+        }
+      }
+    },
+    "Heute ohne Grenze": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute ohne Grenze"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute ohne Grenze"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No limit today"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No limit today"
+          }
+        }
+      }
+    },
+    "%lld von %lld Min. gebraucht": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Min. gebraucht"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Min. gebraucht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld of %lld min used"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld of %lld min used"
+          }
+        }
+      }
+    },
+    "heute %@ bis %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "heute %@ bis %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "heute %@ bis %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "today %@ to %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "today %@ to %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

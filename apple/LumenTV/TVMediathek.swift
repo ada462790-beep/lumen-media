@@ -421,6 +421,9 @@ struct TVPersonView: View {
 struct TVFilmreihenView: View {
     @Environment(Session.self) private var session
     @State private var reihen: [Reihe] = []
+    /// Die eigenen Sammlungen, unter den Reihen. Ein älterer Server kennt
+    /// sie nicht; dann bleibt es bei den Reihen.
+    @State private var sammlungen: [Sammlung] = []
     @State private var geladen = false
     @State private var error: String?
 
@@ -434,7 +437,7 @@ struct TVFilmreihenView: View {
                     .padding(.top, 40)
                 if let error {
                     TVFehler(text: error) { await load() }
-                } else if geladen && reihen.isEmpty {
+                } else if geladen && reihen.isEmpty && sammlungen.isEmpty {
                     Text("Noch keine Reihen. Lumen erkennt sie von selbst, sobald zwei Filme einer Reihe da sind.")
                         .font(.title3).foregroundStyle(Theme.label2)
                         .frame(maxWidth: 1100, alignment: .leading)
@@ -451,6 +454,21 @@ struct TVFilmreihenView: View {
                         .buttonStyle(.card)
                     }
                 }
+                if !sammlungen.isEmpty {
+                    Text("Sammlungen").font(.title2.weight(.semibold))
+                        .padding(.top, 20)
+                    LazyVGrid(columns: spalten, alignment: .leading, spacing: 50) {
+                        ForEach(sammlungen) { sammlung in
+                            NavigationLink {
+                                TVSammlungView(sammlungId: sammlung.id, name: sammlung.name)
+                            } label: {
+                                TVStapelLabel(titel: sammlung.name, zeile: sammlung.anzahlText,
+                                              bild: sammlung.items.first, sammlung: sammlung)
+                            }
+                            .buttonStyle(.card)
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 60)
             .padding(.bottom, 60)
@@ -462,6 +480,8 @@ struct TVFilmreihenView: View {
         error = nil
         do { reihen = try await session.client.collections() }
         catch { if !APIClient.istAbbruch(error) { self.error = Session.text(error) } }
+        // Beiwerk: ohne Sammlungen (älterer Server) bleibt es still.
+        sammlungen = (try? await session.client.sammlungen()) ?? []
         geladen = true
     }
 }
