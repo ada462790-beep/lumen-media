@@ -104,8 +104,8 @@ func (s *Server) suche(w http.ResponseWriter, r *http.Request) {
 		"genres":     passende,
 		"reihen":     reihen,
 		"sammlungen": sammlungen,
-		"deutung":  d,
-		"meintest": meintest,
+		"deutung":    d,
+		"meintest":   meintest,
 	})
 }
 
@@ -154,6 +154,11 @@ func suchPasst(name, eingabe string) bool {
 func (s *Server) reihenUndSammlungenSuchen(r *http.Request, eingabe string) ([]reiheAntwort, []sammlungAntwort) {
 	const hoechstens = 12
 	reihen := []reiheAntwort{}
+	// Ein einzelner Buchstabe passt auf fast jede Reihe — bei jedem
+	// Tastendruck alle prüfen lohnt nicht.
+	if len([]rune(strings.TrimSpace(eingabe))) < 2 {
+		return reihen, []sammlungAntwort{}
+	}
 	if alle, err := s.st.Reihen(r.Context(), false); err == nil {
 		for i := range alle {
 			x := &alle[i]
@@ -183,7 +188,9 @@ func (s *Server) reihenUndSammlungenSuchen(r *http.Request, eingabe string) ([]r
 			if err != nil || len(items) == 0 {
 				continue
 			}
-			sammlungen = append(sammlungen, s.sammlungAntwortBauen(r, &alle[i], items, false))
+			a := s.sammlungAntwortBauen(r, &alle[i], items, false)
+			a.VonHand = nil // nur für die Bearbeitung nötig, nicht in Treffern
+			sammlungen = append(sammlungen, a)
 			if len(sammlungen) >= hoechstens {
 				break
 			}
