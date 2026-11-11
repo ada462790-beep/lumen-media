@@ -5686,7 +5686,10 @@ app.addEventListener('input', e => {
   searchTimer = setTimeout(load, 220);
 });
 
-app.addEventListener('mousemove', () => { if (S.view === 'player') showChrome(); });
+// Nur die Maus: Ein Tipp auf dem Handy schickt vor dem Klick ein
+// nachgemachtes mousemove. Das holte die Leiste hervor, und der Klick
+// danach hielt den Film an — der erste Tipp sollte nur die Leiste zeigen.
+app.addEventListener('pointermove', e => { if (S.view === 'player' && e.pointerType === 'mouse') showChrome(); });
 // Fokus in der Leiste (per Tab) holt sie hervor.
 app.addEventListener('focusin', e => {
   if (S.view === 'player' && e.target instanceof Element && e.target.closest('.player')) showChrome();
