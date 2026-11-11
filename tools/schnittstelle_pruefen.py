@@ -41,12 +41,18 @@ GRUEN, ROT, GELB, AUS = "\033[32m", "\033[31m", "\033[33m", "\033[0m"
 # --------------------------------------------------------------- Pfade
 
 def server_routen() -> set[tuple[str, str]]:
-    """Die Routen, die der Server anbietet — aus seiner Routentabelle."""
-    quelle = (SERVER / "internal/api/api.go").read_text(encoding="utf-8")
+    """Die Routen, die der Server anbietet — aus seiner Routentabelle.
+
+    Die steht nicht mehr nur in api.go: neuere Teile (Sammlungen, …)
+    tragen ihre Routen in eigenen Dateien ein (routen_funktionen.go).
+    Darum alle Go-Dateien des Pakets ausser den Tests."""
     routen = set()
     muster = re.compile(r'mux\.Handle(?:Func)?\(\s*"(GET|POST|PUT|PATCH|DELETE) ([^"]+)"')
-    for methode, pfad in muster.findall(quelle):
-        routen.add((methode, pfad.replace("/api/v1", "", 1)))
+    for datei in sorted((SERVER / "internal/api").glob("*.go")):
+        if datei.name.endswith("_test.go"):
+            continue
+        for methode, pfad in muster.findall(datei.read_text(encoding="utf-8")):
+            routen.add((methode, pfad.replace("/api/v1", "", 1)))
     return routen
 
 
@@ -223,6 +229,11 @@ PAARE = {
     "Track": "Track",
     "Chapter": "Chapter",
     "Vorspann": "Vorspann",
+    # Eigene Sammlungen; Vorspann und Abspann je Datei einer Titelseite.
+    "Sammlung": "sammlungAntwort",
+    "VorspannDatei": "vorspannDatei",
+    # Die Bildschirmzeit des eigenen Profils ist im Server eine map.
+    "Bildschirmzeit": None,
     # Die Suche: Personen und Deutung sind Strukturen, die Antwort selbst
     # ist im Server eine map — darum ohne Gegenstück.
     "PersonTreffer": "PersonTreffer",
