@@ -137,6 +137,9 @@ type Scanner struct {
 	// Pause: auf einem NAS mit schwachem Prozessor hat die Wiedergabe
 	// Vorrang, der Durchlauf darf länger dauern.
 	Bremse func() bool
+	// ausgelassen: was der letzte Durchlauf je Bibliothek ausgelassen hat
+	// (ausgelassen.go).
+	ausgelassen map[string][]Auslassung
 }
 
 // VonSelbst kennzeichnet einen Durchlauf, der von selbst läuft, nicht
@@ -237,11 +240,16 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	// ein Dateiteil ist.
 	lauf := s.lokalLauf(ctx, lib)
 	disc, teile := discWahl{}, teilOrdner{}
+	aus := neuerAuslassLauf()
+	unlesbar := 0
 
 	walkErr := filepath.WalkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			// Ein unlesbarer Ordner darf den ganzen Durchlauf nicht abbrechen.
-			s.st.Log(ctx, "warn", "scan", fmt.Sprintf("übersprungen: %s (%v)", path, err))
+			// Ein unlesbarer Ordner darf den ganzen Durchlauf nicht
+			// abbrechen. Welcher es war, steht unter „Aufräumen", nicht
+			// im Protokoll (dort stehen keine Pfade).
+			aus.merken(AuslassFehler, path)
+			unlesbar++
 			return nil
 		}
 		if ctx.Err() != nil {
@@ -249,11 +257,15 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		}
 		if d.IsDir() {
 			if path != lib.Path && ordnerUeberspringen(d.Name(), lib.Kind) {
+				if IsExtrasDir(d.Name()) && !IstSystemOrdner(d.Name()) {
+					aus.merken(AuslassOrdner, path)
+				}
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		if !IsVideo(path) || IsJunkFile(path) || VerweisInDatenordner(path, d) {
+			aus.datei(path)
 			return nil
 		}
 		rel, _ := filepath.Rel(lib.Path, path)
@@ -264,6 +276,8 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 
 		info, err := d.Info()
 		if err != nil {
+			aus.merken(AuslassFehler, path)
+			unlesbar++
 			return nil
 		}
 		if s.Bremse != nil && s.Bremse() {
@@ -398,6 +412,11 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		return err == nil && !strings.HasPrefix(rel, "..") && IstSystemPfad(rel)
 	}); err == nil && n > 0 {
 		s.st.Log(ctx, "info", "scan", fmt.Sprintf("%s: %d Dateien aus Systemordnern ausgetragen", lib.Name, n))
+	}
+	s.auslassenSetzen(lib.ID, aus)
+	if unlesbar > 0 {
+		s.st.Log(ctx, "warn", "scan", fmt.Sprintf(
+			"%s: %d Ordner oder Dateien liessen sich nicht lesen (Liste unter Aufräumen)", lib.Name, unlesbar))
 	}
 	res.Took = time.Since(start)
 	res.TookMS = res.Took.Milliseconds()
