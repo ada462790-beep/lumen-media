@@ -952,6 +952,12 @@ func fold(s string) string {
 	return r.Replace(s)
 }
 
+// SuchFalten macht einen Namen vergleichbar wie die Titelsuche: klein, ohne
+// Akzente, Umlaute als ae/oe/ue.
+func SuchFalten(s string) string {
+	return fold(strings.ToLower(s))
+}
+
 // ohnePunkte: „ärger" → „arger". Wer ohne Umlaut-Taste sucht, tippt das
 // so; fold macht daraus „aerger". Im Suchtext stehen darum beide Formen.
 func ohnePunkte(s string) string {

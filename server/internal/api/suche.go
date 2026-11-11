@@ -25,7 +25,8 @@ func (s *Server) suche(w http.ResponseWriter, r *http.Request) {
 	}
 	eingabe := suchEingabe(r)
 	if eingabe == "" {
-		ok(w, map[string]any{"items": []any{}, "personen": []any{}, "genres": []any{}})
+		ok(w, map[string]any{"items": []any{}, "personen": []any{}, "genres": []any{},
+			"reihen": []any{}, "sammlungen": []any{}})
 		return
 	}
 	genres, _ := s.st.AlleGenres(r.Context(), q)
@@ -96,10 +97,13 @@ func (s *Server) suche(w http.ResponseWriter, r *http.Request) {
 			passende = append(passende, g)
 		}
 	}
+	reihen, sammlungen := s.reihenUndSammlungenSuchen(r, eingabe)
 	ok(w, map[string]any{
-		"items":    out,
-		"personen": personen,
-		"genres":   passende,
+		"items":      out,
+		"personen":   personen,
+		"genres":     passende,
+		"reihen":     reihen,
+		"sammlungen": sammlungen,
 		"deutung":  d,
 		"meintest": meintest,
 	})
@@ -130,4 +134,60 @@ func suchtextKuerzen(roh string) string {
 		t = strings.Join(w[:suchWoerterHoechstens], " ")
 	}
 	return strings.TrimSpace(t)
+}
+
+// suchPasst: Steckt die Eingabe im Namen? Ohne Gross/klein, Umlaute und
+// Akzente; bei mehreren Wörtern muss jedes vorkommen („potter harry").
+func suchPasst(name, eingabe string) bool {
+	n := store.SuchFalten(name)
+	for _, w := range strings.Fields(store.SuchFalten(eingabe)) {
+		if !strings.Contains(n, w) {
+			return false
+		}
+	}
+	return strings.TrimSpace(eingabe) != ""
+}
+
+// reihenUndSammlungenSuchen: Filmreihen und eigene Sammlungen, deren Name
+// zur Eingabe passt — mit denselben Sichtbarkeitsregeln wie ihre Seiten
+// (eine Reihe ab zwei sichtbaren Filmen, eine Sammlung nicht leer).
+func (s *Server) reihenUndSammlungenSuchen(r *http.Request, eingabe string) ([]reiheAntwort, []sammlungAntwort) {
+	const hoechstens = 12
+	reihen := []reiheAntwort{}
+	if alle, err := s.st.Reihen(r.Context(), false); err == nil {
+		for i := range alle {
+			x := &alle[i]
+			if !suchPasst(x.Name, eingabe) {
+				continue
+			}
+			items, err := s.sichtbar(r, x.ItemIDs)
+			if err != nil || len(items) < reiheMindestens {
+				continue
+			}
+			a := reiheAntwort{ID: x.ID, Name: x.Name, Overview: x.Overview, Source: x.Source,
+				Anzahl: len(items), Items: items[:min(len(items), 3)]}
+			reiheBilder(x, &a)
+			reihen = append(reihen, a)
+			if len(reihen) >= hoechstens {
+				break
+			}
+		}
+	}
+	sammlungen := []sammlungAntwort{}
+	if alle, err := s.st.Sammlungen(r.Context()); err == nil {
+		for i := range alle {
+			if !suchPasst(alle[i].Name, eingabe) {
+				continue
+			}
+			items, err := s.sammlungInhalt(r, &alle[i])
+			if err != nil || len(items) == 0 {
+				continue
+			}
+			sammlungen = append(sammlungen, s.sammlungAntwortBauen(r, &alle[i], items, false))
+			if len(sammlungen) >= hoechstens {
+				break
+			}
+		}
+	}
+	return reihen, sammlungen
 }

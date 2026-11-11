@@ -25,6 +25,7 @@ import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBe
   sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter } from './funktionen.js';
 // Bildschirmzeit der Kinderprofile (durchgesetzt vom Server).
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
+import { sammlungKarte } from './sammlungen.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -1381,6 +1382,7 @@ function viewWatchlist() {
 function viewSearch() {
   const d = S.data || {};
   const items = d.items || [], personen = d.personen || [], genres = d.genres || [];
+  const reihen = d.reihen || [], sammlungen = d.sammlungen || [];
   const q = S.query.trim();
   const de = d.deutung || {};
   const deutung = [de.person ? tr('mit {person}', { person: de.person }) : '', de.genre || '',
@@ -1397,6 +1399,11 @@ function viewSearch() {
           <div class="t-caption clamp-1" style="margin-top:6px">${esc(p.name)}</div>
           <div class="t-caption c-2">${tr('{n} Titel', { n: p.anzahl })}</div>
         </button>`).join('')}</div></section>` : '';
+  // Filmreihen und eigene Sammlungen, deren Name passt — „Harry Potter"
+  // findet die Reihe, nicht nur die einzelnen Filme.
+  const reihenHtml = reihen.length || sammlungen.length ? `<section style="margin-bottom:26px">
+      <div class="section-h" style="padding-left:0">${tr('Filmreihen und Sammlungen')}</div>
+      <div class="rail">${reihen.map(reiheKarte).join('')}${sammlungen.map(sammlungKarte).join('')}</div></section>` : '';
   const genresHtml = genres.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px">${genres.map(g =>
       `<button class="tab-pill" style="background:var(--fill)" data-genre="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : '';
 
@@ -1413,10 +1420,10 @@ function viewSearch() {
     </form>
     <div style="margin-top:28px">
       ${!q ? leer({ symbol: I.search, titel: tr('Wonach suchst du?'), text: tr('Titel, Schauspieler, Genre oder Jahr — auch „Komödie 2019“, „Filme mit Tom Hanks“ oder „Thriller 80er“.') })
-        : `${personenHtml}${genresHtml}${meintest}
+        : `${reihenHtml}${personenHtml}${genresHtml}${meintest}
            ${items.length ? `<div class="t-sub c-2" style="margin-bottom:18px">${tr('{n} Treffer', { n: items.length })}${gedeutet ? ' · ' + esc(deutung) : ''}</div>
             <div class="grid">${items.map(posterCard).join('')}</div>`
-           : personen.length || genres.length ? `<p class="hint">${gedeutet ? tr('Kein Titel passt genau — gesucht wurde {deutung}.', { deutung: esc(deutung) }) : tr('Kein Titel passt genau — aber die Personen und Genres oben.')}</p>`
+           : personen.length || genres.length || reihen.length || sammlungen.length ? `<p class="hint">${gedeutet ? tr('Kein Titel passt genau — gesucht wurde {deutung}.', { deutung: esc(deutung) }) : tr('Kein Titel passt genau — aber die Personen und Genres oben.')}</p>`
            : leer({ symbol: I.search, titel: tr('Keine Treffer für „{q}“', { q }),
                text: tr('Prüf die Schreibweise oder versuch es mit einem anderen Wort.'),
                aktion: `<button class="btn btn-pill btn-pill--fill" data-wish="${esc(q)}">${tr('„{q}“ wünschen', { q: esc(q) })}</button>
