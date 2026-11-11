@@ -4426,9 +4426,9 @@ function viewAdminUmwandlung() {
     <form id="umwandlungform">
       <section style="margin-top:24px"><div class="group group--inset">
         <div class="row" style="min-height:56px;gap:12px">
-          <label for="hwwahl" class="t-body" style="flex:1">${tr('Hardware-Beschleunigung')}</label>
+          <label for="hwwahl" class="t-body" style="flex:1;min-width:0">${tr('Hardware-Beschleunigung')}</label>
           <select id="hwwahl" name="hardware"${d.hardwareAusUmgebung ? ' disabled' : ''}
-            style="height:34px;border:0;border-radius:10px;background:var(--fill);color:var(--label);font:inherit;padding:0 10px">${optionen}</select>
+            style="height:34px;border:0;border-radius:10px;background:var(--fill);color:var(--label);font:inherit;padding:0 10px;max-width:58%;min-width:0">${optionen}</select>
         </div>
         <div class="row" style="min-height:52px;gap:12px">
           <span class="t-sub c-2" style="flex:1">${esc(jetzt)} ${esc(gefunden)}${hw.ruht?.length ? ' ' + esc(`${tr('Ruht nach Fehlern:')} ` + hw.ruht.map(v => HW_NAMEN[v] || v).join(', ') + '.') : ''}</span>
@@ -4530,7 +4530,7 @@ function viewCleanup() {
     return `
     <div class="orow" style="height:auto;padding:14px 16px;display:block">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div class="t-body" style="flex:1">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
+        <div class="t-body" style="flex:1 1 200px">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
           <span class="t-caption c-2">${teile ? ` ${tr('· {n} Teile eines Films', { n: x.files.length })}` : ` ${tr('· {n} Fassungen', { n: x.files.length })}`}</span></div>
         ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
       </div>
