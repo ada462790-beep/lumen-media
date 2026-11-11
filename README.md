@@ -328,6 +328,62 @@ und Bilder neben den Dateien (`poster.jpg`, `fanart.jpg`, Staffelposter)
 verloren. Die Verwaltung kann jeden Titel auch von Hand bearbeiten —
 was du änderst, bleibt gesperrt und wird nicht mehr überschrieben.
 
+**Zuordnen: Welcher Film ist das?** Lumen sucht bei TMDb mit dem Titel und
+Jahr aus dem Datei- oder Ordnernamen. Bringt das nichts Sicheres, versucht
+es weitere Schreibweisen: ohne Fassungswörter („Director's Cut",
+„Extended", „Kinofassung", „3D", „IMAX" …), „Herr der Ringe, Der"
+umgestellt, „&" als „und"/„and", römische Zahlen als Ziffern und
+umgekehrt („Teil II" / „Teil 2"), ohne Satzzeichen, „oe" als „ö" und
+umgekehrt, die englischen Titel und die Alternativtitel von TMDb, das Jahr
+eins daneben. Genommen wird ein Treffer nur, wenn Titel und Jahr gut genug
+passen und kein zweiter gleich gut ist — lieber „nicht erkannt" als der
+falsche Film. Ist TMDb gerade nicht erreichbar, bleibt der Titel
+„ausstehend" und kommt beim nächsten Durchgang wieder dran.
+
+Am sichersten ist eine **Kennung im Namen** — dann sucht Lumen gar nicht.
+Diese Schreibweisen (von Radarr, Sonarr, Jellyfin und Emby) versteht es,
+im Dateinamen oder im Ordner des Films bzw. der Serie:
+
+| Schreibweise | Beispiel |
+|---|---|
+| IMDb | `The Matrix (1999) {imdb-tt0133093}` oder `[imdbid-tt0133093]` |
+| TMDb | `The Matrix (1999) {tmdb-603}` oder `[tmdbid-603]` |
+| TheTVDB (Serien) | `Breaking Bad (2008) {tvdb-81189}` oder `[tvdbid-81189]` |
+| IMDb frei im Namen | `Matrix.1999.tt0133093.German.1080p.mkv` |
+
+Die Kennung gehört bei Serien an den Serienordner, nicht an die Folgen.
+Auch NFO-Dateien mit Kennung gelten (`<uniqueid type="imdb|tmdb|tvdb">`,
+`<imdbid>`, `<tmdbid>`, `<tvdbid>`, `<id>` oder eine IMDb-/TMDb-Adresse in
+der Datei) — so, wie Emby sie mit eingeschaltetem NFO-Speicher als
+`movie.nfo`, `<Dateiname>.nfo` oder `tvshow.nfo` schreibt. Vorrang hat,
+was von Hand zugewiesen ist, dann die NFO, dann die Kennung im Namen, dann
+die Suche.
+
+**Nicht erkannt? Von Hand zuweisen.** Unter Verwaltung › Aufräumen stehen
+alle Filme und Serien, die nicht erkannt sind oder noch warten — mit
+Pfad, dem Titel und Jahr, nach denen gesucht wurde, und dem Grund (keine
+Treffer, zu unsicher, zwei gleich gute, TMDb nicht erreichbar). Dazu, was
+der letzte Durchlauf mit Absicht ausgelassen hat: Dateien, die wie ein
+Trailer oder Sample heissen, Extras-Ordner, ISO-Abbilder und andere
+Endungen, die Lumen nicht abspielt, und Unlesbares. „Suchen" sucht frei
+bei TMDb, „ID eingeben" nimmt eine Kennung oder einen Link:
+
+- IMDb: `tt0133093` oder `https://www.imdb.com/title/tt0133093/`
+- TMDb: `603` (Film oder Serie, je nach Titel),
+  `https://www.themoviedb.org/movie/603-the-matrix`,
+  `https://www.themoviedb.org/tv/1399-game-of-thrones?language=de`
+- TheTVDB: `tvdb:121361`, `https://thetvdb.com/?tab=series&id=121361`,
+  `https://thetvdb.com/dereferrer/series/121361`. Ein Link mit Namen
+  statt Nummer (`thetvdb.com/series/game-of-thrones`) genügt nicht — die
+  Nummer steht auf der Seite der Serie unter „TheTVDB.com Series ID".
+
+IMDb- und TheTVDB-Kennungen löst Lumen über TMDb auf; einen eigenen
+TheTVDB-Schlüssel braucht es nicht. Vor dem Zuweisen zeigt Lumen den
+Eintrag mit Titel, Jahr und Poster; nach „Nehmen" gilt der Titel als von
+Hand zugewiesen, kein Durchlauf ändert das mehr, Metadaten, Bilder und bei
+Serien alle Folgen kommen neu. Dasselbe geht auf jeder Titelseite unter
+Verwaltung › „Anderen Titel zuweisen".
+
 **Beschreibungen, Poster und Noten** holt es von TMDb; die IMDb-Note und
 den Rotten-Tomatoes-Wert über OMDb. Das richtest du einmal ein, dann gilt
 es für alle — niemand im Haushalt braucht ein eigenes Konto. Die
@@ -362,7 +418,8 @@ einmal. Kinderprofile sehen nur, was altersfrei ist und ausdrücklich
 geprüft wurde.
 
 **Verwaltung.** Bibliotheken, laufende Wiedergaben (nur die Last, nicht
-wer was schaut), Protokoll, Aufräumen (doppelte Titel, fehlende Dateien),
+wer was schaut), Protokoll, Aufräumen (Filme in Teilen, fehlende Dateien,
+nicht erkannte Titel, ausgelassene Dateien),
 Rechte pro Person oder Gruppe, Updates, tägliche Sicherung. Rechte in der
 Verwaltung gibt es in drei Stufen: *keine* (nur schauen), *verwaltet mit*
 (Bibliotheken, Konten ohne Verwaltung, Wünsche, Protokoll) und
@@ -386,6 +443,22 @@ den automatisch erkannten Filmreihen.
 **Umzug aus Emby oder Jellyfin.** Jedes Profil holt unter Ich › Umzug seine
 eigenen Gesehen-Haken, Fortschritte und Favoriten herüber. Das Passwort
 wird nicht gespeichert, und die Verwaltung sieht davon nichts.
+
+Wer die Mediathek verwaltet, kann am Schreibtisch dabei auch **die
+Zuordnungen übernehmen** („Zuordnungen (IMDb/TMDb/TVDb) übernehmen" beim
+Anmelden; auch über den Knopf unter Aufräumen erreichbar): Was in Emby
+mit „Identifizieren" richtiggestellt wurde, gilt dann auch in Lumen — für
+alle Profile. Lumen findet die Titel über die Dateien, nicht über den
+Namen: Emby und Lumen sehen dieselbe Platte meist unter verschiedenen
+Pfaden (`/media/Filme/…` im Emby-Container, `/volume1/video/Filme/…` auf
+dem NAS), darum zählt das gemeinsame Ende des Pfads (Dateiname und bis zu
+zwei Ordner darüber, bei Serien der Serienordner); ist das mehrdeutig,
+entscheidet die Dateigrösse, sonst bleibt der Titel unverändert. Die
+Vorschau zeigt, wie viele Zuordnungen neu sind, wie viele schon stimmen,
+wie viele in Lumen von Hand zugewiesen sind (die bleiben, ausser du wählst
+„überschreiben") und welche Emby-Titel Lumen nicht gefunden hat.
+Übernommene Titel gelten als von Hand zugewiesen; Bilder und Folgen
+kommen danach im Hintergrund. Ins Protokoll kommt nur die Anzahl.
 
 **Kinderprofile.** Beim Einladen wählbar, mit Altersgrenze; Gruppen und
 Rechte können Grenzen nie lockerer machen. Wer verwaltet, braucht eine PIN
