@@ -1495,8 +1495,9 @@ function groesse(bytes) {
 }
 
 function fassungName(f) {
-  const h = f.height || 0;
-  const q = h >= 2000 ? '4K' : h >= 1000 ? '1080p' : h >= 700 ? '720p' : h ? `${h}p` : '';
+  // Breitformat zählt nach der Breite: 1920×800 ist ein 1080p-Film.
+  const h = f.height || 0, w = f.width || 0;
+  const q = h >= 2000 || w >= 3400 ? '4K' : h >= 1000 || w >= 1800 ? '1080p' : h >= 700 || w >= 1200 ? '720p' : h ? `${h}p` : '';
   const gb = groesse(f.sizeBytes);
   return [q, (f.container || '').toUpperCase(), gb].filter(Boolean).join(' · ');
 }

@@ -518,7 +518,7 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 			v.Progress, v.Finished, v.ResumeMS = p.Percent(), p.Finished, p.PositionMS
 		}
 		if k, okK := kenn[it.ID]; okK {
-			v.Qualitaet, v.HDR, v.Kanaele = store.Qualitaet(k.Height), k.HDR, k.Channels
+			v.Qualitaet, v.HDR, v.Kanaele = store.Qualitaet(k.Width, k.Height), k.HDR, k.Channels
 		}
 		v.Neu = time.Since(it.AddedAt) < neuSeit
 		if n := neueFolgen[it.ID]; n > 0 {
