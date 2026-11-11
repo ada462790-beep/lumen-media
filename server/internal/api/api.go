@@ -318,6 +318,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/admin/groups/{id}", owner(s.bestaetigt(s.adminGruppeLoeschen)))
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/group", owner(s.bestaetigt(s.adminKontoGruppe)))
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/rolle", owner(s.bestaetigt(s.adminKontoRolle)))
+	mux.Handle("DELETE /api/v1/admin/accounts/{id}", owner(s.bestaetigt(s.adminKontoEntfernen)))
 	mux.Handle("PUT /api/v1/admin/server-name", owner(s.adminServerName))
 	mux.Handle("PUT /api/v1/admin/sprache", owner(s.adminSprache))
 	// Schreibt in die Medienordner — nur der Besitzer.

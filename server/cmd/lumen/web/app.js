@@ -24,6 +24,7 @@ import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBe
   einstellungenUmzug, metadatenUntertitel, playerUntertitelEintrag, utStand, utStandLaden,
   sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter } from './funktionen.js';
 // Bildschirmzeit der Kinderprofile (durchgesetzt vom Server).
+import { grenzenBearbeiten } from './konto.js';
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
@@ -141,6 +142,7 @@ const I = {
   lautsprecher: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/>',
   stumm: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
   vollbild: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  kapitel: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   vollbildAus: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
   liste: '<path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4.6" cy="6" r=".9"/><circle cx="4.6" cy="12" r=".9"/><circle cx="4.6" cy="18" r=".9"/>',
   hoch: '<path d="M6 15l6-6 6 6"/>',
@@ -1382,7 +1384,7 @@ function viewWatchlist() {
 function viewSearch() {
   const d = S.data || {};
   const items = d.items || [], personen = d.personen || [], genres = d.genres || [];
-  const reihen = d.reihen || [], sammlungen = d.sammlungen || [];
+  const reihen = d.reihen || [], sammlungen = d.sammlungen || [], folgen = d.folgen || [];
   const q = S.query.trim();
   const de = d.deutung || {};
   const deutung = [de.person ? tr('mit {person}', { person: de.person }) : '', de.genre || '',
@@ -1404,6 +1406,10 @@ function viewSearch() {
   const reihenHtml = reihen.length || sammlungen.length ? `<section style="margin-bottom:26px">
       <div class="section-h" style="padding-left:0">${tr('Filmreihen und Sammlungen')}</div>
       <div class="rail">${reihen.map(reiheKarte).join('')}${sammlungen.map(sammlungKarte).join('')}</div></section>` : '';
+  // Folgen, deren Titel passt — als breite Karten, Klick spielt ab.
+  const folgenHtml = folgen.length ? `<section style="margin-top:30px">
+      <div class="section-h" style="padding-left:0">${tr('Folgen')}</div>
+      <div class="rail">${folgen.map(wideCard).join('')}</div></section>` : '';
   const genresHtml = genres.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px">${genres.map(g =>
       `<button class="tab-pill" style="background:var(--fill)" data-genre="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : '';
 
@@ -1422,7 +1428,8 @@ function viewSearch() {
       ${!q ? leer({ symbol: I.search, titel: tr('Wonach suchst du?'), text: tr('Titel, Schauspieler, Genre oder Jahr — auch „Komödie 2019“, „Filme mit Tom Hanks“ oder „Thriller 80er“.') })
         : `${reihenHtml}${personenHtml}${genresHtml}${meintest}
            ${items.length ? `<div class="t-sub c-2" style="margin-bottom:18px">${tr('{n} Treffer', { n: items.length })}${gedeutet ? ' · ' + esc(deutung) : ''}</div>
-            <div class="grid">${items.map(posterCard).join('')}</div>`
+            <div class="grid">${items.map(posterCard).join('')}</div>${folgenHtml}`
+           : folgen.length ? folgenHtml
            : personen.length || genres.length || reihen.length || sammlungen.length ? `<p class="hint">${gedeutet ? tr('Kein Titel passt genau — gesucht wurde {deutung}.', { deutung: esc(deutung) }) : tr('Kein Titel passt genau — aber die Personen und Genres oben.')}</p>`
            : leer({ symbol: I.search, titel: tr('Keine Treffer für „{q}“', { q }),
                text: tr('Prüf die Schreibweise oder versuch es mit einem anderen Wort.'),
@@ -1495,8 +1502,9 @@ function groesse(bytes) {
 }
 
 function fassungName(f) {
-  const h = f.height || 0;
-  const q = h >= 2000 ? '4K' : h >= 1000 ? '1080p' : h >= 700 ? '720p' : h ? `${h}p` : '';
+  // Breitformat zählt nach der Breite: 1920×800 ist ein 1080p-Film.
+  const h = f.height || 0, w = f.width || 0;
+  const q = h >= 2000 || w >= 3400 ? '4K' : h >= 1000 || w >= 1800 ? '1080p' : h >= 700 || w >= 1200 ? '720p' : h ? `${h}p` : '';
   const gb = groesse(f.sizeBytes);
   return [q, (f.container || '').toUpperCase(), gb].filter(Boolean).join(' · ');
 }
@@ -1867,6 +1875,22 @@ function spurenVorbelegen(p) {
   }
 }
 
+/* Kapitel, wie der Player sie anbietet: mindestens zwei, nach Beginn
+   sortiert, ohne winzige Reste (manche Rips haben ein 0-Sekunden-Kapitel
+   am Ende). */
+function kapitelListe(file) {
+  const k = (file?.chapters || []).filter(c => c.endMs - c.startMs >= 1000)
+    .sort((a, b) => a.startMs - b.startMs);
+  return k.length >= 2 ? k : [];
+}
+
+/* Kleine Striche auf der Zeitleiste, wo ein Kapitel beginnt. */
+function kapitelMarken(p, total) {
+  if (!p.kapitel?.length || !total) return '';
+  return p.kapitel.filter(k => k.startMs > 0 && k.startMs / 1000 < total)
+    .map(k => `<s style="left:${(k.startMs / 10 / total).toFixed(2)}%"></s>`).join('');
+}
+
 function spurenPanel(p) {
   const ton = tonspuren(p);
   const zeile = (aktiv, attr, name) => `
@@ -1876,6 +1900,12 @@ function spurenPanel(p) {
   let html = '';
   if (p.spurenOffen === 'folgen') {
     return `<div class="spuren spuren--folgen" role="group" aria-label="${tr('Folgen')}">${folgenPanel(p)}</div>`;
+  }
+  if (p.spurenOffen === 'kapitel') {
+    const jetzt = (p.offset + p.current) * 1000;
+    const aktiv = p.kapitel.reduce((a, k, i) => (k.startMs <= jetzt + 500 ? i : a), 0);
+    return `<div class="spuren spuren--kapitel" role="menu" aria-label="${tr('Kapitel')}">${abschnitt(tr('Kapitel'),
+      p.kapitel.map((k, i) => zeile(i === aktiv, `data-kapitel="${k.startMs}"`, `${clock(k.startMs / 1000)}  ${k.title || tr('Kapitel {n}', { n: i + 1 })}`)).join(''))}</div>`;
   }
   if (p.spurenOffen === 'tempo') {
     return `<div class="spuren" role="menu" aria-label="${tr('Wiedergabetempo')}">${abschnitt(tr('Tempo'),
@@ -2220,6 +2250,8 @@ function viewPlayer() {
           aria-label="${tr('Untertitel')}" aria-expanded="${p.spurenOffen === 'untertitel'}">${svg(I.untertitel, 22, 1.7)}</button>` : ''}
         ${tonspuren(p).length > 1 || (S.me?.account?.isAdmin && p.kind === 'episode') ? `<button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'ton' ? ' pl-knopf--an' : ''}" data-spuren="ton"
           aria-label="${tr('Ton')}" aria-expanded="${p.spurenOffen === 'ton'}">${svg(I.ton, 22, 2)}</button>` : ''}
+        ${p.kapitel?.length ? `<button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'kapitel' ? ' pl-knopf--an' : ''}" data-spuren="kapitel"
+          aria-label="${tr('Kapitel')}" aria-expanded="${p.spurenOffen === 'kapitel'}">${svg(I.kapitel, 21, 2)}</button>` : ''}
         <button class="btn btn-pill glass glass--clear pl-knopf pl-knopf--tempo${p.spurenOffen === 'tempo' ? ' pl-knopf--an' : ''}" data-spuren="tempo"
           aria-label="${esc(tr('Wiedergabetempo: {tempo}', { tempo: tempoText(p.tempo || 1) }))}" aria-expanded="${p.spurenOffen === 'tempo'}">${esc(tempoZahl(p.tempo || 1))}</button>
         <button class="btn btn-round sm glass glass--clear pl-knopf" data-vollbild
@@ -2227,7 +2259,7 @@ function viewPlayer() {
       </div>
       <div class="pl-bar" data-bar role="slider" tabindex="0" aria-label="${tr('Wiedergabeposition')}"
         aria-valuemin="0" aria-valuemax="${Math.round(total)}" aria-valuenow="${Math.round(pos)}"
-        aria-valuetext="${esc(zeitleisteText(pos, total))}"><i style="width:${pct}%"></i><b style="left:${pct}%"></b>
+        aria-valuetext="${esc(zeitleisteText(pos, total))}">${kapitelMarken(p, total)}<i style="width:${pct}%"></i><b style="left:${pct}%"></b>
         <span class="pl-vorschau" aria-hidden="true" hidden><span class="pl-vorschau-bild"></span><span class="pl-vorschau-zeit tnum"></span></span></div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
         <span class="t-caption tnum pl-zeit" aria-hidden="true">${clock(pos)}</span>
@@ -2302,6 +2334,9 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       mode: plan?.plan?.direct ? 'direct' : 'transcode',
       // Ton und Untertitel: was die Datei hat, und was gewählt ist.
       tracks: file.tracks || [],
+      // Kapitel der Datei (Blu-ray-Rips haben oft zwanzig und mehr). Bei
+      // Filmen in Teilen gehören sie zu einem Teil — dann keine.
+      kapitel: teile.length > 1 ? [] : kapitelListe(file),
       spur: -1, untertitel: null, spurenOffen: false,
       // Vorspann und Abspann, falls bekannt — für „Überspringen" und „Als Nächstes".
       // Je Fassung eigene Zeiten (jeDatei): Kapitel und Erkanntes gehören
@@ -4179,7 +4214,7 @@ function viewAdminUpdate() {
             : u.tokenGesetzt
               ? tr('Ist eingetragen. Ein neues ersetzt das alte; es wird gespeichert, aber nie wieder angezeigt.')
               : tr('Optional — nur nötig, wenn die Updates aus einem privaten Repository kommen. Wird gespeichert, aber nie wieder angezeigt.')}</div></div>
-        <input type="password" name="token" placeholder="${u.tokenGesetzt ? tr('neues Token, ghp_… oder github_pat_…') : tr('ghp_… oder github_pat_…')}" autocomplete="off" style="width:min(320px,100%)"></div>
+        <span class="field" style="width:min(320px,100%);margin:0"><input type="password" name="token" class="mono" aria-label="${tr('GitHub-Token')}" placeholder="${u.tokenGesetzt ? tr('neues Token, ghp_… oder github_pat_…') : tr('ghp_… oder github_pat_…')}" autocomplete="off" style="width:100%;box-sizing:border-box;height:40px"></span></div>
         ${u.tokenQuelle === 'verwaltung' ? `<button type="button" class="btn row" style="width:100%;justify-content:flex-start;min-height:46px;color:#ff6961" data-tokenweg>
           <span class="t-body">${tr('Token entfernen')}</span></button>` : ''}</div></section>
     <div style="display:flex;justify-content:flex-end;margin-top:14px">
@@ -4391,9 +4426,9 @@ function viewAdminUmwandlung() {
     <form id="umwandlungform">
       <section style="margin-top:24px"><div class="group group--inset">
         <div class="row" style="min-height:56px;gap:12px">
-          <label for="hwwahl" class="t-body" style="flex:1">${tr('Hardware-Beschleunigung')}</label>
+          <label for="hwwahl" class="t-body" style="flex:1;min-width:0">${tr('Hardware-Beschleunigung')}</label>
           <select id="hwwahl" name="hardware"${d.hardwareAusUmgebung ? ' disabled' : ''}
-            style="height:34px;border:0;border-radius:10px;background:var(--fill);color:var(--label);font:inherit;padding:0 10px">${optionen}</select>
+            style="height:34px;border:0;border-radius:10px;background:var(--fill);color:var(--label);font:inherit;padding:0 10px;max-width:58%;min-width:0">${optionen}</select>
         </div>
         <div class="row" style="min-height:52px;gap:12px">
           <span class="t-sub c-2" style="flex:1">${esc(jetzt)} ${esc(gefunden)}${hw.ruht?.length ? ' ' + esc(`${tr('Ruht nach Fehlern:')} ` + hw.ruht.map(v => HW_NAMEN[v] || v).join(', ') + '.') : ''}</span>
@@ -4495,7 +4530,7 @@ function viewCleanup() {
     return `
     <div class="orow" style="height:auto;padding:14px 16px;display:block">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div class="t-body" style="flex:1">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
+        <div class="t-body" style="flex:1 1 200px">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
           <span class="t-caption c-2">${teile ? ` ${tr('· {n} Teile eines Films', { n: x.files.length })}` : ` ${tr('· {n} Fassungen', { n: x.files.length })}`}</span></div>
         ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
       </div>
@@ -4619,8 +4654,10 @@ function viewAccounts() {
           · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
+      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
       ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
       ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
+      ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
         <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
           ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]].map(([k, n]) =>
@@ -4849,6 +4886,21 @@ app.addEventListener('click', async e => {
     }
     return;
   }
+  if ((n = hit('data-kontoweg'))) {
+    const a = (S.data?.accounts || []).find(x => x.id === n.dataset.kontoweg);
+    if (!a) return;
+    const ok = await frage(tr('{name} entfernen?', { name: a.name }),
+      tr('Das Profil verschwindet von allen Geräten, samt Verlauf, Merkliste, Bewertungen und eigenen Listen. Was {name} in geteilte Listen anderer gelegt hat, bleibt dort. Das lässt sich nicht rückgängig machen.', { name: a.name }),
+      tr('Entfernen'));
+    if (!ok) return;
+    try { await api.adminDeleteAccount(a.id); toast(tr('{name} ist entfernt', { name: a.name })); return load(); }
+    catch (err) { if (!err?.abgebrochen) toast(err.message); return; }
+  }
+  if ((n = hit('data-grenzen'))) {
+    const a = (S.data?.accounts || []).find(x => x.id === n.dataset.grenzen);
+    if (a) grenzenBearbeiten(a, S.data?.libraries || [], () => { if (S.view === 'accounts') load(); });
+    return;
+  }
   if ((n = hit('data-bildschirmzeit'))) {
     const a = (S.data?.accounts || []).find(x => x.id === n.dataset.bildschirmzeit);
     if (a) bzBearbeiten(a, () => { if (S.view === 'accounts') load(); });
@@ -5071,6 +5123,15 @@ app.addEventListener('click', async e => {
   if (hit('data-stumm')) return stummUmschalten();
   if (hit('data-vollbild')) return vollbildUmschalten();
   if ((n = hit('data-tempo'))) { tempoSetzen(Number(n.dataset.tempo)); return; }
+  if ((n = hit('data-kapitel'))) {
+    const p = S.playing;
+    if (!p) return;
+    p.spurenOffen = false; p.spurenHtml = '';
+    seekTo(Number(n.dataset.kapitel) / 1000);
+    patchChrome();
+    app.querySelector('[data-spuren="kapitel"]')?.focus({ preventScroll: true });
+    return;
+  }
   if ((n = hit('data-nochda-weiter'))) {
     eingabeGesehen();
     document.getElementById('nochda')?.remove();
@@ -5165,7 +5226,21 @@ app.addEventListener('click', async e => {
     try {
       const r = await api.adminUpdateRun(trotzdem);
       toast(tr('Lumen {nach} wird eingesetzt — gleich startet es neu', { nach: r.nach }));
-      setTimeout(load, 8000);
+      // Scheitert das Einsetzen (kein Paket, falsche Prüfsumme), startet
+      // nichts neu — dann soll das nicht nur unten im Protokoll stehen.
+      const seit = Date.now() - 5000;
+      const nachsehen = async (rest) => {
+        let u = null;
+        try { u = await api.adminUpdate(); } catch { /* startet gerade neu */ }
+        const letzter = u?.protokoll?.[0];
+        if (letzter && letzter.ergebnis === 'fehler' && Date.parse(letzter.at) >= seit) {
+          if (S.view === 'adminUpdate') { S.data = u; render(); }
+          return toast(tr('Das Update liess sich nicht einsetzen: {grund}', { grund: letzter.notiz || '' }));
+        }
+        if (rest > 0 && (!u || u.laeuft)) return setTimeout(() => nachsehen(rest - 1), 2000);
+        if (S.view === 'adminUpdate') load();
+      };
+      setTimeout(() => nachsehen(6), 2000);
     } catch (err) {
       if (err.wiedergaben) return updateFrage(err.wiedergaben);
       toast(err.message);
@@ -5611,7 +5686,10 @@ app.addEventListener('input', e => {
   searchTimer = setTimeout(load, 220);
 });
 
-app.addEventListener('mousemove', () => { if (S.view === 'player') showChrome(); });
+// Nur die Maus: Ein Tipp auf dem Handy schickt vor dem Klick ein
+// nachgemachtes mousemove. Das holte die Leiste hervor, und der Klick
+// danach hielt den Film an — der erste Tipp sollte nur die Leiste zeigen.
+app.addEventListener('pointermove', e => { if (S.view === 'player' && e.pointerType === 'mouse') showChrome(); });
 // Fokus in der Leiste (per Tab) holt sie hervor.
 app.addEventListener('focusin', e => {
   if (S.view === 'player' && e.target instanceof Element && e.target.closest('.player')) showChrome();

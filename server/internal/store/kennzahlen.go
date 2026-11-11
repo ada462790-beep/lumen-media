@@ -19,6 +19,7 @@ import (
 
 type Kennzahl struct {
 	Height   int    `json:"height,omitempty"`
+	Width    int    `json:"width,omitempty"`
 	HDR      string `json:"hdr,omitempty"`
 	Channels int    `json:"channels,omitempty"` // meiste Kanäle einer Tonspur
 }
@@ -31,7 +32,7 @@ func (s *Store) Kennzahlen(ctx context.Context, ids []string) (map[string]Kennza
 		return out, nil
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT t.id, MAX(COALESCE(f.height, 0)), MAX(COALESCE(f.hdr, '')),
+		`SELECT t.id, MAX(COALESCE(f.height, 0)), MAX(COALESCE(f.width, 0)), MAX(COALESCE(f.hdr, '')),
 		        MAX(COALESCE((SELECT MAX(channels) FROM media_track mt WHERE mt.file_id = f.id AND mt.kind = 'audio'), 0))
 		   FROM item t
 		   JOIN item e ON e.id = t.id OR e.parent_id = t.id
@@ -46,7 +47,7 @@ func (s *Store) Kennzahlen(ctx context.Context, ids []string) (map[string]Kennza
 	for rows.Next() {
 		var id string
 		var k Kennzahl
-		if err := rows.Scan(&id, &k.Height, &k.HDR, &k.Channels); err != nil {
+		if err := rows.Scan(&id, &k.Height, &k.Width, &k.HDR, &k.Channels); err != nil {
 			return nil, err
 		}
 		out[id] = k
@@ -87,14 +88,19 @@ func (s *Store) NeueFolgenSeit(ctx context.Context, accountID string, seriesIDs 
 	return out, rows.Err()
 }
 
-// Qualitaet macht aus der Höhe ein Wort fürs Abzeichen.
-func Qualitaet(height int) string {
+// Qualitaet macht aus Breite und Höhe ein Wort fürs Abzeichen.
+//
+// Die Breite zählt mit: Kinofilme im Breitformat sind niedriger als ihre
+// Stufe — ein 1080p-Film in 2,39:1 hat 1920×800, ein 4K-Film 3840×1600.
+// Nach der Höhe allein wäre der eine „SD", der andere „HD". Und 720p
+// (1280×720) ist HD, nicht SD.
+func Qualitaet(width, height int) string {
 	switch {
-	case height >= 2000:
+	case height >= 2000 || width >= 3400:
 		return "4K"
-	case height >= 1000:
+	case height >= 700 || width >= 1200:
 		return "HD"
-	case height > 0:
+	case height > 0 || width > 0:
 		return "SD"
 	}
 	return ""

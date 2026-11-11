@@ -9,6 +9,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"lumen/internal/meta"
 )
@@ -71,6 +73,23 @@ func (s *Server) adminSetMetaSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	// Ein neuer TMDb-Schlüssel wird einmal ausprobiert, bevor er gilt.
+	// Sonst merkte man einen falsch kopierten Schlüssel (die kurze
+	// API-Kennung statt des langen Tokens) erst daran, dass nach dem
+	// Durchlauf alle Poster fehlen.
+	if in.TMDbKey != nil && strings.TrimSpace(*in.TMDbKey) != "" {
+		cfg := s.metaConfig(r)
+		cfg.TMDbKey = strings.TrimSpace(*in.TMDbKey)
+		if probe, err := meta.NewResolver(s.st, s.dataDir, cfg); err == nil {
+			pctx, abbrechen := context.WithTimeout(ctx, 8*time.Second)
+			err := probe.TMDbPruefen(pctx)
+			abbrechen()
+			if errors.Is(err, meta.ErrTMDbSchluessel) {
+				fail(w, http.StatusBadRequest, "TMDb nimmt diesen Schlüssel nicht an. Es braucht den langen API Read Access Token (er fängt mit eyJ an), nicht die kurze API-Kennung.")
+				return
+			}
+		}
+	}
 	set := func(key string, v *string) {
 		if v != nil {
 			_ = s.st.SetSetting(ctx, key, strings.TrimSpace(*v))

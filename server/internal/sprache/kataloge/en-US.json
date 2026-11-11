@@ -298,5 +298,7 @@
   "Das ist ein Serien-Link – hier wird ein Film gesucht.": "That’s a series link – a movie is being matched here.",
   "Dieser TheTVDB-Link nennt keine Nummer. Auf der Seite der Serie bei TheTVDB steht sie unter „TheTVDB.com Series ID“ – diese Zahl hier einfügen (oder tvdb:Nummer).": "This TheTVDB link has no number. On the series page at TheTVDB it’s listed as “TheTVDB.com Series ID” – paste that number here (or tvdb:number).",
   "Zu dieser Kennung kennt TMDb keinen passenden Eintrag. Stimmt die Nummer, und ist es die richtige Art (Film oder Serie)?": "TMDb has no matching entry for this ID. Is the number right, and is it the right kind (movie or series)?",
-  "Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.": "Only people who manage the library can import matches."
+  "Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.": "Only people who manage the library can import matches.",
+  "dein eigenes Konto entfernst du hier nicht": "You can’t remove your own account here.",
+  "TMDb nimmt diesen Schlüssel nicht an. Es braucht den langen API Read Access Token (er fängt mit eyJ an), nicht die kurze API-Kennung.": "TMDb doesn’t accept this key. Lumen needs the long API Read Access Token (it starts with eyJ), not the short API key."
 }

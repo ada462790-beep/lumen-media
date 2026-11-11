@@ -340,7 +340,7 @@ func AgeYears(rating string) *int {
 		"0": 0, "6": 6, "12": 12, "16": 16, "18": 18,
 		"AB 0": 0, "AB 6": 6, "AB 12": 12, "AB 16": 16, "AB 18": 18,
 		// USA
-		"G": 0, "TV-Y": 0, "TV-G": 0, "PG": 6, "TV-PG": 6,
+		"G": 0, "TV-Y": 0, "TV-G": 0, "TV-Y7": 7, "PG": 6, "TV-PG": 6,
 		"PG-13": 12, "TV-14": 14, "R": 16, "TV-MA": 18, "NC-17": 18,
 		// Grossbritannien
 		"U": 0, "12A": 12, "15": 15,

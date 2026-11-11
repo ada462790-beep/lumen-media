@@ -186,6 +186,11 @@ func TestResolveSeriesThenEpisodes(t *testing.T) {
 	if gotSeries.MatchState != "matched" {
 		t.Errorf("Serie: %q", gotSeries.MatchState)
 	}
+	// Die Freigabe der Serie kommt mit (Region CH fehlt, also DE) — ohne
+	// sie sähe ein Kinderprofil keine einzige Serie.
+	if gotSeries.AgeYears == nil || *gotSeries.AgeYears != 12 || gotSeries.AgeRating != "12" {
+		t.Errorf("Freigabe der Serie: %q %v", gotSeries.AgeRating, gotSeries.AgeYears)
+	}
 	gotEp, _ := st.Item(ctx, ep.ID)
 	if gotEp.Title != "Rückkehr" {
 		t.Errorf("Folgentitel %q — erwartet den aus der Quelle", gotEp.Title)
@@ -259,6 +264,15 @@ func fakeSources(t *testing.T) *httptest.Server {
 				"releases": map[string]any{"countries": []map[string]any{
 					{"iso_3166_1": "DE", "certification": "12"},
 					{"iso_3166_1": "CH", "certification": "16"}}}})
+		case r.URL.Path == "/movie/43":
+			// Ein anderer Film ohne Reihe und ohne bekannte Besetzung.
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": 43, "title": "Die Bucht (Kurzfilm)", "release_date": "2001-01-01", "runtime": 12})
+		case r.URL.Path == "/movie/44":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": 44, "title": "Die Brücke", "release_date": "1959-10-22", "runtime": 103,
+				"credits": map[string]any{"cast": []map[string]any{
+					{"name": "Folker Bohnet", "character": "Hans", "profile_path": "/folker.png", "order": 0}}}})
 		case r.URL.Path == "/collection/777":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id": 777, "name": "Die Bucht – Filmreihe",
@@ -274,7 +288,9 @@ func fakeSources(t *testing.T) *httptest.Server {
 				"id": 7, "name": "Nordlicht", "first_air_date": "2025-01-09",
 				"overview": "Ein Dorf im Norden.", "poster_path": "/n.png",
 				"genres":  []map[string]any{{"name": "Drama"}},
-				"credits": map[string]any{"cast": []map[string]any{{"name": "Mia Roth", "character": "Elin"}}}})
+				"credits": map[string]any{"cast": []map[string]any{{"name": "Mia Roth", "character": "Elin"}}},
+				"content_ratings": map[string]any{"results": []map[string]any{
+					{"iso_3166_1": "US", "rating": "TV-14"}, {"iso_3166_1": "DE", "rating": "12"}}}})
 		case r.URL.Path == "/tv/7/season/1/episode/4":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"name": "Rückkehr", "overview": "Sie kommt zurück.",
@@ -334,5 +350,51 @@ func TestZuweisenMitLink(t *testing.T) {
 	// Ein gewöhnlicher Titel wird weiter gesucht.
 	if c, err := r.Kandidaten(ctx, "movie", "Die Bucht", 0); err != nil || len(c) != 1 {
 		t.Errorf("Suche: %+v %v", c, err)
+	}
+}
+
+// Zuweisen ersetzt, was zur alten Zuordnung gehörte: Reihe, Besetzung und
+// die Bilder der Besetzung.
+func TestZuweisenErsetztReiheUndBesetzung(t *testing.T) {
+	srv := fakeSources(t)
+	st := testStore(t)
+	r := resolverFor(t, st, srv)
+	ctx := context.Background()
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", t.TempDir(), "de")
+	it := &store.Item{LibraryID: lib.ID, Kind: "movie", Title: "Die Bucht", Year: 2019, MatchState: "pending"}
+	if err := st.UpsertItem(ctx, it); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ResolvePending(ctx, lib.ID, 10); err != nil {
+		t.Fatal(err)
+	}
+	vorher, _ := st.Besetzung(ctx, it.ID)
+	if len(vorher) == 0 || vorher[0].Bild == "" {
+		t.Fatalf("Besetzung vorher: %+v", vorher)
+	}
+
+	// Ein anderer Film mit anderer Hauptrolle: neues Bild, nicht das alte.
+	got, _ := st.Item(ctx, it.ID)
+	if err := r.Zuweisen(ctx, got, "44"); err != nil {
+		t.Fatal(err)
+	}
+	leute, _ := st.Besetzung(ctx, it.ID)
+	if len(leute) != 1 || leute[0].Name != "Folker Bohnet" || leute[0].Bild == "" || leute[0].Bild == vorher[0].Bild {
+		t.Errorf("Besetzung nach dem Zuweisen: %+v (vorher %+v)", leute, vorher)
+	}
+	if _, err := os.Stat(filepath.Join(r.ArtDir(), vorher[0].Bild)); !os.IsNotExist(err) {
+		t.Errorf("das Bild der alten Hauptrolle liegt noch da: %v", err)
+	}
+	if reihe, _ := st.ReiheVon(ctx, it.ID); reihe != nil {
+		t.Errorf("der Film steht noch in der Reihe %q", reihe.Name)
+	}
+
+	// Ein Film, zu dem TMDb niemanden kennt: keine Besetzung, nicht die alte.
+	got, _ = st.Item(ctx, it.ID)
+	if err := r.Zuweisen(ctx, got, "43"); err != nil {
+		t.Fatal(err)
+	}
+	if leute, _ := st.Besetzung(ctx, it.ID); len(leute) != 0 {
+		t.Errorf("Besetzung des falschen Films blieb stehen: %+v", leute)
 	}
 }

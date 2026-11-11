@@ -98,7 +98,24 @@ func (s *Server) suche(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	reihen, sammlungen := s.reihenUndSammlungenSuchen(r, eingabe)
+
+	// Folgen, deren Titel passt — „die Folge mit dem Bunker". Nur für
+	// Text ab drei Zeichen und nur, wenn nicht ausdrücklich nach einer Art
+	// gefragt wurde; was das Profil nicht sehen darf, bleibt auch hier weg
+	// (scope gilt für Folgen über ihre Serie).
+	folgen := []view{}
+	if d.Text != "" && len([]rune(d.Text)) >= 3 && r.URL.Query().Get("kind") == "" {
+		fq := q
+		fq.Text, fq.JahrVon, fq.JahrBis = d.Text, d.JahrVon, d.JahrBis
+		fq.Kinds, fq.Limit, fq.Sort = []string{"episode"}, 12, "relevanz"
+		if its, err := s.st.Query(r.Context(), fq); err == nil && len(its) > 0 {
+			if v, err := s.decorate(r, its); err == nil {
+				folgen = v
+			}
+		}
+	}
 	ok(w, map[string]any{
+		"folgen":     folgen,
 		"items":      out,
 		"personen":   personen,
 		"genres":     passende,

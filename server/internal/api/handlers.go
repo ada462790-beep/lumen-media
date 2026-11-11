@@ -518,7 +518,7 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 			v.Progress, v.Finished, v.ResumeMS = p.Percent(), p.Finished, p.PositionMS
 		}
 		if k, okK := kenn[it.ID]; okK {
-			v.Qualitaet, v.HDR, v.Kanaele = store.Qualitaet(k.Height), k.HDR, k.Channels
+			v.Qualitaet, v.HDR, v.Kanaele = store.Qualitaet(k.Width, k.Height), k.HDR, k.Channels
 		}
 		v.Neu = time.Since(it.AddedAt) < neuSeit
 		if n := neueFolgen[it.ID]; n > 0 {
@@ -957,7 +957,26 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	add("top", "Gut bewertet", "rating", nil, false)
+	// Gut bewertet: nur, was wirklich eine gute Note hat. Ohne OMDb-
+	// Schlüssel hat kein Titel eine — dann stand hier früher einfach die
+	// halbe Mediathek nach dem Alphabet.
+	{
+		nq := q
+		nq.Sort, nq.Limit = "rating", 60
+		if its, err := s.st.Query(r.Context(), nq); err == nil {
+			gute := its[:0]
+			for _, it := range its {
+				if it.IMDbRating >= 7 && len(gute) < 20 {
+					gute = append(gute, it)
+				}
+			}
+			if len(gute) >= 4 {
+				if v, err := s.decorate(r, gute); err == nil {
+					rows = append(rows, row{"top", tr(w, "Gut bewertet"), false, v})
+				}
+			}
+		}
+	}
 
 	// Eigene Sammlungen, die auf die Startseite sollen (sammlungen.go).
 	rows = append(rows, s.sammlungsReihen(r)...)

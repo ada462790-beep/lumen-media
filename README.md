@@ -401,10 +401,12 @@ Untertitel eingebettet oder als `.srt` daneben (`Film.de.srt`,
 **Vorspann** überspringt ein Knopf — aus den Kapiteln der Datei, weil
 jemand ihn markiert hat, oder weil Lumen ihn selbst erkannt hat (siehe
 [Vorspann und Abspann erkennen](#vorspann-und-abspann-erkennen)) —, und im
-Abspann steht schon da, was als Nächstes kommt.
+Abspann steht schon da, was als Nächstes kommt. Hat die Datei **Kapitel**,
+stehen sie als Marken auf der Zeitleiste und im Menü „Kapitel" zum Springen.
 
 **Suchen** geht nach Titel, Schauspieler, Genre und Jahr, auch zusammen:
-„Filme mit Tom Hanks aus den 90ern", „Komödie 2019".
+„Filme mit Tom Hanks aus den 90ern", „Komödie 2019". Filmreihen, eigene
+Sammlungen und Folgen (nach ihrem Titel) findet sie mit.
 
 Im Browser geht es ohne Fremdbibliothek: Lumen fragt, was der Browser kann,
 und schickt genau das. Auch einem Browser ohne H.264 — manche Linux-Ausgaben
@@ -462,7 +464,11 @@ kommen danach im Hintergrund. Ins Protokoll kommt nur die Anzahl.
 
 **Kinderprofile.** Beim Einladen wählbar, mit Altersgrenze; Gruppen und
 Rechte können Grenzen nie lockerer machen. Wer verwaltet, braucht eine PIN
-und hat selbst keine Grenzen.
+und hat selbst keine Grenzen. Unter Verwaltung › Konten lässt sich bei
+jedem Konto ohne Verwaltung nachträglich ändern, was es darf
+(„Bearbeiten": Kinderprofil, Altersgrenze, Bibliotheken, gleichzeitige
+Wiedergaben, Herunterladen) — und ein Konto lässt sich dort auch wieder
+entfernen. Serien bekommen ihre Altersfreigabe von TMDb wie Filme.
 
 **Bildschirmzeit für Kinderprofile.** Unter Verwaltung › Konten ›
 „Bildschirmzeit" bekommt ein Kinderprofil je ein Zeitfenster und eine
