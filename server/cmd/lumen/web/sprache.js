@@ -91,7 +91,7 @@ async function katalog(id) {
   if (geladen.has(id)) return geladen.get(id);
   let k = {};
   try {
-    const r = await fetch(`sprachen/${id}.json`, { cache: 'no-cache' });
+    const r = await fetch(`/sprachen/${id}.json`, { cache: 'no-cache' });
     if (r.ok) k = await r.json();
   } catch { /* ohne Katalog bleibt der deutsche Text */ }
   geladen.set(id, k);

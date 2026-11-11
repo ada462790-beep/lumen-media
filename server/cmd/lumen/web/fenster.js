@@ -28,7 +28,7 @@ export const U = {};
   if (document.querySelector('link[data-funktionen]')) return;
   const l = document.createElement('link');
   l.rel = 'stylesheet';
-  l.href = 'funktionen.css';
+  l.href = '/funktionen.css';
   l.dataset.funktionen = '';
   document.head.appendChild(l);
 })();
