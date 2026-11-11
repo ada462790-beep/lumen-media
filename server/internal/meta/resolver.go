@@ -9,6 +9,8 @@ package meta
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -508,15 +510,18 @@ func (r *Resolver) ReihenBilderHolen(ctx context.Context) {
 
 // saveCast legt die Besetzung ab, samt kleinen Bildern — lokal, wie die
 // Poster: der Browser soll dafür nicht bei TMDb anklopfen müssen.
+//
+// Der Dateiname trägt einen Abdruck der Bildadresse. Früher hiess das Bild
+// nur nach der Stelle („…-cast00.jpg") und wurde wiederverwendet, sobald
+// es die Datei gab — nach dem Zuweisen eines anderen Films trug die neue
+// Hauptrolle dann das Gesicht der alten.
 func (r *Resolver) saveCast(ctx context.Context, itemID string, c *Candidate) {
-	if len(c.Cast) == 0 {
-		return
-	}
 	leute := make([]store.Person, 0, len(c.Cast))
-	for i, p := range c.Cast {
+	for _, p := range c.Cast {
 		person := store.Person{Name: p.Name, Rolle: p.Rolle}
 		if p.BildURL != "" {
-			name := fmt.Sprintf("%s-cast%02d%s", itemID, i, extOf(p.BildURL))
+			sum := sha1.Sum([]byte(p.BildURL))
+			name := fmt.Sprintf("%s-cast-%s%s", itemID, hex.EncodeToString(sum[:5]), extOf(p.BildURL))
 			dest := filepath.Join(r.artDir, name)
 			if _, err := os.Stat(dest); err == nil || r.download(ctx, p.BildURL, dest) == nil {
 				person.Bild = name
@@ -524,7 +529,47 @@ func (r *Resolver) saveCast(ctx context.Context, itemID string, c *Candidate) {
 		}
 		leute = append(leute, person)
 	}
-	_ = r.st.BesetzungSetzen(ctx, itemID, leute)
+	// Keine Besetzung heisst hier meist nur: die Suche brachte keine mit.
+	// Leeren tut das Zuweisen ausdrücklich (besetzungLeeren).
+	if len(leute) == 0 {
+		return
+	}
+	if err := r.st.BesetzungSetzen(ctx, itemID, leute); err != nil {
+		return
+	}
+	r.alteCastBilderWeg(ctx, itemID)
+}
+
+// besetzungLeeren: Beim Zuweisen eines Eintrags, zu dem TMDb niemanden
+// kennt, soll nicht die Besetzung des falschen stehen bleiben. Von Hand
+// gepflegte bleibt (gesperrt, siehe BesetzungSetzen).
+func (r *Resolver) besetzungLeeren(ctx context.Context, itemID string, c *Candidate) {
+	if len(c.Cast) > 0 {
+		return
+	}
+	if r.st.BesetzungSetzen(ctx, itemID, nil) == nil {
+		r.alteCastBilderWeg(ctx, itemID)
+	}
+}
+
+// alteCastBilderWeg löscht Bilder der Besetzung eines Titels, auf die
+// keine Zeile mehr zeigt — etwa die der vorigen Zuordnung.
+func (r *Resolver) alteCastBilderWeg(ctx context.Context, itemID string) {
+	leute, err := r.st.Besetzung(ctx, itemID)
+	if err != nil {
+		return
+	}
+	behalten := map[string]bool{}
+	for _, p := range leute {
+		behalten[p.Bild] = true
+	}
+	alle, _ := filepath.Glob(filepath.Join(r.artDir, itemID+"-cast*"))
+	for _, pfad := range alle {
+		name := filepath.Base(pfad)
+		if !behalten[name] && !strings.Contains(name, ".teil") {
+			_ = os.Remove(pfad)
+		}
+	}
 }
 
 func (r *Resolver) saveArtwork(ctx context.Context, itemID string, c *Candidate) error {
@@ -715,7 +760,13 @@ func (r *Resolver) zuweisen(ctx context.Context, it *store.Item, sourceID string
 		_ = r.st.SetSourceID(ctx, it.ID, "tmdb", sourceID)
 		if full.ReiheID != "" {
 			_ = r.st.TMDbReiheZuordnen(ctx, full.ReiheID, full.ReiheName, it.ID, it.Year)
+		} else {
+			// Der neue Film gehört zu keiner Reihe: aus der des alten heraus.
+			// Sonst stand „Alien vs. Predator" nach dem Zuweisen noch in der
+			// Alien-Reihe, nur weil vorher „Alien 3" zugeordnet war.
+			_ = r.st.TMDbReiheLoesen(ctx, it.ID)
 		}
+		r.besetzungLeeren(ctx, it.ID, full)
 		return r.saveArtwork(ctx, it.ID, full)
 	case "series":
 		gewaehlt, err := r.tmdb.SeriesDetails(ctx, sourceID)
@@ -749,6 +800,7 @@ func (r *Resolver) zuweisen(ctx context.Context, it *store.Item, sourceID string
 		if err := r.st.UpsertItem(ctx, it); err != nil {
 			return err
 		}
+		r.besetzungLeeren(ctx, it.ID, gewaehlt)
 		if err := r.saveArtwork(ctx, it.ID, gewaehlt); err != nil {
 			return err
 		}
@@ -787,7 +839,9 @@ func (r *Resolver) titelNachholen(ctx context.Context, id string) error {
 				return
 			}
 			if err := r.resolveOne(ctx, &liste[i]); err != nil && err != errUnmatched {
-				r.st.Log(ctx, "warn", "metadaten", fmt.Sprintf("%s: %v", liste[i].Title, err))
+				// Ohne Titel: Das Protokoll verrät nicht, was in der
+				// Mediathek steht (DATENSCHUTZ.md).
+				r.st.Log(ctx, "warn", "metadaten", fmt.Sprintf("ein Titel liess sich nicht nachladen: %v", err))
 			}
 		}
 	}
@@ -819,6 +873,49 @@ func (r *Resolver) SerienZeitraeumeNachholen(ctx context.Context, n int) int {
 			continue
 		}
 		if r.st.SerienZeitraum(ctx, it.ID, d.EndYear, d.LaeuftNoch) == nil {
+			fertig++
+		}
+	}
+	return fertig
+}
+
+// freigabeVersucht: Serien, für die TMDb schon gefragt wurde und keine
+// Freigabe kannte — bis zum nächsten Start nicht noch einmal.
+var freigabeVersucht sync.Map
+
+// SerienFreigabenNachholen holt für zugeordnete Serien die Altersfreigabe
+// nach. Frühere Fassungen fragten TMDb gar nicht danach; ein Kinderprofil
+// sah darum keine Serie. Höchstens n auf einmal.
+func (r *Resolver) SerienFreigabenNachholen(ctx context.Context, n int) int {
+	if !r.Ready() || r.tmdb == nil {
+		return 0
+	}
+	serien, err := r.st.SerienOhneFreigabe(ctx, n+200)
+	if err != nil {
+		return 0
+	}
+	fertig, gefragt := 0, 0
+	for _, it := range serien {
+		if ctx.Err() != nil || gefragt >= n {
+			break
+		}
+		if _, schon := freigabeVersucht.Load(it.ID); schon {
+			continue
+		}
+		src, err := r.st.SourceID(ctx, it.ID, "tmdb")
+		if err != nil || src == "" {
+			continue
+		}
+		gefragt++
+		d, err := r.tmdb.SeriesDetails(ctx, src)
+		if err != nil {
+			continue
+		}
+		if d.AgeYears == nil {
+			freigabeVersucht.Store(it.ID, true)
+			continue
+		}
+		if r.st.FreigabeSetzen(ctx, it.ID, d.AgeRating, *d.AgeYears) == nil {
 			fertig++
 		}
 	}

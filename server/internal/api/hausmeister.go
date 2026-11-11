@@ -148,6 +148,7 @@ func (s *Server) nachholen(ctx context.Context) {
 	}
 	defer nachholenMu.Unlock()
 	s.meta.SerienZeitraeumeNachholen(ctx, 200)
+	s.meta.SerienFreigabenNachholen(ctx, 200)
 	s.meta.SerienWertungenNachholen(ctx, 300)
 	s.meta.TomatenNachholen(ctx, 300)
 }

@@ -312,7 +312,8 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		gleich := s.unveraendert(ctx, path, info.Size(), info.ModTime().Unix())
 		added, err := s.upsertMovie(ctx, lib, g, path, info.Size(), info.ModTime().Unix())
 		if err != nil {
-			s.st.Log(ctx, "error", "scan", fmt.Sprintf("%s: %v", filepath.Base(path), err))
+			// Ohne Dateinamen: Das Protokoll verrät keine Titel (DATENSCHUTZ.md).
+			s.st.Log(ctx, "error", "scan", "eine Datei liess sich nicht eintragen: "+ohnePfad(err))
 			return nil
 		}
 		if added {
@@ -1162,3 +1163,13 @@ func splitDirs(rel string) []string {
 // bekommt darum eine Chance; ein Dateiname wie „Sommerhaus" ist für den
 // Scanner dünn, für TMDb aber eindeutig.
 func matchState(Guess) string { return "pending" }
+
+// ohnePfad gibt eine Fehlermeldung fürs Protokoll weiter — aber nur, wenn
+// kein Pfad darin steckt; der verriete den Titel.
+func ohnePfad(err error) string {
+	m := err.Error()
+	if strings.ContainsAny(m, `/\`) {
+		return "…"
+	}
+	return m
+}

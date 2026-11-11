@@ -94,6 +94,16 @@ func (s *Store) TMDbReiheZuordnen(ctx context.Context, tmdbID, name, itemID stri
 	})
 }
 
+// TMDbReiheLoesen nimmt einen Film aus jeder TMDb-Reihe — wenn TMDb für
+// ihn (nach einem Zuweisen oder Neuladen) keine Reihe mehr nennt. Leer
+// gewordene Reihen verschwinden beim nächsten ReihenNeuBilden.
+func (s *Store) TMDbReiheLoesen(ctx context.Context, itemID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM collection_item WHERE item_id = ? AND collection_id IN
+		   (SELECT id FROM collection WHERE source = 'tmdb')`, itemID)
+	return err
+}
+
 // ReihenNeuBilden erkennt Reihen aus den Titeln aller Filme, die noch in
 // keiner TMDb-Reihe stehen. Läuft nach jedem Durchlauf und nach dem
 // Holen der Metadaten; das Ergebnis ist jedes Mal dasselbe, solange sich

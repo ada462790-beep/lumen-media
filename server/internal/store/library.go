@@ -1490,6 +1490,42 @@ func (s *Store) SerienOhneZeitraum(ctx context.Context, limit int) ([]Item, erro
 	return out, rows.Err()
 }
 
+// SerienOhneFreigabe: zugeordnete Serien ohne Altersfreigabe, deren
+// Freigabe niemand von Hand gesetzt hat. Lumen holte die Freigabe von
+// Serien früher gar nicht — ein Kinderprofil sah darum keine einzige.
+func (s *Store) SerienOhneFreigabe(ctx context.Context, limit int) ([]Item, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+itemCols+` FROM item WHERE kind = 'series' AND match_state IN ('matched','manual')
+		   AND age_years IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM feld_sperre fs WHERE fs.item_id = item.id AND fs.feld = ?)
+		 ORDER BY updated_at LIMIT ?`, FeldFreigabe, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Item
+	for rows.Next() {
+		it, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *it)
+	}
+	return out, rows.Err()
+}
+
+// FreigabeSetzen trägt die Altersfreigabe eines Titels nach — ausser,
+// jemand hat sie von Hand gesetzt (gesperrt).
+func (s *Store) FreigabeSetzen(ctx context.Context, id, rating string, jahre int) error {
+	return s.tx(ctx, func(t *sql.Tx) error {
+		if gesperrt(ctx, t, id, FeldFreigabe) {
+			return nil
+		}
+		_, err := t.ExecContext(ctx, `UPDATE item SET age_rating = ?, age_years = ? WHERE id = ?`, rating, jahre, id)
+		return err
+	})
+}
+
 // Buchstaben zählt die Titel je Anfangsbuchstaben („#" für Zahlen und
 // Zeichen) — für die Buchstabenleiste, damit nur Buchstaben antippbar
 // sind, unter denen auch etwas steht.

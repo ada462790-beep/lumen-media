@@ -119,9 +119,18 @@ func (t *TMDb) SeriesDetails(ctx context.Context, seriesID string) (*Candidate, 
 			IMDbID string `json:"imdb_id"`
 			TVDBID int    `json:"tvdb_id"`
 		} `json:"external_ids"`
+		// Die Altersfreigabe je Land. Ohne sie galt jede Serie als
+		// ungeprüft — und ein Kinderprofil sah keine einzige, nicht einmal
+		// „Peppa Wutz".
+		Freigaben struct {
+			Results []struct {
+				ISO3166 string `json:"iso_3166_1"`
+				Rating  string `json:"rating"`
+			} `json:"results"`
+		} `json:"content_ratings"`
 	}
 	err := t.get(ctx, "/tv/"+seriesID,
-		url.Values{"language": {t.Language}, "append_to_response": {"credits,external_ids"}}, &d)
+		url.Values{"language": {t.Language}, "append_to_response": {"credits,external_ids,content_ratings"}}, &d)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +149,19 @@ func (t *TMDb) SeriesDetails(ctx context.Context, seriesID string) (*Candidate, 
 	}
 	for _, g := range d.Genres {
 		c.Genres = append(c.Genres, g.Name)
+	}
+	// Wie bei Filmen: die eigene Region, sonst Deutschland, sonst USA.
+	// Nur eine Einstufung, die Lumen versteht — sonst lieber keine.
+freigabe:
+	for _, want := range []string{t.Region, "DE", "US"} {
+		for _, f := range d.Freigaben.Results {
+			if f.ISO3166 == want && f.Rating != "" {
+				if jahre := AgeYears(f.Rating); jahre != nil {
+					c.AgeRating, c.AgeYears = f.Rating, jahre
+					break freigabe
+				}
+			}
+		}
 	}
 	if d.Status != "" {
 		c.ZeitraumBekannt = true
