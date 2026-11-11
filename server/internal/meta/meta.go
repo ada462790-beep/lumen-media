@@ -19,6 +19,7 @@ package meta
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -61,6 +62,10 @@ type Candidate struct {
 	// Laender: origin_country einer Serie („US", „GB") — trennt „The
 	// Office" aus den USA von dem aus Grossbritannien.
 	Laender []string
+	// Alternativ: weitere Titel desselben Eintrags — der englische aus
+	// einer zweiten Suche, die Alternativtitel von TMDb. Sie zählen beim
+	// Vergleich wie Titel und Originaltitel.
+	Alternativ []string
 }
 
 type CastEintrag struct {
@@ -153,6 +158,11 @@ func Score(guessTitle string, guessYear int, c Candidate) float64 {
 	if orig := similarity(g, normalize(c.Original)); orig > title {
 		title = orig
 	}
+	for _, a := range c.Alternativ {
+		if alt := similarity(g, normalize(a)); alt > title {
+			title = alt
+		}
+	}
 	if title < 0.3 {
 		return title * 0.3 // hoffnungslos daneben
 	}
@@ -188,6 +198,9 @@ func Score(guessTitle string, guessYear int, c Candidate) float64 {
 // Satzzeichen, ohne führenden Artikel.
 func normalize(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
+	// „Herr der Ringe, Der" ist „Der Herr der Ringe" — auch mit einem
+	// Untertitel dahinter („Bucht, Die: Teil 2").
+	s = artikelNachVorne(s)
 	s = strings.NewReplacer(
 		"ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss",
 		"á", "a", "à", "a", "â", "a", "é", "e", "è", "e", "ê", "e",
@@ -208,12 +221,50 @@ func normalize(s string) string {
 		}
 	}
 	out := strings.TrimSpace(b.String())
+	// „Teil II" und „Teil 2", „Rocky IV" und „Rocky 4" sind dasselbe;
+	// „and" und „und" ebenso („Fast & Furious" kommt als „und").
+	woerter := strings.Fields(out)
+	for i, w := range woerter {
+		if n, ok := roemisch[w]; ok {
+			woerter[i] = n
+		} else if w == "and" {
+			woerter[i] = "und"
+		}
+	}
+	out = strings.Join(woerter, " ")
 	for _, a := range []string{"der ", "die ", "das ", "the ", "ein ", "eine ", "a ", "an "} {
 		if strings.HasPrefix(out, a) {
 			return strings.TrimPrefix(out, a)
 		}
 	}
 	return out
+}
+
+// roemisch: Zahlen bis zwanzig, wie sie in Filmtiteln vorkommen. Auch
+// „i" gehört dazu: „I, Robot" wird auf beiden Seiten zu „1 robot", der
+// Vergleich bleibt gleich.
+var roemisch = map[string]string{
+	"i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6", "vii": "7",
+	"viii": "8", "ix": "9", "x": "10", "xi": "11", "xii": "12", "xiii": "13",
+	"xiv": "14", "xv": "15", "xvi": "16", "xvii": "17", "xviii": "18", "xix": "19", "xx": "20",
+}
+
+var reArtikelHinten = regexp.MustCompile(`(?i)^(.+?),\s*(der|die|das|the|a|an|ein|eine|le|la|les|el|il)\b(.*)$`)
+
+// artikelNachVorne: „Bucht, Die" → „Die Bucht", „Herr der Ringe, Der:
+// Die Gefährten" → „Der Herr der Ringe: Die Gefährten".
+func artikelNachVorne(s string) string {
+	m := reArtikelHinten.FindStringSubmatch(s)
+	if m == nil {
+		return s
+	}
+	rest := strings.TrimSpace(m[3])
+	// Hinter dem Artikel darf nur ein Untertitel kommen, kein weiterer
+	// Satzteil: „Ich, die Frau" bleibt, wie es ist.
+	if rest != "" && !strings.HasPrefix(rest, ":") && !strings.HasPrefix(rest, "-") && !strings.HasPrefix(rest, "(") {
+		return s
+	}
+	return strings.TrimSpace(m[2] + " " + m[1] + " " + rest)
 }
 
 // similarity vergleicht zwei Titel. Grundlage ist die Editierdistanz; wenn

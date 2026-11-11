@@ -95,20 +95,8 @@ func (t *TMDb) StaffelFolgen(ctx context.Context, seriesID string, staffel int) 
 
 // FindTVDb sucht zu einer TVDb-Kennung die TMDb-Kennung einer Serie.
 func (t *TMDb) FindTVDb(ctx context.Context, tvdbID string) ([]string, error) {
-	var d struct {
-		TV []struct {
-			ID int `json:"id"`
-		} `json:"tv_results"`
-	}
-	if err := t.get(ctx, "/find/"+url.PathEscape(tvdbID),
-		url.Values{"external_source": {"tvdb_id"}, "language": {t.Language}}, &d); err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, s := range d.TV {
-		out = append(out, strconv.Itoa(s.ID))
-	}
-	return out, nil
+	_, serien, err := t.FindExtern(ctx, tvdbID, "tvdb_id")
+	return serien, err
 }
 
 // AbsolutAbbilden rechnet eine durchgezählte Folgennummer in Staffel und

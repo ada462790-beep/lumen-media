@@ -55,7 +55,29 @@ func NewTMDb(key, language, region string) *TMDb {
 func (t *TMDb) Name() string { return "tmdb" }
 
 func (t *TMDb) SearchMovie(ctx context.Context, title string, year int) ([]Candidate, error) {
-	q := url.Values{"query": {title}, "language": {t.Language},
+	out, err := t.SearchMovieSprache(ctx, title, year, "")
+	if err != nil {
+		return nil, err
+	}
+	// Ohne Jahr sucht TMDb breiter; dann lohnt ein zweiter Versuch ohne
+	// Jahresfilter, falls nichts kam.
+	if len(out) == 0 && year > 0 {
+		if ohne, err := t.SearchMovieSprache(ctx, title, 0, ""); err == nil {
+			out = ohne
+		}
+	}
+	return out, nil
+}
+
+// SearchMovieSprache sucht wie SearchMovie, aber mit den Titeln in einer
+// anderen Sprache ("" = die eingestellte). Eine englische Suche bringt
+// zu „Chihiros Reise ins Zauberland" den Titel „Spirited Away" — den,
+// unter dem die Datei oft liegt.
+func (t *TMDb) SearchMovieSprache(ctx context.Context, title string, year int, sprache string) ([]Candidate, error) {
+	if sprache == "" {
+		sprache = t.Language
+	}
+	q := url.Values{"query": {title}, "language": {sprache},
 		"include_adult": {"false"}}
 	if year > 0 {
 		q.Set("year", fmt.Sprint(year))
@@ -69,16 +91,6 @@ func (t *TMDb) SearchMovie(ctx context.Context, title string, year int) ([]Candi
 	out := make([]Candidate, 0, len(res.Results))
 	for _, m := range res.Results {
 		out = append(out, t.movie(m))
-	}
-	// Ohne Jahr sucht TMDb breiter; dann lohnt ein zweiter Versuch ohne
-	// Jahresfilter, falls nichts kam.
-	if len(out) == 0 && year > 0 {
-		q.Del("year")
-		if err := t.get(ctx, "/search/movie", q, &res); err == nil {
-			for _, m := range res.Results {
-				out = append(out, t.movie(m))
-			}
-		}
 	}
 	return out, nil
 }
@@ -145,10 +157,19 @@ func (t *TMDb) SearchSeries(ctx context.Context, title string) ([]Candidate, err
 // angefangen haben — mit 0 unter allen. „Doctor Who (2005)" im Ordnernamen
 // trennt so die neue Serie von der aus 1963.
 func (t *TMDb) SearchSeriesJahr(ctx context.Context, title string, year int) ([]Candidate, error) {
+	return t.SearchSeriesSprache(ctx, title, year, "")
+}
+
+// SearchSeriesSprache: SearchSeriesJahr mit den Titeln in einer anderen
+// Sprache ("" = die eingestellte).
+func (t *TMDb) SearchSeriesSprache(ctx context.Context, title string, year int, sprache string) ([]Candidate, error) {
+	if sprache == "" {
+		sprache = t.Language
+	}
 	var res struct {
 		Results []tmdbSeries `json:"results"`
 	}
-	q := url.Values{"query": {title}, "language": {t.Language}}
+	q := url.Values{"query": {title}, "language": {sprache}}
 	if year > 0 {
 		q.Set("first_air_date_year", fmt.Sprint(year))
 	}
@@ -352,6 +373,30 @@ func (t *TMDb) image(path, size string) string {
 }
 
 func (t *TMDb) get(ctx context.Context, path string, q url.Values, out any) error {
+	err := t.getEinmal(ctx, path, q, out)
+	var b *gebremst
+	if errors.As(err, &b) {
+		// TMDb bremst: so lange warten, wie TMDb sagt (höchstens zehn
+		// Sekunden), dann ein zweites Mal. Klappt auch das nicht, bleibt
+		// der Titel „ausstehend" und kommt beim nächsten Durchgang dran —
+		// er wird nicht als „nicht erkannt" abgelegt.
+		warte := min(max(b.warte, time.Second), 10*time.Second)
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(warte):
+		}
+		err = t.getEinmal(ctx, path, q, out)
+	}
+	return err
+}
+
+// gebremst: TMDb hat mit 429 geantwortet.
+type gebremst struct{ warte time.Duration }
+
+func (g *gebremst) Error() string { return "TMDb bremst gerade — später noch einmal" }
+
+func (t *TMDb) getEinmal(ctx context.Context, path string, q url.Values, out any) error {
 	if t.Key == "" {
 		return fmt.Errorf("für TMDb fehlt der Schlüssel")
 	}
@@ -380,7 +425,8 @@ func (t *TMDb) get(ctx context.Context, path string, q url.Values, out any) erro
 	case http.StatusNotFound:
 		return fmt.Errorf("bei TMDb nicht gefunden")
 	case http.StatusTooManyRequests:
-		return fmt.Errorf("TMDb bremst gerade — später noch einmal")
+		sek, _ := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After")))
+		return &gebremst{warte: time.Duration(sek) * time.Second}
 	default:
 		return fmt.Errorf("TMDb antwortete mit %s", resp.Status)
 	}
@@ -581,6 +627,24 @@ func reihenName(n string) string {
 // FindIMDb sucht zu einer IMDb-Kennung die TMDb-Kennungen — als Film und
 // als Serie, je nachdem, was es ist.
 func (t *TMDb) FindIMDb(ctx context.Context, imdbID string) (filme, serien []string, err error) {
+	return t.FindExtern(ctx, imdbID, "imdb_id")
+}
+
+// FindExtern sucht zu einer fremden Kennung (quelle: imdb_id | tvdb_id)
+// die TMDb-Kennungen von Filmen und Serien.
+func (t *TMDb) FindExtern(ctx context.Context, kennung, quelle string) (filme, serien []string, err error) {
+	if quelle != "imdb_id" && quelle != "tvdb_id" {
+		return nil, nil, errors.New("unbekannte quelle")
+	}
+	// Nur Buchstaben und Ziffern — die Kennung kommt in den Pfad.
+	if kennung == "" || len(kennung) > 16 {
+		return nil, nil, errors.New("ungültige kennung")
+	}
+	for _, c := range kennung {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'z') {
+			return nil, nil, errors.New("ungültige kennung")
+		}
+	}
 	var d struct {
 		Movie []struct {
 			ID int `json:"id"`
@@ -589,8 +653,8 @@ func (t *TMDb) FindIMDb(ctx context.Context, imdbID string) (filme, serien []str
 			ID int `json:"id"`
 		} `json:"tv_results"`
 	}
-	if err := t.get(ctx, "/find/"+url.PathEscape(imdbID),
-		url.Values{"external_source": {"imdb_id"}, "language": {t.Language}}, &d); err != nil {
+	if err := t.get(ctx, "/find/"+url.PathEscape(kennung),
+		url.Values{"external_source": {quelle}, "language": {t.Language}}, &d); err != nil {
 		return nil, nil, err
 	}
 	for _, m := range d.Movie {
@@ -600,6 +664,36 @@ func (t *TMDb) FindIMDb(ctx context.Context, imdbID string) (filme, serien []str
 		serien = append(serien, strconv.Itoa(s.ID))
 	}
 	return filme, serien, nil
+}
+
+// Alternativtitel holt die weiteren Titel eines Eintrags (andere Länder,
+// frühere Verleihtitel). Nur für knappe Fälle: Es ist eine Anfrage mehr.
+func (t *TMDb) Alternativtitel(ctx context.Context, kind, id string) ([]string, error) {
+	if err := tmdbKennung(id); err != nil {
+		return nil, err
+	}
+	var d struct {
+		Titles []struct {
+			Title string `json:"title"`
+		} `json:"titles"` // Filme
+		Results []struct {
+			Title string `json:"title"`
+		} `json:"results"` // Serien
+	}
+	pfad := "/movie/" + id + "/alternative_titles"
+	if kind == "series" {
+		pfad = "/tv/" + id + "/alternative_titles"
+	}
+	if err := t.get(ctx, pfad, url.Values{}, &d); err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, x := range append(d.Titles, d.Results...) {
+		if x.Title != "" && len(out) < 40 {
+			out = append(out, x.Title)
+		}
+	}
+	return out, nil
 }
 
 // tmdbKennung prüft eine TMDb-Kennung, bevor sie in einen Pfad kommt.

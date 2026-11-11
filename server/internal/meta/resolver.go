@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -111,6 +110,7 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 	if !r.Ready() {
 		return nil, fmt.Errorf("es ist keine Metadaten-Quelle eingerichtet")
 	}
+	r.einmalNeuVersuchen(ctx)
 	pending, err := r.st.PendingItems(ctx, libraryID, limit)
 	if err != nil {
 		return nil, err
@@ -179,6 +179,27 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 
 var errUnmatched = fmt.Errorf("nicht sicher zuzuordnen")
 
+// abgleichStand zählt die Fassungen der Zuordnung. Steigt er, kommen alle
+// bisher nicht erkannten Filme und Serien einmal neu dran — die bessere
+// Zuordnung (abgleich.go, Kennungen im Namen) soll auch für sie gelten.
+const (
+	abgleichStand       = "2"
+	einstellungAbgleich = "meta.abgleich_stand"
+)
+
+func (r *Resolver) einmalNeuVersuchen(ctx context.Context) {
+	if r.st.Setting(ctx, einstellungAbgleich, "1") == abgleichStand {
+		return
+	}
+	if n, err := r.st.NichtErkannteZuruecksetzen(ctx); err == nil {
+		_ = r.st.SetSetting(ctx, einstellungAbgleich, abgleichStand)
+		if n > 0 {
+			r.st.Log(ctx, "info", "metadaten", fmt.Sprintf(
+				"%d bisher nicht erkannte Titel werden mit der verbesserten Zuordnung neu versucht", n))
+		}
+	}
+}
+
 func (r *Resolver) resolveOne(ctx context.Context, it *store.Item) error {
 	switch it.Kind {
 	case "movie":
@@ -234,12 +255,19 @@ func (r *Resolver) resolveMovie(ctx context.Context, it *store.Item) error {
 	// Nennt eine NFO neben der Datei die Kennung, wird nicht gesucht.
 	full, quelle := r.lokalerTreffer(ctx, it, "movie")
 	if full == nil {
-		cands, err := r.suchen(ctx, "movie", it.Title, it.Year)
+		// Eine Kennung im Datei- oder Ordnernamen („{imdb-tt0133093}").
+		full, quelle = r.dateiTreffer(ctx, it, "movie")
+	}
+	if full == nil {
+		m, gesucht, _, err := r.finden(ctx, "movie", it.Title, it.Year, "")
 		if err != nil {
+			// Kein Netz, TMDb bremst: bleibt „ausstehend" und kommt beim
+			// nächsten Durchgang wieder dran.
+			grundMerken(it.ID, Grund{Art: "fehler", Gesucht: gesucht.Texte, Anfragen: gesucht.Anfragen})
 			return err
 		}
-		m := Best(it.Title, it.Year, cands)
 		if !m.Sure {
+			grundMerken(it.ID, grundAus(m, gesucht))
 			return r.markUnmatched(ctx, it, m)
 		}
 		quelle = m.Candidate.SourceID
@@ -266,6 +294,7 @@ func (r *Resolver) resolveMovie(ctx context.Context, it *store.Item) error {
 	if err := r.st.UpsertItem(ctx, it); err != nil {
 		return err
 	}
+	grundVergessen(it.ID)
 	if tomaten > -2 {
 		_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 	}
@@ -282,14 +311,17 @@ func (r *Resolver) resolveMovie(ctx context.Context, it *store.Item) error {
 func (r *Resolver) resolveSeries(ctx context.Context, it *store.Item) error {
 	full, quelle := r.lokalerTreffer(ctx, it, "series")
 	if full == nil {
-		cands, err := r.suchen(ctx, "series", it.Title, it.Year)
+		full, quelle = r.dateiTreffer(ctx, it, "series")
+	}
+	if full == nil {
+		// „The Office (US)": nur die Kandidaten aus diesem Land.
+		m, gesucht, _, err := r.finden(ctx, "series", it.Title, it.Year, r.st.ZusatzZu(ctx, it.ID).Land)
 		if err != nil {
+			grundMerken(it.ID, Grund{Art: "fehler", Gesucht: gesucht.Texte, Anfragen: gesucht.Anfragen})
 			return err
 		}
-		// „The Office (US)": nur die Kandidaten aus diesem Land.
-		cands = nachLand(cands, r.st.ZusatzZu(ctx, it.ID).Land)
-		m := Best(it.Title, it.Year, cands)
 		if !m.Sure {
+			grundMerken(it.ID, grundAus(m, gesucht))
 			return r.markUnmatched(ctx, it, m)
 		}
 		quelle = m.Candidate.SourceID
@@ -307,6 +339,7 @@ func (r *Resolver) resolveSeries(ctx context.Context, it *store.Item) error {
 	if err := r.st.UpsertItem(ctx, it); err != nil {
 		return err
 	}
+	grundVergessen(it.ID)
 	if tomaten > -2 {
 		_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 	}
@@ -389,8 +422,9 @@ func (r *Resolver) markUnmatched(ctx context.Context, it *store.Item, m Match) e
 	if err := r.st.UpsertItem(ctx, it); err != nil {
 		return err
 	}
-	r.st.Log(ctx, "info", "metadaten",
-		fmt.Sprintf("%q nicht zugeordnet (%s)", it.Title, m.Why))
+	// Kein Eintrag im Protokoll mit dem Titel: Warum es nicht geklappt
+	// hat, steht in der Verwaltung unter „Aufräumen" (GrundZu).
+	_ = m
 	return errUnmatched
 }
 
@@ -642,6 +676,10 @@ func (r *Resolver) Zuweisen(ctx context.Context, it *store.Item, sourceID string
 	if !r.Ready() {
 		return fmt.Errorf("es ist keine Metadaten-Quelle eingerichtet")
 	}
+	if err := tmdbKennung(sourceID); err != nil {
+		return err
+	}
+	grundVergessen(it.ID)
 	switch it.Kind {
 	case "movie":
 		full, err := r.tmdb.Details(ctx, sourceID)
@@ -849,61 +887,4 @@ func (r *Resolver) SerienWertungenNachholen(ctx context.Context, n int) int {
 		}
 	}
 	return fertig
-}
-
-var (
-	reTMDbLink = regexp.MustCompile(`themoviedb\.org/(movie|tv)/(\d+)`)
-	reIMDbID   = regexp.MustCompile(`\b(tt\d{6,10})\b`)
-	reNurZahl  = regexp.MustCompile(`^\s*(\d{1,9})\s*$`)
-)
-
-// direkterTreffer versteht, was man aus dem Browser kopiert:
-// „https://www.themoviedb.org/movie/20858-8-million-ways-to-die",
-// „https://www.imdb.com/title/tt0090570/", „tt0090570" oder nur „20858".
-// ok ist false, wenn es nach einem gewöhnlichen Titel aussieht.
-func (r *Resolver) direkterTreffer(ctx context.Context, kind, s string) (*Candidate, bool, error) {
-	holen := func(art, id string) (*Candidate, bool, error) {
-		if art == "tv" {
-			c, err := r.tmdb.SeriesDetails(ctx, id)
-			return c, true, err
-		}
-		c, err := r.tmdb.Details(ctx, id)
-		return c, true, err
-	}
-	art := "movie"
-	if kind == "series" {
-		art = "tv"
-	}
-	if m := reTMDbLink.FindStringSubmatch(s); m != nil {
-		if m[1] != art {
-			if art == "tv" {
-				return nil, true, fmt.Errorf("das ist ein Film-Link — hier wird eine Serie gesucht")
-			}
-			return nil, true, fmt.Errorf("das ist ein Serien-Link — hier wird ein Film gesucht")
-		}
-		return holen(art, m[2])
-	}
-	if m := reIMDbID.FindStringSubmatch(s); m != nil {
-		filme, serien, err := r.tmdb.FindIMDb(ctx, m[1])
-		if err != nil {
-			return nil, true, err
-		}
-		ids := filme
-		if art == "tv" {
-			ids = serien
-		}
-		if len(ids) == 0 {
-			return nil, true, fmt.Errorf("TMDb kennt %s nicht als %s", m[1], map[string]string{"tv": "Serie", "movie": "Film"}[art])
-		}
-		return holen(art, ids[0])
-	}
-	if m := reNurZahl.FindStringSubmatch(s); m != nil && len(m[1]) >= 2 && !istJahreszahl(m[1]) {
-		return holen(art, m[1])
-	}
-	return nil, false, nil
-}
-
-// „1917" ist eher ein Filmtitel als eine TMDb-Kennung.
-func istJahreszahl(s string) bool {
-	return len(s) == 4 && (strings.HasPrefix(s, "19") || strings.HasPrefix(s, "20"))
 }
