@@ -142,6 +142,7 @@ const I = {
   lautsprecher: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/>',
   stumm: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
   vollbild: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  kapitel: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   vollbildAus: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
   liste: '<path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4.6" cy="6" r=".9"/><circle cx="4.6" cy="12" r=".9"/><circle cx="4.6" cy="18" r=".9"/>',
   hoch: '<path d="M6 15l6-6 6 6"/>',
@@ -1869,6 +1870,22 @@ function spurenVorbelegen(p) {
   }
 }
 
+/* Kapitel, wie der Player sie anbietet: mindestens zwei, nach Beginn
+   sortiert, ohne winzige Reste (manche Rips haben ein 0-Sekunden-Kapitel
+   am Ende). */
+function kapitelListe(file) {
+  const k = (file?.chapters || []).filter(c => c.endMs - c.startMs >= 1000)
+    .sort((a, b) => a.startMs - b.startMs);
+  return k.length >= 2 ? k : [];
+}
+
+/* Kleine Striche auf der Zeitleiste, wo ein Kapitel beginnt. */
+function kapitelMarken(p, total) {
+  if (!p.kapitel?.length || !total) return '';
+  return p.kapitel.filter(k => k.startMs > 0 && k.startMs / 1000 < total)
+    .map(k => `<s style="left:${(k.startMs / 10 / total).toFixed(2)}%"></s>`).join('');
+}
+
 function spurenPanel(p) {
   const ton = tonspuren(p);
   const zeile = (aktiv, attr, name) => `
@@ -1878,6 +1895,12 @@ function spurenPanel(p) {
   let html = '';
   if (p.spurenOffen === 'folgen') {
     return `<div class="spuren spuren--folgen" role="group" aria-label="${tr('Folgen')}">${folgenPanel(p)}</div>`;
+  }
+  if (p.spurenOffen === 'kapitel') {
+    const jetzt = (p.offset + p.current) * 1000;
+    const aktiv = p.kapitel.reduce((a, k, i) => (k.startMs <= jetzt + 500 ? i : a), 0);
+    return `<div class="spuren spuren--kapitel" role="menu" aria-label="${tr('Kapitel')}">${abschnitt(tr('Kapitel'),
+      p.kapitel.map((k, i) => zeile(i === aktiv, `data-kapitel="${k.startMs}"`, `${clock(k.startMs / 1000)}  ${k.title || tr('Kapitel {n}', { n: i + 1 })}`)).join(''))}</div>`;
   }
   if (p.spurenOffen === 'tempo') {
     return `<div class="spuren" role="menu" aria-label="${tr('Wiedergabetempo')}">${abschnitt(tr('Tempo'),
@@ -2222,6 +2245,8 @@ function viewPlayer() {
           aria-label="${tr('Untertitel')}" aria-expanded="${p.spurenOffen === 'untertitel'}">${svg(I.untertitel, 22, 1.7)}</button>` : ''}
         ${tonspuren(p).length > 1 || (S.me?.account?.isAdmin && p.kind === 'episode') ? `<button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'ton' ? ' pl-knopf--an' : ''}" data-spuren="ton"
           aria-label="${tr('Ton')}" aria-expanded="${p.spurenOffen === 'ton'}">${svg(I.ton, 22, 2)}</button>` : ''}
+        ${p.kapitel?.length ? `<button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'kapitel' ? ' pl-knopf--an' : ''}" data-spuren="kapitel"
+          aria-label="${tr('Kapitel')}" aria-expanded="${p.spurenOffen === 'kapitel'}">${svg(I.kapitel, 21, 2)}</button>` : ''}
         <button class="btn btn-pill glass glass--clear pl-knopf pl-knopf--tempo${p.spurenOffen === 'tempo' ? ' pl-knopf--an' : ''}" data-spuren="tempo"
           aria-label="${esc(tr('Wiedergabetempo: {tempo}', { tempo: tempoText(p.tempo || 1) }))}" aria-expanded="${p.spurenOffen === 'tempo'}">${esc(tempoZahl(p.tempo || 1))}</button>
         <button class="btn btn-round sm glass glass--clear pl-knopf" data-vollbild
@@ -2229,7 +2254,7 @@ function viewPlayer() {
       </div>
       <div class="pl-bar" data-bar role="slider" tabindex="0" aria-label="${tr('Wiedergabeposition')}"
         aria-valuemin="0" aria-valuemax="${Math.round(total)}" aria-valuenow="${Math.round(pos)}"
-        aria-valuetext="${esc(zeitleisteText(pos, total))}"><i style="width:${pct}%"></i><b style="left:${pct}%"></b>
+        aria-valuetext="${esc(zeitleisteText(pos, total))}">${kapitelMarken(p, total)}<i style="width:${pct}%"></i><b style="left:${pct}%"></b>
         <span class="pl-vorschau" aria-hidden="true" hidden><span class="pl-vorschau-bild"></span><span class="pl-vorschau-zeit tnum"></span></span></div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
         <span class="t-caption tnum pl-zeit" aria-hidden="true">${clock(pos)}</span>
@@ -2304,6 +2329,9 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       mode: plan?.plan?.direct ? 'direct' : 'transcode',
       // Ton und Untertitel: was die Datei hat, und was gewählt ist.
       tracks: file.tracks || [],
+      // Kapitel der Datei (Blu-ray-Rips haben oft zwanzig und mehr). Bei
+      // Filmen in Teilen gehören sie zu einem Teil — dann keine.
+      kapitel: teile.length > 1 ? [] : kapitelListe(file),
       spur: -1, untertitel: null, spurenOffen: false,
       // Vorspann und Abspann, falls bekannt — für „Überspringen" und „Als Nächstes".
       // Je Fassung eigene Zeiten (jeDatei): Kapitel und Erkanntes gehören
@@ -4181,7 +4209,7 @@ function viewAdminUpdate() {
             : u.tokenGesetzt
               ? tr('Ist eingetragen. Ein neues ersetzt das alte; es wird gespeichert, aber nie wieder angezeigt.')
               : tr('Optional — nur nötig, wenn die Updates aus einem privaten Repository kommen. Wird gespeichert, aber nie wieder angezeigt.')}</div></div>
-        <input type="password" name="token" placeholder="${u.tokenGesetzt ? tr('neues Token, ghp_… oder github_pat_…') : tr('ghp_… oder github_pat_…')}" autocomplete="off" style="width:min(320px,100%)"></div>
+        <span class="field" style="width:min(320px,100%);margin:0"><input type="password" name="token" class="mono" aria-label="${tr('GitHub-Token')}" placeholder="${u.tokenGesetzt ? tr('neues Token, ghp_… oder github_pat_…') : tr('ghp_… oder github_pat_…')}" autocomplete="off" style="width:100%;box-sizing:border-box;height:40px"></span></div>
         ${u.tokenQuelle === 'verwaltung' ? `<button type="button" class="btn row" style="width:100%;justify-content:flex-start;min-height:46px;color:#ff6961" data-tokenweg>
           <span class="t-body">${tr('Token entfernen')}</span></button>` : ''}</div></section>
     <div style="display:flex;justify-content:flex-end;margin-top:14px">
@@ -5090,6 +5118,15 @@ app.addEventListener('click', async e => {
   if (hit('data-stumm')) return stummUmschalten();
   if (hit('data-vollbild')) return vollbildUmschalten();
   if ((n = hit('data-tempo'))) { tempoSetzen(Number(n.dataset.tempo)); return; }
+  if ((n = hit('data-kapitel'))) {
+    const p = S.playing;
+    if (!p) return;
+    p.spurenOffen = false; p.spurenHtml = '';
+    seekTo(Number(n.dataset.kapitel) / 1000);
+    patchChrome();
+    app.querySelector('[data-spuren="kapitel"]')?.focus({ preventScroll: true });
+    return;
+  }
   if ((n = hit('data-nochda-weiter'))) {
     eingabeGesehen();
     document.getElementById('nochda')?.remove();
@@ -5184,7 +5221,21 @@ app.addEventListener('click', async e => {
     try {
       const r = await api.adminUpdateRun(trotzdem);
       toast(tr('Lumen {nach} wird eingesetzt — gleich startet es neu', { nach: r.nach }));
-      setTimeout(load, 8000);
+      // Scheitert das Einsetzen (kein Paket, falsche Prüfsumme), startet
+      // nichts neu — dann soll das nicht nur unten im Protokoll stehen.
+      const seit = Date.now() - 5000;
+      const nachsehen = async (rest) => {
+        let u = null;
+        try { u = await api.adminUpdate(); } catch { /* startet gerade neu */ }
+        const letzter = u?.protokoll?.[0];
+        if (letzter && letzter.ergebnis === 'fehler' && Date.parse(letzter.at) >= seit) {
+          if (S.view === 'adminUpdate') { S.data = u; render(); }
+          return toast(tr('Das Update liess sich nicht einsetzen: {grund}', { grund: letzter.notiz || '' }));
+        }
+        if (rest > 0 && (!u || u.laeuft)) return setTimeout(() => nachsehen(rest - 1), 2000);
+        if (S.view === 'adminUpdate') load();
+      };
+      setTimeout(() => nachsehen(6), 2000);
     } catch (err) {
       if (err.wiedergaben) return updateFrage(err.wiedergaben);
       toast(err.message);

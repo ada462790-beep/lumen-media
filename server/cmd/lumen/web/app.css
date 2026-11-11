@@ -80,6 +80,8 @@ html.hell, html.hell body { background:#f2f2f7 }
           bottom:max(34px, calc(env(safe-area-inset-bottom) + 12px)); z-index:3 }
 .pl-bar { position:relative; height:6px; border-radius:3px; background:var(--spur); cursor:pointer }
 .pl-bar > i { position:absolute; left:0; top:0; height:6px; border-radius:3px; background:#fff }
+/* Kapitelmarken: kleine Lücken in der Leiste, wie bei Apple TV. */
+.pl-bar > s { position:absolute; top:0; width:2px; height:6px; margin-left:-1px; background:rgba(0,0,0,.55); z-index:1; pointer-events:none }
 .pl-bar > b { position:absolute; top:-5px; width:16px; height:16px; margin-left:-8px; border-radius:50%; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.6) }
 /* Die Leiste ist 6 px hoch, die Fläche zum Greifen 30 px — für Finger. */
 .pl-bar { touch-action:none }

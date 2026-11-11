@@ -1315,5 +1315,8 @@
  "{name} entfernen?": "Remove {name}?",
  "Das Profil verschwindet von allen Geräten, samt Verlauf, Merkliste, Bewertungen und eigenen Listen. Was {name} in geteilte Listen anderer gelegt hat, bleibt dort. Das lässt sich nicht rückgängig machen.": "The profile disappears from all devices, along with its history, watchlist, ratings and own playlists. Anything {name} added to other people’s shared playlists stays there. This can’t be undone.",
  "{name} ist entfernt": "{name} has been removed",
- "Entfernen": "Remove"
+ "Entfernen": "Remove",
+ "Das Update liess sich nicht einsetzen: {grund}": "The update couldn’t be installed: {grund}",
+ "Kapitel": "Chapters",
+ "Kapitel {n}": "Chapter {n}"
 }
