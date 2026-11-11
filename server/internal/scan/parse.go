@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lumen/internal/lokal"
 )
 
 // Guess ist, was aus einem Dateinamen herauszulesen war.
@@ -199,6 +201,18 @@ func Parse(path string, dirs []string) Guess { return ParseFuer(path, dirs, "") 
 func ParseFuer(path string, dirs []string, art string) Guess {
 	base := filepath.Base(path)
 	name := strings.TrimSuffix(base, filepath.Ext(base))
+
+	// Kennungen im Namen („{imdb-tt0133093}", „[tmdbid-603]", „tt0133093")
+	// sind kein Teil des Titels. Gelesen werden sie bei der Zuordnung
+	// (lokal.KennungenFilm), hier fallen sie nur weg.
+	name = strings.TrimSpace(lokal.OhneKennungen(name))
+	if len(dirs) > 0 {
+		sauber := make([]string, len(dirs))
+		for i, d := range dirs {
+			sauber[i] = strings.TrimSpace(lokal.OhneKennungen(d))
+		}
+		dirs = sauber
+	}
 
 	g := Guess{Kind: "movie", PartNo: 1}
 

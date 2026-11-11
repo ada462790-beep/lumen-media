@@ -53,6 +53,27 @@ https://www.themoviedb.org/movie/68-brazil`, NFO{Art: "movie", Titel: "Brazil", 
 <sorttitle>Herr der Ringe 1</sorttitle></movie>`, NFO{Art: "movie", Titel: "Der Herr der Ringe: Die Gefährten",
 			Sortiertitel: "Herr der Ringe 1"}},
 		{"nur eine Adresse", `https://www.imdb.com/title/tt0088846/`, NFO{IMDb: "tt0088846"}},
+		// So schreibt Emby mit eingeschaltetem „NFO-Speicher" (movie.nfo
+		// oder <Dateiname>.nfo): eigene Felder und uniqueid mit grossem
+		// Anfangsbuchstaben.
+		{"Emby-Film", `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <plot><![CDATA[Ein Hacker erfährt die Wahrheit.]]></plot>
+  <lockdata>false</lockdata>
+  <title>Matrix</title><originaltitle>The Matrix</originaltitle>
+  <year>1999</year>
+  <imdbid>tt0133093</imdbid><tmdbid>603</tmdbid>
+  <uniqueid type="Imdb">tt0133093</uniqueid><uniqueid type="Tmdb">603</uniqueid>
+</movie>`, NFO{Art: "movie", Titel: "Matrix", Originaltitel: "The Matrix", Jahr: 1999,
+			Inhalt: "Ein Hacker erfährt die Wahrheit.", TMDb: "603", IMDb: "tt0133093"}},
+		{"Emby-Serie", `<tvshow><title>Breaking Bad</title><year>2008</year>
+  <uniqueid type="Tvdb">81189</uniqueid><uniqueid type="Imdb">tt0903747</uniqueid><tvdbid>81189</tvdbid></tvshow>`,
+			NFO{Art: "tvshow", Titel: "Breaking Bad", Jahr: 2008, TVDb: "81189", IMDb: "tt0903747"}},
+		{"Adresse mitten im XML", `<movie><title>Brazil</title>
+  <trailer>x</trailer><url>https://www.imdb.com/title/tt0088846/</url></movie>`,
+			NFO{Art: "movie", Titel: "Brazil", IMDb: "tt0088846"}},
+		{"tmdbid und imdb_id als eigene Felder", `<movie><title>Alien</title><imdb_id>tt0078748</imdb_id><tmdbid>348</tmdbid></movie>`,
+			NFO{Art: "movie", Titel: "Alien", TMDb: "348", IMDb: "tt0078748"}},
 		{"Latin-1", "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><movie><title>Sch\xf6ne T\xfcte</title></movie>",
 			NFO{Art: "movie", Titel: "Schöne Tüte"}},
 	}
