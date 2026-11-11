@@ -11,9 +11,11 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -89,6 +91,20 @@ func NewResolver(st *store.Store, dataDir string, cfg Config) (*Resolver, error)
 		}
 	}
 	return r, nil
+}
+
+// TMDbPruefen fragt TMDb einmal, ob der Schlüssel angenommen wird. Nur
+// ErrTMDbSchluessel heisst „falsch"; ist TMDb gerade nicht erreichbar,
+// gibt es keinen Grund, den Schlüssel abzulehnen.
+func (r *Resolver) TMDbPruefen(ctx context.Context) error {
+	if r.tmdb == nil {
+		return nil
+	}
+	var antwort map[string]any
+	if err := r.tmdb.getEinmal(ctx, "/authentication", url.Values{}, &antwort); errors.Is(err, ErrTMDbSchluessel) {
+		return err
+	}
+	return nil
 }
 
 // Ready sagt, ob überhaupt eine Quelle eingerichtet ist. Ohne läuft Lumen

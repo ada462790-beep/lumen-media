@@ -413,6 +413,10 @@ func (t *TMDb) get(ctx context.Context, path string, q url.Values, out any) erro
 	return err
 }
 
+// ErrTMDbSchluessel: TMDb antwortet mit 401 — der Schlüssel stimmt nicht
+// (meist die kurze API-Kennung statt des langen Read Access Token).
+var ErrTMDbSchluessel = errors.New("der TMDb-Schlüssel wird nicht angenommen")
+
 // gebremst: TMDb hat mit 429 geantwortet.
 type gebremst struct{ warte time.Duration }
 
@@ -443,7 +447,7 @@ func (t *TMDb) getEinmal(ctx context.Context, path string, q url.Values, out any
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusUnauthorized:
-		return fmt.Errorf("der TMDb-Schlüssel wird nicht angenommen")
+		return ErrTMDbSchluessel
 	case http.StatusNotFound:
 		return fmt.Errorf("bei TMDb nicht gefunden")
 	case http.StatusTooManyRequests:
