@@ -117,6 +117,11 @@
     <string name="kern_rolle_vollzugriff">Vollzugriff</string>
     <string name="kern_rolle_kind">Kinderprofil</string>
     <string name="kern_rolle_haushalt">Haushalt</string>
+    <string name="kern_bz_schluss">Für heute ist Schluss.</string>
+    <string name="kern_bz_heute_noch">Heute noch %1$d Min.</string>
+    <string name="kern_bz_ohne_grenze">Heute ohne Grenze</string>
+    <string name="kern_bz_gebraucht">%1$d von %2$d Min. gebraucht</string>
+    <string name="kern_bz_fenster">heute %1$s bis %2$s</string>
     <plurals name="kern_neue_folgen">
         <item quantity="one">Neue Folge</item>
         <item quantity="other">%1$d neue Folgen</item>

@@ -84,6 +84,9 @@
     <string name="filme">Filme</string>
     <string name="filme_ansehen">Filme ansehen</string>
     <string name="filmreihen">Filmreihen</string>
+    <string name="sammlungen">Sammlungen</string>
+    <string name="filmreihen_und_sammlungen">Filmreihen und Sammlungen</string>
+    <string name="bildschirmzeit">Bildschirmzeit</string>
     <string name="fingerabdruck_64_zeichen_aus_09">Fingerabdruck — 64 Zeichen aus 0–9 und a–f</string>
     <string name="folge_x">Folge %1$s</string>
     <string name="folgen">FOLGEN</string>

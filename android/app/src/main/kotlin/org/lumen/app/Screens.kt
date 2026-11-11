@@ -572,6 +572,14 @@ fun ProfileScreen(
     LaunchedEffect(wiedergabenStand) {
         wiedergaben = model.fetch { it.meineWiedergaben() } ?: emptyList()
     }
+    // Wie viel Bildschirmzeit heute bleibt — nur Kinderprofile haben eine
+    // Regel, die anderen fragen gar nicht erst. Beiwerk: ohne Antwort
+    // bleibt der Abschnitt weg.
+    var bildschirmzeit by remember { mutableStateOf<Bildschirmzeit?>(null) }
+    LaunchedEffect(me.account.id, me.account.isKid) {
+        bildschirmzeit = if (!me.account.isKid) null
+            else withContext(Dispatchers.IO) { oderNull { model.client.bildschirmzeit() } }
+    }
 
     fun pref(key: String, wert: String) {
         model.send(onDone = { model.refreshMe() }) { it.updatePrefs(mapOf(key to wert)) }
@@ -592,6 +600,20 @@ fun ProfileScreen(
                 QuietButton(tx(R.string.abmelden)) { model.signOut() }
             }
             Spacer(Modifier.height(24.dp))
+        }
+
+        bildschirmzeit?.takeIf { it.aktiv }?.let { bz ->
+            item {
+                SettingGroup(tx(R.string.bildschirmzeit))
+                val zeile = bz.nebenzeile
+                ListItem(
+                    headlineContent = { Text(bz.hauptzeile) },
+                    supportingContent = if (zeile != null) {
+                        { Text(zeile, color = Lumen.label3) }
+                    } else null,
+                    colors = ListItemDefaults.colors(containerColor = Lumen.background))
+                Spacer(Modifier.height(18.dp))
+            }
         }
 
         // Mehr: was nicht in der unteren Leiste steht — wie im Browser auf

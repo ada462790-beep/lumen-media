@@ -54,6 +54,8 @@ internal fun TvSuche(
     onOpen: (Item) -> Unit,
     onPerson: (String) -> Unit,
     onGenre: (String) -> Unit,
+    onReihe: (Reihe) -> Unit = {},
+    onSammlung: (Sammlung) -> Unit = {},
 ) {
     var ergebnis by remember { mutableStateOf<Suchergebnis?>(null) }
     var sucht by remember { mutableStateOf(false) }
@@ -104,6 +106,25 @@ internal fun TvSuche(
         }
         val e = ergebnis
         if (q.isNotEmpty() && e != null) {
+            // Filmreihen und Sammlungen, deren Name passt — „Harry Potter"
+            // findet die Reihe, nicht nur die einzelnen Filme.
+            if (e.hatReihenOderSammlungen) {
+                item(key = "lumen:reihen") {
+                    Column(Modifier.padding(bottom = 28.dp)) {
+                        Text(tx(R.string.filmreihen_und_sammlungen), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(12.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(30.dp),
+                                contentPadding = PaddingValues(vertical = 14.dp, horizontal = 4.dp)) {
+                            items(e.reihen, key = { "reihe:" + it.id }) { r ->
+                                TvKachel(client.reiheBildUrl(r), r.name, r.anzahlText, breite = 160.dp) { onReihe(r) }
+                            }
+                            items(e.sammlungen, key = { "sammlung:" + it.id }) { x ->
+                                TvKachel(client.sammlungBildUrl(x), x.name, x.anzahlText, breite = 160.dp) { onSammlung(x) }
+                            }
+                        }
+                    }
+                }
+            }
             if (e.personen.isNotEmpty()) {
                 item(key = "lumen:personen") {
                     Column(Modifier.padding(bottom = 28.dp)) {
@@ -143,7 +164,7 @@ internal fun TvSuche(
                         }
                     }
                 }
-            } else if (e.personen.isNotEmpty() || e.genres.isNotEmpty()) {
+            } else if (!e.leer) {
                 item(key = "lumen:gedeutet") {
                     val d = e.deutung
                     Text(if (d != null && d.gedeutet) tx(R.string.kein_titel_passt_genau_gesucht, d.beschreibung)

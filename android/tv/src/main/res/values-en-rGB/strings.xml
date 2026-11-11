@@ -12,11 +12,11 @@
     <string name="filme">Films</string>
     <string name="filme_ansehen">Browse Films</string>
     <string name="lizenz">Licence</string>
-    <string name="neue_folgen_deiner_serien_neue">New episodes of your shows, new films in your collections, recent additions — just for you.</string>
+    <string name="neue_folgen_deiner_serien_neue">New episodes of your shows, new films in your franchises, recent additions — just for you.</string>
     <string name="nichts_gefunden_fuer_x">Nothing found for ‘%1$s’.</string>
     <string name="noch_keine_lieblingsfilme_auf_einer">No favourite films yet. Tap the heart on a title page.</string>
     <string name="noch_keine_lieblingsserien_auf_einer">No favourite shows yet. Tap the heart on a title page.</string>
-    <string name="noch_keine_reihen_lumen_erkennt">No collections yet. Lumen detects them on its own as soon as two films of a collection are there — by title or, with a TMDb key, reliably via TMDb.</string>
+    <string name="noch_keine_reihen_lumen_erkennt">No franchises yet. Lumen detects them on its own as soon as two films of a franchise are there — by title or, with a TMDb key, reliably via TMDb.</string>
     <string name="noch_leer_auf_der_seite">Still empty. Every title page has ‘Add to Playlist’.</string>
     <string name="noch_nichts_da_sobald_filme">Nothing here yet. As soon as there are films in a library, they’ll appear here.</string>
     <string name="nur_du_siehst_deine_favoriten">Only you can see your favourites</string>

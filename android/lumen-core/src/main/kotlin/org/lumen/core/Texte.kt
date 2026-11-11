@@ -166,6 +166,13 @@ enum class Tx(val vorgabe: String) {
     ROLLE_VOLLZUGRIFF("Vollzugriff"),
     ROLLE_KIND("Kinderprofil"),
     ROLLE_HAUSHALT("Haushalt"),
+
+    // Bildschirmzeit der Kinderprofile (unter „Ich")
+    BZ_SCHLUSS("Für heute ist Schluss."),
+    BZ_HEUTE_NOCH("Heute noch %1\$d Min."),
+    BZ_OHNE_GRENZE("Heute ohne Grenze"),
+    BZ_GEBRAUCHT("%1\$d von %2\$d Min. gebraucht"),
+    BZ_FENSTER("heute %1\$s bis %2\$s"),
 }
 
 /** Sätze mit Mehrzahl: [eins] für genau eins, [mehr] sonst — wie `<plurals>` in Android. */

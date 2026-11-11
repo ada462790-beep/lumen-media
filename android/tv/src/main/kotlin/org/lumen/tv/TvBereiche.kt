@@ -72,6 +72,8 @@ internal enum class TvBereich(@StringRes private val titelId: Int, val oben: Boo
 internal sealed interface TvSeite {
     data class Titel(val ziel: TvTitelZiel) : TvSeite
     data class ReiheOffen(val id: String) : TvSeite
+    /** Eine eigene Sammlung, von der Verwaltung zusammengestellt. */
+    data class SammlungOffen(val id: String) : TvSeite
     data class ListeOffen(val id: String) : TvSeite
     /** Alles mit einer Person aus der Besetzung. */
     data class Person(val name: String) : TvSeite
@@ -614,10 +616,11 @@ internal fun TvFavoriten(client: ApiClient, serien: Boolean, onSerien: (Boolean)
 
 // ---------------------------------------------------------------- Filmreihen
 
-/** Alle Filmreihen, die Lumen zusammengestellt hat. */
+/** Alle Filmreihen, die Lumen zusammengestellt hat — darunter die eigenen Sammlungen. */
 @Composable
-internal fun TvFilmreihen(client: ApiClient, onOpen: (Reihe) -> Unit) {
+internal fun TvFilmreihen(client: ApiClient, onSammlung: (Sammlung) -> Unit = {}, onOpen: (Reihe) -> Unit) {
     var reihen by remember { mutableStateOf<List<Reihe>?>(null) }
+    var sammlungen by remember { mutableStateOf<List<Sammlung>>(emptyList()) }
     var fehler by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -626,6 +629,10 @@ internal fun TvFilmreihen(client: ApiClient, onOpen: (Reihe) -> Unit) {
         } catch (e: LumenException) {
             fehler = e.message
         }
+    }
+    // Beiwerk: ohne Sammlungen (älterer Server) bleibt es bei den Reihen.
+    LaunchedEffect(Unit) {
+        sammlungen = withContext(Dispatchers.IO) { oderNull { client.sammlungen() } } ?: emptyList()
     }
 
     TvGitter {
@@ -640,13 +647,65 @@ internal fun TvFilmreihen(client: ApiClient, onOpen: (Reihe) -> Unit) {
         val r = reihen
         when {
             r == null && fehler == null -> item(span = { GridItemSpan(maxLineSpan) }) { TvLadeZeile() }
-            r != null && r.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+            r != null && r.isEmpty() && sammlungen.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(tx(R.string.noch_keine_reihen_lumen_erkennt),
                      color = Tv.label2, fontSize = 20.sp)
             }
             r != null -> items(r, key = { it.id }) { reihe ->
                 TvKachel(client.reiheBildUrl(reihe), reihe.name, reihe.anzahlText,
                          breite = RASTER_KARTE) { onOpen(reihe) }
+            }
+        }
+        if (sammlungen.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "lumen:sammlungen") {
+                Text(tx(R.string.sammlungen), fontSize = 26.sp, fontWeight = FontWeight.SemiBold,
+                     modifier = Modifier.padding(top = 24.dp, bottom = 4.dp))
+            }
+            items(sammlungen, key = { "sammlung:" + it.id }) { x ->
+                TvKachel(client.sammlungBildUrl(x), x.name, x.anzahlText,
+                         breite = RASTER_KARTE) { onSammlung(x) }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Sammlungen
+
+/**
+ * Eine eigene Sammlung: Name, Anzahl, Beschreibung, darunter ihre Titel in
+ * der Reihenfolge, die die Verwaltung gewählt hat — Filme und Serien
+ * gemischt. Zusammenstellen geht nur im Browser.
+ */
+@Composable
+internal fun TvSammlung(client: ApiClient, sammlungId: String, onOpen: (Item) -> Unit) {
+    var sammlung by remember(sammlungId) { mutableStateOf<Sammlung?>(null) }
+    var fehler by remember(sammlungId) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(sammlungId) {
+        try {
+            sammlung = withContext(Dispatchers.IO) { client.sammlung(sammlungId) }
+        } catch (e: LumenException) {
+            fehler = e.message
+        }
+    }
+
+    TvGitter {
+        item(span = { GridItemSpan(maxLineSpan) }, key = "lumen:kopf") {
+            val x = sammlung
+            Column(Modifier.padding(bottom = 8.dp)) {
+                TvKopf(x?.name ?: "", x?.anzahlText)
+                x?.beschreibung?.let {
+                    Text(it, color = Tv.label2, fontSize = 17.sp, maxLines = 3,
+                         modifier = Modifier.widthIn(max = 900.dp).padding(top = 6.dp))
+                }
+                fehler?.let { Text(it, color = Tv.bad, fontSize = 17.sp) }
+            }
+        }
+        val x = sammlung
+        when {
+            x == null && fehler == null -> item(span = { GridItemSpan(maxLineSpan) }) { TvLadeZeile() }
+            x != null -> items(x.items, key = { it.id }) { t ->
+                TvCard(client, t, onFocus = {}, onClick = { onOpen(t) }, breite = RASTER_KARTE)
             }
         }
     }

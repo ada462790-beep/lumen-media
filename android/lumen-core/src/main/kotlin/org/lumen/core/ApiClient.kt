@@ -869,6 +869,36 @@ class ApiClient(
 
     fun collection(id: String): Reihe = Reihe.from(getJson("/collections/$id"))
 
+    // ---------------------------------------------------------- Sammlungen
+
+    /**
+     * Die eigenen Sammlungen, aus denen dieses Profil etwas sehen darf —
+     * je mit den ersten Titeln fürs Bild. Ein älterer Server kennt sie
+     * nicht (404): dann eine leere Liste statt eines Fehlers.
+     */
+    fun sammlungen(): List<Sammlung> =
+        try {
+            getJson("/sammlungen").list.map { Sammlung.from(it) }
+        } catch (e: LumenException.Server) {
+            if (e.status == 404) emptyList() else throw e
+        }
+
+    /** Eine Sammlung mit allen Titeln, die dieses Profil sehen darf. */
+    fun sammlung(id: String): Sammlung = Sammlung.from(getJson("/sammlungen/$id"))
+
+    // ---------------------------------------------------------- Bildschirmzeit
+
+    /**
+     * Wie viel Bildschirmzeit dem eigenen Profil heute bleibt. Null, wenn
+     * der Server die Route (noch) nicht kennt.
+     */
+    fun bildschirmzeit(): Bildschirmzeit? =
+        try {
+            Bildschirmzeit.from(getJson("/me/bildschirmzeit"))
+        } catch (e: LumenException.Server) {
+            if (e.status == 404) null else throw e
+        }
+
     // ---------------------------------------------------------- Listen
 
     /**
@@ -1214,6 +1244,16 @@ class ApiClient(
         if (eigenes != null) return bildUrl(eigenes)
         val erster = reihe.items.firstOrNull() ?: return null
         return if (breit) wideUrl(erster) else posterUrl(erster)
+    }
+
+    /**
+     * Das Bild einer Sammlung: ihr eigenes, sonst das Poster des ersten
+     * Titels. Null, wenn es keines gibt.
+     */
+    fun sammlungBildUrl(sammlung: Sammlung): String? {
+        if (sammlung.bild != null) return bildUrl(sammlung.bild)
+        val erster = sammlung.items.firstOrNull() ?: return null
+        return posterUrl(erster)
     }
 
     /** Das Bild hochkant: Poster, sonst ein Standbild aus dem Film. */

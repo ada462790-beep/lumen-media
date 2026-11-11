@@ -117,6 +117,11 @@
     <string name="kern_rolle_vollzugriff">Full Access</string>
     <string name="kern_rolle_kind">Kids Profile</string>
     <string name="kern_rolle_haushalt">Household</string>
+    <string name="kern_bz_schluss">That’s it for today.</string>
+    <string name="kern_bz_heute_noch">%1$d min left today</string>
+    <string name="kern_bz_ohne_grenze">No limit today</string>
+    <string name="kern_bz_gebraucht">%1$d of %2$d min used</string>
+    <string name="kern_bz_fenster">today %1$s to %2$s</string>
     <plurals name="kern_neue_folgen">
         <item quantity="one">New Episode</item>
         <item quantity="other">%1$d New Episodes</item>
@@ -138,7 +143,7 @@
         <item quantity="other">%1$d movies</item>
     </plurals>
     <plurals name="kern_reihen_anzahl">
-        <item quantity="one">%1$d collection</item>
-        <item quantity="other">%1$d collections</item>
+        <item quantity="one">%1$d franchise</item>
+        <item quantity="other">%1$d franchises</item>
     </plurals>
 </resources>

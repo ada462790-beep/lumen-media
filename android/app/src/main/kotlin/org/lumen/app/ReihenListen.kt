@@ -29,7 +29,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.lumen.core.*
 
 /**
@@ -44,14 +46,98 @@ import org.lumen.core.*
 // ---------------------------------------------------------------- Filmreihen
 
 @Composable
-fun ReihenScreen(model: LumenViewModel, onOpen: (Reihe) -> Unit) {
+fun ReihenScreen(
+    model: LumenViewModel,
+    // Eine eigene Sammlung — sie stehen über den Reihen, wenn es welche gibt.
+    onSammlung: (Sammlung) -> Unit = {},
+    onOpen: (Reihe) -> Unit,
+) {
     var reihen by remember { mutableStateOf<List<Reihe>>(emptyList()) }
+    var sammlungen by remember { mutableStateOf<List<Sammlung>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     val error by model.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         reihen = model.fetch { it.collections() } ?: emptyList()
         loading = false
+    }
+    // Beiwerk: ohne Sammlungen (älterer Server) bleibt es bei den Reihen.
+    LaunchedEffect(Unit) {
+        sammlungen = withContext(Dispatchers.IO) { oderNull { model.client.sammlungen() } } ?: emptyList()
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(Lumen.posterWidth),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        if (sammlungen.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "lumen:sammlungen") {
+                Abschnitt(tx(R.string.sammlungen))
+            }
+            items(sammlungen, key = { "sammlung:" + it.id }) { x -> SammlungKarte(model, x) { onSammlung(x) } }
+            item(span = { GridItemSpan(maxLineSpan) }, key = "lumen:reihen") {
+                if (reihen.isNotEmpty()) {
+                    Abschnitt(tx(R.string.filmreihen))
+                }
+            }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            if (reihen.isNotEmpty()) {
+                Text(tx(R.string.reihen_zeile, Texte.n(TxN.REIHEN_ANZAHL, reihen.size)),
+                     color = Lumen.label2, fontSize = 14.sp)
+            }
+        }
+        items(reihen, key = { it.id }) { reihe -> ReiheKarte(model, reihe) { onOpen(reihe) } }
+    }
+    StateOverlay(loading && reihen.isEmpty(), error,
+        reihen.isEmpty() && sammlungen.isEmpty() && !loading,
+        tx(R.string.noch_keine_reihen_lumen_erkennt))
+}
+
+/** Eine eigene Sammlung als Karte: ihr eigenes Bild, sonst das des ersten Titels. */
+@Composable
+fun SammlungKarte(model: LumenViewModel, sammlung: Sammlung, onClick: () -> Unit) {
+    Column(Modifier.width(Lumen.posterWidth).clickableRow(onClick)) {
+        Artwork(
+            model.client.sammlungBildUrl(sammlung), sammlung.name,
+            Modifier.width(Lumen.posterWidth).height(Lumen.posterHeight))
+        Spacer(Modifier.height(7.dp))
+        Text(sammlung.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(sammlung.anzahlText, fontSize = 12.sp, color = Lumen.label2, maxLines = 1)
+    }
+}
+
+/**
+ * Eine eigene Sammlung: Name, Anzahl, Beschreibung, darunter die Titel in
+ * der Reihenfolge, die die Verwaltung gewählt hat. Zusammenstellen geht
+ * nur im Browser.
+ */
+@Composable
+fun SammlungScreen(
+    model: LumenViewModel,
+    sammlungId: String,
+    onBack: () -> Unit,
+    onOpen: (Item) -> Unit,
+) {
+    var sammlung by remember(sammlungId) { mutableStateOf<Sammlung?>(null) }
+    var loading by remember(sammlungId) { mutableStateOf(true) }
+    var reload by remember { mutableStateOf(0) }
+    val error by model.error.collectAsStateWithLifecycle()
+
+    LaunchedEffect(sammlungId, reload) {
+        sammlung = model.fetch { it.sammlung(sammlungId) }
+        loading = false
+    }
+
+    val x = sammlung
+    if (x == null) {
+        Column(Modifier.fillMaxSize()) {
+            ZurueckZeile(onBack)
+            StateOverlay(loading, error, onRetry = { reload++ })
+        }
+        return
     }
 
     LazyVerticalGrid(
@@ -61,15 +147,18 @@ fun ReihenScreen(model: LumenViewModel, onOpen: (Reihe) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            if (reihen.isNotEmpty()) {
-                Text(tx(R.string.reihen_zeile, Texte.n(TxN.REIHEN_ANZAHL, reihen.size)),
-                     color = Lumen.label2, fontSize = 14.sp)
+            Column {
+                ZurueckZeile(onBack)
+                Text(x.name, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(x.anzahlText, color = Lumen.label2, fontSize = 14.sp)
+                x.beschreibung?.let {
+                    Spacer(Modifier.height(10.dp))
+                    Text(it, color = Lumen.label, fontSize = 15.sp, lineHeight = 22.sp)
+                }
             }
         }
-        items(reihen, key = { it.id }) { reihe -> ReiheKarte(model, reihe) { onOpen(reihe) } }
+        items(x.items, key = { it.id }) { titel -> PosterCard(model, titel, onOpen) }
     }
-    StateOverlay(loading && reihen.isEmpty(), error, reihen.isEmpty() && !loading,
-        tx(R.string.noch_keine_reihen_lumen_erkennt))
 }
 
 /** Eine Filmreihe als Karte: ihr eigenes Poster, sonst das des ersten Films. */

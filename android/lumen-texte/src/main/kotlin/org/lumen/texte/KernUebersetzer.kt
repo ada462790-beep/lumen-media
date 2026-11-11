@@ -149,6 +149,11 @@ internal object KernUebersetzer : Uebersetzer {
         Tx.ROLLE_VOLLZUGRIFF -> R.string.kern_rolle_vollzugriff
         Tx.ROLLE_KIND -> R.string.kern_rolle_kind
         Tx.ROLLE_HAUSHALT -> R.string.kern_rolle_haushalt
+        Tx.BZ_SCHLUSS -> R.string.kern_bz_schluss
+        Tx.BZ_HEUTE_NOCH -> R.string.kern_bz_heute_noch
+        Tx.BZ_OHNE_GRENZE -> R.string.kern_bz_ohne_grenze
+        Tx.BZ_GEBRAUCHT -> R.string.kern_bz_gebraucht
+        Tx.BZ_FENSTER -> R.string.kern_bz_fenster
     }
 
     private fun id(k: TxN): Int = when (k) {

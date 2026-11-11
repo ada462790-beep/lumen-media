@@ -16,12 +16,12 @@
     <string name="keine_filme_mit_diesem_genre">No films in this genre.</string>
     <string name="laeuft_auf_x">Playing on ‘%1$s’</string>
     <string name="lizenz">Licence</string>
-    <string name="neue_folgen_deiner_serien_neue">New episodes of your shows, new films in your collections, recent additions — just for you.</string>
+    <string name="neue_folgen_deiner_serien_neue">New episodes of your shows, new films in your franchises, recent additions — just for you.</string>
     <string name="nichts_gefunden_fuer_x">Nothing found for ‘%1$s’.</string>
     <string name="noch_keine_lieblingsfilme_auf_einer">No favourite films yet. Tap the heart on a title page.</string>
     <string name="noch_keine_lieblingsserien_auf_einer">No favourite shows yet. Tap the heart on a title page.</string>
     <string name="noch_keine_listen_leg_eine">No playlists yet. Create one — for your next film night, say.</string>
-    <string name="noch_keine_reihen_lumen_erkennt">No collections yet. Lumen detects them on its own as soon as two films of a collection are there — by title (‘Part 2’, ‘II’) or, with a TMDb key, reliably via TMDb.</string>
+    <string name="noch_keine_reihen_lumen_erkennt">No franchises yet. Lumen detects them on its own as soon as two films of a franchise are there — by title (‘Part 2’, ‘II’) or, with a TMDb key, reliably via TMDb.</string>
     <string name="noch_leer_auf_der_seite">Still empty. Every title page has ‘Add to Playlist’.</string>
     <string name="noch_nichts_da_sobald_der">Nothing here yet. As soon as the owner adds films, they’ll appear here.</string>
     <string name="noch_nichts_heruntergeladen_auf_der">Nothing downloaded yet. The page of a film or episode shows ‘Download’ if your server allows it.</string>

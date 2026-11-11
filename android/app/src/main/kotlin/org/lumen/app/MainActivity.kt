@@ -573,6 +573,8 @@ private enum class Tab(@StringRes private val titelId: Int, val icon: androidx.c
 private sealed interface Ziel {
     data class Titel(val id: String) : Ziel
     data class ReiheOffen(val id: String) : Ziel
+    /** Eine eigene Sammlung, von der Verwaltung zusammengestellt. */
+    data class SammlungOffen(val id: String) : Ziel
     data class ListeOffen(val id: String) : Ziel
     /** Die Suche, und was dahinter liegt: alles mit einer Person, ein Genre. */
     data object Suche : Ziel
@@ -601,6 +603,7 @@ private val ZielStapelSaver = listSaver<List<Ziel>, String>(
             when (it) {
                 is Ziel.Titel -> "titel:" + it.id
                 is Ziel.ReiheOffen -> "reihe:" + it.id
+                is Ziel.SammlungOffen -> "sammlung:" + it.id
                 is Ziel.ListeOffen -> "liste:" + it.id
                 Ziel.Suche -> "suche:"
                 is Ziel.Person -> "person:" + it.name
@@ -619,6 +622,7 @@ private val ZielStapelSaver = listSaver<List<Ziel>, String>(
             when (t.substringBefore(':')) {
                 "titel" -> Ziel.Titel(wert)
                 "reihe" -> Ziel.ReiheOffen(wert)
+                "sammlung" -> Ziel.SammlungOffen(wert)
                 "liste" -> Ziel.ListeOffen(wert)
                 "suche" -> Ziel.Suche
                 "person" -> Ziel.Person(wert)
@@ -746,6 +750,10 @@ private fun LibraryScaffold(model: LumenViewModel) {
                         onPlay = { model.abspielen = Abspielen(it) })
             return
         }
+        is Ziel.SammlungOffen -> {
+            SammlungScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen)
+            return
+        }
         is Ziel.ListeOffen -> {
             ListeScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen,
                         onPlay = { name, eintraege, n ->
@@ -756,7 +764,9 @@ private fun LibraryScaffold(model: LumenViewModel) {
         Ziel.Suche -> {
             SuchScreen(model, onBack = { zurueck() }, onOpen = titelOeffnen,
                        onPerson = { oeffnen(Ziel.Person(it)) },
-                       onGenre = { oeffnen(Ziel.Genre(it)) })
+                       onGenre = { oeffnen(Ziel.Genre(it)) },
+                       onReihe = { oeffnen(Ziel.ReiheOffen(it.id)) },
+                       onSammlung = { oeffnen(Ziel.SammlungOffen(it.id)) })
             return
         }
         is Ziel.Person -> {
@@ -808,7 +818,9 @@ private fun LibraryScaffold(model: LumenViewModel) {
                 Umschalter(tx(R.string.alle_filme), tx(R.string.filmreihen), reihenZeigen) { reihenZeigen = it }
                 Box(Modifier.fillMaxSize()) {
                     if (reihenZeigen) {
-                        ReihenScreen(model) { oeffnen(Ziel.ReiheOffen(it.id)) }
+                        ReihenScreen(model, onSammlung = { oeffnen(Ziel.SammlungOffen(it.id)) }) {
+                            oeffnen(Ziel.ReiheOffen(it.id))
+                        }
                     } else {
                         BrowseScreen(model, "movie", filmRaster, filmWahl,
                                      { sortierungMerken(model, "movie", filmWahl, it); filmWahl = it }, titelOeffnen, suchen)

@@ -34,6 +34,14 @@ sealed interface JsonValue {
 
 class JsonException(message: String) : RuntimeException(message)
 
+/**
+ * Ein Teil der Antwort, der fehlen darf: passt er nicht (Pflichtfeld weg),
+ * null statt eines Fehlers, der die ganze Antwort mitnähme. Fängt nur
+ * [JsonException] — wie [oderNull] nur Fehler des Servers.
+ */
+inline fun <T> oderNullJson(block: () -> T): T? =
+    try { block() } catch (e: JsonException) { null }
+
 object Json {
 
     fun parse(text: String): JsonValue {

@@ -583,6 +583,58 @@ private fun sucheTests() {
         Suchergebnis.from(Json.parse("""{"items":[],"personen":[],"genres":[]}""")).leer)
     wirftFehler("Person ohne Namen") { PersonTreffer.from(Json.parse("""{"anzahl":1}""")) }
 
+    // Filmreihen und eigene Sammlungen in der Suche. Eine Reihe ohne
+    // Kennung fällt weg, statt die Suche scheitern zu lassen.
+    val mitReihen = Suchergebnis.from(Json.parse("""
+        {"items":[],"personen":[],"genres":[],
+         "reihen":[{"id":"col_1","name":"Alien","source":"auto","anzahl":2,"items":[]},{"name":"kaputt"}],
+         "sammlungen":[{"id":"sm_1","name":"Weltraum","sortierung":"hand","aufStart":false,"anzahl":5,
+                        "bild":"/api/v1/art/sm_1/poster","items":[{"id":"it_1","kind":"movie","title":"Alien"}],
+                        "regel":{"genre":"Science-Fiction"}}],
+         "meintest":""}
+    """))
+    gleich("Reihen in der Suche", listOf("col_1"), mitReihen.reihen.map { it.id })
+    gleich("Sammlung in der Suche", "Weltraum", mitReihen.sammlungen.single().name)
+    gleich("Sammlung: Anzahl als Text", "5 Titel", mitReihen.sammlungen.single().anzahlText)
+    pruefe("eine Reihe allein ist ein Treffer", !mitReihen.leer && mitReihen.hatReihenOderSammlungen)
+    gleich("Bild einer Sammlung: ihr eigenes", "http://nas:8097/api/v1/art/sm_1/poster?key=KEY",
+        ApiClient("http://nas:8097", "TOKEN").also { it.medienSchluesselSetzen("KEY") }
+            .sammlungBildUrl(mitReihen.sammlungen.single()))
+    val ohneBild = Sammlung.from(Json.parse("""{"id":"sm_2","name":"Leer","items":[]}"""))
+    gleich("Sammlung ohne Anzahl zählt ihre Titel", 0, ohneBild.anzahl)
+    pruefe("Sammlung ohne Bild und Titel: kein Bild",
+        ApiClient("http://nas:8097", "TOKEN").sammlungBildUrl(ohneBild) == null)
+    pruefe("älterer Server: keine Reihen",
+        !Suchergebnis.from(Json.parse("""{"items":[],"personen":[],"genres":[]}""")).hatReihenOderSammlungen)
+
+    // Vorspann und Abspann je Fassung; neue Quellen lesen sich wie die alten.
+    val fassungen = ItemDetail.from(Json.parse("""
+        {"item":{"id":"ep_1","kind":"episode","title":"X"},"files":[],
+         "intro":{"vonMs":5000,"bisMs":65000,"quelle":"automatisch"},"creditsMs":2400000,
+         "jeDatei":{"f_1":{"intro":{"vonMs":5000,"bisMs":65000,"quelle":"automatisch"},"creditsMs":2400000},
+                    "f_2":{"intro":{"vonMs":7000,"bisMs":70000,"quelle":"folge"},"creditsMs":2500000},
+                    "f_3":{}},
+         "vonHand":"x"}
+    """))
+    gleich("Vorspann der zweiten Fassung", 7000L, fassungen.marken("f_2").intro?.vonMs)
+    gleich("Abspann der zweiten Fassung", 2_500_000L, fassungen.marken("f_2").creditsMs)
+    pruefe("Fassung ohne Marken", fassungen.marken("f_3").intro == null && fassungen.marken("f_3").creditsMs == null)
+    gleich("unbekannte Datei: die Angaben oben", 5000L, fassungen.marken("f_9").intro?.vonMs)
+    gleich("neue Quelle wird gelesen", "folge", fassungen.marken("f_2").intro?.quelle)
+
+    // Bildschirmzeit eines Kinderprofils.
+    val bz = Bildschirmzeit.from(Json.parse("""
+        {"aktiv":true,"erlaubt":true,"genutztMinuten":35,"budgetMinuten":60,"restMinuten":25,"von":"16:00","bis":"19:00"}
+    """))
+    gleich("Bildschirmzeit: Rest", "Heute noch 25 Min.", bz.hauptzeile)
+    gleich("Bildschirmzeit: Zeile darunter", "35 von 60 Min. gebraucht · heute 16:00 bis 19:00", bz.nebenzeile)
+    val schluss = Bildschirmzeit.from(Json.parse("""{"aktiv":true,"erlaubt":false,"genutztMinuten":60,"meldung":"Für heute ist die Zeit um."}"""))
+    gleich("Bildschirmzeit: Satz des Servers", "Für heute ist die Zeit um.", schluss.hauptzeile)
+    val frei = Bildschirmzeit.from(Json.parse("""{"aktiv":true,"erlaubt":true,"genutztMinuten":10}"""))
+    gleich("Bildschirmzeit ohne Grenze", "Heute ohne Grenze", frei.hauptzeile)
+    pruefe("ohne Grenze und Fenster keine Zeile darunter", frei.nebenzeile == null)
+    pruefe("Profil ohne Regel", !Bildschirmzeit.from(Json.parse("""{"aktiv":false}""")).aktiv)
+
     // Der Stand einer Serie auf der Karte — nur die eigenen Folgen.
     val serie = Item.from(Json.parse("""
         {"id":"se1","kind":"series","title":"Nordlicht","gesehen":4,"folgen":10,"progress":40}

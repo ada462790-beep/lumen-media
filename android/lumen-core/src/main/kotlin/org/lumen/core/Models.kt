@@ -454,6 +454,8 @@ data class Chapter(
  * jemand mit Zugang zur Verwaltung für die ganze Serie gesetzt hat.
  */
 data class Vorspann(val vonMs: Long, val bisMs: Long, val quelle: String) {
+    // quelle: kapitel | serie | folge | automatisch — gelesen wird jede,
+    // auch eine, die erst ein neuerer Server kennt.
     val vonSerie: Boolean get() = quelle == "serie"
 
     companion object {
@@ -484,9 +486,20 @@ data class ItemDetail(
     // „Ähnliche Titel": gleiche Reihe, geteilte Besetzung, gleiche Genres —
     // nur bei Filmen und Serien, nur was diese Person sehen darf.
     val similar: List<Item> = emptyList(),
+    // Vorspann und Abspann je Fassung, nach der Kennung ihrer (ersten)
+    // Datei — nur, wenn es mehr als eine gibt. [intro] und [creditsMs]
+    // gelten für die erste vorhandene Datei.
+    val jeDatei: Map<String, VorspannDatei> = emptyMap(),
 ) {
     /** Die Datei, die sich abspielen lässt — fehlende übersprungen. */
     val playable: MediaFile? get() = files.firstOrNull { !it.missing }
+
+    /**
+     * Vorspann und Abspann der Datei, die wirklich läuft: aus [jeDatei],
+     * wenn der Server sie für diese Datei nennt, sonst die Angaben oben.
+     */
+    fun marken(fileId: String): VorspannDatei =
+        jeDatei[fileId] ?: VorspannDatei(intro, creditsMs)
 
     companion object {
         fun from(j: JsonValue?) = ItemDetail(
@@ -500,6 +513,18 @@ data class ItemDetail(
             seriesId = j["seriesId"].text,
             cast = j["cast"].list.map { Besetzung.from(it) },
             similar = j["similar"].list.map { Item.from(it) },
+            jeDatei = (j["jeDatei"] as? JsonValue.Obj)?.fields
+                ?.mapValues { (_, v) -> VorspannDatei.from(v) } ?: emptyMap(),
+        )
+    }
+}
+
+/** Vorspann und Abspann einer bestimmten Datei ([ItemDetail.jeDatei]). */
+data class VorspannDatei(val intro: Vorspann?, val creditsMs: Long?) {
+    companion object {
+        fun from(j: JsonValue?) = VorspannDatei(
+            intro = j["intro"]?.let { Vorspann.from(it) },
+            creditsMs = j["creditsMs"].long?.takeIf { it > 0 },
         )
     }
 }
@@ -667,8 +692,17 @@ data class Suchergebnis(
     val personen: List<PersonTreffer>,
     val genres: List<String>,
     val deutung: Deutung?,
+    // Filmreihen und eigene Sammlungen, deren Name passt — „Harry Potter"
+    // findet die Reihe, nicht nur die Filme. Fehlen bei älteren Servern.
+    val reihen: List<Reihe> = emptyList(),
+    val sammlungen: List<Sammlung> = emptyList(),
 ) {
-    val leer: Boolean get() = items.isEmpty() && personen.isEmpty() && genres.isEmpty()
+    val leer: Boolean
+        get() = items.isEmpty() && personen.isEmpty() && genres.isEmpty() &&
+            reihen.isEmpty() && sammlungen.isEmpty()
+
+    /** Gibt es Filmreihen oder Sammlungen für die Zeile ganz oben? */
+    val hatReihenOderSammlungen: Boolean get() = reihen.isNotEmpty() || sammlungen.isNotEmpty()
 
     /** „12 Treffer · mit Tom Hanks · 1990–1999" — die Zeile über den Titeln. */
     val trefferZeile: String
@@ -684,6 +718,10 @@ data class Suchergebnis(
             personen = j["personen"].list.map { PersonTreffer.from(it) },
             genres = j["genres"].strings(),
             deutung = j["deutung"]?.let { Deutung.from(it) },
+            // Beiwerk: eine Reihe ohne Kennung soll nicht die ganze Suche
+            // scheitern lassen — sie fällt weg.
+            reihen = j["reihen"].list.mapNotNull { r -> oderNullJson { Reihe.from(r) } },
+            sammlungen = j["sammlungen"].list.mapNotNull { x -> oderNullJson { Sammlung.from(x) } },
         )
     }
 }
@@ -744,6 +782,92 @@ data class Reihe(
             items = j["items"].list.map { Item.from(it) },
             poster = j["poster"].text?.takeIf { it.isNotBlank() },
             backdrop = j["backdrop"].text?.takeIf { it.isNotBlank() },
+        )
+    }
+}
+
+// ---------------------------------------------------------------- Sammlungen
+
+/**
+ * Eine eigene Sammlung (GET /sammlungen, /sammlungen/{id}): von der
+ * Verwaltung zusammengestellt — „Weihnachtsfilme", „Marvel in
+ * Reihenfolge". Jedes Profil sieht darin nur, was es ohnehin sehen darf.
+ *
+ * In der Übersicht und in der Suche stehen nur die ersten Titel in
+ * [items] (fürs Bild), [anzahl] zählt alle. [bild] ist ein eigenes Bild als
+ * Pfad beim Server; fehlt es, steht das Poster des ersten Titels da.
+ */
+data class Sammlung(
+    val id: String,
+    val name: String,
+    val beschreibung: String?,
+    val bild: String?,
+    val anzahl: Int,
+    val items: List<Item>,
+) {
+    /** „1 Titel" oder „5 Titel" — Filme und Serien gemischt. */
+    val anzahlText: String get() = Texte.n(TxN.TITEL_ANZAHL, anzahl)
+
+    companion object {
+        fun from(j: JsonValue?): Sammlung {
+            val items = j["items"].list.map { Item.from(it) }
+            return Sammlung(
+                id = j.requiredText("id"),
+                name = j.requiredText("name"),
+                beschreibung = j["beschreibung"].text?.takeIf { it.isNotBlank() },
+                bild = j["bild"].text?.takeIf { it.isNotBlank() },
+                anzahl = j["anzahl"].int ?: items.size,
+                items = items,
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Bildschirmzeit
+
+/**
+ * Wie es um die Bildschirmzeit des eigenen Profils steht
+ * (GET /me/bildschirmzeit). [aktiv] nur bei Kinderprofilen mit Regel; die
+ * Grenze zieht der Server, die Apps zeigen nur, wie viel bleibt.
+ */
+data class Bildschirmzeit(
+    val aktiv: Boolean,
+    val erlaubt: Boolean,
+    val genutztMinuten: Int,
+    val budgetMinuten: Int?,
+    val restMinuten: Int?,
+    val von: String?,
+    val bis: String?,
+    val meldung: String?,
+) {
+    /**
+     * „Heute noch 25 Min.", „Heute ohne Grenze" oder der Satz des Servers,
+     * wenn für heute Schluss ist — wie im Browser.
+     */
+    val hauptzeile: String
+        get() = when {
+            !erlaubt -> meldung ?: Texte.t(Tx.BZ_SCHLUSS)
+            restMinuten != null -> Texte.t(Tx.BZ_HEUTE_NOCH, restMinuten)
+            else -> Texte.t(Tx.BZ_OHNE_GRENZE)
+        }
+
+    /** „35 von 60 Min. gebraucht · heute 16:00 bis 19:00" — oder null. */
+    val nebenzeile: String?
+        get() = buildList {
+            budgetMinuten?.let { add(Texte.t(Tx.BZ_GEBRAUCHT, genutztMinuten, it)) }
+            if (von != null && bis != null) add(Texte.t(Tx.BZ_FENSTER, von, bis))
+        }.joinToString(" · ").ifEmpty { null }
+
+    companion object {
+        fun from(j: JsonValue?) = Bildschirmzeit(
+            aktiv = j["aktiv"].bool ?: false,
+            erlaubt = j["erlaubt"].bool ?: false,
+            genutztMinuten = j["genutztMinuten"].int ?: 0,
+            budgetMinuten = j["budgetMinuten"].int?.takeIf { it > 0 },
+            restMinuten = j["restMinuten"].int,
+            von = j["von"].text?.takeIf { it.isNotBlank() },
+            bis = j["bis"].text?.takeIf { it.isNotBlank() },
+            meldung = j["meldung"].text?.takeIf { it.isNotBlank() },
         )
     }
 }

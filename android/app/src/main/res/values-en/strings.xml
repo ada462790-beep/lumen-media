@@ -101,7 +101,10 @@
     <string name="ffmpeg_fehlt_auf_dem_server">\n\nFFmpeg is missing on the server, so it can’t convert videos.</string>
     <string name="filme">Movies</string>
     <string name="filme_ansehen">Browse Movies</string>
-    <string name="filmreihen">Collections</string>
+    <string name="filmreihen">Franchises</string>
+    <string name="sammlungen">Collections</string>
+    <string name="filmreihen_und_sammlungen">Franchises and Collections</string>
+    <string name="bildschirmzeit">Screen Time</string>
     <string name="fingerabdruck">Fingerprint</string>
     <string name="folge_x">Episode %1$s</string>
     <string name="folgen">EPISODES</string>
@@ -160,7 +163,7 @@
     <string name="nach_unten">Move Down</string>
     <string name="naechste_folge">Next Episode</string>
     <string name="name">Name</string>
-    <string name="neue_folgen_deiner_serien_neue">New episodes of your shows, new movies in your collections, recent additions — just for you.</string>
+    <string name="neue_folgen_deiner_serien_neue">New episodes of your shows, new movies in your franchises, recent additions — just for you.</string>
     <string name="neue_liste">New Playlist…</string>
     <string name="neue_liste_2">New Playlist</string>
     <string name="neuen_pin_wiederholen">Repeat new PIN</string>
@@ -178,7 +181,7 @@
     <string name="noch_keine_lieblingsfilme_auf_einer">No favorite movies yet. Tap the heart on a title page.</string>
     <string name="noch_keine_lieblingsserien_auf_einer">No favorite shows yet. Tap the heart on a title page.</string>
     <string name="noch_keine_listen_leg_eine">No playlists yet. Create one — for your next movie night, say.</string>
-    <string name="noch_keine_reihen_lumen_erkennt">No collections yet. Lumen detects them on its own as soon as two movies of a collection are there — by title (“Part 2”, “II”) or, with a TMDb key, reliably via TMDb.</string>
+    <string name="noch_keine_reihen_lumen_erkennt">No franchises yet. Lumen detects them on its own as soon as two movies of a franchise are there — by title (“Part 2”, “II”) or, with a TMDb key, reliably via TMDb.</string>
     <string name="noch_keine_wuensche">No requests yet.</string>
     <string name="noch_leer_auf_der_seite">Still empty. Every title page has “Add to Playlist”.</string>
     <string name="noch_nichts_da_lege_im">Nothing here yet. Create a library in the browser.</string>

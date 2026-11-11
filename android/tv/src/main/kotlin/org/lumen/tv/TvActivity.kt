@@ -796,6 +796,10 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
             TvReihe(client, oben.id, onOpen = titelOeffnen, onPlay = { laeuft = TvAbspielen(it) })
             return
         }
+        is TvSeite.SammlungOffen -> {
+            TvSammlung(client, oben.id, onOpen = titelOeffnen)
+            return
+        }
         is TvSeite.ListeOffen -> {
             TvListe(client, oben.id, listenStand,
                 onPlay = { name, eintraege, n ->
@@ -839,14 +843,18 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
                     TvBereich.SUCHE -> TvSuche(client, suche, { suche = it },
                         onOpen = titelOeffnen,
                         onPerson = { oeffnen(TvSeite.Person(it)) },
-                        onGenre = { oeffnen(TvSeite.Genre(it)) })
+                        onGenre = { oeffnen(TvSeite.Genre(it)) },
+                        onReihe = { oeffnen(TvSeite.ReiheOffen(it.id)) },
+                        onSammlung = { oeffnen(TvSeite.SammlungOffen(it.id)) })
                     TvBereich.MERKLISTE -> TvMerkliste(client, merklisteGesehen, { merklisteGesehen = it },
                         onOpen = titelOeffnen) {
                         bereich = TvBereich.FILME
                     }
                     TvBereich.FAVORITEN -> TvFavoriten(client, favoritenSerien,
                         onSerien = { favoritenSerien = it }, onOpen = titelOeffnen)
-                    TvBereich.REIHEN -> TvFilmreihen(client) { oeffnen(TvSeite.ReiheOffen(it.id)) }
+                    TvBereich.REIHEN -> TvFilmreihen(client, onSammlung = { oeffnen(TvSeite.SammlungOffen(it.id)) }) {
+                        oeffnen(TvSeite.ReiheOffen(it.id))
+                    }
                     TvBereich.LISTEN -> TvListen(client, listenStand,
                         onOpen = { oeffnen(TvSeite.ListeOffen(it)) },
                         onGeaendert = { listenStand++ })

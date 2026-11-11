@@ -232,6 +232,9 @@ private fun Wiedergabe(
 
     // Vorspann und Abspann.
     var intro by remember { mutableStateOf<Vorspann?>(null) }
+    // Wo der Abspann der laufenden Fassung beginnt — aus jeDatei, sonst
+    // die Angabe für die erste Datei.
+    var abspannMs by remember { mutableStateOf<Long?>(null) }
     var introUebersprungen by remember { mutableStateOf(false) }
     var abspannGemeldet by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(0L) }
@@ -444,7 +447,10 @@ private fun Wiedergabe(
         teil = stelle.teil
         vorher = stelle.vorher
         // Der Vorspann liegt im ersten Teil; in Teil 2 wäre die Marke falsch.
-        intro = if (stelle.teil == 0) d.intro else null
+        // Es gelten die Marken der Fassung, die wirklich läuft (jeDatei).
+        val marken = d.marken(erste.id)
+        intro = if (stelle.teil == 0) marken.intro else null
+        abspannMs = marken.creditsMs
         umgewandelt = !pl.direct
         wahl = Spuren.vorbelegen(f.tracks, model.me?.prefs ?: emptyMap())
 
@@ -619,7 +625,7 @@ private fun Wiedergabe(
                 vorspannUeberspringen()
             }
             // Der Abspann liegt im letzten Teil — vorher kommt kein „Als Nächstes".
-            if (!abspannGemeldet && letzterTeil() && Marken.imAbspann(detail?.creditsMs, dauerMs, pos)) {
+            if (!abspannGemeldet && letzterTeil() && Marken.imAbspann(abspannMs, dauerMs, pos)) {
                 abspannGemeldet = true
                 imAbspann(item)
             }

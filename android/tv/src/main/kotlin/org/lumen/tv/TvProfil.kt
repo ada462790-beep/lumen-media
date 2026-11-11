@@ -95,6 +95,14 @@ internal fun TvProfil(
         }
     }
 
+    // Wie viel Bildschirmzeit heute bleibt — nur Kinderprofile haben eine
+    // Regel. Beiwerk: ohne Antwort bleibt der Abschnitt weg.
+    var bildschirmzeit by remember { mutableStateOf<Bildschirmzeit?>(null) }
+    LaunchedEffect(a.id, a.isKid) {
+        bildschirmzeit = if (!a.isKid) null
+            else withContext(Dispatchers.IO) { oderNull { client.bildschirmzeit() } }
+    }
+
     fun wiedergabeBeenden(id: String) {
         scope.launch {
             try {
@@ -132,6 +140,11 @@ internal fun TvProfil(
                 TvButton(tx(R.string.server_wechseln)) { onServerWechseln() }
             }
             hinweis?.let { Text(it, color = Tv.bad, fontSize = 17.sp, modifier = Modifier.padding(bottom = 12.dp)) }
+        }
+
+        bildschirmzeit?.takeIf { it.aktiv }?.let { bz ->
+            item { TvGruppe(tx(R.string.bildschirmzeit)) }
+            item { TvEinstellung(bz.hauptzeile, wert = bz.nebenzeile) }
         }
 
         // Was nicht oben in der Navigation steht, liegt hier.

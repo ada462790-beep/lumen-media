@@ -91,6 +91,8 @@ fun SuchScreen(
     onOpen: (Item) -> Unit,
     onPerson: (String) -> Unit,
     onGenre: (String) -> Unit,
+    onReihe: (Reihe) -> Unit = {},
+    onSammlung: (Sammlung) -> Unit = {},
 ) {
     var eingabe by remember { mutableStateOf("") }
     var ergebnis by remember { mutableStateOf<Suchergebnis?>(null) }
@@ -161,7 +163,7 @@ fun SuchScreen(
                     color = Lumen.label2, textAlign = TextAlign.Center)
             }
             e == null -> StateOverlay(sucht, error)
-            else -> Suchergebnisse(model, q, e, onOpen, onPerson, onGenre)
+            else -> Suchergebnisse(model, q, e, onOpen, onPerson, onGenre, onReihe, onSammlung)
         }
     }
 }
@@ -174,6 +176,8 @@ private fun Suchergebnisse(
     onOpen: (Item) -> Unit,
     onPerson: (String) -> Unit,
     onGenre: (String) -> Unit,
+    onReihe: (Reihe) -> Unit,
+    onSammlung: (Sammlung) -> Unit,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(Lumen.posterWidth),
@@ -181,6 +185,20 @@ private fun Suchergebnisse(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        // Filmreihen und Sammlungen, deren Name passt — „Harry Potter"
+        // findet die Reihe, nicht nur die einzelnen Filme. Wie im Browser.
+        if (e.hatReihenOderSammlungen) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Text(tx(R.string.filmreihen_und_sammlungen), fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                         modifier = Modifier.padding(bottom = 10.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        items(e.reihen, key = { "reihe:" + it.id }) { r -> ReiheKarte(model, r) { onReihe(r) } }
+                        items(e.sammlungen, key = { "sammlung:" + it.id }) { x -> SammlungKarte(model, x) { onSammlung(x) } }
+                    }
+                }
+            }
+        }
         if (e.personen.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column {
@@ -209,7 +227,7 @@ private fun Suchergebnisse(
                 Text(e.trefferZeile, color = Lumen.label2, fontSize = 14.sp)
             }
             items(e.items, key = { it.id }) { item -> PosterCard(model, item, onOpen) }
-        } else if (e.personen.isNotEmpty() || e.genres.isNotEmpty()) {
+        } else if (!e.leer) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 val d = e.deutung
                 Text(
