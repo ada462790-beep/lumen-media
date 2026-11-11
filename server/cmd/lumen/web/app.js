@@ -1384,7 +1384,7 @@ function viewWatchlist() {
 function viewSearch() {
   const d = S.data || {};
   const items = d.items || [], personen = d.personen || [], genres = d.genres || [];
-  const reihen = d.reihen || [], sammlungen = d.sammlungen || [];
+  const reihen = d.reihen || [], sammlungen = d.sammlungen || [], folgen = d.folgen || [];
   const q = S.query.trim();
   const de = d.deutung || {};
   const deutung = [de.person ? tr('mit {person}', { person: de.person }) : '', de.genre || '',
@@ -1406,6 +1406,10 @@ function viewSearch() {
   const reihenHtml = reihen.length || sammlungen.length ? `<section style="margin-bottom:26px">
       <div class="section-h" style="padding-left:0">${tr('Filmreihen und Sammlungen')}</div>
       <div class="rail">${reihen.map(reiheKarte).join('')}${sammlungen.map(sammlungKarte).join('')}</div></section>` : '';
+  // Folgen, deren Titel passt — als breite Karten, Klick spielt ab.
+  const folgenHtml = folgen.length ? `<section style="margin-top:30px">
+      <div class="section-h" style="padding-left:0">${tr('Folgen')}</div>
+      <div class="rail">${folgen.map(wideCard).join('')}</div></section>` : '';
   const genresHtml = genres.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px">${genres.map(g =>
       `<button class="tab-pill" style="background:var(--fill)" data-genre="${esc(g)}">${esc(g)}</button>`).join('')}</div>` : '';
 
@@ -1424,7 +1428,8 @@ function viewSearch() {
       ${!q ? leer({ symbol: I.search, titel: tr('Wonach suchst du?'), text: tr('Titel, Schauspieler, Genre oder Jahr — auch „Komödie 2019“, „Filme mit Tom Hanks“ oder „Thriller 80er“.') })
         : `${reihenHtml}${personenHtml}${genresHtml}${meintest}
            ${items.length ? `<div class="t-sub c-2" style="margin-bottom:18px">${tr('{n} Treffer', { n: items.length })}${gedeutet ? ' · ' + esc(deutung) : ''}</div>
-            <div class="grid">${items.map(posterCard).join('')}</div>`
+            <div class="grid">${items.map(posterCard).join('')}</div>${folgenHtml}`
+           : folgen.length ? folgenHtml
            : personen.length || genres.length || reihen.length || sammlungen.length ? `<p class="hint">${gedeutet ? tr('Kein Titel passt genau — gesucht wurde {deutung}.', { deutung: esc(deutung) }) : tr('Kein Titel passt genau — aber die Personen und Genres oben.')}</p>`
            : leer({ symbol: I.search, titel: tr('Keine Treffer für „{q}“', { q }),
                text: tr('Prüf die Schreibweise oder versuch es mit einem anderen Wort.'),
