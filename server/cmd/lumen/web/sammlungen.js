@@ -269,7 +269,7 @@ export async function zuSammlung(itemId, titel) {
         ${liste.length ? liste.map(s => `<button type="button" class="wahl-zeile" data-sam-wahl="${escH(s.id)}" aria-pressed="${s.enthaelt}">
             <span class="haken${s.enthaelt ? ' haken--an' : ''}" aria-hidden="true">${s.enthaelt ? U.svg(U.I.check, 13, 2.8) : ''}</span>
             <span style="flex:1">${escH(s.name)}</span>
-            <span class="t-caption c-2">${titelAnzahl(s.vonHand)}${s.regel ? ' · ' + tr('mit Regel') : ''}</span></button>`).join('')
+            <span class="t-caption c-2">${s.regel && !s.vonHand ? tr('mit Regel') : titelAnzahl(s.vonHand) + (s.regel ? ' · ' + tr('mit Regel') : '')}</span></button>`).join('')
           : `<div class="wahl-leer">${tr('Noch keine Sammlung. Leg unten eine an.')}</div>`}
       </div>
       <form class="ff" style="margin-top:14px" data-sam-neuform autocomplete="off">
