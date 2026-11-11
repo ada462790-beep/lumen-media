@@ -130,6 +130,9 @@ func (r *Resolver) TMDbKennungZu(ctx context.Context, kind string, e Eingabe) (s
 		}
 		filme, serien, err := r.tmdb.FindExtern(ctx, e.ID, quelle)
 		if err != nil {
+			if strings.Contains(err.Error(), "nicht gefunden") {
+				return "", ErrKennungUnbekannt
+			}
 			return "", err
 		}
 		ids := filme

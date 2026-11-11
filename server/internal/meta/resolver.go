@@ -673,6 +673,18 @@ func (r *Resolver) Kandidaten(ctx context.Context, kind, suche string, jahr int)
 // von keinem Durchlauf mehr umgehängt. Bei einer Serie werden die Folgen
 // danach neu geholt — sie hängen ja an der Kennung der Serie.
 func (r *Resolver) Zuweisen(ctx context.Context, it *store.Item, sourceID string) error {
+	return r.zuweisen(ctx, it, sourceID, true)
+}
+
+// ZuweisenOhneFolgen weist zu wie Zuweisen, holt bei einer Serie die
+// Folgen aber nicht gleich: Sie stehen danach auf „ausstehend" und kommen
+// mit dem nächsten Durchgang (für viele Titel auf einmal, etwa beim
+// Übernehmen der Zuordnungen aus Emby).
+func (r *Resolver) ZuweisenOhneFolgen(ctx context.Context, it *store.Item, sourceID string) error {
+	return r.zuweisen(ctx, it, sourceID, false)
+}
+
+func (r *Resolver) zuweisen(ctx context.Context, it *store.Item, sourceID string, folgenGleich bool) error {
 	if !r.Ready() {
 		return fmt.Errorf("es ist keine Metadaten-Quelle eingerichtet")
 	}
@@ -739,6 +751,9 @@ func (r *Resolver) Zuweisen(ctx context.Context, it *store.Item, sourceID string
 		}
 		if err := r.saveArtwork(ctx, it.ID, gewaehlt); err != nil {
 			return err
+		}
+		if !folgenGleich {
+			return nil
 		}
 		return r.titelNachholen(ctx, it.ID)
 	}

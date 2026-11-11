@@ -293,5 +293,10 @@
   "Die Regel für die Bildschirmzeit liess sich nicht lesen. Bitte neu speichern.": "The screen time rule couldn’t be read. Please save it again.",
   "Mit einer Tagesgrenze für die Bildschirmzeit lässt sich nichts herunterladen — was so läuft, könnte Lumen nicht zählen.": "Downloads aren’t available with a daily screen time limit — Lumen couldn’t count what plays that way.",
   "der abspann beginnt irgendwo in der folge": "the end credits have to start somewhere within the episode",
-  "den abspann setzt man an einer folge, „kein abspann“ auch an der serie": "end credits are set on an episode; “no end credits” can also be set on the series"
+  "den abspann setzt man an einer folge, „kein abspann“ auch an der serie": "end credits are set on an episode; “no end credits” can also be set on the series",
+  "Das ist ein Film-Link – hier wird eine Serie gesucht.": "That’s a movie link – a series is being matched here.",
+  "Das ist ein Serien-Link – hier wird ein Film gesucht.": "That’s a series link – a movie is being matched here.",
+  "Dieser TheTVDB-Link nennt keine Nummer. Auf der Seite der Serie bei TheTVDB steht sie unter „TheTVDB.com Series ID“ – diese Zahl hier einfügen (oder tvdb:Nummer).": "This TheTVDB link has no number. On the series page at TheTVDB it’s listed as “TheTVDB.com Series ID” – paste that number here (or tvdb:number).",
+  "Zu dieser Kennung kennt TMDb keinen passenden Eintrag. Stimmt die Nummer, und ist es die richtige Art (Film oder Serie)?": "TMDb has no matching entry for this ID. Is the number right, and is it the right kind (movie or series)?",
+  "Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.": "Only people who manage the library can import matches."
 }

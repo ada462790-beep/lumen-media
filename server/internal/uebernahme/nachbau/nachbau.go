@@ -38,6 +38,9 @@ type Server struct {
 	Titel []Titel
 	// Serien: alle Serien der Mediathek.
 	Serien []Titel
+	// Alle: alle Filme und Serien der Mediathek (ohne Filter abgefragt,
+	// für das Übernehmen der Zuordnungen). nil: wie Titel.
+	Alle []Titel
 
 	mu          sync.Mutex
 	Token       string
@@ -140,6 +143,9 @@ func (s *Server) titelListe(w http.ResponseWriter, r *http.Request) {
 	quelle := s.Titel
 	if q.Get("IncludeItemTypes") == "Series" && q.Get("Filters") == "" {
 		quelle = s.Serien
+	}
+	if q.Get("Filters") == "" && typen["Movie"] && s.Alle != nil {
+		quelle = s.Alle
 	}
 	var passend []Titel
 	for _, t := range quelle {

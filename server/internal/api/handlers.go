@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"lumen/internal/meta"
+	"lumen/internal/scan"
 	"lumen/internal/sprache"
 	"lumen/internal/store"
 	"lumen/internal/stream"
@@ -1557,20 +1559,37 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	unmatched, err := s.st.UnmatchedItems(r.Context(), 100)
+	unmatched, err := s.st.UnmatchedItems(r.Context(), 500)
 	if err != nil {
 		failErr(w, err)
 		return
 	}
+	// Noch nicht geprüft (oder beim letzten Mal kein Netz): Filme und
+	// Serien, die auf die Zuordnung warten.
+	offen, err := s.st.OffeneZuordnungen(r.Context(), 700)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	ausstehend := make([]store.Item, 0)
+	for _, it := range offen {
+		if it.MatchState == "pending" && len(ausstehend) < 200 {
+			ausstehend = append(ausstehend, it)
+		}
+	}
 	// Zu jedem nicht erkannten Titel der Pfad einer Datei: Ordner und
-	// Dateiname sagen oft schon, was es ist.
+	// Dateiname sagen oft schon, was es ist. Dazu, warum Lumen ihn nicht
+	// zuordnen konnte und wonach gesucht wurde (Titel und Jahr sind bei
+	// einem nicht erkannten Titel noch die aus dem Dateinamen).
 	type mitPfad struct {
 		store.Item
-		Pfad string `json:"pfad,omitempty"`
+		Pfad  string      `json:"pfad,omitempty"`
+		Grund *meta.Grund `json:"grund,omitempty"`
 	}
 	// Ein auf einzelne Mediatheken beschränkter Mitverwalter sieht nur
 	// deren Titel — und deren Pfade.
-	if darf := s.verwalteteMediatheken(r); darf != nil {
+	darf := s.verwalteteMediatheken(r)
+	if darf != nil {
 		inDarf := func(itemID string) bool {
 			it, err := s.st.Item(r.Context(), itemID)
 			return err == nil && darf[it.LibraryID]
@@ -1596,13 +1615,60 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		unmatched = u
+		a := ausstehend[:0]
+		for _, it := range ausstehend {
+			if darf[it.LibraryID] {
+				a = append(a, it)
+			}
+		}
+		ausstehend = a
 	}
-	ohne := make([]mitPfad, 0, len(unmatched))
-	for _, it := range unmatched {
-		ohne = append(ohne, mitPfad{Item: it, Pfad: s.st.ErsterPfad(r.Context(), it.ID)})
+	anreichern := func(liste []store.Item) []mitPfad {
+		out := make([]mitPfad, 0, len(liste))
+		for _, it := range liste {
+			x := mitPfad{Item: it, Pfad: s.st.ErsterPfad(r.Context(), it.ID)}
+			if g, ok := meta.GrundZu(it.ID); ok {
+				x.Grund = &g
+			}
+			out = append(out, x)
+		}
+		return out
 	}
+	// Was der letzte Durchlauf je Bibliothek mit Absicht ausgelassen hat.
+	type auslassBib struct {
+		LibraryID string            `json:"libraryId"`
+		Name      string            `json:"name"`
+		Liste     []scan.Auslassung `json:"liste"`
+	}
+	ausgelassen := []auslassBib{}
+	if libs, err := s.st.Libraries(r.Context()); err == nil {
+		for _, l := range libs {
+			if darf != nil && !darf[l.ID] {
+				continue
+			}
+			if liste := s.scanner.Ausgelassen(l.ID); len(liste) > 0 {
+				ausgelassen = append(ausgelassen, auslassBib{l.ID, l.Name, liste})
+			}
+		}
+	}
+	nUnmatched, nPending := s.st.OffeneZuordnungenZahl(r.Context())
 	ok(w, map[string]any{"duplicates": dups, "missing": missing,
-		"unmatched": ohne, "pending": s.st.PendingCount(r.Context())})
+		"unmatched": anreichern(unmatched), "ausstehend": anreichern(ausstehend),
+		"ausgelassen": ausgelassen,
+		// Gesamtzahlen (die Listen sind begrenzt). Für einen
+		// beschränkten Mitverwalter zählen nur die eigenen.
+		"offen": map[string]int{"unmatched": zahlOder(darf, nUnmatched, len(unmatched)),
+			"pending": zahlOder(darf, nPending, len(ausstehend))},
+		"pending": s.st.PendingCount(r.Context())})
+}
+
+// zahlOder: die Gesamtzahl für den, der alles sieht, sonst die Länge der
+// eigenen (gefilterten) Liste.
+func zahlOder(darf map[string]bool, gesamt, eigen int) int {
+	if darf == nil {
+		return gesamt
+	}
+	return eigen
 }
 
 func (s *Server) adminAccounts(w http.ResponseWriter, r *http.Request) {

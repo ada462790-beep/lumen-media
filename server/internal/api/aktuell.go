@@ -8,9 +8,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
+	"lumen/internal/meta"
 	"lumen/internal/store"
 )
 
@@ -101,7 +103,9 @@ func (s *Server) adminTitelSuchen(w http.ResponseWriter, r *http.Request) {
 	jahr := qInt(r, "year", 0)
 	cands, err := s.meta.Kandidaten(r.Context(), it.Kind, suche, jahr)
 	if err != nil {
-		failErr(w, err)
+		if !kennungFehler(w, err) {
+			failErr(w, err)
+		}
 		return
 	}
 	type treffer struct {
@@ -155,4 +159,25 @@ func (s *Server) adminTitelZuweisen(w http.ResponseWriter, r *http.Request) {
 		neu = &store.Item{}
 	}
 	ok(w, neu)
+}
+
+// kennungFehler beantwortet die Fehler beim Zuweisen über eine Kennung
+// oder einen Link mit einem Satz, der sagt, was zu tun ist. false: kein
+// solcher Fehler.
+func kennungFehler(w http.ResponseWriter, err error) bool {
+	switch {
+	case errors.Is(err, meta.ErrTVDbOhneNummer):
+		failCode(w, http.StatusBadRequest, "tvdb_ohne_nummer",
+			"Dieser TheTVDB-Link nennt keine Nummer. Auf der Seite der Serie bei TheTVDB steht sie unter „TheTVDB.com Series ID“ – diese Zahl hier einfügen (oder tvdb:Nummer).")
+	case errors.Is(err, meta.ErrFilmLinkBeiSerie):
+		failCode(w, http.StatusBadRequest, "falsche_art", "Das ist ein Film-Link – hier wird eine Serie gesucht.")
+	case errors.Is(err, meta.ErrSerienLinkBeiFilm):
+		failCode(w, http.StatusBadRequest, "falsche_art", "Das ist ein Serien-Link – hier wird ein Film gesucht.")
+	case errors.Is(err, meta.ErrKennungUnbekannt):
+		failCode(w, http.StatusNotFound, "kennung_unbekannt",
+			"Zu dieser Kennung kennt TMDb keinen passenden Eintrag. Stimmt die Nummer, und ist es die richtige Art (Film oder Serie)?")
+	default:
+		return false
+	}
+	return true
 }

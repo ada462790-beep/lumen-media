@@ -524,3 +524,13 @@ func (s *Server) Stand(ctx context.Context, fertig func(int)) (titel []Eintrag, 
 	}
 	return titel, serien, nil
 }
+
+// FilmeUndSerien holt alle Filme und Serien, die dieser Benutzer sieht —
+// mit Pfad, Grösse und Kennungen, für das Übernehmen der Zuordnungen
+// (kennungen.go). Den Stand des Benutzers braucht es dafür nicht.
+func (s *Server) FilmeUndSerien(ctx context.Context, fertig func(int)) ([]Eintrag, error) {
+	if s.token == "" {
+		return nil, ErrAnmeldung
+	}
+	return s.titelHolen(ctx, "Movie,Series", "", fertig)
+}
