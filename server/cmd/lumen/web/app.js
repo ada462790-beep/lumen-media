@@ -24,6 +24,7 @@ import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBe
   einstellungenUmzug, metadatenUntertitel, playerUntertitelEintrag, utStand, utStandLaden,
   sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter } from './funktionen.js';
 // Bildschirmzeit der Kinderprofile (durchgesetzt vom Server).
+import { grenzenBearbeiten } from './konto.js';
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
@@ -4620,6 +4621,7 @@ function viewAccounts() {
           · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
+      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
       ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
       ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
@@ -4848,6 +4850,11 @@ app.addEventListener('click', async e => {
       if (war && S.me.account.lockKind !== 'none') return go('admin');
       return render();
     }
+    return;
+  }
+  if ((n = hit('data-grenzen'))) {
+    const a = (S.data?.accounts || []).find(x => x.id === n.dataset.grenzen);
+    if (a) grenzenBearbeiten(a, S.data?.libraries || [], () => { if (S.view === 'accounts') load(); });
     return;
   }
   if ((n = hit('data-bildschirmzeit'))) {

@@ -446,8 +446,8 @@ export const api = {
   adminBildschirmzeitGeschenk(id, minuten) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}/bildschirmzeit/geschenk`, { method: 'POST', body: { minuten } });
   },
-  adminSetLimits(id, limits, libraries) {
-    return this.call(`/admin/accounts/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: { limits, libraries } });
+  adminSetLimits(id, limits, libraries, kinderprofil) {
+    return this.call(`/admin/accounts/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: { limits, libraries, kinderprofil } });
   },
   /* zusatz: { kinderprofil: true, altersgrenze: 0|6|12|16 } für ein Kind. */
   adminInvite(libraries, limits, days = 7, zusatz = {}) {

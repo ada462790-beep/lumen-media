@@ -1308,5 +1308,8 @@
  "{n} schon richtig": "{n} already right",
  "Öffnen": "Open",
  "Übernehme Zuordnungen … {fertig} von {gesamt}": "Importing matches … {fertig} of {gesamt}",
- "Filmreihen und Sammlungen": "Franchises and Collections"
+ "Filmreihen und Sammlungen": "Franchises and Collections",
+ "Mindestens eine Bibliothek – sonst sieht {name} nichts.": "At least one library – otherwise {name} sees nothing.",
+ "Was {name} darf": "What {name} can do",
+ "{name} gehört zur Gruppe „{gruppe}“. Solange gelten deren Bibliotheken und Grenzen; was du hier einstellst, gilt erst ohne Gruppe.": "{name} belongs to the group “{gruppe}”. While that’s the case, its libraries and limits apply; what you set here only applies without a group."
 }
