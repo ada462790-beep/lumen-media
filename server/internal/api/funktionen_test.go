@@ -698,7 +698,7 @@ func TestUntertitelSuchenUndHolen(t *testing.T) {
 		t.Fatal("vorhandene Untertitel überschrieben")
 	}
 	for _, p := range []string{neu, filepath.Dir(neu)} {
-		if st, _ := os.Stat(p); st.ModTime().Year() != 2000 {
+		if st, _ := os.Stat(p); st.ModTime().UTC().Year() != 2000 {
 			t.Fatalf("Zeitstempel verrät das Holen: %s %v", p, st.ModTime())
 		}
 	}

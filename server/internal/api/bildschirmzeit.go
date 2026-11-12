@@ -499,7 +499,7 @@ func (s *Server) meineBildschirmzeit(w http.ResponseWriter, r *http.Request) {
 		out["von"], out["bis"] = heute.Von, heute.Bis
 	}
 	if !l.verlaengertBis.IsZero() && l.jetzt.Before(l.verlaengertBis) {
-		out["verlaengertBis"] = l.verlaengertBis.Format("15:04")
+		out["verlaengertBis"] = l.verlaengertBis.In(l.jetzt.Location()).Format("15:04")
 	}
 	if l.urteil.Budget > 0 {
 		out["budgetMinuten"] = int(l.urteil.Budget / time.Minute)
@@ -615,7 +615,7 @@ func (s *Server) bildschirmzeitVerwaltung(ctx context.Context, acc *store.Accoun
 	}
 	out.FensterHeute = heute.Von != ""
 	if bis := s.st.BildschirmzeitVerlaengerung(ctx, acc.ID, tag); !bis.IsZero() && jetzt.Before(bis) {
-		out.VerlaengertBis = bis.Format("15:04")
+		out.VerlaengertBis = bis.In(jetzt.Location()).Format("15:04")
 	}
 	return out
 }
