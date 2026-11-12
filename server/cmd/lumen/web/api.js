@@ -452,8 +452,9 @@ export const api = {
   adminDeleteAccount(id) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
-  adminSetLimits(id, limits, libraries, kinderprofil) {
-    return this.call(`/admin/accounts/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: { limits, libraries, kinderprofil } });
+  /* gast: true/false – gehört nicht zum Haushalt (undefined: unverändert). */
+  adminSetLimits(id, limits, libraries, kinderprofil, gast) {
+    return this.call(`/admin/accounts/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: { limits, libraries, kinderprofil, gast } });
   },
   /* zusatz: { kinderprofil: true, altersgrenze: 0|6|12|16 } für ein Kind. */
   adminInvite(libraries, limits, days = 7, zusatz = {}) {

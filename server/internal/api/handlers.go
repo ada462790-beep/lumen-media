@@ -289,6 +289,12 @@ func (s *Server) redeemInvite(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Von unterwegs eingelöst: ein Gast, nicht der Haushalt — er sieht
+	// keine geteilten Listen und Bewertungen mit Namen (store/haushalt.go).
+	// Die Verwaltung kann das am Konto ändern.
+	if vonAussen(r) {
+		_ = s.st.GastSetzen(r.Context(), acc.ID, true)
+	}
 	tok, err := s.st.IssueToken(r.Context(), acc.ID,
 		kuerzen(orElse(in.DeviceName, tr(w, "Neues Gerät")), 60), kuerzen(orElse(in.DeviceKind, "browser"), 20))
 	if err != nil {
@@ -369,6 +375,14 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	for k, v := range in.Prefs {
 		if err := s.st.SetPref(r.Context(), acc.ID, k, v); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	// „Bewertungen im Haushalt zeigen" aus: auch die bisher geteilten
+	// gehen zurück — nicht nur die künftigen.
+	if v, da := in.Prefs["shareRatings"]; da && v != "1" {
+		if err := s.st.BewertungenNichtMehrTeilen(r.Context(), acc.ID); err != nil {
 			failErr(w, err)
 			return
 		}
@@ -766,7 +780,7 @@ func (s *Server) item(w http.ResponseWriter, r *http.Request) {
 		files[i].Path = pfadFuer(accountOf(r), files[i].Path)
 	}
 	s.mitSpuren(r.Context(), files)
-	shared, _ := s.st.SharedRatings(r.Context(), it.ID)
+	shared, _ := s.st.SharedRatings(r.Context(), accountOf(r).ID, it.ID)
 
 	body := map[string]any{"item": out[0], "files": files, "sharedRatings": shared}
 	if l := s.links(r.Context(), it); len(l) > 0 {
@@ -1807,6 +1821,8 @@ func (s *Server) adminAccounts(w http.ResponseWriter, r *http.Request) {
 		// PIN, Bildschirmzeit) — ein Mitverwalter nur Konten ohne
 		// Verwaltung ganz innerhalb seiner Bibliotheken (mitverwalterDarf).
 		Verwaltbar bool `json:"verwaltbar"`
+		// Gast: gehört nicht zum Haushalt (store/haushalt.go).
+		Gast bool `json:"gast,omitempty"`
 	}
 	ich := accountOf(r)
 	eigene, err := s.eigeneBibliotheken(r)
@@ -1826,7 +1842,8 @@ func (s *Server) adminAccounts(w http.ResponseWriter, r *http.Request) {
 				darf = darf && eigene[l]
 			}
 		}
-		out = append(out, entry{a, lim, libs, len(devs), s.bildschirmzeitVerwaltung(r.Context(), &a), darf})
+		out = append(out, entry{a, lim, libs, len(devs), s.bildschirmzeitVerwaltung(r.Context(), &a), darf,
+			s.st.IstGast(r.Context(), a.ID)})
 	}
 	ok(w, out)
 }
@@ -1838,6 +1855,8 @@ func (s *Server) adminSetLimits(w http.ResponseWriter, r *http.Request) {
 		// Kinderprofil: optional, macht ein Konto zum Kinderprofil oder
 		// nimmt es zurück. Fehlt es, bleibt es, wie es ist.
 		Kinderprofil *bool `json:"kinderprofil"`
+		// Gast: gehört nicht zum Haushalt (optional, store/haushalt.go).
+		Gast *bool `json:"gast"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -1905,6 +1924,12 @@ func (s *Server) adminSetLimits(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Libraries != nil {
 		if err := s.st.SetGrants(r.Context(), r.PathValue("id"), in.Libraries); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	if in.Gast != nil {
+		if err := s.st.GastSetzen(r.Context(), ziel.ID, *in.Gast); err != nil {
 			failErr(w, err)
 			return
 		}

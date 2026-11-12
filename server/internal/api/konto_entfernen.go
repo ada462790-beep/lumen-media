@@ -44,6 +44,7 @@ func (s *Server) adminKontoEntfernen(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	_ = s.st.GastSetzen(r.Context(), id, false)
 	// Weg heisst weg: auch aus der WAL-Datei und den Sicherungen.
 	s.privatesAusschreiben(id)
 	s.spaeterBeenden(id)

@@ -515,7 +515,9 @@ func (s *Store) RatingsFor(ctx context.Context, accountID string, itemIDs []stri
 
 // SharedRatings sind die Bewertungen, die jemand ausdrücklich freigegeben hat.
 // Ohne das Häkchen taucht hier nichts auf — auch nicht für den Besitzer.
-func (s *Store) SharedRatings(ctx context.Context, itemID string) ([]struct {
+// ich: wer fragt. Ein Gast (haushalt.go) sieht keine, und die eines Gasts
+// sieht niemand.
+func (s *Store) SharedRatings(ctx context.Context, ich, itemID string) ([]struct {
 	Name   string `json:"name"`
 	Avatar string `json:"avatar"`
 	Stars  int    `json:"stars"`
@@ -525,10 +527,13 @@ func (s *Store) SharedRatings(ctx context.Context, itemID string) ([]struct {
 		Avatar string `json:"avatar"`
 		Stars  int    `json:"stars"`
 	}
+	if s.IstGast(ctx, ich) {
+		return []row{}, nil
+	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT a.name, a.avatar, r.stars
 		   FROM rating r JOIN account a ON a.id = r.account_id
-		  WHERE r.item_id = ? AND r.shared = 1
+		  WHERE r.item_id = ? AND r.shared = 1 AND NOT `+gastSQL("r.account_id")+`
 		  ORDER BY a.name`, itemID)
 	if err != nil {
 		return nil, err

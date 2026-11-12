@@ -65,10 +65,16 @@ func scanListe(sc interface{ Scan(...any) error }, ich string) (*Liste, error) {
 
 // Listen gibt die eigenen Listen und die, die andere im Haushalt geteilt
 // haben. Eigene zuerst.
+// geteiltFuer: eine fremde Liste ist sichtbar, wenn sie geteilt ist und
+// weder die fragende Person (der Platzhalter) noch die Besitzerin der
+// Liste ein Gast ist (haushalt.go).
+var geteiltFuer = `(p.shared = 1 AND NOT EXISTS (SELECT 1 FROM setting
+	  WHERE key IN ('gast:' || ?, 'gast:' || p.account_id)))`
+
 func (s *Store) Listen(ctx context.Context, ich string) ([]Liste, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+listeCols+` FROM playlist p JOIN account a ON a.id = p.account_id
-		  WHERE p.account_id = ? OR p.shared = 1`, ich)
+		  WHERE p.account_id = ? OR `+geteiltFuer+``, ich, ich)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +102,7 @@ func (s *Store) Listen(ctx context.Context, ich string) ([]Liste, error) {
 func (s *Store) Liste(ctx context.Context, ich, id string) (*Liste, error) {
 	l, err := scanListe(s.db.QueryRowContext(ctx,
 		`SELECT `+listeCols+` FROM playlist p JOIN account a ON a.id = p.account_id
-		  WHERE p.id = ? AND (p.account_id = ? OR p.shared = 1)`, id, ich), ich)
+		  WHERE p.id = ? AND (p.account_id = ? OR `+geteiltFuer+`)`, id, ich, ich), ich)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -295,7 +301,7 @@ func (s *Store) ListeOrdnen(ctx context.Context, ich, id string, itemIDs []strin
 func (s *Store) ListenMitTitel(ctx context.Context, ich, itemID string) (map[string]bool, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT p.id FROM playlist p JOIN playlist_item pi ON pi.playlist_id = p.id
-		  WHERE pi.item_id = ? AND (p.account_id = ? OR p.shared = 1)`, itemID, ich)
+		  WHERE pi.item_id = ? AND (p.account_id = ? OR `+geteiltFuer+`)`, itemID, ich, ich)
 	if err != nil {
 		return nil, err
 	}

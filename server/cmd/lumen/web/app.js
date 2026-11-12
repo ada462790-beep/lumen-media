@@ -1362,7 +1362,7 @@ function viewFavorites() {
   return shell(`<div class="wrap wrap--flat">
     <h1 class="t-large">${tr('Favoriten')}</h1>
     ${tabs}
-    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Was dir besonders gefallen hat · nur du siehst das')}</div>
+    <div class="t-sub c-2" style="margin:4px 0 24px">${offenesProfil() ? tr('Was dir besonders gefallen hat · alle in diesem Profil sehen das') : tr('Was dir besonders gefallen hat · nur du siehst das')}</div>
     ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>`
       : leer({ symbol: I.herz, titel: art === 'movie' ? tr('Noch keine Lieblingsfilme') : tr('Noch keine Lieblingsserien'),
           text: tr('Tippe auf einer Titelseite auf das Herz, dann steht der Titel hier.') })}
@@ -1382,7 +1382,7 @@ function viewGesehen() {
   return shell(`<div class="wrap wrap--flat">
     <h1 class="t-large">${tr('Gesehen')}</h1>
     ${merkReiter('gesehen')}
-    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Was du fertig geschaut hast, zuletzt Beendetes zuerst — Serien, sobald alle Folgen gesehen sind. Nur du siehst das.')}</div>
+    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Was du fertig geschaut hast, zuletzt Beendetes zuerst — Serien, sobald alle Folgen gesehen sind.')} ${offenesProfil() ? tr('Alle in diesem Profil sehen das.') : tr('Nur du siehst das.')}</div>
     ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>`
       : leer({ symbol: I.check, titel: tr('Noch nichts zu Ende geschaut'), text: tr('Was du fertig schaust, steht hier — nur für dich.') })}
     <div style="height:40px"></div></div>`);
@@ -1393,7 +1393,7 @@ function viewWatchlist() {
   return shell(`<div class="wrap wrap--flat">
     <h1 class="t-large">${tr('Merkliste')}</h1>
     ${merkReiter('watchlist')}
-    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Nur du siehst diese Liste')}</div>
+    <div class="t-sub c-2" style="margin:4px 0 24px">${offenesProfil() ? tr('Alle in diesem Profil sehen diese Liste') : tr('Nur du siehst diese Liste')}</div>
     ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>`
       : leer({ symbol: I.mark, titel: tr('Noch nichts gemerkt'), text: tr('Auf einer Titelseite legst du mit „Merken“ etwas hierher.'),
           aktion: `<button class="btn btn-primary" data-go="movies">${tr('Filme ansehen')}</button>` })}
@@ -1778,7 +1778,9 @@ function viewDetail() {
             <span style="flex:1"></span>
             ${it.myRating ? `<button class="btn btn-pill" style="height:28px;font-size:12px" data-rate="0">${tr('Löschen')}</button>` : ''}
           </div>
-          <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Nur für dich sichtbar.')}</p></section>
+          <p class="t-caption c-2" style="margin:8px 16px 0">${(S.me?.prefs || {}).shareRatings === '1'
+            ? tr('Im Haushalt sichtbar, mit deinem Namen – abschalten unter „Ich“ › Privatsphäre.')
+            : tr('Nur für dich sichtbar.')}</p></section>
         ${(d.sharedRatings || []).length ? `<section style="margin-top:22px"><div class="section-h">${tr('Im Haushalt')}</div>
             <div class="group group--inset">${d.sharedRatings.map(r => `
               <div class="row" style="min-height:44px">
@@ -3448,7 +3450,7 @@ function viewPlaylist() {
         lswRow(tr('Im Haushalt zeigen'), l.geteilt, 'geteilt') +
         lswRow(tr('Alle dürfen mitschreiben'), l.gemeinsam, 'gemeinsam'),
         l.geteilt ? tr('Wer sie sieht, sieht nur die Titel, die er ohnehin sehen darf.')
-                  : tr('Nur du siehst diese Liste.'))}</section>` : ''}
+                  : offenesProfil() ? tr('Alle in diesem Profil sehen diese Liste.') : tr('Nur du siehst diese Liste.'))}</section>` : ''}
     <section style="margin-top:${l.meine ? 4 : 28}px"><div class="group group--inset">
       ${zeilen || `<p class="hint" style="padding:18px 16px;margin:0">${tr('Noch leer. Auf einer Titelseite legst du mit „Zur Liste“ etwas hinein.')}</p>`}</div></section>
     <div style="height:40px"></div></div>`);
@@ -3563,6 +3565,10 @@ function viewWishes() {
 
 /* ---------------------------------------------------------------- Einstellungen */
 
+// Ein Profil ohne PIN öffnet zu Hause jede Person – „nur du siehst das"
+// wäre dort nicht ehrlich.
+const offenesProfil = () => (S.me?.account?.lockKind || 'none') === 'none';
+
 const swRow = (label, on, value, key) => `
   <div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${esc(label)}</span>
     ${on === null ? `<span style="color:var(--label-2);font-size:15px">${esc(value)}</span>`
@@ -3652,9 +3658,11 @@ function viewSettings() {
           tr('Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.')) : ''}
         ${grp(tr('Privatsphäre'),
           swRow(tr('Bewertungen im Haushalt zeigen'), prefs.shareRatings === '1', null, 'shareRatings'),
-          a.isKid && bzStand()?.aktiv
-            ? tr('Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur ungefähr, in Viertelstunden, wie viel Bildschirmzeit du heute gebraucht hast — nicht, was du geschaut hast, und nicht, wann.')
-            : tr('Dein Verlauf und deine Bewertungen gehören dir. Auch der Besitzer des Servers kann nicht sehen, wann oder wie lange du etwas schaust.'))}
+          [a.isKid && bzStand()?.aktiv
+            ? tr('Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur ungefähr, wie viel Bildschirmzeit du heute gebraucht hast, und erst eine Weile später — nicht, was du geschaut hast, und nicht, wann.')
+            : tr('Dein Verlauf und deine Bewertungen gehören dir. Auch der Besitzer des Servers kann nicht sehen, wann oder wie lange du etwas schaust.'),
+           prefs.shareRatings === '1' ? tr('Deine Bewertungen sieht der Haushalt mit deinem Namen; ausschalten nimmt auch die bisherigen zurück.') : '',
+           offenesProfil() ? tr('Ohne PIN kann jede Person zu Hause dieses Profil öffnen und alles darin sehen.') : ''].filter(Boolean).join(' '))}
       </div>
       <div>
         ${grp(tr('Profil schützen'),
@@ -5111,7 +5119,8 @@ app.addEventListener('click', async e => {
   if (hit('data-vorherige-nein')) { if (S.data) S.data.vorherigeFrage = null; return render(); }
   if ((n = hit('data-rate'))) {
     const stars = Number(n.dataset.rate);
-    try { await api.rate(S.id, stars, (S.me.prefs || {}).shareRatings === '1'); toast(stars ? tr('Bewertung gespeichert — nur für dich sichtbar') : tr('Bewertung gelöscht')); }
+    const geteilt = (S.me.prefs || {}).shareRatings === '1';
+    try { await api.rate(S.id, stars, geteilt); toast(!stars ? tr('Bewertung gelöscht') : geteilt ? tr('Bewertung gespeichert — im Haushalt sichtbar') : tr('Bewertung gespeichert — nur für dich sichtbar')); }
     catch (err) { toast(err.message); }
     return load();
   }

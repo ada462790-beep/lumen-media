@@ -85,7 +85,7 @@ func (s *Server) prefsPruefen(ctx context.Context, accountID string, neu map[str
 		if !prefSchluesselGueltig(k) {
 			return &apiFehler{status: http.StatusBadRequest, text: "Unbekannte Einstellung."}
 		}
-		if strings.HasPrefix(k, "hinweis.") {
+		if strings.HasPrefix(k, "hinweis.") || strings.HasPrefix(k, "pflicht.") {
 			return &apiFehler{status: http.StatusBadRequest, text: "Unbekannte Einstellung."}
 		}
 		if _, da := alt[k]; !da {

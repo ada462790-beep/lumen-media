@@ -52,6 +52,8 @@ function formular(konto, bibliotheken, kind) {
           <input id="gz-dl" name="maxDownloads" type="number" min="0" max="500" value="${Number(lim.maxDownloads) || 0}"></div>
       </div>
       <label class="wahl-check"><input type="checkbox" name="allowTranscode"${lim.allowTranscode !== false ? ' checked' : ''}><span>${tr('Umwandeln')}</span></label>
+      <label class="wahl-check"><input type="checkbox" name="haushalt"${konto.gast ? '' : ' checked'}><span>${tr('Gehört zum Haushalt')}</span></label>
+      <p class="ff-hinweis" style="margin:-8px 0 0">${tr('Nur der Haushalt sieht im Haushalt geteilte Listen und Bewertungen – mit Namen. Wer eine Einladung von unterwegs einlöst, ist zuerst Gast.')}</p>
       <div data-meldung hidden></div>
       <div class="fenster-fuss">
         <button class="btn btn-primary" style="height:40px" data-laeuft="${tr('Speichert …')}">${tr('Speichern')}</button></div>
@@ -63,6 +65,7 @@ function grenzenAus(form) {
   const kind = !!fd.get('kind');
   return {
     kinderprofil: kind,
+    gast: !fd.get('haushalt'),
     libraries: fd.getAll('lib').map(String),
     limits: {
       maxAge: Number(fd.get('maxAge')),
@@ -102,7 +105,7 @@ export function grenzenBearbeiten(konto, bibliotheken, nachher) {
     const g = grenzenAus(e.target);
     if (!g.libraries.length) { meldung(d, tr('Mindestens eine Bibliothek – sonst sieht {name} nichts.', { name: konto.name })); return; }
     try {
-      await beschaeftigt(knopf, () => api.adminSetLimits(konto.id, g.limits, g.libraries, g.kinderprofil));
+      await beschaeftigt(knopf, () => api.adminSetLimits(konto.id, g.limits, g.libraries, g.kinderprofil, g.gast));
       d.close();
       U.toast?.(tr('Gespeichert'));
     } catch (err) {
