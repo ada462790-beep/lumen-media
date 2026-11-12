@@ -96,7 +96,7 @@ export function sammlungSeite() {
       ${x.bild ? `<div style="position:relative;width:140px;aspect-ratio:2/3;border-radius:12px;overflow:hidden;flex:none">
           <img class="art-img" src="${escH(mitSchluessel(x.bild))}" alt=""></div>` : ''}
       <div style="flex:1;min-width:240px">
-        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
+        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
         <h1 class="t-large" style="margin:14px 0 0">${escH(x.name)}</h1>
         <div class="t-sub c-2" style="margin-top:4px">${escH(unter)}</div>
         ${aktionen ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">${aktionen}</div>` : ''}

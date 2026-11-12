@@ -71,7 +71,7 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	start := float64(qInt(r, "t", 0))
+	start := qSek(r, "t")
 	if start < 0 {
 		start = 0
 	}
@@ -319,7 +319,7 @@ func (s *Server) seekPoint(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	want := float64(qInt(r, "t", 0))
+	want := qSek(r, "t")
 	if want < 0 {
 		want = 0
 	}

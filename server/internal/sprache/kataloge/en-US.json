@@ -303,5 +303,7 @@
   "Dafür braucht es einen TMDb-Schlüssel (Verwaltung › Poster und Beschreibungen). Eine Kennung lässt sich auch ohne ihn speichern.": "This needs a TMDb key (Admin › Posters and Descriptions). An ID can be saved without one.",
   "Das sieht nicht nach einer Kennung aus. Möglich sind etwa tt0133093, eine TMDb-Nummer, tvdb:121361 oder ein Link.": "That doesn't look like an ID. Try tt0133093, a TMDb number, tvdb:121361 or a link.",
   "TMDb lehnt den hinterlegten Schlüssel ab. Unter Verwaltung › Poster und Beschreibungen einen gültigen eintragen.": "TMDb rejects the saved key. Enter a valid one under Admin › Posters and Descriptions.",
-  "Dieses Extra gibt es nicht.": "This extra doesn't exist."
+  "Dieses Extra gibt es nicht.": "This extra doesn't exist.",
+  "richte zuerst eine metadaten-quelle ein": "Set up a metadata source first.",
+  "diese einladung gibt es nicht (mehr)": "This invitation doesn’t exist (anymore)."
 }

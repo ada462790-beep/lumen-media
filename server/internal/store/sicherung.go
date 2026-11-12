@@ -42,7 +42,11 @@ const SicherungsGenerationen = 2
 type Sicherung struct {
 	Nr  int    `json:"nr"`
 	Tag string `json:"tag"` // JJJJ-MM-TT
-	MB  int64  `json:"mb"`
+	// Zeit ist der genaue Zeitpunkt (RFC 3339). Zwei Sicherungen vom
+	// selben Tag hiessen sonst beide „heute“.
+	Zeit  string `json:"zeit"`
+	MB    int64  `json:"mb"`
+	Bytes int64  `json:"bytes"`
 }
 
 func sicherungsPfad(ordner string, nr int) string {
@@ -102,7 +106,8 @@ func Sicherungen(ordner string) []Sicherung {
 		if err != nil {
 			continue
 		}
-		out = append(out, Sicherung{Nr: i, Tag: fi.ModTime().Format("2006-01-02"), MB: fi.Size() >> 20})
+		out = append(out, Sicherung{Nr: i, Tag: fi.ModTime().Format("2006-01-02"),
+			Zeit: fi.ModTime().Format(time.RFC3339), MB: fi.Size() >> 20, Bytes: fi.Size()})
 	}
 	return out
 }

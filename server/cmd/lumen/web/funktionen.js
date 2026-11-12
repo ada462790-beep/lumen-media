@@ -21,7 +21,7 @@ export { sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reiter 
 export { utStand, utStandLaden } from './untertitel.js';
 
 const verwalten = () => !!U.S?.me?.account?.isAdmin && amSchreibtisch();
-const klein = 'class="btn btn-pill" style="height:30px;font-size:13px"';
+const klein = 'class="btn btn-pill" style="height:30px;font-size:.8125rem"';
 
 /* Titelseite: weitere Knöpfe in der Zeile „Verwaltung:". */
 export function detailVerwaltung(it, imMenue = false) {
@@ -49,7 +49,7 @@ export function detailUntertitel(it, files) {
 /* Bei Serien: Staffel und Folgen bearbeiten. */
 export function staffelBearbeiten(staffelId) {
   return verwalten() && staffelId
-    ? `<button ${klein} data-fk-bearbeiten="${escH(staffelId)}" style="height:30px;font-size:13px;margin-left:8px">${tr('Staffel bearbeiten')}</button>` : '';
+    ? `<button ${klein} data-fk-bearbeiten="${escH(staffelId)}" style="height:30px;font-size:.8125rem;margin-left:8px">${tr('Staffel bearbeiten')}</button>` : '';
 }
 export function folgeBearbeiten(folge) {
   return verwalten()

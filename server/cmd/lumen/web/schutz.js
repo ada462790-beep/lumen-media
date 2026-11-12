@@ -83,14 +83,14 @@ function dialogRahmen(titelId) {
 }
 
 const FELD = 'width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;' +
-  'background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:16px';
+  'background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:1rem';
 
 /* Eine Frage mit Ja/Abbrechen. Gibt true zurück, wenn bestätigt. */
 export function frage(titel, text, ja) {
   return new Promise(fertig => {
     const d = dialogRahmen('frage-t');
     d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-      <div id="frage-t" class="t-title" style="font-size:19px;font-weight:700">${esc(titel)}</div>
+      <div id="frage-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${esc(titel)}</div>
       <div class="t-body c-2">${esc(text)}</div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button type="button" class="btn btn-pill" value="ab">${tr('Abbrechen')}</button>
@@ -111,7 +111,7 @@ export function mitteilung(titel, text) {
     const d = dialogRahmen('mitteilung-t');
     d.setAttribute('role', 'alertdialog');
     d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-      <div id="mitteilung-t" class="t-title" style="font-size:19px;font-weight:700">${esc(titel)}</div>
+      <div id="mitteilung-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${esc(titel)}</div>
       <div class="t-body c-2">${esc(text)}</div>
       <div style="display:flex;justify-content:flex-end">
         <button class="btn btn-pill btn-pill--fill" value="ok">${tr('OK')}</button></div></form>`;
@@ -137,7 +137,7 @@ export function schutzDialog({ titel, hinweis = '', warnung = '', mitAlt = false
     let art = altArt === 'password' ? 'password' : 'pin';
     const zeichnen = fehler => {
       d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-        <div id="schutz-t" class="t-title" style="font-size:19px;font-weight:700">${esc(titel)}</div>
+        <div id="schutz-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${esc(titel)}</div>
         ${hinweis ? `<div class="t-caption c-2">${esc(hinweis)}</div>` : ''}
         ${warnung ? `<div class="t-caption" role="note" style="color:var(--red,#ff453a);font-weight:600">${esc(warnung)}</div>` : ''}
         ${mitAlt && altArt !== 'none' ? `<label class="t-caption c-2">${altArt === 'password' ? tr('Bisheriges Passwort') : tr('Bisherige PIN')}
@@ -145,7 +145,7 @@ export function schutzDialog({ titel, hinweis = '', warnung = '', mitAlt = false
             inputmode="${altArt === 'pin' ? 'numeric' : 'text'}"></label>` : ''}
         <div role="tablist" style="display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;align-self:flex-start">
           ${arten.map(([v, n]) => `<button type="button" class="tab-pill" role="tab" aria-selected="${art === v}" data-art="${v}"
-            style="height:30px;font-size:14px">${n}</button>`).join('')}</div>
+            style="height:30px;font-size:.875rem">${n}</button>`).join('')}</div>
         ${art === 'none' ? `<div class="t-caption c-2">${esc(T.schutzOhne)}</div>` : `
           <label class="t-caption c-2">${art === 'pin' ? tr('Neue PIN – mindestens vier Ziffern') : tr('Neues Passwort – mindestens acht Zeichen')}
             <input type="password" name="neu" autocomplete="new-password" required minlength="${art === 'pin' ? 4 : 8}"
@@ -209,19 +209,24 @@ export function einladungsFormular(bibliotheken, kind) {
   </form>`;
 }
 
+// „2IH44II3V7DNNZNY" → „2IH4-4II3-V7DN-NZNY": in Vierergruppen liest
+// und tippt man ihn am Fernseher leichter. Der Server nimmt ihn mit und
+// ohne Bindestriche.
+const codeGruppen = code => String(code).match(/.{1,4}/g)?.join('-') || code;
+
 export function einladungsBox(url, code) {
   return `
     <div class="field" style="margin-top:14px">
-      <label>${tr('Diesen Link weitergeben')}</label>
+      <label for="einladungslink">${tr('Diesen Link weitergeben')}</label>
       <div style="display:flex;gap:8px">
-        <input class="mono" readonly style="flex:1;min-width:0" value="${esc(url)}" data-auswahl>
+        <input id="einladungslink" class="mono" readonly style="flex:1;min-width:0" value="${esc(url)}" data-auswahl>
         <button class="btn btn-pill btn-pill--fill" style="flex:none" data-kopieren="${esc(url)}">${tr('Kopieren')}</button>
       </div>
     </div>
     <div class="field" style="margin-top:10px">
       <label>${tr('Oder nur der Code')}</label>
       <div style="display:flex;gap:8px;align-items:center">
-        <span class="mono t-title3" style="flex:1;letter-spacing:.08em">${esc(code)}</span>
+        <span class="mono t-title3" style="flex:1;letter-spacing:.08em">${esc(codeGruppen(code))}</span>
         <button class="btn btn-pill btn-pill--fill" style="flex:none" data-kopieren="${esc(code)}">${tr('Kopieren')}</button>
       </div>
       <span class="hint">${tr('In der App auf dem Fernseher ist der Code einfacher als der Link.')}</span>

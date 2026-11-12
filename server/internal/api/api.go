@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -359,6 +360,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/cleanup", admin(s.adminCleanup))
 	mux.Handle("GET /api/v1/admin/accounts", admin(s.adminAccounts))
 	mux.Handle("POST /api/v1/admin/invites", admin(s.adminCreateInvite))
+	// Offene Einladungen sehen und zurückziehen (ein Link, der versehentlich
+	// im Familienchat gelandet ist).
+	mux.Handle("GET /api/v1/admin/invites", admin(s.adminInvites))
+	mux.Handle("DELETE /api/v1/admin/invites/{kennung}", admin(s.adminInviteZurueckziehen))
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/limits", admin(s.bestaetigt(s.adminSetLimits)))
 	// Bildschirmzeit eines Kinderprofils; das Geschenk („heute 30 Min.
 	// mehr") ohne erneuten Code, es gilt nur heute (bildschirmzeit.go).
@@ -577,6 +582,24 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 		return false
 	}
 	return true
+}
+
+// qSek liest eine Stelle im Film in Sekunden, auch mit Nachkommastellen
+// („104.54"). Früher nur ganze Sekunden: Ein Ton- oder Untertitelwechsel
+// setzte bis zu einer Sekunde zu früh wieder an.
+func qSek(r *http.Request, key string) float64 {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return 0
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+		return 0
+	}
+	if f > 1e7 {
+		f = 1e7
+	}
+	return math.Round(f*1000) / 1000
 }
 
 func qInt(r *http.Request, key string, def int) int {

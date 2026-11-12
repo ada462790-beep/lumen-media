@@ -27,6 +27,7 @@ import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBe
 import { grenzenBearbeiten } from './konto.js';
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
+import { tastaturEinrichten } from './tastatur.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -34,6 +35,24 @@ const app = document.getElementById('app');
 // Besitzerrechte: der Besitzer selbst oder jemand mit „Vollzugriff".
 const voll = () => !!(S.me?.account?.isOwner || S.me?.account?.vollzugriff);
 const $ = sel => app.querySelector(sel);
+
+/* Was genau gemeint ist: Mit Verwaltungssperre zählt nur deren PIN,
+   Passwort oder Code — das Passwort des Profils nicht mehr. Vorher stand
+   „PIN, Passwort oder Code" da, und wer beides hatte, riet. */
+function bestaetigenText() {
+  switch (S.me?.account?.adminLock) {
+    case 'pin': return tr('Zur Sicherheit noch einmal die PIN der Verwaltungssperre – nicht die deines Profils.');
+    case 'password': return tr('Zur Sicherheit noch einmal das Passwort der Verwaltungssperre – nicht das deines Profils.');
+    case 'totp': return tr('Zur Sicherheit noch einmal den Code aus deiner Authenticator-App.');
+    default: return S.me?.account?.lockKind === 'password'
+      ? tr('Zur Sicherheit noch einmal das Passwort deines Profils.')
+      : tr('Zur Sicherheit noch einmal die PIN deines Profils.');
+  }
+}
+function bestaetigenFeld() {
+  return { pin: tr('PIN der Verwaltungssperre'), password: tr('Passwort der Verwaltungssperre'), totp: tr('Code aus der Authenticator-App') }[S.me?.account?.adminLock]
+    || (S.me?.account?.lockKind === 'password' ? tr('Passwort') : 'PIN');
+}
 
 /* Rechte ändern verlangt den Code noch einmal. api.js fragt
    hier nach, wenn der Server „bestaetigen" antwortet. Ein echtes <dialog>:
@@ -52,10 +71,11 @@ api.bestaetigen = (hinweis = '') => new Promise(fertig => {
     'border:0;border-radius:22px;padding:22px;width:min(360px,calc(100vw - 32px));' +
     'box-sizing:border-box;overflow:hidden;color:var(--label)';
   d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-    <div id="bestaetigen-t" class="t-title" style="font-size:19px;font-weight:700">${tr('Rechte ändern')}</div>
-    <div class="t-caption c-2">${hinweis ? hinweis.replace(/[<&]/g, '') : tr('Zur Sicherheit noch einmal deine PIN, dein Passwort oder den Code aus der Authenticator-App.')}</div>
-    <input type="password" name="code" autocomplete="current-password" required aria-label="${tr('PIN, Passwort oder Code')}"
-      style="width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:16px">
+    <div id="bestaetigen-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${tr('Änderung bestätigen')}</div>
+    <div class="t-caption c-2" id="bestaetigen-x">${hinweis ? hinweis.replace(/[<&]/g, '') : bestaetigenText()}</div>
+    <input type="password" name="code" autocomplete="current-password" required aria-label="${esc(bestaetigenFeld())}" aria-describedby="bestaetigen-x"
+      ${['pin', 'totp'].includes(S.me?.account?.adminLock) ? 'inputmode="numeric"' : ''}
+      style="width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:1rem">
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button type="button" class="btn btn-pill" value="ab">${tr('Abbrechen')}</button>
       <button class="btn btn-pill btn-pill--fill" value="ok">${tr('Bestätigen')}</button></div></form>`;
@@ -144,6 +164,9 @@ const I = {
   vollbild: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   kapitel: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   vollbildAus: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
+  vonVorn: '<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/>',
+  laden: '<path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/>',
+  bildImBild: '<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11.5" width="6.5" height="5" rx="1" fill="currentColor" stroke="none"/>',
   liste: '<path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4.6" cy="6" r=".9"/><circle cx="4.6" cy="12" r=".9"/><circle cx="4.6" cy="18" r=".9"/>',
   hoch: '<path d="M6 15l6-6 6 6"/>',
   runter: '<path d="M6 9l6 6 6-6"/>',
@@ -169,6 +192,31 @@ function anmeldeHinweis() {
   api.anmeldeHinweis = null;
   if (!h?.text) return;
   return mitteilung(tr('PIN zurückgesetzt'), h.text);
+}
+
+/* Leise Ansage für Bildschirmleser (eigene Live-Region, damit sie keine
+   Meldung verdrängt). */
+function ansagen(text) {
+  let el = document.getElementById('ansage');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ansage'; el.className = 'sr-only';
+    el.setAttribute('aria-live', 'polite'); el.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(el);
+  }
+  el.textContent = '';
+  setTimeout(() => { el.textContent = text; }, 60);
+}
+// Suchtreffer: nach einer kurzen Pause die Zahl ansagen, nicht bei jedem Zeichen.
+let ansageZeit = null, letzteAnsage = '';
+function trefferAnsagen() {
+  clearTimeout(ansageZeit);
+  const q = S.query.trim();
+  if (!q || S.busy || S.error) return;
+  const d = S.data || {};
+  const n = (d.items || []).length + (d.folgen || []).length;
+  const text = n ? tr('{n} Treffer', { n }) : tr('Keine Treffer für „{q}“', { q });
+  ansageZeit = setTimeout(() => { if (text !== letzteAnsage) { letzteAnsage = text; ansagen(text); } }, 500);
 }
 
 function toast(msg) {
@@ -321,7 +369,7 @@ function posterCard(it, hier = false) {
     <div class="thumb thumb--poster" style="position:relative;width:168px;height:252px;border-radius:12px;overflow:hidden">
       ${artOf(it)}
       ${abzeichen(it)}
-      ${it.finished ? `<span class="seen-dot" aria-hidden="true">${svg(I.check, 13, 2.6)}</span>` : ''}
+      ${it.finished ? `<span class="watched" aria-hidden="true">${svg(I.check, 13, 2.6)}</span>` : ''}
       ${pct > 1 && !it.finished ? `<div class="progress progress--onart"><i style="width:${pct}%"></i></div>` : ''}
     </div>
     <div class="t-body clamp-1" style="margin-top:10px">${esc(it.title)}</div>
@@ -441,9 +489,9 @@ function hoverKarteZeigen(card) {
       <button class="hoverkarte-titel" data-go="detail" data-id="${esc(id)}">${esc(it.title)}</button>
       <div class="t-caption c-2 clamp-1">${esc(unter)}</div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-hk-play="${esc(id)}">${PLAY(14)} ${it.resumeMs || (it.kind === 'series' && it.gesehen) ? tr('Weiterschauen') : tr('Ansehen')}</button>
-        <button class="btn btn-pill" style="height:32px;font-size:13px" data-hk-merken="${esc(id)}" aria-pressed="${!!it.onList}">${it.onList ? tr('Gemerkt') : tr('Merken')}</button>
-        <button class="btn btn-pill" style="height:32px;font-size:13px" data-go="detail" data-id="${esc(id)}">${tr('Info')}</button>
+        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-hk-play="${esc(id)}">${PLAY(14)} ${it.resumeMs || (it.kind === 'series' && it.gesehen) ? tr('Weiterschauen') : tr('Ansehen')}</button>
+        <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-hk-merken="${esc(id)}" aria-pressed="${!!it.onList}">${it.onList ? tr('Gemerkt') : tr('Merken')}</button>
+        <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-go="detail" data-id="${esc(id)}">${tr('Info')}</button>
       </div></div>`;
   document.body.appendChild(k);
   hoverKarte = k;
@@ -562,7 +610,7 @@ function sidebar() {
   const p = S.me?.account;
   if (!p) return '';
   const items = NAV().map(([v, d, label]) =>
-    `<a href="#" class="nav" data-go="${v}" title="${esc(label)}"${
+    `<a href="${adresseFuer(v) || '#'}" class="nav" data-go="${v}" title=""${esc(label)}"${
       S.view === v || (v === 'watchlist' && ['gesehen', 'playlists', 'playlist'].includes(S.view))
         || (v === 'collections' && ['collection', 'sammlungen', 'sammlung'].includes(S.view)) ? ' aria-current="page"' : ''}>${svg(d, 20)}${label}${
       v === 'news' && S.me.neuigkeiten ? `<span class="punkt" aria-hidden="true">${S.me.neuigkeiten > 9 ? '9+' : S.me.neuigkeiten}</span><span class="sr-only">${tr(', {n} ungelesen', { n: S.me.neuigkeiten })}</span>` : ''}</a>`).join('');
@@ -577,8 +625,8 @@ function sidebar() {
     <button class="sidebar-search" data-go="search" title="${tr('Suchen')}">${svg(I.search, 16, 2)}${tr('Suchen')}</button>
     ${items}
     <div class="sidebar-foot">
-      ${verwaltungHier() ? `<a href="#" class="nav nav--quiet" data-go="admin"${ADMIN_VIEWS.includes(S.view) ? ' aria-current="page"' : ''}>${svg(I.gear, 19)}${tr('Verwaltung')}</a>` : ''}
-      <a href="#" class="nav" data-go="settings"${S.view === 'settings' ? ' aria-current="page"' : ''}>
+      ${verwaltungHier() ? `<a href="${adresseFuer('admin') || '#'}" class="nav nav--quiet" data-go="admin"${ADMIN_VIEWS.includes(S.view) ? ' aria-current="page"' : ''}>${svg(I.gear, 19)}${tr('Verwaltung')}</a>` : ''}
+      <a href="${adresseFuer('settings') || '#'}" class="nav" data-go="settings"${S.view === 'settings' ? ' aria-current="page"' : ''}>
         ${avatar(p, 28)}${esc(p.name)}</a>
     </div>
   </aside>`;
@@ -603,9 +651,9 @@ function tabbar() {
   const ich = ['settings', 'wishes', 'news', 'favorites', 'collections', 'collection', 'sammlungen', 'sammlung', 'playlists', 'playlist',
     ...ADMIN_VIEWS].includes(S.view);
   return `<nav class="tabbar glass glass--regular" aria-label="${tr('Navigation')}">
-    ${TABS().map(([v, d, label]) => `<a href="#" class="tab" data-go="${v}"${
+    ${TABS().map(([v, d, label]) => `<a href="${adresseFuer(v) || '#'}" class="tab" data-go="${v}"${
       S.view === v || (v === 'watchlist' && S.view === 'gesehen') ? ' aria-current="page"' : ''}>${svg(d, 22)}<span>${label}</span></a>`).join('')}
-    <a href="#" class="tab" data-go="settings"${ich ? ' aria-current="page"' : ''} style="position:relative">
+    <a href="${adresseFuer('settings') || '#'}" class="tab" data-go="settings"${ich ? ' aria-current="page"' : ''} style="position:relative">
       ${avatar(p, 24)}${S.me.neuigkeiten ? '<span class="punkt punkt--tab" aria-hidden="true"></span>' : ''}
       <span>${tr('Ich')}</span></a>
   </nav>`;
@@ -860,7 +908,7 @@ async function fetchFor(view) {
     case 'logs':      return { lines: await api.adminLog(S.logFilter) };
     case 'cleanup':   return { ...await api.adminCleanup(),
                                  reihen: await api.adminCollections().catch(() => []) };
-    case 'accounts':  { const [accounts, libraries] = await Promise.all([api.adminAccounts(), api.adminLibraries().catch(() => [])]); return { accounts, libraries }; }
+    case 'accounts':  { const [accounts, libraries, einladungen] = await Promise.all([api.adminAccounts(), api.adminLibraries().catch(() => []), api.adminInvites().catch(() => [])]); return { accounts, libraries, einladungen }; }
     case 'metadata':  return api.adminMetadata();
     default:          return null;
   }
@@ -940,7 +988,10 @@ function render() {
     return;
   }
 
-  if (S.hinweis && !S.me && !S.busy) html = `<div class="anmelde-hinweis" role="alert">${esc(S.hinweis)}</div>` + html;
+  // Ansichten ohne Gerüst (Einrichtung, Einladung, Profilwahl) bekommen
+  // trotzdem eine Hauptlandmarke — für Bildschirmleser der Einstieg.
+  if (!html.includes('<main')) html = `<main id="inhalt">${html}</main>`;
+  if (S.hinweis && !S.me && !S.busy) html =`<div class="anmelde-hinweis" role="alert">${esc(S.hinweis)}</div>` + html;
   const vorherFokus = fokusSchluessel();
   // Dieselbe Seite neu gezeichnet (Stern gesetzt, Folge abgehakt, Schalter
   // umgelegt): an derselben Stelle bleiben. Vorher sprang jede solche
@@ -959,7 +1010,10 @@ function render() {
   else { mehrBeobachter?.disconnect(); mehrBeobachter = null; }
   if (S.view === 'search') {
     const q = $('#q');
-    if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    // Nach Enter bleibt die Tastatur des Handys zu (sie verdeckte die Treffer).
+    if (q && !S.suchTastaturZu) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    S.suchTastaturZu = false;
+    trefferAnsagen();
   }
   if (S.view === 'player') mountPlayer();
   else nachDemZeichnen(vorherFokus);
@@ -988,12 +1042,21 @@ addEventListener('resize', () => randHinweise(), { passive: true });
 
 /* ---------------------------------------------------------------- Darstellung */
 
-/* Hell oder dunkel. Die Farben für hell standen im Designsystem längst
-   bereit; es fehlte nur der Schalter. Voreingestellt bleibt dunkel —
-   so sieht ein Kino aus, und so kennen es alle, die Lumen schon haben. */
+/* Hell oder dunkel. Voreingestellt ist „Wie das Gerät" — so, wie es
+   jede Apple-App hält. Player und grosses Bild bleiben ohnehin dunkel. */
 function darstellung() {
-  try { return localStorage.getItem('lumen.darstellung') || 'dunkel'; } catch { return 'dunkel'; }
+  try { return localStorage.getItem('lumen.darstellung') || 'auto'; } catch { return 'auto'; }
 }
+/* Textgrösse der Oberfläche, zusätzlich zur Einstellung von Browser und
+   System (alle Schriften sind in rem). */
+const TEXTGROESSEN = { normal: '100%', gross: '112.5%', sehrgross: '125%' };
+function textgroesse() {
+  try { const w = localStorage.getItem('lumen.textgroesse'); return TEXTGROESSEN[w] ? w : 'normal'; } catch { return 'normal'; }
+}
+function textgroesseAnwenden() {
+  document.documentElement.style.fontSize = TEXTGROESSEN[textgroesse()];
+}
+textgroesseAnwenden();
 function darstellungAnwenden() {
   const w = darstellung();
   const hell = w === 'hell' || (w === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
@@ -1022,7 +1085,7 @@ function viewSetupSprache() {
   const aktiv = S.setupSprache || sprache();
   return `<div class="center"><div class="panel">
     <div style="text-align:center;margin-bottom:8px">
-      <div class="t-large">${tr('Willkommen bei Lumen')}</div>
+      <h1 class="t-large" style="margin:0">${tr('Willkommen bei Lumen')}</h1>
       <p class="hint" style="margin-top:8px">${tr('Wähle Sprache und Region. Sie gilt für den ganzen Server; jedes Profil kann später seine eigene wählen.')}</p>
     </div>
     <form id="setupsprache" class="panel">
@@ -1040,7 +1103,7 @@ function viewSetup() {
   if (!S.setupSpracheFertig) return viewSetupSprache();
   return `<div class="center"><div class="panel">
     <div style="text-align:center;margin-bottom:8px">
-      <div class="t-large">${tr('Willkommen bei Lumen')}</div>
+      <h1 class="t-large" style="margin:0">${tr('Willkommen bei Lumen')}</h1>
       <p class="hint" style="margin-top:8px">${tr('Du richtest diesen Server ein und wirst sein Besitzer. Später lädst du andere mit einem Link dazu ein — jede Person bekommt ein eigenes Profil.')}</p>
       <p class="hint" style="margin-top:6px">${tr('Lumen war hier schon in Gebrauch? Dann ist der Datenordner falsch eingehängt — bitte nicht einrichten, sondern zuerst die Compose-Datei prüfen.')}</p>
     </div>
@@ -1052,12 +1115,12 @@ function viewSetup() {
                minlength="8" required>
         <span class="hint">${tr('Mindestens acht Zeichen. Damit meldest du dich auf allen Geräten an.')}</span></div>
       <div class="field"><span class="hint">${tr('Sprache und Region: {name}', { name: esc(sprachNameVon(sprache())) })} ·
-        <a href="#" data-setupsprache-zurueck style="color:#4aa3ff">${tr('Ändern')}</a></span></div>
+        <a href="#" class="link" data-setupsprache-zurueck>${tr('Ändern')}</a></span></div>
       <div class="err">${esc(S.error)}</div>
       <button class="btn btn-primary" style="height:46px">${tr('Server einrichten')}</button>
     </form>
     <p class="hint" style="text-align:center">
-      ${tr('Du wurdest eingeladen?')} <a href="#" data-go="redeem" style="color:#4aa3ff">${tr('Einladung einlösen')}</a></p>
+      ${tr('Du wurdest eingeladen?')} <a href="#" class="link" data-go="redeem">${tr('Einladung einlösen')}</a></p>
   </div></div>`;
 }
 
@@ -1076,8 +1139,8 @@ function viewRedeem() {
   const code = S.id || f.code || '';
 
   const wahl = [['pin', 'PIN'], ['password', tr('Passwort')], ['none', tr('Ohne Schutz')]].map(([v, n]) =>
-    `<button type="button" class="tab-pill" role="tab" aria-selected="${art === v}"
-       data-lockkind="${v}" style="height:32px;font-size:14px">${n}</button>`).join('');
+    `<button type="button" class="tab-pill" role="radio" aria-checked="${art === v}"
+       tabindex="${art === v ? 0 : -1}" data-lockkind="${v}" style="height:32px;font-size:.875rem">${n}</button>`).join('');
 
   const geheim = art === 'none' ? `
     <p class="hint">${tr('{schutzOhne} Das passt für den Fernseher im Wohnzimmer, weniger für ein Profil, das nur dir gehört.', { schutzOhne: esc(T.schutzOhne) })}</p>`
@@ -1091,7 +1154,7 @@ function viewRedeem() {
 
   return `<div class="center"><div class="panel">
     <div style="text-align:center;margin-bottom:8px">
-      <div class="t-large">${tr('Du bist eingeladen')}</div>
+      <h1 class="t-large" style="margin:0">${tr('Du bist eingeladen')}</h1>
       <p class="hint" style="margin-top:8px">${tr('Leg dir ein Profil an. Was du zu sehen bekommst, hat die Person festgelegt, die dich eingeladen hat.')}</p>
     </div>
     <form id="redeemform" class="panel">
@@ -1102,15 +1165,15 @@ function viewRedeem() {
       <div class="field"><label for="rname">${tr('Dein Name')}</label>
         <input id="rname" name="name" autocomplete="name" required
           value="${esc(f.name || '')}" ${S.id ? 'autofocus' : ''}></div>
-      <div class="field"><label>${tr('Anmelden mit')}</label>
-        <div role="tablist" style="display:inline-flex;padding:3px;border-radius:999px;
+      <div class="field"><span id="ranmelden" style="font-size:.8125rem;color:var(--label-2)">${tr('Anmelden mit')}</span>
+        <div role="radiogroup" aria-labelledby="ranmelden" data-radiogruppe style="display:inline-flex;padding:3px;border-radius:999px;
           background:var(--fill);gap:2px">${wahl}</div></div>
       ${geheim}
       <div class="err">${esc(S.error)}</div>
       <button class="btn btn-primary" style="height:46px">${tr('Profil anlegen')}</button>
     </form>
     <p class="hint" style="text-align:center">
-      ${tr('Schon ein Profil?')} <a href="#" data-go="profiles" style="color:#4aa3ff">${tr('Zur Übersicht')}</a></p>
+      ${tr('Schon ein Profil?')} <a href="#" class="link" data-go="profiles">${tr('Zur Übersicht')}</a></p>
   </div></div>`;
 }
 
@@ -1134,7 +1197,7 @@ function viewProfiles() {
     <button class="pcard" data-pick="${esc(p.id)}" data-lock="${esc(p.lockKind)}">
       ${avatar(p, 104)}
       <span class="t-body">${esc(p.name)}${p.lockKind !== 'none' ? ' ' + svg(I.lock, 13, 2.2) : ''}</span>
-      ${p.isKid ? `<span class="badge" style="border:0;background:rgba(48,209,88,.16);color:#30d158">${esc(T.kinderprofil)}</span>` : ''}
+      ${p.isKid ? `<span class="badge badge--gruen">${esc(T.kinderprofil)}</span>` : ''}
     </button>`).join('');
   return `<div class="pwrap">
     <h1 class="t-large" style="margin:0">${tr('Wer schaut?')}</h1>
@@ -1166,8 +1229,32 @@ function viewUnlock() {
 
 /* ---------------------------------------------------------------- Mediathek */
 
+/* Startseite bei kleiner Bibliothek: „Neu", „Gut bewertet", „Drama",
+   „Noch nicht angefangen" zeigten dieselben acht Titel. Eine Reihe, die
+   zu über 70 % wiederholt, was weiter oben schon stand, und weniger als
+   vier eigene Titel hat, fällt weg. Weiterschauen bleibt immer. */
+function reihenOhneWiederholung(rows) {
+  const schon = new Set();
+  return rows.filter(r => {
+    const ids = (r.items || []).map(x => x.id);
+    if (r.wide || r.key === 'resume') return true;
+    const eigene = ids.filter(id => !schon.has(id)).length;
+    if (ids.length && (ids.length - eigene) / ids.length > 0.7 && eigene < 4) return false;
+    ids.forEach(id => schon.add(id));
+    return true;
+  });
+}
+/* „Neu" auf dem Poster sagt nur etwas, wenn es nicht auf allem steht: In
+   der Reihe „Neu dazugekommen" sagt es die Reihe schon, und wo mehr als
+   ein Drittel neu ist, fällt die Plakette weg. */
+function neuGedaempft(r) {
+  const items = r.items || [];
+  const neu = items.filter(x => x.neu && !x.finished).length;
+  return r.key === 'new' || neu > items.length / 3 ? items.map(x => (x.neu ? { ...x, neu: false } : x)) : items;
+}
+
 function viewHome() {
-  const rows = S.data?.rows || [];
+  const rows = reihenOhneWiederholung(S.data?.rows || []).map(r => ({ ...r, items: neuGedaempft(r) }));
   if (!rows.length) {
     return shell(`<div class="wrap"><div style="padding-top:90px;max-width:560px">
       <h1 class="t-large">${tr('Noch nichts da')}</h1>
@@ -1303,7 +1390,7 @@ function viewGrid(title) {
       S.filter !== 'Alle' ? ' · ' + esc(S.filter) : ''}</div>
     ${genres.length ? `<div role="group" aria-label="${tr('Genre')}" class="chips chips--rollen">${chips}</div>` : ''}
     ${leiste}
-    ${items.length ? `<div class="grid" id="raster">${items.map(posterCard).join('')}</div>` : leerHtml}
+    ${items.length ? `<div class="grid" id="raster">${neuGedaempft({ items }).map(posterCard).join('')}</div>` : leerHtml}
     ${d.weiter ? '<div id="mehr" class="loading" style="padding:30px 0"><span class="spin"></span></div>' : ''}
     <div style="height:40px"></div></div>`);
 }
@@ -1332,7 +1419,7 @@ function mehrLadenEinrichten() {
       if (S.data !== d) return; // inzwischen woanders
       d.items.push(...naechste.items);
       d.weiter = naechste.weiter;
-      document.getElementById('raster')?.insertAdjacentHTML('beforeend', naechste.items.map(posterCard).join(''));
+      document.getElementById('raster')?.insertAdjacentHTML('beforeend', neuGedaempft({ items: naechste.items }).map(posterCard).join(''));
       if (!d.weiter) { ziel.remove(); mehrBeobachter?.disconnect(); }
     } catch (err) { toast(err.message); }
     finally { laeuft = false; }
@@ -1428,7 +1515,8 @@ function viewSearch() {
     <h1 class="t-large" style="margin:0 0 16px">${tr('Suchen')}</h1>
     <form id="searchform" class="sfield" autocomplete="off" role="search">
       ${svg(I.search, 18, 2)}
-      <input id="q" name="q" value="${esc(S.query)}" placeholder="${tr('Titel, Schauspieler, Genre, Jahr …')}" aria-label="${tr('Suchen')}">
+      <input id="q" name="q" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false"
+        value="${esc(S.query)}" placeholder="${tr('Titel, Schauspieler, Genre, Jahr …')}" aria-label="${tr('Suchen')}">
       ${q ? `<button type="button" class="btn btn-round sm" data-clear aria-label="${tr('Leeren')}">${svg(I.x, 15, 2.2)}</button>` : ''}
     </form>
     <div style="margin-top:28px">
@@ -1482,7 +1570,7 @@ function viewPerson() {
     p.gestorben ? tr('gestorben {tag}', { tag: tag(p.gestorben) }) : ''].filter(Boolean).join(' · ');
   const quellen = (p.quellen || []).map(q => `<a href="${esc(nurHttp(q.url))}" target="_blank" rel="noopener noreferrer">${esc(q.name)}</a>`).join(', ');
   return shell(`<div class="wrap wrap--flat">
-    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
+    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
     <div style="display:flex;gap:24px;align-items:flex-start;margin-top:14px;flex-wrap:wrap">
       ${p.bild ? `<img src="${esc(p.bild)}${tokenSuffix(p.bild)}" alt="" data-weg
         style="width:150px;height:200px;object-fit:cover;border-radius:16px;flex:none;background:var(--fill)">` : ''}
@@ -1524,8 +1612,8 @@ function fassungsWahl(it, fassungen, resumeSec) {
         <span style="display:flex;width:30px;height:30px;border-radius:50%;background:var(--fill);align-items:center;justify-content:center;flex:none">${PLAY(12)}</span>
         <span><span class="t-body">${esc(fassungName(f))}</span>
           ${i === 0 ? `<span class="t-caption c-2"> ${tr('· Standard')}</span>` : ''}</span></button>
-      ${resumeSec > 60 ? `<button class="btn btn-pill" style="height:28px;font-size:12px" data-play="${esc(it.id)}" data-file="${esc(f.id)}" data-from="0">${tr('Von vorn')}</button>` : ''}
-      ${admin && i > 0 ? `<button class="btn btn-pill" style="height:28px;font-size:12px" data-fassungstandard="${esc(it.id)}:${esc(f.id)}"
+      ${resumeSec > 60 ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-play="${esc(it.id)}" data-file="${esc(f.id)}" data-from="0">${tr('Von vorn')}</button>` : ''}
+      ${admin && i > 0 ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassungstandard="${esc(it.id)}:${esc(f.id)}"
           title="${tr('Diese Qualität für alle als Standard nehmen')}">${tr('Als Standard')}</button>` : ''}
     </div>`;
   return `<div class="group group--inset listen-panel" style="max-width:560px;margin-top:14px" role="group" aria-label="${tr('Qualität wählen')}">
@@ -1622,14 +1710,14 @@ function viewDetail() {
   const staffelJetzt = (d.seasons || []).find(x => x.id === d.staffel);
   const staffelFertig = (d.episodes || []).length > 0 && d.episodes.every(e => e.finished);
   const staffelKnopf = staffelJetzt && (d.episodes || []).length ? `
-    <button class="btn btn-pill" style="height:32px;font-size:13px" data-staffel-gesehen="${esc(staffelJetzt.id)}" aria-pressed="${staffelFertig}">
+    <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-staffel-gesehen="${esc(staffelJetzt.id)}" aria-pressed="${staffelFertig}">
       ${svg(I.check, 14, 2.6)} ${staffelFertig ? tr('Staffel nicht mehr als gesehen') : tr('Staffel als gesehen markieren')}</button>` : '';
   // Nach einem Haken an einer späten Folge: auch die davor?
   const vorherFrage = d.vorherigeFrage ? `
     <div class="vorher-frage surface" role="status">
       <span class="t-sub" style="flex:1;min-width:180px">${tr('Auch alle Folgen davor als gesehen markieren?')}</span>
-      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-vorherige-ja="${esc(d.vorherigeFrage)}">${tr('Ja, alle davor')}</button>
-      <button class="btn btn-pill" style="height:32px;font-size:13px" data-vorherige-nein>${tr('Nein')}</button>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-vorherige-ja="${esc(d.vorherigeFrage)}">${tr('Ja, alle davor')}</button>
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-vorherige-nein>${tr('Nein')}</button>
     </div>` : '';
   // „Weiterschauen" auf der Serienseite: die Folge nach der zuletzt
   // geschauten — der Server weiss sie (dieselbe wie auf der Startseite).
@@ -1703,27 +1791,36 @@ function viewDetail() {
                 ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}</button>`) : ''}
           ${it.kind === 'series' && (d.seasons || []).length ? `<button class="btn btn-primary" data-serie-play="${esc(it.id)}">
               ${PLAY(16)} ${esc(serienKnopfText)}</button>` : ''}
-          ${resumeSec > 60 && fassungen.length <= 1 ? `<button class="btn btn-pill btn-pill--fill" data-play="${it.id}" data-file="${esc(playable?.id || '')}" data-from="0">${tr('Von vorn')}</button>` : ''}
-          <button class="btn btn-pill btn-pill--fill" data-list="${it.onList ? 'off' : 'on'}">
-            ${svg(it.onList ? I.check : I.plus, 15, 2.2)} ${it.onList ? tr('Gemerkt') : tr('Merken')}</button>
-          ${it.kind === 'movie' || it.kind === 'series' ? `<button class="btn btn-pill btn-pill--fill herz-knopf" data-fav="${it.favorite ? 'off' : 'on'}"
-              aria-pressed="${!!it.favorite}">${it.favorite
-                ? svg(I.herz, 16, 2).replace('fill="none"', 'fill="currentColor"') : svg(I.herz, 16, 2)} ${tr('Favorit')}</button>` : ''}
+          ${'' /* Eine Hauptaktion (Ansehen), daneben runde Symbole mit kurzer
+                 Beschriftung — wie in der TV-App von Apple. Vorher standen
+                 sechs gleich grosse Kapseln da, am Handy auf drei Zeilen. */}
+          <div class="aktionen">
+          ${resumeSec > 60 && fassungen.length <= 1 ? `<button class="aktion" data-play="${it.id}" data-file="${esc(playable?.id || '')}" data-from="0">
+              <span class="aktion-rund">${svg(I.vonVorn, 18, 2)}</span><span class="aktion-text">${tr('Aktion|Von vorn')}</span></button>` : ''}
+          <button class="aktion" data-list="${it.onList ? 'off' : 'on'}" aria-pressed="${!!it.onList}">
+            <span class="aktion-rund">${svg(it.onList ? I.check : I.plus, 18, 2.2)}</span><span class="aktion-text">${it.onList ? tr('Gemerkt') : tr('Merken')}</span></button>
+          ${it.kind === 'movie' || it.kind === 'series' ? `<button class="aktion herz-knopf" data-fav="${it.favorite ? 'off' : 'on'}"
+              aria-pressed="${!!it.favorite}"><span class="aktion-rund">${it.favorite
+                ? svg(I.herz, 18, 2).replace('fill="none"', 'fill="currentColor"') : svg(I.herz, 18, 2)}</span><span class="aktion-text">${tr('Favorit')}</span></button>` : ''}
+          ${it.finished
+            ? `<button class="aktion" data-fokus="gesehen" data-unseen aria-pressed="true" aria-label="${tr('Gesehen')}" title="${tr('Nicht mehr als gesehen')}">
+                <span class="aktion-rund">${svg(I.check, 18, 2.6)}</span><span class="aktion-text">${tr('Gesehen')}</span></button>`
+            : `<button class="aktion" data-fokus="gesehen" data-seen aria-pressed="false" aria-label="${tr('Gesehen')}" title="${tr('Als gesehen markieren')}">
+                <span class="aktion-rund">${svg(I.check, 18, 2.6)}</span><span class="aktion-text">${tr('Gesehen')}</span></button>`}
           ${it.kind === 'movie' || it.kind === 'series'
-            ? `<button class="btn btn-pill btn-pill--fill" data-zurliste aria-expanded="false">
-                ${svg(I.liste, 15, 2)} ${tr('Zur Liste')}</button>` : ''}
+            ? `<button class="aktion" data-zurliste aria-expanded="false">
+                <span class="aktion-rund">${svg(I.liste, 18, 2)}</span><span class="aktion-text">${tr('Zur Liste')}</span></button>` : ''}
           ${(() => {
             // Herunterladen: die Fassung, die „Ansehen" spielt, sonst die erste.
             const dl = d.download?.erlaubt ? (d.download.dateien || []) : [];
             const datei = dl.find(x => x.fileId === playable?.id) || dl[0];
             if (!datei) return '';
             const gb = datei.groesse ? `${(datei.groesse / 1e9).toLocaleString(sprache(), { maximumFractionDigits: 1 })} GB` : '';
-            return `<a class="btn btn-pill btn-pill--fill" href="${esc(api.downloadURL(datei.fileId))}" download
-              title="${esc(gb ? tr('Originaldatei herunterladen ({gb})', { gb }) : tr('Originaldatei herunterladen'))}">${tr('Herunterladen')}</a>`;
+            return `<a class="aktion" href="${esc(api.downloadURL(datei.fileId))}" download
+              title="${esc(gb ? tr('Originaldatei herunterladen ({gb})', { gb }) : tr('Originaldatei herunterladen'))}">
+              <span class="aktion-rund">${svg(I.laden, 18, 2)}</span><span class="aktion-text">${tr('Herunterladen')}</span></a>`;
           })()}
-          ${it.finished
-            ? `<button class="btn btn-pill btn-pill--fill" data-unseen>${tr('Nicht mehr als gesehen')}</button>`
-            : `<button class="btn btn-pill btn-pill--fill" data-seen>${tr('Als gesehen markieren')}</button>`}
+          </div>
           ${detailUntertitel(it, files)}
         </div>
       </div>
@@ -1773,7 +1870,7 @@ function viewDetail() {
           <div class="surface" style="padding:14px 16px;border-radius:14px;display:flex;align-items:center;gap:4px">
             ${stars}
             <span style="flex:1"></span>
-            ${it.myRating ? `<button class="btn btn-pill" style="height:28px;font-size:12px" data-rate="0">${tr('Löschen')}</button>` : ''}
+            ${it.myRating ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-rate="0">${tr('Löschen')}</button>` : ''}
           </div>
           <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Nur für dich sichtbar.')}</p></section>
         ${(d.sharedRatings || []).length ? `<section style="margin-top:22px"><div class="section-h">${tr('Im Haushalt')}</div>
@@ -1861,10 +1958,22 @@ function extraAbspielen(url, titel) {
 // Namen der Sprachen kommen aus Intl.DisplayNames – in der Sprache der
 // Oberfläche („Deutsch" / „German"), ohne eigene Liste.
 
+/* Sagt der Titel der Spur nur, was ohnehin dasteht — Sprache, „erzwungen",
+   „Standard" —, fällt er weg. Sonst hiess es „Deutsch (Deutsch (erzwungen),
+   erzwungen)". */
+function nurSpracheUndMerkmale(titel, name, code) {
+  let rest = ` ${String(titel).toLowerCase()} `;
+  for (const w of [name, code, sprachName(code || ''), 'forced', 'erzwungen', tr('erzwungen'), 'default', 'standard', 'sdh', 'cc', 'full', 'subtitles', 'subtitle', 'untertitel', 'stereo', 'surround']) {
+    if (!w) continue;
+    rest = rest.split(String(w).toLowerCase()).join(' ');
+  }
+  return !rest.replace(/[\s()\[\]\-–—_.,:;/|]+/g, '');
+}
+
 function spurName(t) {
   let name = t.language && t.language !== 'und' ? sprachName(t.language) : tr('Unbekannt');
   const z = [];
-  if (t.title && t.title.toLowerCase() !== name.toLowerCase()) z.push(t.title);
+  if (t.title && !nurSpracheUndMerkmale(t.title, name, t.language)) z.push(t.title);
   if (t.forced) z.push(tr('erzwungen'));
   if (t.hearingImpaired) z.push(tr('für Hörgeschädigte'));
   // Bild-Untertitel (PGS, DVD) rechnet der Server ins Bild — die Wahl
@@ -2056,7 +2165,7 @@ async function vonHandSetzen(wert) {
 function folgenPanel(p) {
   const f = p.folgen;
   if (!f) { folgenLaden(p); return `<div class="spuren-titel">${tr('Folgen')}</div><div class="loading" style="padding:20px"><span class="spin"></span></div>`; }
-  const pillen = f.seasons.map(st => `<button class="tab-pill" role="tab" aria-selected="${f.staffel === st.id}" data-pl-staffel="${esc(st.id)}" style="height:28px;font-size:13px">
+  const pillen = f.seasons.map(st => `<button class="tab-pill" role="tab" aria-selected="${f.staffel === st.id}" data-pl-staffel="${esc(st.id)}" style="height:28px;font-size:.8125rem">
       ${(st.seasonNo || 0) === 0 ? tr('Specials') : esc(st.title)}</button>`).join('');
   const zeilen = (f.episodes || []).map(e => {
     const aktuell = e.id === p.itemId;
@@ -2167,23 +2276,51 @@ async function untertitelAnwenden() {
   if (!p || !v) return;
   if (!p.textspur) { p.textspur = v.addTextTrack('subtitles', tr('Untertitel'), sprache().slice(0, 2)); }
   const spur = p.textspur;
-  for (const c of [...(spur.cues || [])]) spur.removeCue(c);
+  // Jeder Aufruf bekommt eine Nummer; nur der jüngste darf Zeilen setzen.
+  // Zwei überlappende Aufrufe (Start und gleich danach ein Sprung, bevor
+  // die .vtt da war) legten sonst jede Zeile doppelt hin.
+  const nr = p.utLauf = (p.utLauf || 0) + 1;
+  const leeren = () => { for (const c of [...(spur.cues || [])]) spur.removeCue(c); };
   // Aus, oder ein Bild-Untertitel — der steckt schon im Bild des Stroms.
-  if (p.untertitel == null || einbrennenVon(p) >= 0) { spur.mode = 'disabled'; return; }
+  if (p.untertitel == null || einbrennenVon(p) >= 0) { leeren(); spur.mode = 'disabled'; return; }
   const gewuenscht = p.untertitel;
   if (p.cuesFuer !== gewuenscht) {
     const text = await untertitelHolen(p, gewuenscht);
-    if (S.playing !== p || p.untertitel !== gewuenscht) return;
+    if (S.playing !== p || p.untertitel !== gewuenscht || nr !== p.utLauf) return;
     if (text == null) return;
     p.cues = vttLesen(text); p.cuesFuer = gewuenscht;
   }
-  if (S.playing !== p || p.untertitel !== gewuenscht) return;
+  if (S.playing !== p || p.untertitel !== gewuenscht || nr !== p.utLauf) return;
+  // Erst jetzt, direkt vor dem Setzen, leeren — nach dem Warten.
+  leeren();
   for (const c of p.cues) {
     const von = c.von - p.offset, bis = c.bis - p.offset;
     if (bis <= 0) continue;
     spur.addCue(new VTTCue(Math.max(0, von), bis, c.text));
   }
   spur.mode = 'showing';
+  untertitelLage();
+}
+
+/* Untertitel über der Steuerleiste: Ist die Leiste zu sehen, rücken die
+   Zeilen über sie (wie bei Netflix und YouTube) — vorher standen sie
+   hinter den Zeiten bzw. am Handy zwischen den Knöpfen. */
+function untertitelLage() {
+  const p = S.playing, v = $('#v');
+  const spur = p?.textspur;
+  if (!p || !v || !spur || spur.mode !== 'showing' || !spur.cues) return;
+  let linie = 'auto';
+  if (p.ui) {
+    const bot = app.querySelector('.pl-bot')?.getBoundingClientRect();
+    const vr = v.getBoundingClientRect();
+    if (bot && vr.height) linie = Math.max(10, Math.min(92, Math.floor((bot.top - vr.top) / vr.height * 100) - 2));
+  }
+  if (p.utLinie === linie && p.utLinieZahl === spur.cues.length) return;
+  p.utLinie = linie; p.utLinieZahl = spur.cues.length;
+  for (const c of [...spur.cues]) {
+    if (linie === 'auto') { c.snapToLines = true; c.line = 'auto'; }
+    else { c.snapToLines = false; c.line = linie; c.lineAlign = 'end'; }
+  }
 }
 
 async function spurWaehlen(idx) {
@@ -2254,6 +2391,45 @@ const imVollbild = () => !!(document.fullscreenElement || document.webkitFullscr
 // Auf Geräten ohne Maus (iPhone, iPad) regelt die Hardware die Lautstärke;
 // iOS ignoriert volume ohnehin. Dort nur der Stumm-Knopf.
 const lautRegler = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+// Bild im Bild: Standard-API (Chrome, Edge, Safari 13.1+) oder die ältere
+// von Safari. Firefox hat keine, dort fehlt der Knopf.
+const bildImBildDa = () => !!(document.pictureInPictureEnabled || HTMLVideoElement.prototype.webkitSetPresentationMode);
+async function bildImBildUmschalten() {
+  const v = $('#v'), p = S.playing;
+  if (!v || !p) return;
+  try {
+    if (document.pictureInPictureElement) await document.exitPictureInPicture();
+    else if (v.webkitPresentationMode === 'picture-in-picture') v.webkitSetPresentationMode('inline');
+    else if (document.pictureInPictureEnabled && v.requestPictureInPicture) {
+      await v.requestPictureInPicture();
+      // Chrome zeigt Text-Untertitel im kleinen Fenster nicht.
+      if (p.textspur?.mode === 'showing') toast(tr('Im Bild-im-Bild-Fenster erscheinen die Untertitel nicht.'));
+    } else if (v.webkitSetPresentationMode) v.webkitSetPresentationMode('picture-in-picture');
+  } catch { toast(tr('Bild im Bild ist hier nicht möglich.')); }
+}
+function bildImBildVerlassen() {
+  if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
+}
+
+/* Film in Teilen (cd1, cd2): Die Leiste zeigt den ganzen Film, nicht nur
+   den laufenden Teil — „Weiter bei 1:43" auf der Titelseite findet man so
+   im Player wieder. Intern bleibt alles je Teil (offset, duration). */
+const filmVor = p => (p.teile ? p.vorher || 0 : 0);
+const filmDauer = p => (p.teile && p.gesamt ? p.gesamt : p.duration || 0);
+const filmPos = p => filmVor(p) + p.offset + p.current;
+/* Ein Sprung auf der Leiste, in Sekunden des ganzen Films. Liegt das Ziel
+   in einem anderen Teil, startet dieser an der richtigen Stelle. */
+function filmSprung(sek) {
+  const p = S.playing;
+  if (!p) return;
+  if (!p.teile) return seekTo(sek);
+  const vor = filmVor(p);
+  if (sek >= vor && sek < vor + (p.duration || 0) - 1) return seekTo(sek - vor);
+  const v = $('#v');
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  S.playing = null;
+  startPlayer(p.itemId, Math.max(0, Math.min(sek, filmDauer(p) - 2)));
+}
 
 function zeitleisteText(pos, total) {
   return total ? tr('{pos} von {gesamt}', { pos: clock(pos), gesamt: clock(total) }) : clock(pos);
@@ -2264,15 +2440,16 @@ function viewPlayer() {
   if (!p) return viewHome();
   const hid = p.ui ? '' : ' pl-hide';
   const inert = p.ui ? '' : ' inert';
-  const pos = p.offset + p.current;
-  const total = p.duration || 0;
+  const pos = filmPos(p);
+  const total = filmDauer(p);
   const pct = total ? Math.min(100, pos / total * 100) : 0;
   const v = $('#v');
   const stumm = v ? v.muted : !!p.stumm;
   const laut = v ? v.volume : (p.lautstaerke ?? 1);
 
   const prefs = S.me?.prefs || {};
-  return `<div class="player${p.ui ? '' : ' pl-nocursor'} ut-${prefs.utGroesse || 'normal'}${prefs.utHintergrund === '0' ? ' ut-ohne' : ''}">
+  return `<div class="player${p.ui ? '' : ' pl-nocursor'} ut-${prefs.utGroesse || 'normal'}${prefs.utHintergrund === '0' ? ' ut-ohne' : ''}"
+    role="dialog" aria-modal="true" aria-label="${esc(tr('{titel} – Wiedergabe', { titel: p.title }))}">
     <video id="v" class="pl-video" playsinline autoplay
       style="position:absolute;inset:0;width:100%;height:100%;background:#000;object-fit:contain"></video>
     <div class="pl-surface" data-surface style="position:absolute;inset:0;z-index:2"></div>
@@ -2317,6 +2494,7 @@ function viewPlayer() {
           aria-label="${tr('Kapitel')}" aria-expanded="${p.spurenOffen === 'kapitel'}">${svg(I.kapitel, 21, 2)}</button>` : ''}
         <button class="btn btn-pill glass glass--clear pl-knopf pl-knopf--tempo${p.spurenOffen === 'tempo' ? ' pl-knopf--an' : ''}" data-spuren="tempo"
           aria-label="${esc(tr('Wiedergabetempo: {tempo}', { tempo: tempoText(p.tempo || 1) }))}" aria-expanded="${p.spurenOffen === 'tempo'}">${esc(tempoZahl(p.tempo || 1))}</button>
+        ${bildImBildDa() ? `<button class="btn btn-round sm glass glass--clear pl-knopf" data-pip aria-label="${tr('Bild im Bild')}" title="${tr('Bild im Bild (P)')}">${svg(I.bildImBild, 20, 2)}</button>` : ''}
         <button class="btn btn-round sm glass glass--clear pl-knopf" data-vollbild
           aria-label="${imVollbild() ? tr('Vollbild beenden') : tr('Vollbild')}">${svg(imVollbild() ? I.vollbildAus : I.vollbild, 20, 2)}</button>
       </div>
@@ -2325,8 +2503,8 @@ function viewPlayer() {
         aria-valuetext="${esc(zeitleisteText(pos, total))}">${kapitelMarken(p, total)}<i style="width:${pct}%"></i><b style="left:${pct}%"></b>
         <span class="pl-vorschau" aria-hidden="true" hidden><span class="pl-vorschau-bild"></span><span class="pl-vorschau-zeit tnum"></span></span></div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
-        <span class="t-caption tnum pl-zeit" aria-hidden="true">${clock(pos)}</span>
-        <span class="t-caption tnum c-2 pl-rest" aria-hidden="true">${total ? '−' + clock(total - pos) : ''}</span>
+        <span class="t-sub tnum pl-zeit" aria-hidden="true">${clock(pos)}</span>
+        <span class="t-sub tnum c-2 pl-rest" aria-hidden="true">${total ? '−' + clock(total - pos) : ''}</span>
       </div>
     </div>
   </div>`;
@@ -2431,6 +2609,9 @@ async function startPlayer(itemId, fromSec, fileId = null) {
         history.pushState({ ...(history.state || {}), tiefe: verlaufTiefe, spieler: true }, '');
       } catch {}
     }
+    // Wohin der Fokus nach dem Schliessen zurückkehrt: auf den Knopf, mit
+    // dem der Film gestartet wurde.
+    if (S.view !== 'player') S.fokusNachPlayer = fokusSchluessel();
     S.view = 'player';
     render();          // baut den Player auf, mountPlayer hängt sich ein
     // Kinderprofil: leise Bescheid geben, wenn die Zeit knapp wird.
@@ -2564,14 +2745,24 @@ function mountPlayer() {
   lautstaerkeAnwenden(v);
   v.defaultPlaybackRate = v.playbackRate = p.tempo || 1;
   v.onloadedmetadata = () => { p.loading = false; v.playbackRate = p.tempo || 1; patchChrome(); };
-  v.onplaying = () => { p.loading = false; p.paused = false; patchChrome(); showChrome(); };
+  v.onplaying = () => { p.loading = false; clearTimeout(p.wartenZeit); p.wartenZeit = null; p.paused = false; patchChrome(); showChrome(); };
   // Pause und Sprung sind gute Momente zum Sichern: Wer pausiert, steht
   // vielleicht gleich auf und schaut auf dem Handy weiter.
   v.onpause = () => { p.paused = true; showChrome(true); if (!v.ended) standSichern(); };
   v.onseeked = () => { standSichern(); };
   v.onvolumechange = () => { lautstaerkeMerken(v); patchLautstaerke(); };
-  v.onwaiting = () => { p.loading = true; patchChrome(); };
-  v.oncanplay = () => { p.loading = false; patchChrome(); };
+  // Hängt der Strom länger, sagt Lumen es — vorher drehte sich der Kringel
+  // nach einem Verbindungsabbruch wortlos weiter.
+  const wartenAus = () => { clearTimeout(p.wartenZeit); p.wartenZeit = null; };
+  v.onwaiting = () => {
+    p.loading = true; patchChrome();
+    if (p.wartenZeit) return;
+    p.wartenZeit = setTimeout(() => {
+      p.wartenZeit = null;
+      if (S.playing === p && p.loading && !p.paused) toast(tr('Die Verbindung ist gerade langsam. Lumen lädt weiter …'));
+    }, 10000);
+  };
+  v.oncanplay = () => { p.loading = false; wartenAus(); patchChrome(); };
   v.ontimeupdate = () => { p.current = v.currentTime; patchPlayer(); saveSoon(); };
   // Ein Strom ohne Länge endet auch, wenn der Server ihn beendet: nach
   // einer langen Pause (abgelaufen), auf Wunsch (Ich → Geräte) oder weil
@@ -2588,6 +2779,9 @@ function mountPlayer() {
     stromAbgerissen(p, !p.paused);
   };
   showChrome();
+  // Der Fokus geht in den Player (auf Abspielen/Pause): Tastatur und
+  // Bildschirmleser wissen so, dass er offen ist.
+  app.querySelector('[data-toggle]')?.focus({ preventScroll: true });
 }
 
 /* patchChrome bessert die Steuerung nach: ein-/ausblenden, Pause-Symbol,
@@ -2605,6 +2799,7 @@ function patchChrome() {
     if (sel !== '.pl-scrim') el.inert = !p.ui;
   }
   app.querySelector('.player')?.classList.toggle('pl-nocursor', !p.ui);
+  untertitelLage();
 
   const toggle = app.querySelector('[data-toggle]');
   if (toggle) {
@@ -2651,8 +2846,8 @@ function patchChrome() {
 function patchPlayer() {
   const p = S.playing;
   if (!p || S.view !== 'player') return;
-  const pos = p.offset + p.current;
-  const total = p.duration || 0;
+  const pos = filmPos(p);
+  const total = filmDauer(p);
   const pct = total ? Math.min(100, pos / total * 100) : 0;
   const bar = $('.pl-bar > i'), thumb = $('.pl-bar > b');
   // Während jemand zieht, zeigt die Leiste die Zielstelle, nicht den Film.
@@ -2670,15 +2865,21 @@ function patchPlayer() {
   const zeit = app.querySelector('.pl-zeit'), rest = app.querySelector('.pl-rest');
   if (zeit) zeit.textContent = clock(pos);
   if (rest) rest.textContent = total ? '−' + clock(total - pos) : '';
-  vorspannPruefen(p, pos);
-  abspannPruefen(p, pos, total);
+  // Vorspann und Abspann gehören zur Datei, die gerade läuft.
+  vorspannPruefen(p, p.offset + p.current);
+  abspannPruefen(p, p.offset + p.current, p.duration || 0);
 }
 
 /* „Vorspann überspringen": solange die Stelle im Vorspann liegt, steht
    der Knopf da; wer es in den Einstellungen so will, springt von selbst. */
 function vorspannPruefen(p, pos) {
   const i = p.intro;
-  const drin = i && !p.introUebersprungen && pos >= i.vonMs / 1000 + 0.5 && pos < i.bisMs / 1000 - 1;
+  // Wer übersprungen hat und dann in den Vorspann zurückspult, bekommt den
+  // Knopf wieder — nur das automatische Überspringen bleibt aus. (Kurz
+  // nach dem Sprung steht die alte Stelle noch da; die zählt nicht.)
+  const imVorspann = i && pos >= i.vonMs / 1000 + 0.5 && pos < i.bisMs / 1000 - 1;
+  const drin = imVorspann && (!p.introUebersprungen
+    || (pos < i.bisMs / 1000 - 3 && Date.now() - (p.introSprungUm || 0) > 3000));
   const pill = document.getElementById('vorspann');
   if (drin && !pill) {
     const b = document.createElement('button');
@@ -2686,7 +2887,7 @@ function vorspannPruefen(p, pos) {
     b.dataset.skipintro = '1';
     b.innerHTML = `${svg(I.fwd10, 18, 2)}<span class="t-body">${tr('Vorspann überspringen')}</span>`;
     document.querySelector('.player')?.appendChild(b);
-    if ((S.me?.prefs || {}).skipIntro === '1') vorspannUeberspringen();
+    if ((S.me?.prefs || {}).skipIntro === '1' && !p.introUebersprungen) vorspannUeberspringen();
   } else if (!drin && pill) {
     pill.remove();
   }
@@ -2696,6 +2897,7 @@ function vorspannUeberspringen() {
   const p = S.playing;
   if (!p?.intro) return;
   p.introUebersprungen = true;
+  p.introSprungUm = Date.now();
   document.getElementById('vorspann')?.remove();
   seekTo(p.intro.bisMs / 1000);
 }
@@ -2704,8 +2906,16 @@ function vorspannUeberspringen() {
    steht „Als Nächstes" schon da, mit dem, was kommt, und zählt bis zum
    Ende herunter. Nur bei Folgen und Listen; ein einzelner Film endet. */
 function abspannPruefen(p, pos, total) {
-  if (p.naechsterAngeboten || !total) return;
+  if (!total) return;
   const ab = p.creditsMs ? p.creditsMs / 1000 : total - 40;
+  // Aus dem Abspann zurückgespult: Die Karte geht weg und kommt beim
+  // nächsten Abspann wieder (vorher blieb sie über der Handlung stehen).
+  if (p.naechsterAngeboten && !p.abgelehnt && pos < ab - 1 && document.getElementById('naechster')) {
+    naechsterWeg();
+    p.naechsterAngeboten = false;
+    return;
+  }
+  if (p.naechsterAngeboten) return;
   if (pos < ab || pos > total - 2) return;
   if (p.kind !== 'episode' && !S.warteschlange) return;
   p.naechsterAngeboten = true;
@@ -2919,19 +3129,22 @@ function barSekunde(bar, clientX) {
   const p = S.playing;
   const r = bar.getBoundingClientRect();
   const anteil = Math.max(0, Math.min(1, (clientX - r.left) / (r.width || 1)));
-  return anteil * (p?.duration || 0);
+  return anteil * (p ? filmDauer(p) : 0);
 }
 
 function vorschauZeigen(bar, sek) {
   const p = S.playing;
   const box = bar.querySelector('.pl-vorschau');
-  if (!p || !box || !p.duration) return;
-  const anteil = sek / p.duration;
+  if (!p || !box || !filmDauer(p)) return;
+  const anteil = sek / filmDauer(p);
   p.vorschauBei = sek;
   box.hidden = false;
   box.querySelector('.pl-vorschau-zeit').textContent = clock(sek);
   const bild = box.querySelector('.pl-vorschau-bild');
-  const t = p.trick;
+  // Vorschaubilder gibt es je Datei — bei Filmen in Teilen nur für den laufenden.
+  const imTeil = sek - filmVor(p);
+  const t = imTeil >= 0 && imTeil < (p.duration || 0) ? p.trick : null;
+  sek = imTeil;
   if (t && t.blaetter?.length && t.intervall > 0) {
     const n = Math.min(Math.floor(sek / t.intervall), (t.bilder || 1) - 1);
     const jeBlatt = (t.spalten || 1) * (t.zeilen || 1);
@@ -2994,7 +3207,7 @@ app.addEventListener('pointerdown', e => {
   const zeigen = x => {
     const sek = barSekunde(bar, x);
     p.ziel = sek;
-    const pct = sek / p.duration * 100;
+    const pct = sek / filmDauer(p) * 100;
     const i = bar.querySelector('i'), b = bar.querySelector('b');
     if (i) i.style.width = pct + '%';
     if (b) b.style.left = pct + '%';
@@ -3008,7 +3221,7 @@ app.addEventListener('pointerdown', e => {
     bar.removeEventListener('pointercancel', ende);
     p.ziehen = false;
     vorschauWeg(bar);
-    if (ev.type === 'pointerup' && p.ziel != null) seekTo(p.ziel);
+    if (ev.type === 'pointerup' && p.ziel != null) filmSprung(p.ziel);
     p.ziel = null;
     showChrome();
   };
@@ -3032,12 +3245,12 @@ app.addEventListener('pointermove', e => {
 function zeitleisteTaste(e) {
   const p = S.playing, v = $('#v');
   if (!p || !v) return false;
-  const jetzt = p.offset + v.currentTime;
+  const jetzt = filmVor(p) + p.offset + v.currentTime;
   const ziel = { ArrowLeft: jetzt - 10, ArrowDown: jetzt - 10, ArrowRight: jetzt + 10, ArrowUp: jetzt + 10,
-    PageDown: jetzt - 60, PageUp: jetzt + 60, Home: 0, End: (p.duration || 0) - 2 }[e.key];
+    PageDown: jetzt - 60, PageUp: jetzt + 60, Home: 0, End: filmDauer(p) - 2 }[e.key];
   if (ziel == null) return false;
   e.preventDefault();
-  seekTo(Math.max(0, ziel));
+  filmSprung(Math.max(0, ziel));
   return true;
 }
 
@@ -3282,6 +3495,8 @@ async function spielerAnhalten() {
   const p = S.playing;
   if (!p) return null;
   naechsterWeg();
+  bildImBildVerlassen();
+  clearTimeout(p.wartenZeit);
   document.getElementById('nochda')?.remove();
   vollbildVerlassen();
   S.warteschlange = null;
@@ -3327,7 +3542,7 @@ function reiheKarte(r) {
 
 const kopf = (titel, unter, aktionen = '') => `
   <header>
-    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px" data-back>
+    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px" data-back>
       ${svg(I.back, 16, 2)}${tr('Zurück')}</button>
     <h1 class="t-large" style="margin:14px 0 0">${titel}</h1>
     <div class="t-sub c-2" style="margin-top:4px">${unter}</div>
@@ -3381,7 +3596,7 @@ function viewCollection() {
   const kopfbild = r.backdrop ? `<div class="hero" style="height:min(44vh,420px);min-height:280px">
       ${artOf({ backdrop: r.backdrop, title: r.name }, 'wide')}<div class="hero-scrim"></div>
       <div class="hero-text" style="bottom:28px">
-        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px;margin-bottom:14px" data-back>
+        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px;margin-bottom:14px" data-back>
           ${svg(I.back, 16, 2)}${tr('Zurück')}</button>
         <h1 class="t-hero">${titel}</h1>
         <div class="t-sub c-2" style="margin-top:6px">${esc(unter)}</div>
@@ -3426,7 +3641,7 @@ function viewPlaylists() {
     <form id="listeform" class="sfield" style="max-width:520px" autocomplete="off">
       ${svg(I.plus, 18, 2)}<input name="name" placeholder="${tr('Neue Liste, etwa „Filmabend“')}" maxlength="80"
         aria-label="${tr('Name der neuen Liste')}">
-      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px">${tr('Anlegen')}</button></form>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem">${tr('Anlegen')}</button></form>
     <section style="margin-top:30px"><div class="section-h" style="padding-left:0">${tr('Meine Listen')}</div>
       ${meine.length ? `<div class="listen-grid">${meine.map(listeKarte).join('')}</div>`
         : `<p class="hint">${tr('Noch keine. Leg oben eine an, oder auf einer Titelseite mit „Zur Liste“.')}</p>`}</section>
@@ -3511,11 +3726,11 @@ async function zuweisenPanel(itemId, suche, modus = 'suche') {
     <form data-zuweisenform data-item="${esc(itemId)}" class="row" style="min-height:52px;gap:10px" autocomplete="off">
       <span style="color:var(--label-2);display:flex">${svg(I.search, 16, 2)}</span>
       <input name="q" value="${esc(idModus ? '' : suche)}" placeholder="${idModus ? tr('tt0133093, TMDb-Nummer oder Link einfügen …') : tr('Titel suchen, oder Link/Kennung von TMDb, IMDb, TheTVDB einfügen …')}" aria-label="${idModus ? tr('Kennung oder Link') : tr('Suchen')}"
-        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:16px">
+        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:1rem">
       ${idModus ? '' : `<input name="year" placeholder="${tr('Jahr')}" inputmode="numeric" aria-label="${tr('Jahr')}"
-        style="width:64px;border:0;outline:0;background:var(--fill);border-radius:8px;padding:4px 8px;color:var(--label);font:inherit;font-size:14px">`}
-      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px">${idModus ? tr('Laden') : tr('Suchen')}</button>
-      <button type="button" class="btn btn-pill" style="height:30px;font-size:13px" data-zuweisen-aus="${esc(itemId)}">${tr('Zu')}</button></form>
+        style="width:64px;border:0;outline:0;background:var(--fill);border-radius:8px;padding:4px 8px;color:var(--label);font:inherit;font-size:.875rem">`}
+      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem">${idModus ? tr('Laden') : tr('Suchen')}</button>
+      <button type="button" class="btn btn-pill" style="height:30px;font-size:.8125rem" data-zuweisen-aus="${esc(itemId)}">${tr('Zu')}</button></form>
     <div data-treffer-box>${idModus
       ? `<p class="t-caption c-2" style="padding:10px 16px;margin:0;line-height:1.5">${tr('Möglich sind: IMDb-Kennung (tt…), TMDb-Nummer, TheTVDB-Nummer (tvdb:121361) oder ein Link von imdb.com, themoviedb.org oder thetvdb.com. Bei TheTVDB steht die Nummer auf der Seite der Serie unter „TheTVDB.com Series ID“.')}</p>`
       : `<p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p>`}</div></div>`;
@@ -3569,8 +3784,8 @@ async function listenPanel(itemId) {
     <form id="neuelisteform" class="row" style="min-height:52px;gap:10px" autocomplete="off">
       <span style="color:var(--label-2);display:flex">${svg(I.plus, 16, 2)}</span>
       <input name="name" placeholder="${tr('Neue Liste …')}" maxlength="80" aria-label="${tr('Neue Liste')}"
-        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:16px">
-      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px">${tr('Anlegen')}</button></form>
+        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:1rem">
+      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem">${tr('Anlegen')}</button></form>
   </div>`;
   document.querySelector('[data-zurliste]')?.setAttribute('aria-expanded', 'true');
 }
@@ -3592,8 +3807,8 @@ function viewWishes() {
       </div>
       <span class="badge" style="border:0;background:${COL[w.state][0]};color:${COL[w.state][1]};flex:none">${NAME[w.state]}</span>
       ${owner && w.state !== 'done' ? `<div style="display:flex;gap:8px;flex:none">
-          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
+          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
         </div>` : ''}
     </div>`).join('');
 
@@ -3603,7 +3818,7 @@ function viewWishes() {
       ${owner ? tr('Was sich der Haushalt wünscht') : tr('Was du dir gewünscht hast, und wie es steht')}</div>
     <form id="wishform" class="sfield" style="max-width:560px">
       ${svg(I.plus, 18, 2)}<input name="title" placeholder="${tr('Titel wünschen …')}" aria-label="${tr('Titel wünschen')}">
-      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px">${tr('Wünschen')}</button></form>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem">${tr('Wünschen')}</button></form>
     <p class="t-caption c-2" style="margin:8px 2px 0">
       ${tr('Der Besitzer sieht den Titel und wer ihn gewünscht hat — sonst nichts.')}</p>
     <section style="margin-top:24px">${rows ? `<div class="group group--inset">${rows}</div>`
@@ -3615,7 +3830,7 @@ function viewWishes() {
 
 const swRow = (label, on, value, key) => `
   <div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${esc(label)}</span>
-    ${on === null ? `<span style="color:var(--label-2);font-size:15px">${esc(value)}</span>`
+    ${on === null ? `<span style="color:var(--label-2);font-size:.9375rem">${esc(value)}</span>`
       : `<button class="switch" role="switch" aria-checked="${!!on}" ${key ? `data-pref="${key}"` : 'data-sw="1"'}
           aria-label="${esc(label)}"><i></i></button>`}</div>`;
 
@@ -3645,7 +3860,7 @@ function viewSettings() {
     <div class="row" style="min-height:52px;gap:12px">
       <span style="flex:1;min-width:0"><span class="t-body">${esc(p.deviceName)}</span>
         <span class="t-caption c-2" style="display:block">${p.mode === 'direct' ? tr('direkt') : tr('wird umgewandelt')}${p.detail ? ' · ' + esc(p.detail) : ''}</span></span>
-      <button class="btn btn-pill" style="height:32px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
         data-meinstop="${esc(p.id)}">${tr('Beenden')}</button></div>`).join('');
 
   return shell(`<div class="wrap wrap--flat" style="max-width:1100px">
@@ -3678,9 +3893,10 @@ function viewSettings() {
             ${['av-a', 'av-b', 'av-c', 'av-d', 'av-k'].map(c => `<button class="avatar ${c}${a.avatar === c ? ' gewaehlt' : ''}" style="--av:44px;border:0" data-avatar="${c}" aria-label="${tr('Farbe {nr}', { nr: c.slice(3).toUpperCase() })}">${esc(a.name[0])}</button>`).join('')}
             ${Object.keys(FIGUREN).map(f => `<button class="avatar avatar--figur${a.avatar === 'fig-' + f ? ' gewaehlt' : ''}" style="--av:44px;border:0;background:${FIGUREN[f][0]}" data-avatar="fig-${f}" aria-label="${f}">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${FIGUREN[f][1]}</svg></button>`).join('')}
-            <label class="avatar${a.avatar === 'bild' ? ' gewaehlt' : ''}" style="--av:44px;background:var(--fill-2);color:var(--label-2);cursor:pointer" aria-label="${tr('Eigenes Bild hochladen')}">
+            <label class="avatar avatar-hochladen${a.avatar === 'bild' ? ' gewaehlt' : ''}" style="--av:44px;background:var(--fill-2);color:var(--label-2);cursor:pointer">
+              <span class="sr-only">${tr('Eigenes Bild hochladen')}</span>
               ${a.avatar === 'bild' ? `<img src="/api/v1/avatar/${esc(a.id)}?v=${S.avatarStand || 0}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : svg('<path d="M12 5v14M5 12h14"/>', 18, 2.2)}
-              <input type="file" accept="image/*" data-avatarbild style="display:none"></label>
+              <input type="file" accept="image/*" data-avatarbild class="sr-only"></label>
           </div>`, tr('Eine Farbe, eine Figur oder ein eigenes Bild — Lumen verkleinert es auf 256 Pixel.'))}
         ${grp(tr('Untertitel'), `<div class="row" style="min-height:54px"><span class="t-body" style="flex:1" id="ut-groesse">${tr('Grösse')}</span>
             ${segment(tr('Grösse der Untertitel'), [['klein', tr('Klein')], ['normal', tr('Normal')], ['gross', tr('Gross')]].map(([v, n]) =>
@@ -3691,13 +3907,17 @@ function viewSettings() {
         ${grp(tr('Sprache'), `<div class="row" style="min-height:54px;gap:12px">
             <label for="prefsprache" class="sr-only">${tr('Sprache und Region')}</label>
             <select id="prefsprache" class="takt" data-prefsprache style="flex:1;min-width:0">
-              <option value="">${tr('Wie der Server ({name})', { name: esc(sprachNameVon(S.hello?.sprache || 'de-CH')) })}</option>
+              <option value="">${tr('Wie der Server – {name}', { name: esc(sprachNameVon(S.hello?.sprache || 'de-CH')) })}</option>
               ${sprachWahl().map(s => `<option value="${esc(s.id)}" lang="${esc(s.id)}"${prefs.sprache === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
             </select></div>`, tr('Gilt für dein Profil auf allen Geräten.'))}
         ${grp(tr('Darstellung'), `<div class="row" style="min-height:54px">
             ${segment(tr('Darstellung'), [['dunkel', tr('Dunkel')], ['hell', tr('Hell')], ['auto', tr('Wie das Gerät')]].map(([v, n]) =>
               ({ name: n, an: darstellung() === v, attr: `data-darstellung="${v}"` })))}
-            </div>`, tr('Gilt für diesen Browser.'))}
+            </div>
+            <div class="row" style="min-height:54px;flex-wrap:wrap"><span class="t-body" style="flex:1">${tr('Textgrösse')}</span>
+            ${segment(tr('Textgrösse'), [['normal', tr('Normal')], ['gross', tr('Gross')], ['sehrgross', tr('Sehr gross')]].map(([v, n]) =>
+              ({ name: n, an: textgroesse() === v, attr: `data-textgroesse="${v}"` })))}
+            </div>`, tr('Gilt für diesen Browser. Die Schrift wächst auch mit der Textgrösse von Browser und System.'))}
         ${a.isKid && bzStand()?.aktiv ? grp(tr('Bildschirmzeit'), bzIchZeile(),
           tr('Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.')) : ''}
         ${grp(tr('Privatsphäre'),
@@ -3718,7 +3938,7 @@ function viewSettings() {
             <label for="tvcode" class="t-body" style="flex:1;min-width:180px">${tr('Code vom Fernseher')}
               <span class="t-caption c-2" style="display:block">${tr('Der Fernseher meldet sich dann mit deinem Profil an.')}</span></label>
             <input id="tvcode" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" maxlength="7"
-              style="width:120px;height:38px;border-radius:10px;border:0;background:var(--fill);color:var(--label);font:inherit;font-size:18px;text-align:center;letter-spacing:.12em">
+              style="width:120px;height:38px;border-radius:10px;border:0;background:var(--fill);color:var(--label);font:inherit;font-size:1.125rem;text-align:center;letter-spacing:.12em">
             <button class="btn btn-pill btn-pill--fill" type="submit">${tr('Anmelden')}</button></form>`)}
         ${laufend ? grp(tr('Läuft gerade in deinem Profil'), laufend) : ''}
         ${grp(tr('Geräte'), devices +
@@ -3726,13 +3946,13 @@ function viewSettings() {
              <span class="t-body">${tr('Überall abmelden')}</span></button>`, tr('Zuletzt aktiv steht nur auf den Tag genau da — und nur hier, in deinem Profil.'))}
         ${grp(tr('Über Lumen'),
           `<div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${tr('Fassung')}</span>
-             <span style="color:var(--label-2);font-size:15px">${esc(S.hello?.version || '')}</span></div>
+             <span style="color:var(--label-2);font-size:.9375rem">${esc(S.hello?.version || '')}</span></div>
            <div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${tr('Lizenz')}</span>
-             <span style="color:var(--label-2);font-size:15px">${esc(S.hello?.license || 'AGPL-3.0-only')}</span></div>` +
+             <span style="color:var(--label-2);font-size:.9375rem">${esc(S.hello?.license || 'AGPL-3.0-only')}</span></div>` +
           (quelle() ? `<a class="row orow-link" style="min-height:50px;text-decoration:none;color:inherit"
               href="${esc(quelle())}" target="_blank" rel="noopener noreferrer">
              <span class="t-body" style="flex:1">${tr('Quelltext')}</span>
-             <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:15px">
+             <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:.9375rem">
                ${tr('ansehen')}${svg(I.chev, 14, 2.4)}</span></a>` : ''),
           tr('Lumen ist freie Software. Du darfst sie benutzen, verändern und weitergeben — wer sie verändert und betreibt, muss seine Änderungen ebenfalls offenlegen.'))}
         ${grp(tr('Verlauf'),
@@ -3747,7 +3967,7 @@ function viewSettings() {
 
 const ohead = (title, sub, back = 'admin') => `
   <header>
-    ${back ? `<button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px;margin-bottom:14px" data-go="${back}">
+    ${back ? `<button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px;margin-bottom:14px" data-go="${back}">
       ${svg(I.back, 16, 2)}${back === 'admin' ? tr('Verwaltung') : tr('Startseite')}</button>` : ''}
     <h1 class="t-large" style="margin:0">${esc(title)}</h1>
     <div class="t-sub c-2" style="margin-top:4px">${esc(sub)}</div>
@@ -3762,7 +3982,7 @@ const stat = (t, v, sub, bar) => `
 const linkRow = (label, value, view) =>
   `<button class="row orow-link" data-go="${view}" style="width:100%;min-height:50px;text-align:left">
      <span class="t-body" style="flex:1">${esc(label)}</span>
-     <span style="display:inline-flex;align-items:center;gap:6px;color:var(--label-2);font-size:15px">${esc(value)}${svg(I.chev, 14, 2.4)}</span></button>`;
+     <span style="display:inline-flex;align-items:center;gap:6px;color:var(--label-2);font-size:.9375rem">${esc(value)}${svg(I.chev, 14, 2.4)}</span></button>`;
 
 /* Der Fernzugriff in der Verwaltung.
  *
@@ -3775,7 +3995,7 @@ function fernzugriffGruppe(f) {
     return grp(tr('Von aussen erreichbar'),
       `<div class="row" style="min-height:52px">
          <span class="t-body" style="flex:1">${tr('Fernzugriff')}</span>
-         <span style="color:var(--label-2);font-size:15px">${tr('nicht eingerichtet')}</span></div>`,
+         <span style="color:var(--label-2);font-size:.9375rem">${tr('nicht eingerichtet')}</span></div>`,
       f.hinweis || '');
   }
   const steht = !!f.verbunden;
@@ -3820,7 +4040,7 @@ function quelltextZeile(q) {
     `<a class="row orow-link" style="min-height:50px;text-decoration:none;color:inherit"
         href="${esc(q.url)}" target="_blank" rel="noopener noreferrer">
        <span class="t-body" style="flex:1">${q.eigen ? tr('Deine Fassung') : tr('Unverändert')}</span>
-       <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:15px">
+       <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:.9375rem">
          ${esc(wo)}${svg(I.chev, 14, 2.4)}</span></a>`,
     q.eigen
       ? tr('Diese Adresse bekommen alle zu sehen, die den Server benutzen.')
@@ -3847,7 +4067,7 @@ function viewAdmin() {
   const load = d.load || {};
   // Die Seitenleiste führt schon zur Startseite; ein eigener Knopf dafür
   // war doppelt. Breite wie unter „Ich", Kacheln ohne Löcher.
-  return shell(`<div class="wrap wrap--flat" style="max-width:1100px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Verwaltung'), `Lumen ${esc(d.version)} · ${laufzeitText(d.uptimeMs)} · ${tr('nur für dich sichtbar')}`, null)}
     <div class="kacheln" style="margin-top:28px">
       ${stat(tr('Gerade aktiv'), tr('{n} Wiedergaben', { n: load.total || 0 }),
@@ -4018,7 +4238,7 @@ function bibZeile(l) {
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
         <label class="t-caption c-2" style="display:inline-flex;align-items:center;gap:6px">${tr('Von selbst nachsehen')}
           <select class="takt" data-takt="${esc(l.id)}" aria-label="${tr('Wie oft Lumen von selbst nachsieht')}">${takt}</select>${uhrzeit}</label>
-        <button class="btn btn-pill" style="height:28px;font-size:12px" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>
+        <button class="btn btn-pill" style="height:28px;font-size:.75rem" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;flex:none;padding-top:2px">${knoepfe}</div>
@@ -4038,7 +4258,8 @@ function bibWaehler() {
   const b = S.browse;
   if (!b) return '';
   const zeilen = (b.ordner || []).map(o => `
-    <div class="orow" style="height:auto;padding:11px 16px;cursor:pointer" data-into="${esc(o.pfad)}">
+    <button type="button" class="orow orow-link" style="width:100%;text-align:left;height:auto;padding:11px 16px" data-into="${esc(o.pfad)}"
+      aria-label="${esc(o.name)}${o.freigabe ? ', ' + tr('für Lumen freigegeben') : ''}${o.gesperrt ? ', ' + tr('kein Zugriff') : o.filme ? ', ' + tr('{n} Videos', { n: o.filme >= 200 ? '200+' : o.filme }) : ''}">
       <span style="color:var(--label-2);display:flex;flex:none">
         ${svg('<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4L10 8h9.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>', 17)}</span>
       <span style="flex:1;min-width:0">
@@ -4050,17 +4271,17 @@ function bibWaehler() {
         ? `<span class="badge" style="flex:none">${tr('{n} Videos', { n: o.filme >= 200 ? '200+' : o.filme })}</span>`
         : `<span class="t-caption c-3" style="flex:none">${tr('keine Videos')}</span>`}
       <span style="color:var(--label-3);display:flex;flex:none">${svg(I.chev, 15)}</span>
-    </div>`).join('');
+    </button>`).join('');
 
-  return `<div class="group group--inset" style="padding:0;margin-top:4px">
+  return `<div class="group group--inset" style="padding:0;margin-top:4px" role="group" aria-label="${tr('Ordner wählen')}">
     <div class="orow" style="height:auto;padding:12px 16px;gap:10px;background:var(--fill)">
-      <span class="mono t-caption c-2 clamp-1" style="flex:1;min-width:0">
+      <span class="${b.pfad ? 'mono ' : ''}t-caption c-2 clamp-1" style="flex:1;min-width:0" id="waehlerpfad" tabindex="-1">
         ${esc(b.pfad || tr('Wo möchtest du anfangen?'))}</span>
-      ${b.pfad ? `<button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:13px"
+      ${b.pfad ? `<button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:.8125rem"
         data-into="${esc(b.oben || '')}">${tr('Höher')}</button>` : ''}
-      ${b.pfad ? `<button type="button" class="btn btn-pill btn-pill--fill" style="flex:none;height:30px;font-size:13px"
+      ${b.pfad ? `<button type="button" class="btn btn-pill btn-pill--fill" style="flex:none;height:30px;font-size:.8125rem"
         data-take="${esc(b.pfad)}">${tr('Diesen nehmen')}</button>` : ''}
-      <button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:13px" data-browseoff>${tr('Zu')}</button>
+      <button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:.8125rem" data-browseoff>${tr('Schliessen')}</button>
     </div>
     ${zeilen || `<p class="hint" style="padding:14px 16px">${tr('Hier liegen keine Unterordner.')}</p>`}
     ${!b.pfad && b.imContainer ? `<p class="t-caption c-2" style="padding:10px 16px 12px;margin:0">
@@ -4073,7 +4294,7 @@ function bibWaehler() {
 function viewAdminLibraries() {
   const libs = S.data?.libraries || [];
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:860px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Bibliotheken'), tr('Wo deine Filme und Serien liegen'))}
     <section style="margin-top:28px"><div class="group group--inset" id="biblist">
       ${bibListe(libs)}</div></section>
@@ -4104,6 +4325,15 @@ function viewAdminLibraries() {
 /* Zeichnet Liste und Ordnerwähler neu — aber nicht das Formular. Wer
    gerade einen Namen eingetippt hat, soll ihn nicht verlieren, nur weil
    er daneben einen Ordner aufklappt. */
+// Ordnerwähler schliessen; der Fokus geht zurück auf „Durchsuchen".
+function waehlerZu() {
+  if (!S.browse) return false;
+  S.browse = null;
+  bibMalen();
+  app.querySelector('[data-browse]')?.focus();
+  return true;
+}
+
 function bibMalen() {
   const liste = document.getElementById('biblist');
   if (liste) liste.innerHTML = bibListe(S.data?.libraries || []);
@@ -4165,7 +4395,7 @@ function viewAdminWishes() {
   const NAME = { open: tr('offen'), working: tr('in Arbeit'), done: tr('erfüllt'), declined: tr('abgelehnt') };
 
   const knopf = (id, zu, text, rot) =>
-    `<button class="btn btn-pill${rot ? '' : ' btn-pill--fill'}" style="height:30px;font-size:13px;flex:none${
+    `<button class="btn btn-pill${rot ? '' : ' btn-pill--fill'}" style="height:30px;font-size:.8125rem;flex:none${
       rot ? ';background:rgba(255,69,58,.14);color:#ff6961' : ''}"
       data-wishstate="${esc(id)}:${zu}">${text}</button>`;
 
@@ -4196,7 +4426,7 @@ function viewAdminWishes() {
       <div class="group group--inset">${teil.map(zeile).join('')}</div></section>`;
   };
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Wünsche'), tr('Was sich der Haushalt wünscht'))}
     ${alle.length ? '' : `<section style="margin-top:28px"><div class="group group--inset">
       <p class="hint" style="padding:18px 16px;margin:0">${tr('Noch hat sich niemand etwas gewünscht.')}</p></div></section>`}
@@ -4235,7 +4465,7 @@ function viewAdminUpdate() {
       <div style="flex:1;min-width:0">
         <div class="t-body">${tr('Lumen {version} ist da — du hast {installiert}', { version: esc(u.neueste.version), installiert: esc(u.installiert) })}</div>
         <div class="t-sub c-2">${tr('veröffentlicht {wann}', { wann: zeit(u.neueste.published) })} ·
-          <a href="${esc(u.neueste.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${tr('Was sich geändert hat')}</a></div>
+          <a href="${esc(u.neueste.url)}" target="_blank" rel="noopener" class="link">${tr('Was sich geändert hat')}</a></div>
         ${u.container ? `<div class="t-caption c-2" style="margin-top:8px">${esc(u.anleitung)}</div>` : ''}
       </div>
       ${u.container ? '' : `<button class="btn btn-pill btn-pill--fill" data-updjetzt style="flex:none"${u.laeuft ? ' disabled' : ''}>
@@ -4261,13 +4491,13 @@ function viewAdminUpdate() {
     </div>${p.notiz ? `<div class="t-caption c-2" style="padding:0 16px 10px 146px">${esc(p.notiz)}</div>` : ''}`).join('')
     : `<p class="hint" style="padding:16px;margin:0">${tr('Noch keine Aktualisierung.')}</p>`;
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Updates'), tr('Neue Fassungen von Lumen — nachsehen, einsetzen, planen'))}
     <section style="margin-top:28px"><div class="section-h">${tr('Stand')}</div>
       <div class="group group--inset">${stand}
         <div class="row" style="min-height:48px;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-pill" style="height:30px;font-size:13px" data-updpruefen>${tr('Jetzt prüfen')}</button>
-          <a class="btn btn-pill" style="height:30px;font-size:13px;text-decoration:none" href="${esc(u.releaseSeite)}" target="_blank" rel="noopener">${tr('Alle Veröffentlichungen')}</a>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-updpruefen>${tr('Jetzt prüfen')}</button>
+          <a class="btn btn-pill" style="height:30px;font-size:.8125rem;text-decoration:none" href="${esc(u.releaseSeite)}" target="_blank" rel="noopener">${tr('Alle Veröffentlichungen')}</a>
           <span class="t-caption c-2" style="margin-left:auto">${u.wiedergaben ? tr('{n} Wiedergaben laufen', { n: u.wiedergaben }) : tr('gerade schaut niemand')}</span>
         </div></div></section>
 
@@ -4350,7 +4580,7 @@ function viewAdminLock() {
   const art = d.sperre || 'none';
   const wahl = [['none', tr('Keine'), tr('Die Verwaltung geht direkt auf')], ['pin', 'PIN', tr('Mindestens vier Ziffern')],
     ['password', tr('Passwort'), tr('Mindestens acht Zeichen')], ['totp', tr('Authenticator-App'), tr('Sechs Ziffern, alle 30 Sekunden neu')]];
-  return shell(`<div class="wrap wrap--flat" style="max-width:720px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Verwaltungssperre'), tr('Ein zweiter Riegel vor der Verwaltung — nur für dich'))}
     <p class="t-sub c-2" style="margin:20px 0 0">${tr('Jede Person mit Zugang zur Verwaltung setzt sich ihre eigene Sperre. Deine ist zurzeit:')} <b>${sperreName(art)}</b>.</p>
     <form id="lockform" style="margin-top:24px">
@@ -4397,8 +4627,8 @@ function viewAdminGroups() {
           : x.verwaltung ? ` <span class="badge" style="border:0;background:rgba(10,132,255,.16);color:#4aa3ff">${tr('Verwaltung')}</span>` : ''}</div>
         <div class="t-caption c-2">${tr('{n} Personen', { n: x.mitglieder })} · ${tr('{n} Bibliotheken', { n: x.libraries.length })}
           · ${x.verwaltung || x.vollzugriff ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: x.limits.maxStreams })}</div></div>
-      <button class="btn btn-pill" style="height:30px;font-size:13px" data-grpedit="${esc(x.id)}">${tr('Bearbeiten')}</button>
-      <button class="btn btn-pill" style="height:30px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961" data-grpdel="${esc(x.id)}">${tr('Auflösen')}</button>
+      <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-grpedit="${esc(x.id)}">${tr('Bearbeiten')}</button>
+      <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-grpdel="${esc(x.id)}">${tr('Auflösen')}</button>
     </div>`).join('');
   const zuweisung = accounts.map(a => `
     <label class="row" style="min-height:48px">
@@ -4440,7 +4670,7 @@ function viewAdminGroups() {
         ${g ? `<button class="btn btn-pill" type="button" data-grpneu>${tr('Abbrechen')}</button>` : ''}
         <button class="btn btn-pill btn-pill--fill" type="submit">${g ? tr('Speichern') : tr('Anlegen')}</button></div>
     </form>`;
-  return shell(`<div class="wrap wrap--flat" style="max-width:860px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Gruppen'), tr('Rechte bündeln und Konten zuordnen'))}
     <p class="t-sub c-2" style="margin:20px 0 0;display:flex;align-items:flex-start;gap:8px">${svg(I.lock, 14, 2.2)}
       <span>${tr('Wer in einer Gruppe ist, bekommt deren Bibliotheken und Grenzen; die eigenen Einträge am Konto ruhen solange. Was jemand schaut, sieht keine Gruppe — auch keine mit Verwaltung.')}</span></p>
@@ -4455,24 +4685,66 @@ function viewAdminGroups() {
 function platzText(mb) {
   return mb >= 1024 ? `${zahl(mb / 1024, { maximumFractionDigits: mb >= 102400 ? 0 : 1 })} GB` : `${zahl(mb)} MB`;
 }
+// Heute in der Zeitzone des Geräts (toISOString rechnete in UTC — zwischen
+// Mitternacht und 1 Uhr stand dann „gestern" da).
+const heuteTag = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 function tagText(tag) {
-  const heute = new Date().toISOString().slice(0, 10);
+  const heute = heuteTag();
   if (tag === heute) return tr('heute');
   // Mittag statt Mitternacht: so kippt das Datum in keiner Zeitzone.
   return datum(tag + 'T12:00:00', { day: 'numeric', month: 'numeric', year: 'numeric' });
 }
+
+/* Wann eine Sicherung entstand: „heute, 22:07" oder „3.11.2026, 04:31".
+   Zwei Sicherungen vom selben Abend hiessen vorher beide „heute". */
+function sicherungWann(b) {
+  if (!b?.zeit) return tagText(b?.tag);
+  const uhr = uhrzeitText(b.zeit, { hour: '2-digit', minute: '2-digit' });
+  return b.tag === heuteTag() ? tr('heute, {uhr}', { uhr }) : `${tagText(b.tag)}, ${uhr}`;
+}
+function sicherungGroesse(b) {
+  const bytes = b.bytes ?? (b.mb || 0) * 1048576;
+  return bytes >= 1048576 ? `${zahl(bytes / 1048576, { maximumFractionDigits: 1 })} MB` : `${zahl(Math.max(1, Math.round(bytes / 1024)))} KB`;
+}
+/* Nach dem Wiederherstellen: ein Hinweis über der Seite, bis der Server
+   wieder antwortet — dann neu laden und sagen, dass es geklappt hat. */
+function neustartAbwarten(text, danach) {
+  const el = document.createElement('div');
+  el.className = 'neustart-hinweis';
+  el.setAttribute('role', 'status');
+  el.innerHTML = `<div class="neustart-karte"><span class="spin"></span><p class="t-body" style="margin:0">${esc(text)}</p></div>`;
+  document.body.appendChild(el);
+  try { sessionStorage.setItem('lumen.nachNeustart', danach); } catch {}
+  const start = Date.now();
+  let warWeg = false;
+  const fragen = async () => {
+    let da = false;
+    try { const r = await fetch('/api/v1/hello', { cache: 'no-store' }); da = r.ok; } catch {}
+    if (!da) warWeg = true;
+    // Erst wenn er einmal weg war (oder nach 20 s), gilt er als neu gestartet.
+    if (da && (warWeg || Date.now() - start > 20000)) return location.reload();
+    if (Date.now() - start > 120000) { el.remove(); return toast(tr('Lumen antwortet noch nicht. Lade die Seite gleich selbst neu.')); }
+    setTimeout(fragen, 1000);
+  };
+  setTimeout(fragen, 1500);
+}
+try {
+  const nachNeustart = sessionStorage.getItem('lumen.nachNeustart');
+  if (nachNeustart) { sessionStorage.removeItem('lumen.nachNeustart'); setTimeout(() => toast(nachNeustart), 800); }
+} catch {}
 
 function viewAdminBackups() {
   const d = S.data || {};
   const rows = (d.sicherungen || []).map(b => `
     <div class="row" style="min-height:56px;gap:12px">
       <span style="flex:1"><span class="t-body">${b.nr === 1 ? tr('Neueste') : tr('Davor')}</span>
-        <span class="t-caption c-2" style="display:block">${esc(tagText(b.tag))} · ${b.mb ? zahl(b.mb) + ' MB' : tr('unter 1 MB')}</span></span>
-      <button class="btn btn-pill" style="height:32px;font-size:13px" data-wiederherstellen="${Number(b.nr)}">${tr('Wiederherstellen')}</button>
+        <span class="t-caption c-2" style="display:block">${esc(sicherungWann(b))} · ${esc(sicherungGroesse(b))}</span></span>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-wiederherstellen="${Number(b.nr)}"
+        aria-label="${tr('Stand von {wann} wiederherstellen', { wann: esc(sicherungWann(b)) })}">${tr('Wiederherstellen')}</button>
     </div>`).join('');
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Sicherung'), tr('Einmal am Tag, nach 4:30 Uhr'))}
-    ${d.fehler ? `<p class="t-body" style="color:#ff6961;margin-top:18px">${tr('Die letzte Sicherung ist gescheitert: {fehler}', { fehler: esc(d.fehler) })}</p>` : ''}
+    ${d.fehler ? `<p class="t-body" style="color:var(--text-rot);margin-top:18px">${tr('Die letzte Sicherung ist gescheitert: {fehler}', { fehler: esc(d.fehler) })}</p>` : ''}
     <section style="margin-top:24px"><div class="group group--inset">
       ${rows || `<p class="hint" style="padding:18px 16px">${tr('Noch keine Sicherung.')}</p>`}
       <button class="btn row" style="width:100%;justify-content:flex-start;min-height:48px" data-sichern>
@@ -4503,7 +4775,7 @@ function viewAdminUmwandlung() {
     keins: tr('Dieses FFmpeg kann HDR nicht umrechnen.') }[d.tonemapping] || '';
   const vorrat = d.vorrat || {};
   const erkennung = d.vorspannErkennung || {};
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Umwandeln'), tr('Hardware-Beschleunigung und Vorbereitung'))}
     <form id="umwandlungform">
       <section style="margin-top:24px"><div class="group group--inset">
@@ -4514,7 +4786,7 @@ function viewAdminUmwandlung() {
         </div>
         <div class="row" style="min-height:52px;gap:12px">
           <span class="t-sub c-2" style="flex:1">${esc(jetzt)} ${esc(gefunden)}${hw.ruht?.length ? ' ' + esc(`${tr('Ruht nach Fehlern:')} ` + hw.ruht.map(v => HW_NAMEN[v] || v).join(', ') + '.') : ''}</span>
-          <button class="btn btn-pill" type="button" style="height:32px;font-size:13px" data-hwpruefen>${tr('Neu prüfen')}</button>
+          <button class="btn btn-pill" type="button" style="height:32px;font-size:.8125rem" data-hwpruefen>${tr('Neu prüfen')}</button>
         </div>
         ${d.hardwareAusUmgebung ? `<p class="hint" style="padding:12px 16px">${esc(tr('Das Verfahren ist in der Umgebung (LUMEN_HARDWARE) festgelegt und lässt sich nur dort ändern.'))}</p>` : ''}
       </div></section>
@@ -4558,11 +4830,11 @@ function viewSessions() {
             ${s.mode === 'direct' ? tr('Direkt') : tr('Wird umgewandelt')}</span>
         </div>
       </div>
-      <button class="btn btn-pill" style="height:32px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
         data-kill="${esc(s.id)}">${tr('Beenden')}</button>
     </div>`).join('');
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:1000px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Aktive Wiedergaben'), tr('{n} laufen · Last {last} — beenden, wenn der Server zu viel rechnet', { n: (d.sessions || []).length, last: ({ gering: tr('gering'), mittel: tr('mittel'), hoch: tr('hoch') })[d.load?.last] || tr('gering') }))}
     <section style="margin-top:28px"><div class="group group--inset">
       ${rows || `<p class="hint" style="padding:18px 16px">${tr('Gerade läuft nichts.')}</p>`}</div></section>
@@ -4580,12 +4852,12 @@ function viewLogs() {
         // Störungen beim Abspielen kommen als Tageszahl, ohne Uhrzeit.
         ? datum(l.at)
         : uhrzeitText(l.at, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
-      <span class="badge" style="border:0;flex:none;width:56px;justify-content:center;background:${TAG[l.level]};color:${COL[l.level]};text-transform:uppercase;font-size:10px">${l.level}</span>
+      <span class="badge" style="border:0;flex:none;width:56px;justify-content:center;background:${TAG[l.level]};color:${COL[l.level]};text-transform:uppercase;font-size:.625rem">${l.level}</span>
       <span class="mono" style="flex:none;width:86px;color:var(--label-3)">${esc(l.area)}</span>
       <span class="mono" style="color:${l.level === 'info' ? 'var(--label-2)' : COL[l.level]};flex:1">${esc(l.message)}</span></div>`).join('');
 
   const tabs = [['all', tr('Alles')], ['error', tr('Fehler')], ['warn', tr('Warnung')], ['info', tr('Info')]].map(([v, n]) =>
-    `<button class="tab-pill" role="tab" aria-selected="${S.logFilter === v}" data-logf="${v}" style="height:30px;font-size:13px">${n}</button>`).join('');
+    `<button class="tab-pill" role="tab" aria-selected="${S.logFilter === v}" data-logf="${v}" style="height:30px;font-size:.8125rem">${n}</button>`).join('');
 
   return shell(`<div class="wrap wrap--flat">
     ${ohead(tr('Protokoll'), tr('Was der Server tut — und wo es hakt'))}
@@ -4606,28 +4878,35 @@ function viewCleanup() {
   // (a/b/c, CD1/CD2) lässt sich zu einer Datei zusammenführen.
   // Nur Filme in Teilen: Fassungen (dieselbe Datei in zwei Qualitäten)
   // sind kein Aufräumfall — man wählt sie beim Film unter „Ansehen".
-  const nurTeile = (d.duplicates || []).filter(x => x.files.length > 1 && x.files.every((f, i) => f.partNo === i + 1));
-  const dup = nurTeile.map(x => {
-    const teile = true;
+  const istTeile = x => x.files.every((f, i) => f.partNo === i + 1);
+  const nurTeile = (d.duplicates || []).filter(x => x.files.length > 1 && istTeile(x));
+  // Fassungen (derselbe Film mehrfach, auch gemischt mit Teilen) zeigt die
+  // Seite ebenfalls — sonst meldete die Übersicht „1 Doppel", und hier
+  // stand nichts dazu.
+  const fassungen = (d.duplicates || []).filter(x => x.files.length > 1 && !istTeile(x));
+  const doppelZeile = x => {
+    const teile = istTeile(x);
     return `
     <div class="orow" style="height:auto;padding:14px 16px;display:block">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="t-body" style="flex:1 1 200px">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
           <span class="t-caption c-2">${teile ? ` ${tr('· {n} Teile eines Films', { n: x.files.length })}` : ` ${tr('· {n} Fassungen', { n: x.files.length })}`}</span></div>
-        ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
+        ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
       </div>
       ${x.files.map(f => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
-        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:12px">${esc(f.path)}</span>
+        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(f.path)}</span>
         <span class="t-caption c-2 tnum">${[teile ? tr('Teil {nr}', { nr: f.partNo }) : '', f.height ? f.height + 'p' : '', f.container ? f.container.toUpperCase() : '',
           groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
         ${teile ? '' : f.preferred
-          ? `<span class="badge" style="border:0;background:rgba(48,209,88,.16);color:#30d158">${tr('gewählt')}</span>`
-          : `<button class="btn btn-pill" style="height:28px;font-size:12px" data-fassung="${esc(x.itemId)}:${esc(f.id)}">${tr('Diese nehmen')}</button>`}
-        ${teile ? '' : `<button class="btn btn-pill" style="height:28px;font-size:12px;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
+          ? `<span class="badge badge--gruen">${tr('gewählt')}</span>`
+          : `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassung="${esc(x.itemId)}:${esc(f.id)}">${tr('Diese nehmen')}</button>`}
+        ${teile ? '' : `<button class="btn btn-pill" style="height:28px;font-size:.75rem;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
           title="${tr('Ist ein anderer Film — als eigenen Titel führen')}">${tr('Abtrennen')}</button>`}
       </div>`).join('')}
     </div>`;
-  }).join('');
+  };
+  const dup = nurTeile.map(doppelZeile).join('');
+  const dupFassungen = fassungen.map(doppelZeile).join('');
 
   const missing = (d.missing || []).map(f => `
     <div class="orow">
@@ -4659,15 +4938,15 @@ function viewCleanup() {
         <div style="flex:1;min-width:220px">
           <div class="t-body">${esc(i.title)}${i.year ? ` <span class="c-2">(${i.year})</span>` : ''}
             <span class="t-caption c-2">· ${i.kind === 'movie' ? tr('Film') : i.kind === 'series' ? tr('Serie') : esc(i.kind)}</span></div>
-          ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
+          ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:.7188rem;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
           <div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${g
             ? `${(g.art === 'fehler' && schl === 'abgelehnt' ? GRUND.schluessel : GRUND[g.art]) || ''}${gesucht ? ' ' + tr('Gesucht: {was}.', { was: gesucht }) : ''}${g.vorschlag ? ' ' + tr('Am nächsten: {titel} ({prozent} %).', { titel: esc(g.vorschlag), prozent: Math.round((g.wert || 0) * 100) }) : ''}`
             : i.matchState === 'pending' ? offenText : tr('Seit dem letzten Neustart nicht mehr geprüft.')}</div>
         </div>
         <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap">
-          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:13px" data-zuo-id="${esc(i.id)}">${tr('ID eingeben')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:13px" data-go="detail" data-id="${esc(i.id)}">${tr('Öffnen')}</button>
+          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-zuo-id="${esc(i.id)}">${tr('ID eingeben')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-go="detail" data-id="${esc(i.id)}">${tr('Öffnen')}</button>
         </div>
       </div>
       <div data-zuo-box="${esc(i.id)}" style="margin-top:6px"></div>
@@ -4691,7 +4970,7 @@ function viewCleanup() {
         <span class="t-body" style="flex:1">${esc((AUSLASS[a.grund] || [a.grund])[0])}</span>
         <span class="t-caption c-2">${esc(b.name)} · ${tr('{n} Einträge', { n: a.anzahl })}</span></summary>
       <p class="t-caption c-2" style="margin:6px 0">${esc((AUSLASS[a.grund] || ['', ''])[1])}</p>
-      <div class="mono c-2" style="font-size:11.5px;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
+      <div class="mono c-2" style="font-size:.7188rem;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
     </details>`).join('')).join('');
 
   // Der Schlüssel fehlt oder wird abgelehnt: einmal oben sagen, was das
@@ -4708,12 +4987,15 @@ function viewCleanup() {
             ${d.vorgemerkt ? ' ' + tr('{n} gespeicherte Kennungen warten auf den Schlüssel.', { n: d.vorgemerkt }) : ''}</div></div>
         <button class="btn btn-pill btn-pill--fill" style="flex:none" data-go="metadata">${schl === 'abgelehnt' ? tr('Schlüssel ändern') : tr('Eintragen')}</button>
       </div></div>`;
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Aufräumen'), tr('Filme in Teilen, fehlende Dateien, nicht erkannte Titel'))}
     ${schluesselHinweis}
     ${dup ? `<section style="margin-top:26px"><div class="section-h">${tr('Filme in Teilen · {n}', { n: nurTeile.length })}</div>
       <div class="group group--inset">${dup}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Im Browser laufen die Teile nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.')}</p></section>` : ''}
+    ${dupFassungen ? `<section style="margin-top:22px"><div class="section-h">${tr('Mehrere Fassungen · {n}', { n: fassungen.length })}</div>
+      <div class="group group--inset">${dupFassungen}</div>
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: Beim Film wählt man unter „Ansehen“, welche läuft. Gehört eine Datei zu einem anderen Film, trenne sie ab.')}</p></section>` : ''}
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: d.missing.length })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben stehen — eine abgehängte Platte soll die Mediathek nicht leeren.')}</p></section>` : ''}
@@ -4721,7 +5003,7 @@ function viewCleanup() {
       <div class="group group--inset">${unmatched}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0;line-height:1.5">${tr('Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. „Suchen“ sucht frei bei TMDb, „ID eingeben“ nimmt eine IMDb-, TMDb- oder TheTVDB-Kennung oder einen Link. Zugewiesenes gilt als von Hand zugeordnet und bleibt so.')}
         ${tr('Tipp: Eine Kennung im Ordner- oder Dateinamen, etwa „Matrix (1999) {imdb-tt0133093}“, ordnet beim nächsten Durchlauf ohne Suche zu.')}</p>
-      <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
+      <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
     ${ausstehend ? `<section style="margin-top:22px"><div class="section-h">${tr('Wartet auf die Zuordnung · {n}', { n: nAusstehend })}</div>
       <div class="group group--inset">${ausstehend}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${schl === 'ok' ? tr('Diese Titel prüft der nächste Metadaten-Durchgang.')
@@ -4758,10 +5040,10 @@ function viewAccounts() {
           · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
-      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
-      ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
-      ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
-      ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
+      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
+      ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
+      ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
+      ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
         <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
           ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]].map(([k, n]) =>
@@ -4769,7 +5051,7 @@ function viewAccounts() {
         : `<span class="t-caption c-2">${{ schauen: tr('Nur schauen'), verwalten: tr('Verwaltet mit'), voll: tr('Vollzugriff') }[rolle(a)]}</span>`}
       </div>
     </div>`).join('');
-  return shell(`<div class="wrap wrap--flat" style="max-width:820px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Konten und Rechte'), tr('Wer dazugehört und was er sehen darf'))}
     <p class="t-sub c-2" style="margin:22px 0 0;display:flex;align-items:center;gap:8px">
       ${svg(I.lock, 14, 2.2)}${tr('Du legst fest, was jemand sehen darf. Was er davon schaut, siehst du nicht.')}</p>
@@ -4781,7 +5063,26 @@ function viewAccounts() {
         ${einladungsFormular(S.data?.libraries || [], S.einladungKind)}
         <p class="t-caption c-2" style="margin-top:12px">${tr('Gilt sieben Tage und nur einmal.')}</p>
         <div id="invitebox"></div></div></section>
+    ${offeneEinladungen(S.data?.einladungen || [])}
     <div style="height:40px"></div></div>`);
+}
+
+/* Offene Einladungen: wann sie ablaufen, für wen ungefähr (Kind oder
+   Erwachsen, wie viele Bibliotheken) — und Zurückziehen, etwa für einen
+   Link, der im falschen Chat gelandet ist. */
+function offeneEinladungen(liste) {
+  if (!liste.length) return '';
+  return `<section id="offene-einladungen" style="margin-top:22px"><h2 class="section-h" style="margin:0">${tr('Offene Einladungen')}</h2>
+    <div class="group group--inset">${liste.map(e => `
+      <div class="row" style="min-height:56px;gap:12px;flex-wrap:wrap">
+        <span style="flex:1;min-width:200px"><span class="t-body">${e.kinderprofil ? esc(T.kinderprofil) : tr('Erwachsenes Profil')}
+          <span class="mono c-2" style="font-size:.8125rem">…${esc(e.ende)}</span></span>
+          <span class="t-caption c-2" style="display:block">${tr('gilt bis {wann}', { wann: esc(datumZeit(e.expiresAt, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) })}
+            · ${tr('{n} Bibliotheken', { n: e.bibliotheken })}${e.von ? ` · ${tr('von {name}', { name: esc(e.von) })}` : ''}</span></span>
+        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;flex:none" data-einladung-weg="${esc(e.kennung)}"
+          aria-label="${tr('Einladung …{ende} zurückziehen', { ende: esc(e.ende) })}">${tr('Zurückziehen')}</button>
+      </div>`).join('')}</div>
+    <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Eine zurückgezogene Einladung lässt sich nicht mehr einlösen.')}</p></section>`;
 }
 
 // „CH" → „Schweiz" / „Switzerland".
@@ -4789,7 +5090,7 @@ const regionName = r => { try { return new Intl.DisplayNames([sprache()], { type
 
 function viewMetadata() {
   const d = S.data || {};
-  return shell(`<div class="wrap wrap--flat" style="max-width:720px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Poster und Beschreibungen'), tr('Woher Lumen sie holt — und wo die Schlüssel dafür hingehören'))}
     <p class="t-sub c-2" style="margin:20px 0 0">
       ${tr('Du richtest das einmal ein, dann gilt es für alle. Niemand im Haushalt braucht ein eigenes Konto.')}</p>
@@ -5227,6 +5528,7 @@ app.addEventListener('click', async e => {
   if (hit('data-bar')) return;
   if (hit('data-stumm')) return stummUmschalten();
   if (hit('data-vollbild')) return vollbildUmschalten();
+  if (hit('data-pip')) return bildImBildUmschalten();
   if ((n = hit('data-tempo'))) { tempoSetzen(Number(n.dataset.tempo)); return; }
   if ((n = hit('data-kapitel'))) {
     const p = S.playing;
@@ -5265,6 +5567,11 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-sw'))) {
     n.setAttribute('aria-checked', String(n.getAttribute('aria-checked') !== 'true'));
     return;
+  }
+  if ((n = hit('data-textgroesse'))) {
+    try { localStorage.setItem('lumen.textgroesse', n.dataset.textgroesse); } catch {}
+    textgroesseAnwenden();
+    return render();
   }
   if ((n = hit('data-darstellung'))) {
     try { localStorage.setItem('lumen.darstellung', n.dataset.darstellung); } catch {}
@@ -5422,9 +5729,13 @@ app.addEventListener('click', async e => {
     const pfad = n ? n.dataset.into : '';
     try { S.browse = await api.adminBrowse(pfad); }
     catch (err) { return toast(err.message); }
-    return bibMalen();
+    bibMalen();
+    // Der Fokus geht mit: auf den ersten Ordner, sonst auf den Pfad.
+    const w = document.getElementById('bibwaehler');
+    (w?.querySelector('[data-into]:not(.btn)') || w?.querySelector('#waehlerpfad'))?.focus();
+    return;
   }
-  if (hit('data-browseoff')) { S.browse = null; return bibMalen(); }
+  if (hit('data-browseoff')) return waehlerZu();
   if ((n = hit('data-take'))) {
     const pfad = n.dataset.take;
     const feld = $('#lpath'), name = $('#lname');
@@ -5471,22 +5782,40 @@ app.addEventListener('click', async e => {
     setTimeout(load, 6000);
     return;
   }
+  if ((n = hit('data-einladung-weg'))) {
+    if (!(await rueckfrage({ titel: tr('Einladung zurückziehen?'), text: tr('Wer den Link oder den Code hat, kann damit kein Profil mehr anlegen.'), ja: tr('Zurückziehen'), gefaehrlich: true }))) return;
+    try { await api.adminInviteZurueckziehen(n.dataset.einladungWeg); toast(tr('Einladung zurückgezogen')); }
+    catch (err) { toast(err.message); }
+    return load();
+  }
   if (hit('data-sichern')) {
+    // Es gibt nur zwei Sicherungen. „Jetzt sichern" schiebt die ältere
+    // hinaus — das soll niemand aus Versehen tun, etwa direkt nach einem
+    // Fehler, wenn gerade die ältere die gute ist.
+    const alle = S.data?.sicherungen || [];
+    if (alle.length >= 2) {
+      const davor = alle.find(b => b.nr === 2), neueste = alle.find(b => b.nr === 1);
+      const ok = await rueckfrage({ titel: tr('Jetzt sichern?'),
+        text: tr('Lumen behält nur zwei Sicherungen. Die Sicherung von {davor} wird dabei gelöscht; die von {neueste} wird zur älteren. Willst du zu einem früheren Stand zurück, stelle ihn zuerst wieder her.',
+          { davor: sicherungWann(davor), neueste: sicherungWann(neueste) }),
+        ja: tr('Sichern') });
+      if (!ok) return;
+    }
     try { await api.adminBackupNow(); toast(tr('Gesichert')); } catch (err) { toast(err.message); }
     return load();
   }
   if ((n = hit('data-wiederherstellen'))) {
-    // Zweimal tippen: Wiederherstellen ersetzt den heutigen Stand.
-    if (n.dataset.sicher !== '1') {
-      n.dataset.sicher = '1';
-      n.textContent = tr('Wirklich? Nochmal tippen');
-      return;
-    }
+    const b = (S.data?.sicherungen || []).find(x => String(x.nr) === n.dataset.wiederherstellen);
+    const wann = sicherungWann(b);
+    const ok = await rueckfrage({ titel: tr('Stand von {wann} wiederherstellen?', { wann }),
+      text: tr('Alles, was seither geändert wurde – neue Profile, Einladungen, Einstellungen, Bewertungen und wer wo im Film stand –, geht verloren. Lumen startet dafür neu; laufende Wiedergaben brechen ab.'),
+      ja: tr('Wiederherstellen'), gefaehrlich: true });
+    if (!ok) return;
     try {
       await api.adminRestore(n.dataset.wiederherstellen);
-      toast(tr('Lumen startet neu …'));
-      setTimeout(() => location.reload(), 6000);
-    } catch (err) { toast(err.message); }
+    } catch (err) { return toast(err.message); }
+    neustartAbwarten(tr('Lumen startet neu und nimmt die Sicherung von {wann}.', { wann }),
+      tr('Die Sicherung von {wann} ist wiederhergestellt.', { wann }));
     return;
   }
   if ((n = hit('data-logf'))) { S.logFilter = n.dataset.logf; return load(); }
@@ -5575,6 +5904,14 @@ async function formularAbschicken(e) {
       const url = `${location.origin}/?einladung=${encodeURIComponent(inv.code)}`;
       const box = document.getElementById('invitebox');
       if (box) box.innerHTML = einladungsBox(url, inv.code);
+      // Die Liste der offenen Einladungen nachführen, ohne das Formular neu zu zeichnen.
+      api.adminInvites().then(liste => {
+        if (S.view !== 'accounts' || !S.data) return;
+        S.data.einladungen = liste;
+        const alt = document.getElementById('offene-einladungen');
+        const html = offeneEinladungen(liste);
+        if (alt) alt.outerHTML = html; else box?.closest('section')?.insertAdjacentHTML('afterend', html);
+      }).catch(() => {});
       return toast(kind ? tr('Einladung für ein Kinderprofil erzeugt') : tr('Einladung erzeugt'));
     } catch (err) { return toast(err.message); }
   }
@@ -5665,7 +6002,7 @@ async function formularAbschicken(e) {
     } catch (err) { S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render(); }
   }
 
-  if (f.id === 'searchform') return load();
+  if (f.id === 'searchform') { $('#q')?.blur(); S.suchTastaturZu = true; return load(); }
 
   if (f.id === 'wishform') {
     const t = f.title.value.trim();
@@ -5850,6 +6187,7 @@ document.addEventListener('keydown', e => {
   } else if (e.key === 'Escape' && S.view === 'detail') {
     escAufTitelseite();
   } else if (e.key === 'Escape') {
+    if (S.view === 'adminLibraries' && waehlerZu()) return;
     mehrMenueZu(true);
   } else if (e.key === '/' && S.me && S.view !== 'search') {
     e.preventDefault(); go('search');
@@ -5905,6 +6243,9 @@ function playerTaste(e) {
       e.preventDefault(); return lautstaerkeAendern(-0.05);
     case 'f':
       e.preventDefault(); return vollbildUmschalten();
+    case 'p':
+      if (!bildImBildDa()) return;
+      e.preventDefault(); return bildImBildUmschalten();
     case 'm':
       e.preventDefault(); stummUmschalten(); return toast($('#v')?.muted ? tr('Stumm') : tr('Ton an'));
     case 'n':
@@ -6089,18 +6430,30 @@ function nachDemZeichnen(vorherFokus) {
   const jetzt = `${S.view}|${S.id ?? ''}`;
   const neu = jetzt !== letzteAnsicht;
   letzteAnsicht = jetzt;
+  const nachPlayer = S.view !== 'player' ? S.fokusNachPlayer : null;
+  if (nachPlayer) S.fokusNachPlayer = null;
+  const fokusAuf = sels => {
+    for (const sel of sels || []) {
+      let el = null;
+      try { el = app.querySelector(sel); } catch {}
+      if (el) { el.focus({ preventScroll: true }); return true; }
+    }
+    return false;
+  };
   const w = S.wiederherstellen;
   if (w && !S.error) {
     S.wiederherstellen = null;
     const seite = app.querySelector('.page');
     if (seite && w.scroll) seite.scrollTop = w.scroll;
     if (w.reihen) app.querySelectorAll('.rail').forEach((r, i) => { if (w.reihen[i]) r.scrollLeft = w.reihen[i]; });
+    if (nachPlayer && fokusAuf(nachPlayer)) return;
     const karte = w.fokusId && app.querySelector(`[data-go][data-id="${CSS.escape(w.fokusId)}"]`);
     if (karte && S.view !== 'search') { karte.focus({ preventScroll: true }); return; }
   }
   if (S.view === 'search') return; // dort gehört der Fokus ins Suchfeld (render)
   if (neu) {
     letzteKarte = null;
+    if (nachPlayer && fokusAuf(nachPlayer)) return;
     const auto = app.querySelector('[autofocus]');
     if (auto) { auto.focus(); return; }
     if (h1) { h1.setAttribute('tabindex', '-1'); h1.focus({ preventScroll: true }); }
@@ -6329,6 +6682,9 @@ function escAufTitelseite() {
   }
   zurueck();
 }
+
+// Pfeiltasten und Fernbedienung (räumliche Navigation, Zurück-Taste, F6).
+tastaturEinrichten({ app, imPlayer: () => S.view === 'player', zurueck: () => { if (S.me && S.view !== 'home') zurueck(); } });
 
 app.addEventListener('keydown', e => {
   const eintrag = e.target instanceof Element && e.target.closest('[role="menuitem"]');

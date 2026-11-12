@@ -74,5 +74,19 @@
  "Kein Treffer passt gut genug — lieber nichts als der falsche Film.": "No result fits well enough — better nothing than the wrong film.",
  "Ordner wie „Extras“, „Trailers“, „Featurettes“ liest Lumen nicht als Filme ein.": "Lumen doesn’t read folders like “Extras”, “Trailers”, “Featurettes” as films.",
  "Der Name endet auf „-trailer“, „-sample“, „-featurette“ … oder ist nur „sample“. Heisst ein Film wirklich so, die Datei umbenennen.": "The name ends in “-trailer”, “-sample”, “-featurette” … or is just “sample”. If a film really has that name, rename the file.",
- "Welcher Film und welche Serie zu welchem Eintrag gehört, so wie in {art} — gilt für alle Profile. Lumen findet die Titel über die Dateien.": "Which film and programme belong to which entry, as in {art} — applies to all profiles. Lumen finds the titles by their files."
+ "Welcher Film und welche Serie zu welchem Eintrag gehört, so wie in {art} — gilt für alle Profile. Lumen findet die Titel über die Dateien.": "Which film and programme belong to which entry, as in {art} — applies to all profiles. Lumen finds the titles by their files.",
+ "Ordner wählen": "Choose a folder",
+ "Sehr gross": "Extra large",
+ "Textgrösse": "Text size",
+ "Bild im Bild": "Picture-in-picture",
+ "Bild im Bild (P)": "Picture-in-picture (P)",
+ "Bild im Bild ist hier nicht möglich.": "Picture-in-picture isn’t available here.",
+ "Im Bild-im-Bild-Fenster erscheinen die Untertitel nicht.": "Subtitles don’t appear in the picture-in-picture window.",
+ "Einladung zurückziehen?": "Revoke invitation?",
+ "Jetzt sichern?": "Back up now?",
+ "Mehrere Fassungen · {n}": "Multiple versions · {n}",
+ "Offene Einladungen": "Open invitations",
+ "Stand von {wann} wiederherstellen?": "Restore the state from {wann}?",
+ "Änderung bestätigen": "Confirm change",
+ "Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: Beim Film wählt man unter „Ansehen“, welche läuft. Gehört eine Datei zu einem anderen Film, trenne sie ab.": "The same film in several files, for example in two qualities. That’s fine: on the film, “Watch” lets you choose which one plays. If a file belongs to a different film, split it off."
 }
