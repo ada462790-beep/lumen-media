@@ -143,6 +143,16 @@ func wartenBisVerbunden(t *testing.T, v *relay.Vermittler) {
 // ein Gerät von unterwegs nimmt.
 func (a *aufbau) holen(t *testing.T, pfad string) (int, string) {
 	t.Helper()
+	status, leib, err := a.versuchen(pfad)
+	if err != nil {
+		t.Fatalf("über den Vermittler holen: %v", err)
+	}
+	return status, leib
+}
+
+// versuchen holt einmal über den Vermittler und meldet Fehler zurück, statt
+// den Test abzubrechen.
+func (a *aufbau) versuchen(pfad string) (int, string, error) {
 	wurzel := x509.NewCertPool()
 	wurzel.AddCert(a.LumenZert)
 
@@ -155,11 +165,11 @@ func (a *aufbau) holen(t *testing.T, pfad string) (int, string) {
 	u := url.URL{Scheme: "https", Host: a.BesucherAddr, Path: pfad}
 	res, err := c.Get(u.String())
 	if err != nil {
-		t.Fatalf("über den Vermittler holen: %v", err)
+		return 0, "", err
 	}
 	defer res.Body.Close()
 	leib, _ := io.ReadAll(res.Body)
-	return res.StatusCode, string(leib)
+	return res.StatusCode, string(leib), nil
 }
 
 // ---------------------------------------------------------------- Griff
@@ -426,18 +436,26 @@ func TestWiederverbindenNachAbriss(t *testing.T) {
 	// warten, bis sie wieder steht.
 	a.Tunnel.Kappen()
 
-	for i := 0; i < 400; i++ {
-		if a.Vermittler.Stand().Verbunden {
-			break
+	// Direkt nach dem Kappen kann der Vermittler noch die alte, tote Leitung
+	// für verbunden halten. Darum nicht nur auf „verbunden" warten, sondern so
+	// lange holen, bis eine Anfrage wirklich durch die neue Leitung kommt.
+	var (
+		status  int
+		leib    string
+		letzter error
+	)
+	frist := time.Now().Add(10 * time.Second)
+	for time.Now().Before(frist) {
+		status, leib, letzter = a.versuchen("/")
+		if letzter == nil && status == 200 && leib == "da" {
+			return
 		}
-		time.Sleep(25 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
-	if !a.Vermittler.Stand().Verbunden {
-		t.Fatal("die Heimseite hat nicht wieder gewählt")
+	if letzter != nil {
+		t.Fatalf("die Heimseite hat nicht wieder gewählt: %v", letzter)
 	}
-	if status, leib := a.holen(t, "/"); status != 200 || leib != "da" {
-		t.Fatalf("nach dem Wiederverbinden: %d %q", status, leib)
-	}
+	t.Fatalf("nach dem Wiederverbinden: %d %q", status, leib)
 }
 
 func TestMain(m *testing.M) {
