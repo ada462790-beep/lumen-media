@@ -1318,5 +1318,6 @@
  "Entfernen": "Remove",
  "Das Update liess sich nicht einsetzen: {grund}": "The update couldn’t be installed: {grund}",
  "Kapitel": "Chapters",
- "Kapitel {n}": "Chapter {n}"
+ "Kapitel {n}": "Chapter {n}",
+ "Du bist offline. Sobald die Verbindung wieder da ist, geht es weiter.": "You’re offline. Lumen will carry on as soon as the connection is back."
 }

@@ -246,9 +246,12 @@ function nurHttp(raw) {
   try { const u = new URL(raw); return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : '#'; }
   catch { return '#'; }
 }
+// Bilder bekommen den Bildschlüssel (bleibt über ein Neuladen gleich, der
+// Browser behält sie), alles andere den Medienschlüssel.
 function tokenSuffix(url) {
-  return api.mediaKey && !url.includes('key=')
-    ? (url.includes('?') ? '&' : '?') + api.keyParam() : '';
+  if (url.includes('key=')) return '';
+  const k = api.istBild(url) ? api.bildParam() : api.keyParam();
+  return k ? (url.includes('?') ? '&' : '?') + k : '';
 }
 
 /* ---------------------------------------------------------------- Karten */
@@ -276,7 +279,7 @@ function avatar(p, size, extra = '') {
   const a = p.avatar || 'av-a';
   const st = `--av:${size}px${extra ? ';' + extra : ''}`;
   if (a === 'bild' && p.id) {
-    return `<span class="avatar avatar--bild" style="${st}" aria-hidden="true"><img src="/api/v1/avatar/${esc(p.id)}?v=${S.avatarStand || 0}${api.mediaKey ? '&' + api.keyParam() : ''}" alt="" data-ersatz="${esc((p.name || '?')[0])}"></span>`;
+    return `<span class="avatar avatar--bild" style="${st}" aria-hidden="true"><img src="/api/v1/avatar/${esc(p.id)}?v=${S.avatarStand || 0}${api.bildParam() ? '&' + api.bildParam() : ''}" alt="" data-ersatz="${esc((p.name || '?')[0])}"></span>`;
   }
   if (a.startsWith('fig-') && FIGUREN[a.slice(4)]) {
     const [farbe, pfad] = FIGUREN[a.slice(4)];
@@ -2711,7 +2714,9 @@ function standSichern() {
   p.gesichertUm = Date.now();
   const st = standVon(p);
   if (st.positionMs <= 0) return Promise.resolve();
-  return api.saveProgress(p.itemId, st.positionMs, st.durationMs).catch(() => {});
+  // Geht es nicht durch (Verbindung weg), bleibt der Stand im Browser
+  // liegen und wird nachgereicht (api.standMelden).
+  return api.standMelden(p.itemId, st.positionMs, st.durationMs).catch(() => {});
 }
 
 /* Zum Schluss: gesehen melden oder die Stelle sichern. Jede Art, den
@@ -2720,15 +2725,17 @@ function standSichern() {
 async function standAbschliessen(p) {
   if (!p) return;
   if (istGesehen(p)) {
-    if (!p.fertigGemeldet) { p.fertigGemeldet = true; await api.markFinished(p.itemId).catch(() => {}); }
+    if (!p.fertigGemeldet) { p.fertigGemeldet = true; await api.standMelden(p.itemId, 0, 0, true).catch(() => {}); }
     return;
   }
   const st = standVon(p);
-  if (st.positionMs > 0) await api.saveProgress(p.itemId, st.positionMs, st.durationMs).catch(() => {});
+  if (st.positionMs > 0) await api.standMelden(p.itemId, st.positionMs, st.durationMs).catch(() => {});
 }
 
 /* Beim Weggehen (Tab zu, App in den Hintergrund): fetch mit keepalive statt
-   sendBeacon — nur so geht das Token im Kopf mit statt in der Adresse. */
+   sendBeacon — nur so geht das Token im Kopf mit statt in der Adresse. Der
+   Stand liegt vorher schon im Browser: Kommt er nicht an, reicht ihn der
+   nächste Start nach. */
 function standImHintergrund() {
   const p = S.playing;
   if (!p || !p.duration) return;
@@ -2736,10 +2743,8 @@ function standImHintergrund() {
   if (st.positionMs <= 0) return;
   const fertig = istGesehen(p);
   try {
-    fetch(`/api/v1/items/${encodeURIComponent(p.itemId)}/${fertig ? 'finished' : 'progress'}`, {
-      method: 'POST', keepalive: true, body: fertig ? undefined : JSON.stringify(st),
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + api.token },
-    }).catch(() => {});
+    api.standVormerken(p.itemId, st.positionMs, st.durationMs, fertig);
+    api.standNachreichen({ keepalive: true });
     p.gesichertUm = Date.now();
   } catch {}
 }
@@ -3026,7 +3031,7 @@ function zielNachPlayer(p) {
 async function markDoneAndLeave() {
   const p = S.playing;
   if (!p) return;
-  if (!p.fertigGemeldet) { p.fertigGemeldet = true; await api.markFinished(p.itemId).catch(() => {}); }
+  if (!p.fertigGemeldet) { p.fertigGemeldet = true; await api.standMelden(p.itemId, 0, 0, true).catch(() => {}); }
   const liste = S.warteschlange?.zurueck;
   const ziel = zielNachPlayer(p);
   vollbildVerlassen();
@@ -3138,7 +3143,7 @@ async function amEnde() {
   }
   if (!p.fertigGemeldet) {
     p.fertigGemeldet = true; // markDoneAndLeave soll es nicht zweimal senden
-    await api.markFinished(p.itemId).catch(() => {});
+    await api.standMelden(p.itemId, 0, 0, true).catch(() => {});
   }
   // Steht „Als Nächstes" schon da (seit dem Abspann), geht es jetzt los.
   const box = document.getElementById('naechster');
@@ -6329,8 +6334,8 @@ async function boot() {
     const ziel = ansichtAusAdresse();
     if (api.signedIn) {
       try {
-        S.me = await api.me();
-        await api.medienSchluessel();
+        // Beides zugleich: unterwegs kostet jede Runde eine halbe Sekunde.
+        [S.me] = await Promise.all([api.me(), api.medienSchluessel()]);
         const st = history.state;
         if (st?.view && ziel && st.view === ziel.view) {
           verlaufTiefe = typeof st.tiefe === 'number' ? st.tiefe : 0;
@@ -6338,7 +6343,13 @@ async function boot() {
         }
         if (ziel && ziel.view !== 'home') return go(ziel.view, { id: ziel.id, query: ziel.query, ersetzen: true });
         return go('home', { ersetzen: true });
-      } catch { api.signOut(); }
+      } catch (e) {
+        // Nur eine abgelaufene Anmeldung meldet ab — ohne Netz (unterwegs,
+        // im Funkloch) bleibt man angemeldet und es geht weiter, sobald
+        // die Verbindung zurück ist.
+        if (!(e instanceof ApiError) || e.status !== 0) api.signOut();
+        else throw e;
+      }
     }
     if (ziel && ziel.view !== 'home') S.nachAnmeldung = ziel;
     return go('profiles');
@@ -6358,6 +6369,20 @@ Object.assign(FU, { S, esc, svg, I, toast, artOf, posterCard, shell, loading, go
 beiWechsel(() => { if (S.view !== 'player') render(); });
 
 boot();
+
+// Die Verbindung ist zurück: Eine Fehlerseite lädt sich von selbst neu —
+// niemand soll auf „Nochmal versuchen" tippen müssen, nachdem der Zug aus
+// dem Tunnel ist.
+addEventListener('online', () => {
+  if (!S.error || S.view === 'player') return;
+  if (S.me) load(); else boot();
+});
+
+// Die Hülle der App für den Fall ohne Netz (sw.js). Nur über https oder
+// localhost — anders lassen Browser keinen Service Worker zu.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}
 
 // Den Medienschlüssel vor dem Ablaufen erneuern; abgelaufen hiesse: keine
 // Bilder mehr, und eine laufende Wiedergabe bräche ab.
