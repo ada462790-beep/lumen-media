@@ -102,6 +102,9 @@ Keine fremden Skripte, Stylesheets, Schriften oder Bilder.
   Systemschrift. Keine SF-Symbols-Grafiken, keine kopierten Apple-Bilder.
 - 🍅 ist ein Emoji der Systemschrift. „IMDb" und „Rotten Tomatoes" werden
   nur als Namen der Quelle genannt (beschreibende Nennung, keine Logos).
+- Das **TMDB-Logo** (`web/tmdb.svg`) ist TMDBs offizielles Logo, unverändert,
+  wie es TMDBs API-Bedingungen im „Über"-Teil verlangen. Es ist eine Marke
+  von TMDB und fällt nicht unter Lumens Lizenz.
 
 ## 4. Android-Apps (`android/`)
 
@@ -187,19 +190,15 @@ davon ist umgesetzt.
 1. **Cast-SDK in der Android-Handy-App.** Erledigt am 12.11.2026: Die
    Lumen-Autoren haben die zusätzliche Erlaubnis nach AGPL §7 erteilt
    (Weg a), siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
-2. **App Store.** Die Bedingungen des App Store vertragen sich nach
-   verbreiteter Ansicht nicht mit der (A)GPL. Vor einer Veröffentlichung
-   dort braucht es eine Ausnahme der Rechteinhaber (Vorschlag unten). Die
-   [CLA](CLA.md) §3 erlaubt den Lumen-Autoren, Beiträge auch unter anderen
-   Bedingungen weiterzugeben – also auch solche Ausnahmen zu erteilen.
-3. **Quelltext der GPL-Pakete im Abbild.** Der Verweis auf Alpines Server
-   ist üblich, aber GPL-2.0 §3 (BusyBox, x264, x265) verlangt streng
-   genommen, dass der Quelltext mitgeliefert oder schriftlich angeboten
-   wird. Vorschlag: zu jeder Veröffentlichung die Quellarchive der GPL- und
-   LGPL-Pakete aus `alpine-pakete.txt` als Release-Datei ablegen.
-4. **TMDB-Logo.** TMDB verlangt neben dem Satz auch das Logo (kleiner als
-   das eigene). Lumen zeigt bisher nur den Satz; das Logo wäre ein fremdes
-   Markenbild und gehört nur nach Entscheid und unverändert hinein.
+2. **App Store.** Erledigt am 12.11.2026: Die Lumen-Autoren erlauben die
+   Verteilung über App-Stores, solange der Quelltext frei bleibt (zusätzliche
+   Erlaubnis nach AGPL §7, siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS)).
+3. **Quelltext der GPL-Pakete im Abbild.** Erledigt: Zu jeder
+   Veröffentlichung hängt der Ablauf `quellen.yml` das Archiv
+   `lumen-media-vX-gpl-quellen.tar` mit Alpines Rezepten und den geprüften
+   Quellarchiven aller GPL- und LGPL-Pakete des Abbilds an.
+4. **TMDB-Logo.** Erledigt: klein und unverändert unter Einstellungen ›
+   Datenquellen und Drittsoftware, mit Link auf themoviedb.org.
 
 ### Erteilt: zusätzliche Erlaubnis für Google Play services (AGPL §7)
 
@@ -218,7 +217,9 @@ Gilt seit dem 12.11.2026, siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 > not include the source code for the parts of those libraries used as well
 > as that of the covered work.
 
-### Vorschlag: Ausnahme für App-Stores (AGPL §7)
+### Erteilt: Ausnahme für App-Stores (AGPL §7)
+
+Gilt seit dem 12.11.2026, siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 
 > Additional permission under GNU AGPL version 3 section 7
 >
@@ -233,6 +234,5 @@ Gilt seit dem 12.11.2026, siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 > considered further restrictions under section 10 for the purposes of this
 > permission.
 
-Beide Texte gehörten, falls gewünscht, als eigener Abschnitt in `LICENSE`
-oder in eine Datei `LICENSE-EXCEPTIONS` und in die README. Vorher sollte
-sie jemand mit juristischer Erfahrung prüfen.
+Beide Texte gelten wörtlich so; sie stehen in
+[LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).

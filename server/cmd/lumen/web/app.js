@@ -3913,7 +3913,12 @@ function datenquellenZeilen() {
     zeile('OpenSubtitles', tr('Untertitel aus opensubtitles.com, wenn die Verwaltung einen Schlüssel hinterlegt hat')) +
     zeile('FFmpeg', tr('Umwandeln und Abspielen, unter der GPL — im Docker-Abbild aus den Paketen von Alpine Linux')) +
     `<div class="row" style="min-height:50px"><span style="flex:1;color:var(--label-2);font-size:.9375rem;line-height:1.4">${
-      tr('Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.')}</span></div>`;
+      tr('Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.')}</span></div>` +
+    // TMDb verlangt sein Logo im „Über"-Teil, unverändert und kleiner als
+    // Lumens eigenes. Die Datei ist TMDbs offizielles Logo (Primary short).
+    `<a class="row" style="min-height:44px" href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer"
+        aria-label="The Movie Database (TMDB)">
+      <img src="/tmdb.svg" alt="TMDB" width="92" height="12" style="height:12px;width:auto;display:block"></a>`;
 }
 
 function viewSettings() {

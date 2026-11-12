@@ -228,7 +228,8 @@ and source in [THIRD_PARTY.md](THIRD_PARTY.md) (German:
   to get their source are listed inside it under `/usr/share/licenses/lumen/`.
 - The Android phone app includes Google's Cast library (not open source).
   An additional permission under AGPL section 7 in
-  [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS) allows this.
+  [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS) allows this; it also permits
+  distribution through app stores.
 - The updater (Watchtower, Apache-2.0) is **not part of Lumen**: whoever
   enables it pulls it themselves from its publisher's Docker Hub account.
 - Posters and descriptions come from TMDB, using your own key. This product

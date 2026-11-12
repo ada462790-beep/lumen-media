@@ -2,9 +2,9 @@ Lumen — additional permissions under GNU AGPL version 3, section 7
 ==================================================================
 
 Lumen is licensed under the GNU Affero General Public License version 3
-(see LICENSE). The Lumen authors grant the following additional permission.
-It applies to the entire Program. As section 7 allows, anyone who conveys a
-copy may remove it from that copy.
+(see LICENSE). The Lumen authors grant the following additional permissions.
+They apply to the entire Program. As section 7 allows, anyone who conveys
+a copy may remove them from that copy.
 
 1. Google Play services (Google Cast)
 -------------------------------------
@@ -22,10 +22,29 @@ as that of the covered work.
 
 Granted by the Lumen authors on 2026-11-12.
 
+2. Application stores
+---------------------
+
+The licensors of this Program grant you additional permission to convey
+the covered work, or a work based on it, in object code form through an
+application store (such as Apple's App Store or Google Play) whose terms
+of service impose usage rules, digital rights management or restrictions
+on further distribution on recipients, provided that the Corresponding
+Source of the conveyed work is made available to recipients free of
+charge under the terms of this License, in the manner described in
+section 6. Restrictions imposed by the application store are not
+considered further restrictions under section 10 for the purposes of this
+permission.
+
+Granted by the Lumen authors on 2026-11-12.
+
 ---
 
 Deutsch (Erläuterung, massgebend ist der englische Text oben):
-Die Android-App darf zusammen mit Googles Cast-Bibliothek (Google Play
-services) weitergegeben werden, obwohl deren Quelltext nicht offen ist. Für
-alles andere gilt die AGPL-3.0 unverändert: Der Quelltext von Lumen selbst
-muss weiterhin offen bleiben.
+1. Die Android-App darf zusammen mit Googles Cast-Bibliothek (Google Play
+   services) weitergegeben werden, obwohl deren Quelltext nicht offen ist.
+2. Lumen darf über App-Stores (App Store, Google Play) verteilt werden,
+   auch wenn deren Bedingungen Einschränkungen wie Kopierschutz mitbringen,
+   solange der Quelltext frei und kostenlos verfügbar bleibt.
+Für alles andere gilt die AGPL-3.0 unverändert: Der Quelltext von Lumen
+selbst muss weiterhin offen bleiben.

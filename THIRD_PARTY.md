@@ -101,6 +101,9 @@ No third-party scripts, stylesheets, fonts or images.
   Apple images.
 - 🍅 is a system-font emoji. "IMDb" and "Rotten Tomatoes" are only named as
   the source (descriptive use, no logos).
+- The **TMDB logo** (`web/tmdb.svg`) is TMDB\'s official logo, unmodified, as
+  TMDB\'s API terms require in the "About" section. It is a TMDB trademark and
+  not covered by Lumen\'s license.
 
 ## 4. Android apps (`android/`)
 
@@ -183,20 +186,16 @@ implemented.
 1. **Cast SDK in the Android phone app.** Resolved on 2026-11-12: the Lumen
    authors granted the additional permission under AGPL section 7 (option a),
    see [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
-2. **App Store.** The App Store terms are widely considered incompatible
-   with the (A)GPL. Publishing there needs an exception from the copyright
-   holders (proposal below). Section 3 of the [CLA](CLA.md) allows the Lumen
-   authors to distribute contributions under other terms too, so they can
-   grant such exceptions.
-3. **Source for the GPL packages in the image.** Pointing to Alpine's
-   servers is common practice, but GPL-2.0 section 3 (BusyBox, x264, x265)
-   strictly requires the source to accompany the image or a written offer.
-   Proposal: attach the source archives of the GPL/LGPL packages listed in
-   `alpine-pakete.txt` to each release.
-4. **TMDB logo.** Besides the sentence, TMDB asks for its logo (less
-   prominent than Lumen's own). Lumen currently shows only the sentence; the
-   logo is a third-party trademark and should only be added by decision and
-   unmodified.
+2. **App Store.** Resolved on 2026-11-12: the Lumen authors allow
+   distribution through app stores as long as the source stays available
+   (additional permission under AGPL section 7, see
+   [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS)).
+3. **Source for the GPL packages in the image.** Resolved: for every release
+   the `quellen.yml` workflow attaches `lumen-media-vX-gpl-quellen.tar` with
+   Alpine's build recipes and the verified source archives of every GPL and
+   LGPL package in the image.
+4. **TMDB logo.** Resolved: small and unmodified under Settings › Data
+   sources and third-party software, linking to themoviedb.org.
 
 ### Granted: additional permission for Google Play services (AGPL section 7)
 
@@ -215,7 +214,9 @@ In force since 2026-11-12, see [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 > not include the source code for the parts of those libraries used as well
 > as that of the covered work.
 
-### Proposal: exception for app stores (AGPL section 7)
+### Granted: exception for app stores (AGPL section 7)
+
+In force since 2026-11-12, see [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 
 > Additional permission under GNU AGPL version 3 section 7
 >
@@ -230,9 +231,8 @@ In force since 2026-11-12, see [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 > considered further restrictions under section 10 for the purposes of this
 > permission.
 
-If wanted, both texts would go into their own section of `LICENSE` or a
-file `LICENSE-EXCEPTIONS`, and into the README. Someone with legal
-experience should review them first.
+Both texts are in force as written; they are in
+[LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 
 ---
 
