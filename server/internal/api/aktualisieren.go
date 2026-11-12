@@ -87,6 +87,8 @@ type updateStand struct {
 	// tokenUngueltig: GitHub hat das Token beim letzten Prüfen abgelehnt.
 	tokenUngueltig bool
 	verschoben     time.Time
+	// akt: der letzte Auftrag an den Aktualisierer (aktualisierer.go).
+	akt aktStand
 }
 
 var updStand updateStand
@@ -158,13 +160,17 @@ func (s *Server) updateAntwort(ctx context.Context) map[string]any {
 	updStand.mu.Lock()
 	defer updStand.mu.Unlock()
 	out := map[string]any{
-		"installiert":  s.version,
-		"container":    imContainer(),
-		"einstellung":  s.updateEinstellungen(ctx),
-		"protokoll":    s.updateProtokoll(ctx),
-		"laeuft":       updStand.laeuft,
-		"wiedergaben":  s.live.Load().Total,
-		"tokenGesetzt": s.updatePruefer().Token != "",
+		"installiert": s.version,
+		"container":   updateImContainer(),
+		// Updates per Knopfdruck über den Aktualisierer (aktualisierer.go).
+		// Nur ob — Adresse und Token bleiben auf dem Server.
+		"aktualisierer":     aktualisiererBereit(),
+		"aktualisiererHalb": aktualisiererHalb(),
+		"einstellung":       s.updateEinstellungen(ctx),
+		"protokoll":         s.updateProtokoll(ctx),
+		"laeuft":            updStand.laeuft,
+		"wiedergaben":       s.live.Load().Total,
+		"tokenGesetzt":      s.updatePruefer().Token != "",
 		// Woher das Token kommt: aus der Umgebung (LUMEN_GITHUB_TOKEN, dann
 		// lässt es sich hier nicht ändern) oder aus der Verwaltung.
 		"tokenQuelle":    tokenQuelle(s),
@@ -188,10 +194,8 @@ func (s *Server) updateAntwort(ctx context.Context) map[string]any {
 	if !updStand.verschoben.IsZero() {
 		out["verschoben"] = updStand.verschoben
 	}
-	if imContainer() {
-		out["anleitung"] = "Im Container tauscht man das Abbild als Ganzes: auf dem NAS im Ordner mit der docker-compose.yml  docker compose pull && docker compose up -d  ausführen. " +
-			"Synology: Steht in der docker-compose.yml bei lumen „pull_policy: always“, reicht Projekt › Aktion › Erstellen. " +
-			"Von selbst nachts geht es mit Watchtower — die Zeilen dafür stehen auskommentiert in der docker-compose.yml."
+	if !updStand.akt.Seit.IsZero() {
+		out["aktualisiererStand"] = updStand.akt
 	}
 	return out
 }
@@ -248,7 +252,7 @@ func (s *Server) adminUpdateEinstellen(w http.ResponseWriter, r *http.Request) {
 // adminUpdateJetzt setzt die neueste Fassung ein. Laufen Wiedergaben,
 // braucht es ?trotzdem=1 — die Verwaltung fragt vorher nach.
 func (s *Server) adminUpdateJetzt(w http.ResponseWriter, r *http.Request) {
-	if imContainer() {
+	if updateImContainer() {
 		fail(w, http.StatusPreconditionFailed, "im Container aktualisiert man das Abbild: docker compose pull && docker compose up -d")
 		return
 	}
@@ -327,13 +331,16 @@ func (s *Server) updateEinsetzen(ctx context.Context, rel *update.Release, auto 
 // niemand schaut. Schaut jemand, wird verschoben und später nochmal
 // versucht, solange das Fenster offen ist.
 func (s *Server) UpdateWaechter(ctx context.Context) {
+	// Hat vor dem Neustart der Aktualisierer übernommen? Dann steht das
+	// Ergebnis jetzt fest.
+	s.aktualisiererNachStart(ctx)
 	select {
 	case <-ctx.Done():
 		return
 	case <-time.After(2 * time.Minute):
 	}
-	var zuletztGeprueft, zuletztVersucht string // Tag+Stunde:Minute
-	var verschobenBis time.Time
+	var zuletztGeprueft string // Tag
+	var z waechterZustand
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
@@ -351,39 +358,74 @@ func (s *Server) UpdateWaechter(ctx context.Context) {
 				s.log.Warn("update prüfen", "err", err)
 			}
 		}
-		if e.Auto != "fenster" || imContainer() || !imFenster(jetzt, e.FensterVon, e.FensterBis) {
-			continue
-		}
-		updStand.mu.Lock()
-		rel := updStand.neueste
-		laeuft := updStand.laeuft
-		updStand.mu.Unlock()
-		// Verschoben: bis zum Fenster des nächsten Tages Ruhe (20 Stunden
-		// reichen, auch wenn das Fenster über Mitternacht geht).
-		if laeuft || rel == nil || !update.Neuer(rel.Version, s.version) || jetzt.Before(verschobenBis) {
-			continue
-		}
-		// Höchstens alle zehn Minuten ein Versuch, sonst füllt sich das Protokoll.
-		if zuletztVersucht != "" {
-			if t0, err := time.Parse(time.RFC3339, zuletztVersucht); err == nil && jetzt.Sub(t0) < 10*time.Minute {
-				continue
-			}
-		}
-		zuletztVersucht = jetzt.Format(time.RFC3339)
-		if n := s.live.Load().Total; n > 0 {
-			// Wie gewünscht: nicht alle zehn Minuten neu
-			// anklopfen, sondern auf das Fenster am nächsten Tag
-			// verschieben — und das einmal ins Protokoll schreiben.
-			updStand.mu.Lock()
-			updStand.verschoben = jetzt
-			updStand.mu.Unlock()
-			verschobenBis = jetzt.Add(20 * time.Hour)
-			s.updateProtokollieren(ctx, updateEintrag{Von: s.version, Nach: rel.Version, Auto: true,
-				Ergebnis: "verschoben", Notiz: fmt.Sprintf("%d Wiedergabe(n) laufen — nächster Versuch morgen im Zeitfenster", n)})
-			continue
-		}
-		s.updateEinsetzen(ctx, rel, true)
+		s.fensterSchritt(ctx, jetzt, e, &z)
 	}
+}
+
+// waechterZustand merkt sich zwischen zwei Minuten des Wächters, wann
+// zuletzt versucht und bis wann verschoben wurde.
+type waechterZustand struct {
+	zuletztVersucht time.Time
+	verschobenBis   time.Time
+}
+
+// Was fensterSchritt getan hat — für die Tests.
+const (
+	fensterNichts     = ""
+	fensterVerschoben = "verschoben"
+	fensterEinsetzen  = "einsetzen"
+	fensterContainer  = "container"
+)
+
+// fensterSchritt: eine Minute des Wächters im Update-Fenster. Ohne
+// Container setzt Lumen die neue Fassung selbst ein; im Container bittet
+// es den Aktualisierer darum — aber nur, wenn der eingerichtet ist. Schaut
+// jemand, wird auf das Fenster des nächsten Tages verschoben.
+func (s *Server) fensterSchritt(ctx context.Context, jetzt time.Time, e updateEinstellung, z *waechterZustand) string {
+	if e.Auto != "fenster" || !imFenster(jetzt, e.FensterVon, e.FensterBis) {
+		return fensterNichts
+	}
+	container := updateImContainer()
+	if container && !aktualisiererBereit() {
+		return fensterNichts
+	}
+	updStand.mu.Lock()
+	rel := updStand.neueste
+	laeuft := updStand.laeuft
+	updStand.mu.Unlock()
+	// Verschoben: bis zum Fenster des nächsten Tages Ruhe (20 Stunden
+	// reichen, auch wenn das Fenster über Mitternacht geht).
+	if laeuft || rel == nil || !update.Neuer(rel.Version, s.version) || jetzt.Before(z.verschobenBis) {
+		return fensterNichts
+	}
+	// Höchstens alle zehn Minuten ein Versuch, sonst füllt sich das Protokoll.
+	if !z.zuletztVersucht.IsZero() && jetzt.Sub(z.zuletztVersucht) < 10*time.Minute {
+		return fensterNichts
+	}
+	z.zuletztVersucht = jetzt
+	if n := s.live.Load().Total; n > 0 {
+		// Wie gewünscht: nicht alle zehn Minuten neu
+		// anklopfen, sondern auf das Fenster am nächsten Tag
+		// verschieben — und das einmal ins Protokoll schreiben.
+		updStand.mu.Lock()
+		updStand.verschoben = jetzt
+		updStand.mu.Unlock()
+		z.verschobenBis = jetzt.Add(20 * time.Hour)
+		s.updateProtokollieren(ctx, updateEintrag{Von: s.version, Nach: rel.Version, Auto: true,
+			Ergebnis: "verschoben", Notiz: fmt.Sprintf("%d Wiedergabe(n) laufen — nächster Versuch morgen im Zeitfenster", n)})
+		return fensterVerschoben
+	}
+	if container {
+		// Klappt es nicht (Abbild noch nicht gebaut, Token falsch), erst
+		// in der nächsten Nacht wieder — ein Fehler je Nacht im Protokoll
+		// reicht.
+		if code := s.aktualisiererAnstossen(ctx, rel, true); code != aktOk {
+			z.verschobenBis = jetzt.Add(20 * time.Hour)
+		}
+		return fensterContainer
+	}
+	s.updateEinsetzen(ctx, rel, true)
+	return fensterEinsetzen
 }
 
 // imFenster sagt, ob die Uhrzeit zwischen von und bis liegt — auch über

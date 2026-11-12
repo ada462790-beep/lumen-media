@@ -319,5 +319,7 @@
   "Dieser Einmal-Code ist abgelaufen – er gilt 72 Stunden. Bitte die Verwaltung um einen neuen.": "This one-time code has expired – it is valid for 72 hours. Please ask an admin for a new one.",
   "Dein Passwort wurde zurückgesetzt. Lege jetzt dein eigenes Passwort fest – nur du kennst es.": "Your password was reset. Set your own password now – only you will know it.",
   "Wähle ein anderes Passwort als den Einmal-Code.": "Choose a password other than the one-time code.",
-  "jemandem ausserhalb deines Bereichs": "someone outside your scope"
+  "jemandem ausserhalb deines Bereichs": "someone outside your scope",
+  "Für Updates per Knopfdruck braucht es den Aktualisierer — siehe README.md, Abschnitt „Updates per Knopfdruck“.": "One-click updates need the updater companion — see README.md, section “One-click updates”.",
+  "Ein Update läuft schon.": "An update is already running."
 }

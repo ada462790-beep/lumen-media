@@ -340,6 +340,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/admin/update/check", owner(s.adminUpdatePruefen))
 	mux.Handle("POST /api/v1/admin/update/settings", owner(s.adminUpdateEinstellen))
 	mux.Handle("POST /api/v1/admin/update/run", owner(s.adminUpdateJetzt))
+	// Im Container: den Aktualisierer bitten (aktualisierer.go). Fragt erst
+	// nach laufenden Wiedergaben, dann nach dem Code (bestaetigt).
+	mux.Handle("POST /api/v1/admin/update/container", owner(s.adminUpdateContainer))
 	// Umwandeln: Hardware, Vorschaubilder, Untertitel (umwandlung_einstellungen.go).
 	mux.Handle("GET /api/v1/admin/umwandlung", owner(s.adminUmwandlung))
 	mux.Handle("PUT /api/v1/admin/umwandlung", owner(s.adminUmwandlungSetzen))
