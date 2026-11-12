@@ -91,7 +91,10 @@ async function katalog(id) {
   if (geladen.has(id)) return geladen.get(id);
   let k = {};
   try {
-    const r = await fetch(`/sprachen/${id}.json`, { cache: 'no-cache' });
+    // Mit der Fassung in der Adresse (der Server setzt sie beim Ausliefern
+    // ein, web.go) darf der Browser den Katalog behalten, bis Lumen neu
+    // kommt.
+    const r = await fetch(`/sprachen/${id}.json?v=__LUMEN_FASSUNG__`);
     if (r.ok) k = await r.json();
   } catch { /* ohne Katalog bleibt der deutsche Text */ }
   geladen.set(id, k);
