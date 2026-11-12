@@ -219,7 +219,7 @@ func (f *FFmpeg) TrickplayErzeugenMit(ctx context.Context, quelle string, dauerM
 }
 
 // trickplaySpringen holt jedes Bild einzeln: zur Stelle springen (-ss vor
-// -i), das nächste Schlüsselbild davor nehmen (-noaccurate_seek), nur
+// -i), das Schlüsselbild davor nehmen (-noaccurate_seek, -copyts), nur
 // Schlüsselbilder decodieren. Gelesen wird so nur, was um die Stellen
 // herum liegt. Danach setzt ein letzter Aufruf je hundert Bilder zu einem
 // Blatt zusammen. Geht ein einzelnes Bild nicht (etwa ganz am Ende), steht
@@ -245,6 +245,10 @@ func (f *FFmpeg) trickplaySpringen(ctx context.Context, quelle string, info *Tri
 		stelle := fmt.Sprintf("%d", i*TrickplayIntervall)
 		cmd := exec.CommandContext(ctx, f.FFmpegPath, "-hide_banner", "-loglevel", "error", "-nostdin",
 			"-skip_frame", "nokey", "-noaccurate_seek", "-ss", stelle, "-i", quelle,
+			// -copyts: Das Schlüsselbild vor der Stelle hätte sonst eine
+			// negative Zeit, FFmpeg verwürfe es und läse bis zum nächsten —
+			// bei einem Remux viele Megabyte je Bild.
+			"-copyts",
 			"-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", "1",
 			"-vf", filter, "-q:v", "5", "-update", "1", "-y", bild(i))
 		out, err := Niedrig(cmd, true)

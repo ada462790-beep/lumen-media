@@ -6383,7 +6383,8 @@ addEventListener('online', () => {
 // Die Hülle der App für den Fall ohne Netz (sw.js). Nur über https oder
 // localhost — anders lassen Browser keinen Service Worker zu.
 if ('serviceWorker' in navigator && window.isSecureContext) {
-  addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+  const swAnmelden = () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); };
+  if (document.readyState === 'complete') swAnmelden(); else addEventListener('load', swAnmelden);
 }
 
 // Den Medienschlüssel vor dem Ablaufen erneuern; abgelaufen hiesse: keine
