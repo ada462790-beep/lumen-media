@@ -1187,9 +1187,27 @@ dazu, sie nimmt keine weg. Ohne Gewährleistung — wie bei jeder freien
 Software. Wer etwas beiträgt, behält das Urheberrecht an seinem Beitrag
 und stimmt der [CLA](CLA.md) zu (siehe [Mitmachen](#mitmachen)).
 
-FFmpeg wird nur aufgerufen, nicht eingebaut, und bleibt unter seiner eigenen
-Lizenz. Eingebaute Fremdbibliotheken: `go-sqlite3` (MIT) und `go-qrcode`
-(MIT, für den QR-Code der Authenticator-App).
+### Lizenzen und Drittsoftware
+
+Was nicht von den Lumen-Autoren stammt, steht mit Fassung, Lizenz und
+Fundstelle in [DRITTSOFTWARE.md](DRITTSOFTWARE.md) (englisch:
+[THIRD_PARTY.md](THIRD_PARTY.md)). Kurz:
+
+- In die Binärdatei eingebaut sind nur `go-sqlite3` (MIT, mit SQLite,
+  gemeinfrei), `go-qrcode` (MIT, für den QR-Code der Authenticator-App)
+  und die Go-Standardbibliothek (BSD-3-Clause). Ihre Lizenztexte liegen dem
+  Release-Paket und dem Docker-Abbild bei.
+- FFmpeg wird nur aufgerufen, nicht eingebaut, und bleibt unter seiner
+  eigenen Lizenz (im Abbild: das Alpine-Paket, GPL). Welche Alpine-Pakete in
+  einem Abbild stecken und wo ihr Quelltext liegt, steht darin unter
+  `/usr/share/licenses/lumen/`.
+- Der Aktualisierer (Watchtower, Apache-2.0) ist **nicht Teil von Lumen**:
+  Wer ihn einschaltet, lädt ihn selbst vom Docker Hub seines Herausgebers.
+- Poster und Beschreibungen kommen von TMDB, mit deinem eigenen Schlüssel.
+  This product uses the TMDB API but is not endorsed or certified by TMDB.
+  Wertungen kommen über OMDb (CC BY-NC 4.0), Biografien teils aus der
+  Wikipedia (CC BY-SA 4.0). In der App steht das unter **Einstellungen ›
+  Datenquellen und Drittsoftware**.
 
 ---
 

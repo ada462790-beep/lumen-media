@@ -1465,5 +1465,13 @@
  "Ohne ihn: im Container Manager Projekt › Aktion › Erstellen (mit „pull_policy: always“), sonst docker compose pull && docker compose up -d.": "Without it: in Container Manager, Project › Action › Build (with “pull_policy: always”), otherwise docker compose pull && docker compose up -d.",
  "Wird aktualisiert — Lumen startet gleich neu": "Updating — Lumen will restart shortly",
  "angestossen": "started",
- "so geht’s": "here’s how"
+ "so geht’s": "here’s how",
+ "Datenquellen und Drittsoftware": "Data sources and third-party software",
+ "Dieses Produkt verwendet die TMDB-API, wird aber von TMDB weder unterstützt noch zertifiziert.": "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+ "Poster, Beschreibungen, Besetzung und Folgen — The Movie Database (themoviedb.org)": "Posters, descriptions, cast and episodes — The Movie Database (themoviedb.org)",
+ "IMDb- und Rotten-Tomatoes-Wertungen über omdbapi.com, Inhalte unter CC BY-NC 4.0": "IMDb and Rotten Tomatoes ratings via omdbapi.com, content under CC BY-NC 4.0",
+ "Biografien, wo TMDB keine hat — Texte unter CC BY-SA 4.0, Quelle steht bei der Person": "Biographies where TMDB has none — text under CC BY-SA 4.0, source shown with the person",
+ "Untertitel aus opensubtitles.com, wenn die Verwaltung einen Schlüssel hinterlegt hat": "Subtitles from opensubtitles.com, if an admin has added a key",
+ "Umwandeln und Abspielen, unter der GPL — im Docker-Abbild aus den Paketen von Alpine Linux": "Transcoding and playback, under the GPL — in the Docker image from Alpine Linux packages",
+ "Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.": "The full list with licenses is in THIRD_PARTY.md in the source code."
 }

@@ -211,3 +211,23 @@ AGPL-3.0-only, see [LICENSE](LICENSE). Copyright (C) 2026 Die
 Lumen-Autoren (the Lumen authors). If you run a modified version for
 others over a network, you owe them the source — set `LUMEN_SOURCE_URL` to
 where your version lives.
+
+### Licenses and third-party software
+
+Everything not written by the Lumen authors is listed with version, license
+and source in [THIRD_PARTY.md](THIRD_PARTY.md) (German:
+[DRITTSOFTWARE.md](DRITTSOFTWARE.md)). In short:
+
+- Built into the binary: only `go-sqlite3` (MIT, bundling public-domain
+  SQLite), `go-qrcode` (MIT) and the Go standard library (BSD-3-Clause).
+  Their license texts ship with the release archive and the Docker image.
+- FFmpeg is only executed, not linked, and keeps its own license (in the
+  image: the Alpine package, GPL). The Alpine packages in an image and where
+  to get their source are listed inside it under `/usr/share/licenses/lumen/`.
+- The updater (Watchtower, Apache-2.0) is **not part of Lumen**: whoever
+  enables it pulls it themselves from its publisher's Docker Hub account.
+- Posters and descriptions come from TMDB, using your own key. This product
+  uses the TMDB API but is not endorsed or certified by TMDB. Ratings come
+  via OMDb (CC BY-NC 4.0), some biographies from Wikipedia (CC BY-SA 4.0).
+  The app shows this under **Settings › Data sources and third-party
+  software**.

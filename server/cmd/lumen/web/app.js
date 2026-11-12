@@ -3898,6 +3898,24 @@ function quelle() {
   } catch { return ''; }
 }
 
+/* Woher Poster, Texte und Wertungen kommen — und wem Lumen dafür einen
+ * Hinweis schuldet. TMDb verlangt seinen Satz im „Über"-Teil der App,
+ * OMDb und die Wikipedia stehen unter Creative-Commons-Lizenzen, die eine
+ * Namensnennung verlangen. Die vollständige Liste der Drittsoftware steht
+ * in DRITTSOFTWARE.md bzw. THIRD_PARTY.md im Quelltext. */
+function datenquellenZeilen() {
+  const zeile = (name, text) => `<div class="row" style="min-height:50px;gap:12px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
+      <span class="t-body" style="flex:none;min-width:96px">${esc(name)}</span>
+      <span style="flex:1;color:var(--label-2);font-size:.9375rem;line-height:1.4">${esc(text)}</span></div>`;
+  return zeile('TMDB', tr('Poster, Beschreibungen, Besetzung und Folgen — The Movie Database (themoviedb.org)')) +
+    zeile('OMDb', tr('IMDb- und Rotten-Tomatoes-Wertungen über omdbapi.com, Inhalte unter CC BY-NC 4.0')) +
+    zeile('Wikipedia', tr('Biografien, wo TMDB keine hat — Texte unter CC BY-SA 4.0, Quelle steht bei der Person')) +
+    zeile('OpenSubtitles', tr('Untertitel aus opensubtitles.com, wenn die Verwaltung einen Schlüssel hinterlegt hat')) +
+    zeile('FFmpeg', tr('Umwandeln und Abspielen, unter der GPL — im Docker-Abbild aus den Paketen von Alpine Linux')) +
+    `<div class="row" style="min-height:50px"><span style="flex:1;color:var(--label-2);font-size:.9375rem;line-height:1.4">${
+      tr('Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.')}</span></div>`;
+}
+
 function viewSettings() {
   const a = S.me.account, lim = S.me.limits || {}, prefs = S.me.prefs || {};
   const devices = (S.data?.devices || []).map(geraetZeile).join('');
@@ -4004,6 +4022,8 @@ function viewSettings() {
              <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:.9375rem">
                ${tr('ansehen')}${svg(I.chev, 14, 2.4)}</span></a>` : ''),
           tr('Lumen ist freie Software. Du darfst sie benutzen, verändern und weitergeben — wer sie verändert und betreibt, muss seine Änderungen ebenfalls offenlegen.'))}
+        ${grp(tr('Datenquellen und Drittsoftware'), datenquellenZeilen(),
+          tr('Dieses Produkt verwendet die TMDB-API, wird aber von TMDB weder unterstützt noch zertifiziert.'))}
         ${grp(tr('Verlauf'),
           `<button class="btn row" style="width:100%;justify-content:flex-start;min-height:48px;color:var(--rot)" data-clearhistory>
              <span class="t-body">${tr('Verlauf löschen')}</span></button>`,
@@ -5250,7 +5270,8 @@ function viewMetadata() {
           <span class="hint">${tr('Ohne diesen Schlüssel kommen Poster und Beschreibungen nur aus NFO-Dateien und Bildern neben den Filmen. Kostenlos: auf {seite} anmelden, dann unter {menue} den {token} kopieren — den langen, der mit {anfang} anfängt, nicht die kurze API-Kennung.', {
               seite: '<a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener noreferrer">themoviedb.org</a>',
               menue: `<span class="mono">${tr('Einstellungen → API')}</span>`, token: '<b>API Read Access Token</b>',
-              anfang: '<span class="mono">eyJ</span>' })}</span></div>`)}
+              anfang: '<span class="mono">eyJ</span>' })}</span></div>`,
+        tr('Dieses Produkt verwendet die TMDB-API, wird aber von TMDB weder unterstützt noch zertifiziert.'))}
       ${grp(tr('IMDb-Wertung (über OMDb)'),
         `<div style="padding:16px" class="field">
           <label for="omdb">${tr('Schlüssel')}</label>
