@@ -197,6 +197,16 @@ func (s *Server) updateAntwort(ctx context.Context) map[string]any {
 	if !updStand.akt.Seit.IsZero() {
 		out["aktualisiererStand"] = updStand.akt
 	}
+	// Für die Mac-App, die den Knopf (noch) nicht hat: ein Satz, wie es
+	// im Container geht. Die Web-App baut ihren Text selbst.
+	if updateImContainer() {
+		if aktualisiererBereit() {
+			out["anleitung"] = "Im Container holt der Aktualisierer das neue Abbild: in der Web-App unter Verwaltung › Updates „Jetzt aktualisieren“ drücken."
+		} else {
+			out["anleitung"] = "Im Container tauscht man das Abbild als Ganzes. Per Knopfdruck geht es mit dem Aktualisierer — siehe README.md, „Updates per Knopfdruck“. " +
+				"Sonst: Synology Container Manager › Projekt › Aktion › Erstellen (mit „pull_policy: always“), oder docker compose pull && docker compose up -d."
+		}
+	}
 	return out
 }
 
