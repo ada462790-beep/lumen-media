@@ -9,6 +9,7 @@ package stream
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -343,5 +344,36 @@ func TestTrickplay(t *testing.T) {
 		filepath.Join(ziel, "0.jpg")).Output()
 	if strings.TrimSpace(string(out)) != "3200,1800" {
 		t.Fatalf("Blatt: %s", out)
+	}
+}
+
+// Vorschaubilder durch Springen (grosse Dateien): dasselbe Ergebnis wie
+// der Durchgang, Kacheln an derselben Stelle, Quelle vermerkt.
+func TestTrickplaySpringen(t *testing.T) {
+	src := testFilmMitGOP(t, 25, 25)
+	ff := NewFFmpeg("", "")
+	d, _ := ff.Feinmessung(context.Background(), src)
+	ja := true
+	gewartet := 0
+	ziel := filepath.Join(t.TempDir(), "tp")
+	info, err := ff.TrickplayErzeugenMit(context.Background(), src, 25_000, d, ziel, TrickplayOptionen{
+		Kennung: "f_1:123:456", Springen: &ja,
+		Warten: func(context.Context) error { gewartet++; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Bilder != 3 || info.Blaetter != 1 || gewartet != 3 {
+		t.Fatalf("%+v, gewartet %d", info, gewartet)
+	}
+	if TrickplayKennung(ziel) != "f_1:123:456" {
+		t.Fatalf("Kennung: %q", TrickplayKennung(ziel))
+	}
+	out, _ := exec.Command("ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0",
+		filepath.Join(ziel, "0.jpg")).Output()
+	if strings.TrimSpace(string(out)) != "3200,1800" {
+		t.Fatalf("Blatt: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(ziel, "einzeln")); err == nil {
+		t.Fatal("Einzelbilder liegen noch da")
 	}
 }
