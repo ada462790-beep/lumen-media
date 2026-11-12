@@ -1757,7 +1757,9 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	missing, err := s.st.MissingFiles(r.Context())
+	// Fehlende Dateien seitenweise (?fehlendAb=…): 1 000 fehlende Dateien
+	// waren 460 KB JSON und 9 000 Elemente auf der Seite.
+	missing, err := s.st.MissingFilesSeite(r.Context(), 200, qInt(r, "fehlendAb", 0))
 	if err != nil {
 		failErr(w, err)
 		return
@@ -1826,10 +1828,20 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		}
 		ausstehend = a
 	}
+	// Die Pfade aller Titel mit einer Abfrage (ErstePfade) — vorher eine
+	// je Titel, und jede las die ganze Dateitabelle (1,3 s je Aufruf).
+	ids := make([]string, 0, len(unmatched)+len(ausstehend))
+	for _, it := range unmatched {
+		ids = append(ids, it.ID)
+	}
+	for _, it := range ausstehend {
+		ids = append(ids, it.ID)
+	}
+	pfade, _ := s.st.ErstePfade(r.Context(), ids)
 	anreichern := func(liste []store.Item) []mitPfad {
 		out := make([]mitPfad, 0, len(liste))
 		for _, it := range liste {
-			x := mitPfad{Item: it, Pfad: s.st.ErsterPfad(r.Context(), it.ID)}
+			x := mitPfad{Item: it, Pfad: pfade[it.ID]}
 			if g, ok := meta.GrundZu(it.ID); ok {
 				x.Grund = &g
 			}
@@ -1844,16 +1856,21 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		Liste     []scan.Auslassung `json:"liste"`
 	}
 	ausgelassen := []auslassBib{}
+	// Defekte Dateien (leer, gesperrt, kaputt) stehen in der Datenbank und
+	// gelten auch nach einem Neustart (aufraeumen_scan.go).
+	defekt := s.defektGruppen(r.Context(), darf)
 	if libs, err := s.st.Libraries(r.Context()); err == nil {
 		for _, l := range libs {
 			if darf != nil && !darf[l.ID] {
 				continue
 			}
-			if liste := s.scanner.Ausgelassen(l.ID); len(liste) > 0 {
+			liste := append(s.scanner.Ausgelassen(l.ID), defekt[l.ID]...)
+			if len(liste) > 0 {
 				ausgelassen = append(ausgelassen, auslassBib{l.ID, l.Name, liste})
 			}
 		}
 	}
+	nFehlend, _ := s.st.FehlendZahl(r.Context())
 	nUnmatched, nPending := s.st.OffeneZuordnungenZahl(r.Context())
 	ok(w, map[string]any{"duplicates": dups, "missing": missing,
 		"unmatched": anreichern(unmatched), "ausstehend": anreichern(ausstehend),
@@ -1861,7 +1878,8 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		// Gesamtzahlen (die Listen sind begrenzt). Für einen
 		// beschränkten Mitverwalter zählen nur die eigenen.
 		"offen": map[string]int{"unmatched": zahlOder(darf, nUnmatched, len(unmatched)),
-			"pending": zahlOder(darf, nPending, len(ausstehend))},
+			"pending": zahlOder(darf, nPending, len(ausstehend)),
+			"missing": zahlOder(darf, nFehlend, len(missing))},
 		"pending": s.st.PendingCount(r.Context()),
 		// Ohne gültigen TMDb-Schlüssel sagt die Seite, warum Titel warten.
 		"schluessel": meta.SchluesselStand(r.Context(), s.st),

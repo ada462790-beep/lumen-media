@@ -44,6 +44,12 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 		scheitern(w, http.StatusGone, "die datei ist nicht mehr da")
 		return
 	}
+	// Defekt (leer, gesperrt, kaputt): sagen, statt endlos „Wird
+	// umgewandelt" und HTTP 500 (aufraeumen_scan.go).
+	if f.Defekt != "" {
+		scheitern(w, http.StatusUnprocessableEntity, defektText)
+		return
+	}
 	// Bildschirmzeit: Der Browser sieht den Status nicht — darum merkt
 	// sich der Lauf den Code, und /browser/grund sagt ihn.
 	if l, gilt := s.bildschirmzeitLage(r.Context(), acc); gilt && !l.urteil.Erlaubt {

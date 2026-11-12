@@ -58,11 +58,12 @@ func (s *Server) UmwandlungEinrichten(ctx context.Context) {
 	if !s.ff.Available() {
 		return
 	}
-	go func() {
+	// begleitet: Das Herunterfahren wartet darauf (begleitet.go).
+	s.begleitetMit(ctx, func(ctx context.Context) {
 		s.ff.HW.Pruefen(ctx)
 		s.hardwareMelden(ctx)
-	}()
-	go s.hintergrundArbeit(ctx)
+	})
+	s.begleitetMit(ctx, s.hintergrundArbeit)
 }
 
 // hardwareMelden schreibt ins Protokoll, womit umgewandelt wird.

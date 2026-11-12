@@ -31,15 +31,7 @@ func (s *Store) Kennzahlen(ctx context.Context, ids []string) (map[string]Kennza
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT t.id, MAX(COALESCE(f.height, 0)), MAX(COALESCE(f.width, 0)), MAX(COALESCE(f.hdr, '')),
-		        MAX(COALESCE((SELECT MAX(channels) FROM media_track mt WHERE mt.file_id = f.id AND mt.kind = 'audio'), 0))
-		   FROM item t
-		   JOIN item e ON e.id = t.id OR e.parent_id = t.id
-		     OR e.parent_id IN (SELECT id FROM item WHERE parent_id = t.id)
-		   JOIN media_file f ON f.item_id = e.id AND f.missing_since IS NULL
-		  WHERE t.id IN (`+placeholders(len(ids))+`)
-		  GROUP BY t.id`, toAny(ids)...)
+	rows, err := s.db.QueryContext(ctx, kennzahlenSQL(len(ids)), kennzahlenArgs(ids)...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +80,35 @@ func (s *Store) NeueFolgenSeit(ctx context.Context, accountID string, seriesIDs 
 	return out, rows.Err()
 }
 
+// kennzahlenSQL: drei Zweige mit UNION ALL (der Titel selbst, seine
+// Kinder, seine Enkel) statt eines Joins mit „e.id = t.id OR e.parent_id
+// = t.id OR e.parent_id IN (…)". Mit dem OR hing der Plan an der
+// Statistik: Nach „erst Filme, dann Serien" hielt sie parent_id für
+// wertlos (beim ersten ANALYZE war es überall NULL), und SQLite las für
+// jede Datei einer Folge die ganze Tabelle item — die Startseite brauchte
+// 245 s. INDEXED BY und CROSS JOIN (z zuerst, dann die Dateien) legen
+// die Wege fest, unabhängig von der Statistik.
+func kennzahlenSQL(n int) string {
+	ph := placeholders(n)
+	return `WITH z(t, e) AS (
+		     SELECT id, id FROM item WHERE id IN (` + ph + `)
+		     UNION ALL
+		     SELECT parent_id, id FROM item INDEXED BY item_by_parent WHERE parent_id IN (` + ph + `)
+		     UNION ALL
+		     SELECT st.parent_id, e.id FROM item st INDEXED BY item_by_parent
+		       JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
+		      WHERE st.parent_id IN (` + ph + `))
+		 SELECT z.t, MAX(COALESCE(f.height, 0)), MAX(COALESCE(f.width, 0)), MAX(COALESCE(f.hdr, '')),
+		        MAX(COALESCE((SELECT MAX(channels) FROM media_track mt WHERE mt.file_id = f.id AND mt.kind = 'audio'), 0))
+		   FROM z CROSS JOIN media_file f INDEXED BY file_by_item
+		  WHERE f.item_id = z.e AND f.missing_since IS NULL
+		  GROUP BY z.t`
+}
+
+func kennzahlenArgs(ids []string) []any {
+	return append(append(toAny(ids), toAny(ids)...), toAny(ids)...)
+}
+
 // Qualitaet macht aus Breite und Höhe ein Wort fürs Abzeichen.
 //
 // Die Breite zählt mit: Kinofilme im Breitformat sind niedriger als ihre
@@ -117,18 +138,29 @@ func (s *Store) Aehnliche(ctx context.Context, q Query, itemID string, limit int
 	if limit <= 0 {
 		limit = 20
 	}
-	args = append([]any{itemID, itemID, itemID, itemID}, args...)
-	args = append(args, itemID, limit)
+	// Kandidaten nur von den eigenen Reihen, Personen und Genres aus
+	// (Index je Name) — vorher rechnete die Abfrage für jeden Titel der
+	// Mediathek drei Unterabfragen (6 → 82 ms je Titelseite mit Besetzung,
+	// und wachsend mit der Sammlung). ?1 ist der Titel; die Platzhalter
+	// der Rechte (bedingung) zählen danach weiter.
+	args = append(append([]any{itemID}, args...), limit)
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT i.id,
-		        (SELECT count(*) FROM collection_item a JOIN collection_item b ON a.collection_id = b.collection_id
-		          WHERE a.item_id = ? AND b.item_id = i.id) * 10
-		      + (SELECT count(*) FROM besetzung a JOIN besetzung b ON a.name = b.name
-		          WHERE a.item_id = ? AND b.item_id = i.id AND a.ord < 8 AND b.ord < 8) * 3
-		      + (SELECT count(*) FROM genre a JOIN genre b ON a.name = b.name
-		          WHERE a.item_id = ? AND b.item_id = i.id) * 2
-		      + CASE WHEN i.kind = (SELECT kind FROM item WHERE id = ?) THEN 1 ELSE 0 END AS punkte
-		   FROM item i WHERE `+strings.Join(where, " AND ")+` AND i.id != ? AND punkte > 2
+		`WITH k(id, p) AS (
+		     SELECT b.item_id, 10 FROM collection_item a
+		       JOIN collection_item b ON b.collection_id = a.collection_id
+		      WHERE a.item_id = ?1 AND b.item_id != ?1
+		     UNION ALL
+		     SELECT b.item_id, 3 FROM besetzung a
+		       JOIN besetzung b INDEXED BY besetzung_by_name ON b.name = a.name AND b.ord < 8
+		      WHERE a.item_id = ?1 AND a.ord < 8 AND b.item_id != ?1
+		     UNION ALL
+		     SELECT b.item_id, 2 FROM genre a
+		       JOIN genre b INDEXED BY genre_by_name ON b.name = a.name
+		      WHERE a.item_id = ?1 AND b.item_id != ?1)
+		 SELECT i.id, sum(k.p) + CASE WHEN i.kind = (SELECT kind FROM item WHERE id = ?1) THEN 1 ELSE 0 END AS punkte
+		   FROM k CROSS JOIN item i
+		  WHERE i.id = k.id AND `+strings.Join(where, " AND ")+`
+		  GROUP BY i.id HAVING punkte > 2
 		  ORDER BY punkte DESC, i.imdb_rating DESC, i.sort_title LIMIT ?`, args...)
 	if err != nil {
 		return nil, err

@@ -69,19 +69,25 @@ func TestNeueFolgeHoltSerieNachVorn(t *testing.T) {
 	}
 }
 
-// Die Übersicht zählt Doppel und fehlende Dateien in der Datenbank; das
-// muss zu den Listen passen, die „Aufräumen" zeigt.
+// Die Übersicht zählt Filme in Teilen und fehlende Dateien in der
+// Datenbank; das muss zu den Listen passen, die „Aufräumen" zeigt.
+// Fassungen eines Films (alle Teil 1) sind kein Doppel.
 func TestDoppelUndFehlendZahl(t *testing.T) {
 	st := testStore(t)
 	ctx := t.Context()
 	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", t.TempDir(), "de")
+	fassungen := false
 	film := func(titel string, dateien ...bool) {
 		it := &Item{LibraryID: lib.ID, Kind: "movie", Title: titel}
 		if err := st.UpsertItem(ctx, it); err != nil {
 			t.Fatal(err)
 		}
 		for i, fehlt := range dateien {
-			f := &MediaFile{ItemID: it.ID, Path: "/f/" + titel + string(rune('a'+i)), SizeBytes: 1}
+			teil := i + 1
+			if fassungen {
+				teil = 1
+			}
+			f := &MediaFile{ItemID: it.ID, Path: "/f/" + titel + string(rune('a'+i)), SizeBytes: 1, PartNo: teil}
 			if err := st.UpsertFile(ctx, f); err != nil {
 				t.Fatal(err)
 			}
@@ -95,11 +101,23 @@ func TestDoppelUndFehlendZahl(t *testing.T) {
 	film("Drei mit einem fehlenden", false, false, true)
 	film("Zwei, einer fehlt", false, true)
 	film("Beide fehlen", true, true)
+	fassungen = true
+	film("MKV und AVI", false, false)
 
 	dups, _ := st.Duplicates(ctx)
+	teile := 0
+	for _, d := range dups {
+		ok := len(d.Files) > 1
+		for i, f := range d.Files {
+			ok = ok && f.PartNo == i+1 && !f.Missing
+		}
+		if ok {
+			teile++
+		}
+	}
 	n, err := st.DoppelZahl(ctx)
-	if err != nil || n != len(dups) || n != 2 {
-		t.Fatalf("DoppelZahl %d (%v), Duplicates %d, erwartet 2", n, err, len(dups))
+	if err != nil || n != teile || n != 2 || len(dups) != 3 {
+		t.Fatalf("DoppelZahl %d (%v), Teile unter Duplicates %d von %d, erwartet 2 von 3", n, err, teile, len(dups))
 	}
 	fehlend, _ := st.MissingFiles(ctx)
 	m, err := st.FehlendZahl(ctx)

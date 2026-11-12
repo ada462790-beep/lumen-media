@@ -219,6 +219,9 @@ func (l *lokalLauf) nfo(ctx context.Context, id, pfad string) {
 	if err := st.LokaleNFOSetzen(ctx, id, store.LokaleNFO{Pfad: pfad, MTime: info.ModTime().Unix(), Daten: string(daten)}); err != nil {
 		return
 	}
+	if hatte {
+		nfoGeaendert(ctx, id) // zählt im Ergebnis als aktualisiert
+	}
 	it, err := st.Item(ctx, id)
 	if err != nil || it.MatchState == "manual" {
 		// Von Hand zugewiesen: Das gilt, auch gegen eine NFO.

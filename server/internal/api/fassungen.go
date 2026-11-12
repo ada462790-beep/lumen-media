@@ -153,9 +153,11 @@ func (s *Server) adminTeileZusammenfuehren(w http.ResponseWriter, r *http.Reques
 		fail(w, http.StatusConflict, "läuft schon")
 		return
 	}
-	go func() {
+	// Am Hintergrund-Kontext, nicht an context.Background(): Fährt Lumen
+	// herunter, hört auch das Zusammenführen auf, und das Herunterfahren
+	// wartet darauf, bevor die Datenbank schliesst (begleitet).
+	s.begleitet(func(ctx context.Context) {
 		defer zusammenfuehrenLaeuft.Delete(it.ID)
-		ctx := context.Background()
 		if err := s.teileZusammenfuehren(ctx, it, teile, ziel); err != nil {
 			// Ins Protokoll ohne Pfad: Der verriete den Titel (Datenschutz).
 			s.st.Log(ctx, "error", "aufraeumen", "Zusammenführen gescheitert")
@@ -163,7 +165,7 @@ func (s *Server) adminTeileZusammenfuehren(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		s.st.Log(ctx, "info", "aufraeumen", fmt.Sprintf("%d Teile zu einer Datei zusammengeführt", len(teile)))
-	}()
+	})
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": tr(w, "Läuft – das kann ein paar Minuten dauern.")})
 }
 
@@ -207,24 +209,39 @@ func (s *Server) teileZusammenfuehren(ctx context.Context, it *store.Item, teile
 			return err
 		}
 	}
-	// Die neue Datei an den Titel hängen, die Teile austragen; ausgemessen
-	// wird sie beim nächsten Durchlauf, der gleich angestossen wird.
+	// Die neue Datei an den Titel hängen, die Teile austragen — gleich
+	// ausgemessen, damit sie sofort eine Laufzeit hat (Vorschaubilder,
+	// Vorspann und Untertitel lassen Dateien ohne Laufzeit aus).
 	info, err := os.Stat(ziel)
 	if err != nil {
 		return err
 	}
 	neu := &store.MediaFile{ItemID: it.ID, Path: ziel, SizeBytes: info.Size(), MTime: info.ModTime().Unix(),
 		PartNo: 1, Container: "mkv"}
+	if s.ff != nil && s.ff.Available() {
+		mctx, mab := context.WithTimeout(ctx, 30*time.Second)
+		if p, err := s.ff.Probe(mctx, ziel); err == nil {
+			neu.DurationMS, neu.Bitrate = p.DurationMS, p.Bitrate
+			neu.Width, neu.Height, neu.VideoCodec, neu.HDR = p.Width, p.Height, p.VideoCodec, p.HDR
+			neu.Spuren = scan.SpurenFuerStore(append(p.Tracks, scan.SidecarSubtitles(ziel)...))
+			neu.Kapitel = scan.KapitelFuerStore(p.Chapters)
+		}
+		mab()
+	}
 	if err := s.st.UpsertFile(ctx, neu); err != nil {
 		return err
 	}
 	for _, f := range teile {
 		_ = s.st.DateiAustragen(ctx, f.ID)
 	}
+	// Der Durchlauf danach am Hintergrund-Kontext: Der ctx dieser
+	// Funktion endet mit ihr (WithTimeout oben, defer cancel), und ein
+	// Durchlauf mit beendetem Kontext fängt gar nicht erst an — darum
+	// startete der angekündigte Durchlauf früher nie.
 	libs, _ := s.st.Libraries(ctx)
 	for _, l := range libs {
 		if l.ID == it.LibraryID {
-			go s.Durchlauf(ctx, l, true)
+			s.begleitet(func(ctx context.Context) { s.Durchlauf(ctx, l, true) })
 		}
 	}
 	return nil

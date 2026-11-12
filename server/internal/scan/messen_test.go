@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,12 +21,15 @@ import (
 )
 
 type zaehlProbe struct {
+	mu     sync.Mutex // es messen mehrere Helfer gleichzeitig (vorausMessen)
 	n      int
 	fehler bool
 }
 
 func (z *zaehlProbe) Probe(ctx context.Context, path string) (*Probe, error) {
+	z.mu.Lock()
 	z.n++
+	z.mu.Unlock()
 	if z.fehler {
 		return nil, errors.New("ffprobe " + path + ": Invalid data found when processing input")
 	}

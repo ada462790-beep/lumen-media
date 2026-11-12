@@ -40,6 +40,7 @@ type ScanErgebnis struct {
 	Added     int       `json:"added"`
 	Updated   int       `json:"updated"`
 	Missing   int       `json:"missing"`
+	Renamed   int       `json:"renamed,omitempty"` // umbenannt, Titel behalten
 	Unmatched int       `json:"unmatched"`
 	TookMS    int64     `json:"tookMs"`
 	Auto      bool      `json:"auto"` // von selbst, nicht auf Knopfdruck
@@ -236,8 +237,7 @@ func (s *Store) MetadatenZuruecksetzen(ctx context.Context, libraryID, itemID st
 	switch {
 	case itemID != "":
 		res, err = s.db.ExecContext(ctx,
-			`UPDATE item SET match_state = 'pending' WHERE id = ? OR parent_id = ?
-			    OR parent_id IN (SELECT id FROM item WHERE parent_id = ?)`, itemID, itemID, itemID)
+			`UPDATE item SET match_state = 'pending' WHERE id IN (`+titelUndKinder+`)`, itemID)
 	case libraryID != "":
 		res, err = s.db.ExecContext(ctx,
 			`UPDATE item SET match_state = 'pending' WHERE library_id = ? AND match_state != 'manual'`, libraryID)
@@ -307,6 +307,9 @@ func (s *Store) UpsertItem(ctx context.Context, it *Item) error {
 	if it.MatchState == "" {
 		it.MatchState = "pending"
 	}
+	// Zerlegte Umlaute (NFD, von macOS) zusammensetzen — sonst findet die
+	// Suche „Schöne" nicht und gleiche Titel gelten als verschieden (nfc.go).
+	it.Title, it.OriginalTitle, it.SortEigen = NFC(it.Title), NFC(it.OriginalTitle), NFC(it.SortEigen)
 	now := time.Now().Unix()
 
 	return s.tx(ctx, func(t *sql.Tx) error {
@@ -467,6 +470,13 @@ func bedingung(q Query) (where []string, args []any, ok bool) {
 		where = append(where, `i.id NOT IN (`+placeholders(len(q.NotIDs))+`)`)
 		args = append(args, toAny(q.NotIDs)...)
 	}
+	// Titel, von denen länger als die Frist keine Datei mehr abspielbar
+	// ist (gelöscht, umbenannt, defekt), sehen die Leute nicht mehr; der
+	// Besitzer findet sie unter Aufräumen (scan_aufraeumen.go).
+	if q.Freigabe {
+		where = append(where, `(i.fehlt_seit IS NULL OR i.fehlt_seit > ?)`)
+		args = append(args, time.Now().Add(-FehlendFrist).Unix())
+	}
 	kinds := q.Kinds
 	if len(kinds) == 0 {
 		kinds = []string{"movie", "series"}
@@ -621,7 +631,7 @@ func (s *Store) TitelGleich(ctx context.Context, libraryID, kind, title string, 
 }
 
 // titelKlein ist die Form, unter der TitelGleich sucht.
-func titelKlein(t string) string { return strings.ToLower(strings.TrimSpace(t)) }
+func titelKlein(t string) string { return strings.ToLower(strings.TrimSpace(NFC(t))) }
 
 // Children liefert Staffeln einer Serie oder Folgen einer Staffel — in
 // derselben Reihenfolge wie FolgenVon (folgenOrdnung).
@@ -663,6 +673,10 @@ type MediaFile struct {
 	VideoCodec string `json:"videoCodec,omitempty"`
 	HDR        string `json:"hdr,omitempty"`
 	Missing    bool   `json:"missing,omitempty"`
+	// Defekt: Die Datei liess sich nicht ausmessen — „leer" (0 Byte),
+	// „gesperrt" (keine Leserechte) oder „kaputt". Sie wird nicht
+	// angeboten und steht unter Aufräumen (scan_aufraeumen.go).
+	Defekt string `json:"defekt,omitempty"`
 	// Bevorzugt: Diese Fassung hat der Besitzer für den Titel gewählt; die
 	// Geräte nehmen sie zuerst.
 	Bevorzugt bool `json:"preferred,omitempty"`
@@ -686,17 +700,17 @@ func (s *Store) UpsertFile(ctx context.Context, f *MediaFile) error {
 func dateiEintragen(ctx context.Context, t *sql.Tx, f *MediaFile) error {
 	_, err := t.ExecContext(ctx,
 		`INSERT INTO media_file (id, item_id, path, size_bytes, mtime, part_no, edition,
-		    container, duration_ms, bitrate, width, height, video_codec, hdr, missing_since)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)
+		    container, duration_ms, bitrate, width, height, video_codec, hdr, missing_since, defekt)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)
 		 ON CONFLICT (path) DO UPDATE SET
 		   item_id=excluded.item_id, size_bytes=excluded.size_bytes, mtime=excluded.mtime,
 		   part_no=excluded.part_no, edition=excluded.edition, container=excluded.container,
 		   duration_ms=excluded.duration_ms, bitrate=excluded.bitrate, width=excluded.width,
 		   height=excluded.height, video_codec=excluded.video_codec, hdr=excluded.hdr,
-		   missing_since=NULL`,
+		   missing_since=NULL, defekt=excluded.defekt`,
 		f.ID, f.ItemID, f.Path, f.SizeBytes, f.MTime, f.PartNo, nullStr(f.Edition),
 		nullStr(f.Container), nullInt64(f.DurationMS), nullInt(f.Bitrate),
-		nullInt(f.Width), nullInt(f.Height), nullStr(f.VideoCodec), nullStr(f.HDR))
+		nullInt(f.Width), nullInt(f.Height), nullStr(f.VideoCodec), nullStr(f.HDR), nullStr(f.Defekt))
 	if err != nil {
 		return err
 	}
@@ -717,7 +731,8 @@ func (s *Store) FilesFor(ctx context.Context, itemID string) ([]MediaFile, error
 		        COALESCE(container,''), COALESCE(duration_ms,0), COALESCE(bitrate,0),
 		        COALESCE(width,0), COALESCE(height,0), COALESCE(video_codec,''),
 		        COALESCE(hdr,''), missing_since,
-		        id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), '')
+		        id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), ''),
+		        COALESCE(defekt,'')
 		   FROM media_file WHERE item_id = ?
 		  ORDER BY part_no,
 		           id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), '') DESC,
@@ -733,7 +748,7 @@ func (s *Store) FilesFor(ctx context.Context, itemID string) ([]MediaFile, error
 		var missing sql.NullInt64
 		if err := rows.Scan(&f.ID, &f.ItemID, &f.Path, &f.SizeBytes, &f.MTime, &f.PartNo,
 			&f.Edition, &f.Container, &f.DurationMS, &f.Bitrate, &f.Width, &f.Height,
-			&f.VideoCodec, &f.HDR, &missing, &f.Bevorzugt); err != nil {
+			&f.VideoCodec, &f.HDR, &missing, &f.Bevorzugt, &f.Defekt); err != nil {
 			return nil, err
 		}
 		f.Missing = missing.Valid
@@ -749,11 +764,11 @@ func (s *Store) File(ctx context.Context, id string) (*MediaFile, error) {
 		`SELECT id, item_id, path, size_bytes, mtime, part_no, COALESCE(edition,''),
 		        COALESCE(container,''), COALESCE(duration_ms,0), COALESCE(bitrate,0),
 		        COALESCE(width,0), COALESCE(height,0), COALESCE(video_codec,''),
-		        COALESCE(hdr,''), missing_since
+		        COALESCE(hdr,''), missing_since, COALESCE(defekt,'')
 		   FROM media_file WHERE id = ?`, id).
 		Scan(&f.ID, &f.ItemID, &f.Path, &f.SizeBytes, &f.MTime, &f.PartNo, &f.Edition,
 			&f.Container, &f.DurationMS, &f.Bitrate, &f.Width, &f.Height, &f.VideoCodec,
-			&f.HDR, &missing)
+			&f.HDR, &missing, &f.Defekt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -769,7 +784,7 @@ func (s *Store) BestFileFor(ctx context.Context, itemID string) (*MediaFile, err
 		return nil, err
 	}
 	for _, f := range files {
-		if !f.Missing {
+		if !f.Missing && f.Defekt == "" {
 			return &f, nil
 		}
 	}
@@ -779,48 +794,8 @@ func (s *Store) BestFileFor(ctx context.Context, itemID string) (*MediaFile, err
 // MarkMissing merkt sich, dass eine Datei verschwunden ist, statt den Titel
 // gleich zu löschen — eine abgehängte Platte soll die Mediathek nicht leeren.
 func (s *Store) MarkMissing(ctx context.Context, libraryID string, seenPaths map[string]bool) (int, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT f.id, f.path FROM media_file f
-		   JOIN item i ON i.id = f.item_id
-		  WHERE i.library_id = ? AND f.missing_since IS NULL`, libraryID)
-	if err != nil {
-		return 0, err
-	}
-	type gone struct{ id, path string }
-	list := []gone{}
-	for rows.Next() {
-		var g gone
-		if err := rows.Scan(&g.id, &g.path); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		if !seenPaths[g.path] {
-			list = append(list, g)
-		}
-	}
-	rows.Close()
-	// Brach das Lesen mittendrin ab, fehlen in der Liste Dateien, die
-	// gesehen wurden — und es fehlen andere. Lieber gar nichts vermerken.
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-
-	// In einer Transaktion: Eine abgehängte Platte mit 10 000 Dateien
-	// sind sonst 10 000 einzelne Schreibvorgänge.
-	now := time.Now().Unix()
-	err = s.tx(ctx, func(t *sql.Tx) error {
-		for _, g := range list {
-			if _, err := t.ExecContext(ctx,
-				`UPDATE media_file SET missing_since = ? WHERE id = ?`, now, g.id); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	return len(list), nil
+	weg, _, err := s.FehlendVermerken(ctx, libraryID, seenPaths, nil)
+	return len(weg), err
 }
 
 // ---------------------------------------------------------------- Aufräumen
@@ -832,14 +807,13 @@ type Duplicate struct {
 	Files  []MediaFile `json:"files"`
 }
 
-// doppelVon findet Filme mit mehr als einer vorhandenen Datei.
+// doppelVon findet Filme mit mehr als einer vorhandenen Datei — Fassungen
+// (MKV und AVI, 1080p und 4K) und Teile (cd1/cd2, a/b/c). Die Seite
+// Aufräumen zeigt beides getrennt.
 //
 // Erst die Kandidaten über den Index file_by_item allein (mehr als eine
 // Datei, ob vorhanden oder nicht) — das liest keine einzige Tabellenzeile.
-// Nur für diese wenigen wird dann nachgezählt, ohne die fehlenden. Vorher
-// lief die Abfrage über jede Datei der Datenbank samt Zeile und
-// sortierte mit count(DISTINCT); bei 120 000 Dateien dauerte die
-// Übersicht der Verwaltung dadurch spürbar.
+// Nur für diese wenigen wird dann nachgezählt, ohne die fehlenden.
 const doppelVon = `
 	   FROM (SELECT item_id FROM media_file GROUP BY item_id HAVING count(*) > 1) d
 	   JOIN item i ON i.id = d.item_id
@@ -847,11 +821,25 @@ const doppelVon = `
 	    AND (SELECT count(*) FROM media_file f
 	          WHERE f.item_id = d.item_id AND f.missing_since IS NULL) > 1`
 
-// DoppelZahl zählt, was Duplicates liefern würde — für die Übersicht, die
-// nur die Zahl zeigt.
+// teileVon: nur die Filme in Teilen — die vorhandenen Dateien sind Teil
+// 1, 2, … n. Mehrere Fassungen eines Films sind kein Fall fürs Aufräumen;
+// sie bleiben ein Film, und man wählt beim Abspielen. Vorher zählte die
+// Übersicht sie als „Doppel" mit.
+const teileVon = `
+	   FROM (SELECT item_id FROM media_file GROUP BY item_id HAVING count(*) > 1) d
+	   JOIN item i ON i.id = d.item_id
+	  WHERE i.kind = 'movie'
+	    AND (SELECT count(*) > 1 AND count(DISTINCT part_no) = count(*)
+	                AND min(part_no) = 1 AND max(part_no) = count(*)
+	           FROM media_file f
+	          WHERE f.item_id = d.item_id AND f.missing_since IS NULL)`
+
+// DoppelZahl zählt die Filme in Teilen unter dem, was Duplicates liefert
+// — für die Übersicht, die nur die Zahl zeigt („in Teilen", wie der
+// Abschnitt auf der Seite Aufräumen).
 func (s *Store) DoppelZahl(ctx context.Context) (int, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) `+doppelVon).Scan(&n)
+	err := s.db.QueryRowContext(ctx, `SELECT count(*) `+teileVon).Scan(&n)
 	return n, err
 }
 
@@ -883,19 +871,36 @@ func (s *Store) Duplicates(ctx context.Context) ([]Duplicate, error) {
 		return nil, err
 	}
 	for i := range out {
-		out[i].Files, _ = s.FilesFor(ctx, out[i].ItemID)
+		alle, _ := s.FilesFor(ctx, out[i].ItemID)
+		// Nur die vorhandenen Teile; eine fehlende Datei steht unter
+		// „Fehlende Dateien".
+		out[i].Files = make([]MediaFile, 0, len(alle))
+		for _, f := range alle {
+			if !f.Missing {
+				out[i].Files = append(out[i].Files, f)
+			}
+		}
 	}
 	return out, nil
 }
 
 func (s *Store) MissingFiles(ctx context.Context) ([]MediaFile, error) {
+	return s.MissingFilesSeite(ctx, 0, 0)
+}
+
+// MissingFilesSeite: höchstens grenze fehlende Dateien (0 = alle) ab
+// versatz, die zuletzt verschwundenen zuerst.
+func (s *Store) MissingFilesSeite(ctx context.Context, grenze, versatz int) ([]MediaFile, error) {
+	if grenze <= 0 {
+		grenze = -1
+	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT f.id, f.item_id, f.path, f.size_bytes, f.mtime, f.part_no,
 		        COALESCE(f.edition,''), COALESCE(f.container,''), COALESCE(f.duration_ms,0),
 		        COALESCE(f.bitrate,0), COALESCE(f.width,0), COALESCE(f.height,0),
 		        COALESCE(f.video_codec,''), COALESCE(f.hdr,''), f.missing_since
 		   FROM media_file f WHERE f.missing_since IS NOT NULL
-		  ORDER BY f.missing_since DESC`)
+		  ORDER BY f.missing_since DESC, f.path LIMIT ? OFFSET ?`, grenze, max(versatz, 0))
 	if err != nil {
 		return nil, err
 	}
@@ -949,7 +954,7 @@ func fold(s string) string {
 		"ù", "u", "ú", "u", "û", "u",
 		"ç", "c", "ñ", "n", "ý", "y",
 	)
-	return r.Replace(s)
+	return r.Replace(NFC(s))
 }
 
 // SuchFalten macht einen Namen vergleichbar wie die Titelsuche: klein, ohne
@@ -961,7 +966,7 @@ func SuchFalten(s string) string {
 // ohnePunkte: „ärger" → „arger". Wer ohne Umlaut-Taste sucht, tippt das
 // so; fold macht daraus „aerger". Im Suchtext stehen darum beide Formen.
 func ohnePunkte(s string) string {
-	return strings.NewReplacer("ä", "a", "ö", "o", "ü", "u").Replace(s)
+	return strings.NewReplacer("ä", "a", "ö", "o", "ü", "u").Replace(NFC(s))
 }
 
 func nullStr(s string) any {
@@ -1101,16 +1106,22 @@ func (s *Store) SetArtwork(ctx context.Context, itemID, kind, path, sourceURL st
 	return err
 }
 
+// titelUndKinder: die Kennungen eines Titels (?1), seiner Kinder und
+// Enkel — drei Zweige über item_by_parent statt eines OR, mit dem SQLite
+// keinen Index fand.
+const titelUndKinder = `SELECT ?1
+	UNION ALL SELECT id FROM item WHERE parent_id = ?1
+	UNION ALL SELECT e.id FROM item st JOIN item e ON e.parent_id = st.id WHERE st.parent_id = ?1`
+
 // PendingUnter sind die wartenden Titel eines Films oder einer Serie samt
 // deren Folgen — für „Zuweisen" und „Neu laden", die genau diesen Titel
 // meinen und nicht die ersten paar hundert der ganzen Mediathek.
 func (s *Store) PendingUnter(ctx context.Context, id string) ([]Item, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+itemCols+` FROM item i
 		WHERE i.match_state = 'pending' AND i.kind != 'season'
-		  AND (i.id = ? OR i.parent_id = ?
-		       OR i.parent_id IN (SELECT id FROM item WHERE parent_id = ?))
+		  AND i.id IN (`+titelUndKinder+`)
 		ORDER BY CASE i.kind WHEN 'series' THEN 0 WHEN 'movie' THEN 1 ELSE 2 END,
-		         i.season_no, i.episode_no, i.id`, id, id, id)
+		         i.season_no, i.episode_no, i.id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -1287,6 +1298,7 @@ type Person struct {
 }
 
 func (s *Store) BesetzungSetzen(ctx context.Context, itemID string, leute []Person) error {
+	defer s.personenVeraltet() // personen_vorrat.go
 	return s.tx(ctx, func(t *sql.Tx) error {
 		// Von Hand gepflegt: keine Quelle schreibt darüber (sperren.go).
 		if gesperrt(ctx, t, itemID, FeldBesetzung) {
@@ -1395,13 +1407,68 @@ func (s *Store) TomatenSetzen(ctx context.Context, id string, prozent int) error
 // Serien die erste Folge) — damit man beim Zuordnen sieht, welche Datei
 // gemeint ist.
 func (s *Store) ErsterPfad(ctx context.Context, id string) string {
-	var p string
-	_ = s.db.QueryRowContext(ctx,
-		`SELECT f.path FROM media_file f JOIN item e ON e.id = f.item_id
-		   LEFT JOIN item st ON st.id = e.parent_id
-		  WHERE e.id = ?1 OR e.parent_id = ?1 OR st.parent_id = ?1
-		  ORDER BY e.season_no, e.episode_no, f.path LIMIT 1`, id).Scan(&p)
-	return p
+	p, _ := s.ErstePfade(ctx, []string{id})
+	return p[id]
+}
+
+// ErstePfade ist ErsterPfad für viele Titel mit einer Abfrage.
+//
+// Drei Zweige mit UNION ALL statt „e.id = ? OR e.parent_id = ? OR
+// st.parent_id = ?": Mit dem OR fand SQLite keinen Index und las für
+// jeden Titel die ganze Dateitabelle (8 ms je Titel, 1,6 s für die Seite
+// Aufräumen). So geht jeder Zweig über item_by_parent bzw. file_by_item.
+func (s *Store) ErstePfade(ctx context.Context, ids []string) (map[string]string, error) {
+	out := map[string]string{}
+	for a := 0; a < len(ids); a += 300 {
+		teil := ids[a:min(a+300, len(ids))]
+		rows, err := s.db.QueryContext(ctx, erstePfadeSQL(len(teil)), erstePfadeArgs(teil)...)
+		if err != nil {
+			return out, err
+		}
+		type bester struct {
+			staffel, folge int
+			pfad           string
+		}
+		je := map[string]bester{}
+		for rows.Next() {
+			var t, p string
+			var sn, en int
+			if err := rows.Scan(&t, &p, &sn, &en); err != nil {
+				rows.Close()
+				return out, err
+			}
+			b, da := je[t]
+			if !da || sn < b.staffel || (sn == b.staffel && (en < b.folge || (en == b.folge && p < b.pfad))) {
+				je[t] = bester{sn, en, p}
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return out, err
+		}
+		for t, b := range je {
+			out[t] = b.pfad
+		}
+	}
+	return out, nil
+}
+
+func erstePfadeSQL(n int) string {
+	ph := placeholders(n)
+	return `SELECT x.t, f.path, COALESCE(e.season_no, 0), COALESCE(e.episode_no, 0)
+	   FROM (SELECT id AS t, id AS e FROM item WHERE id IN (` + ph + `)
+	         UNION ALL
+	         SELECT parent_id, id FROM item INDEXED BY item_by_parent WHERE parent_id IN (` + ph + `)
+	         UNION ALL
+	         SELECT st.parent_id, e.id FROM item st INDEXED BY item_by_parent
+	           JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
+	          WHERE st.parent_id IN (` + ph + `)) x
+	   CROSS JOIN item e CROSS JOIN media_file f INDEXED BY file_by_item
+	  WHERE e.id = x.e AND f.item_id = x.e`
+}
+
+func erstePfadeArgs(ids []string) []any {
+	return append(append(toAny(ids), toAny(ids)...), toAny(ids)...)
 }
 
 // SerienOhneIMDb: zugeordnete Serien ohne IMDb-Kennung, bei denen noch

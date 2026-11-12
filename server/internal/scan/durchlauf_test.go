@@ -10,6 +10,7 @@ package scan
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -168,14 +169,21 @@ func TestAbgebrochenerDurchlaufVermerktNichtsAlsFehlend(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	alt := walkDir
+	defer func() { walkDir = alt }()
 	for _, nach := range []int{1, 3, 7} {
 		ctx, cancel := context.WithCancel(context.Background())
 		n := 0
-		sc.Bremse = func() bool {
-			if n++; n == nach {
-				cancel()
-			}
-			return false
+		// Nach so vielen Dateien fährt Lumen herunter.
+		walkDir = func(root string, fn fs.WalkDirFunc) error {
+			return filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+				if err == nil && !d.IsDir() {
+					if n++; n == nach {
+						cancel()
+					}
+				}
+				return fn(p, d, err)
+			})
 		}
 		_, err := sc.Scan(ctx, *lib)
 		cancel()
@@ -188,7 +196,7 @@ func TestAbgebrochenerDurchlaufVermerktNichtsAlsFehlend(t *testing.T) {
 		}
 	}
 	// Nach dem Abbruch läuft der nächste Durchlauf ganz normal.
-	sc.Bremse = nil
+	walkDir = alt
 	if _, err := sc.Scan(context.Background(), *lib); err != nil {
 		t.Fatal(err)
 	}

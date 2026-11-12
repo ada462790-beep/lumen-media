@@ -149,6 +149,7 @@
   "die Adresse antwortete mit {status}": "The address responded with {status}.",
   "die Verwaltung ist gesperrt": "Admin is locked.",
   "die datei ist nicht mehr da": "The file is no longer there.",
+  "die datei ist defekt und lässt sich nicht abspielen": "The file is damaged and can’t be played.",
   "die laufzeit dieser datei ist unbekannt — sie lässt sich nicht umwandeln": "This file’s duration is unknown — it can’t be converted.",
   "die liste braucht einen namen": "The playlist needs a name.",
   "die pin des besitzers ändert nur er selbst": "Only the owner can change the owner’s PIN.",

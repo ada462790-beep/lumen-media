@@ -50,6 +50,9 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
 		return
 	}
+	if defektAbweisen(w, f) {
+		return
+	}
 	// Bildschirmzeit vor allem anderen: Ausserhalb der Zeit entsteht
 	// keine Sitzung (bildschirmzeit.go).
 	if s.bildschirmzeitGesperrt(w, r) {

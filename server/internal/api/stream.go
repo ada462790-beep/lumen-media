@@ -34,6 +34,9 @@ func (s *Server) streamPlan(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	if defektAbweisen(w, f) {
+		return
+	}
 	// Ist die Bildschirmzeit um, erfährt die App es schon hier.
 	if s.bildschirmzeitGesperrt(w, r) {
 		return
@@ -60,6 +63,9 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if f.Missing {
 		fail(w, http.StatusGone, "die datei ist nicht mehr da")
+		return
+	}
+	if defektAbweisen(w, f) {
 		return
 	}
 

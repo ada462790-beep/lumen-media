@@ -4141,7 +4141,7 @@ function viewAdmin() {
                 : tr('{n} insgesamt, nichts offen', { n: (d.wuensche.wishes || []).length }))
             : tr('ansehen'), 'adminWishes') +
           linkRow(tr('Aufräumen'),
-            tr('{doppel} Doppel · {fehlen} fehlen', { doppel: c.duplicates || 0, fehlen: c.missing || 0 }), 'cleanup'))}
+            tr('{doppel} in Teilen · {fehlen} fehlen', { doppel: c.duplicates || 0, fehlen: c.missing || 0 }), 'cleanup'))}
       </div>
       <div>
         ${grp(tr('System'),
@@ -4955,7 +4955,9 @@ function viewCleanup() {
   const missing = (d.missing || []).map(f => `
     <div class="orow">
       <span style="color:#ff9f0a;display:flex;flex:none">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
-      <span class="mono c-2 clamp-1" style="flex:1">${esc(f.path)}</span></div>`).join('');
+      <span class="mono c-2 clamp-1" style="flex:1">${esc(f.path)}</span>
+      ${voll() ? `<button class="btn btn-pill" style="height:28px;font-size:12px;flex:none;background:rgba(120,120,128,.2)" data-fehlend-weg="${esc(f.id)}">${tr('Endgültig entfernen')}</button>` : ''}</div>`).join('');
+  const nFehlend = d.offen?.missing ?? (d.missing || []).length;
 
   // Nicht erkannt: wonach Lumen gesucht hat (Titel und Jahr aus dem
   // Dateinamen), warum es nicht gereicht hat, und gleich die Werkzeuge
@@ -5007,6 +5009,10 @@ function viewCleanup() {
     beiwerk_ordner: [tr('Extras-Ordner'), tr('Ordner wie „Extras“, „Trailers“, „Featurettes“ liest Lumen nicht als Filme ein.')],
     endung: [tr('Endung, die Lumen nicht abspielt'), tr('Etwa ISO-Abbilder, .strm oder .rmvb. In MKV oder MP4 umwandeln, dann kommen sie dazu.')],
     unlesbar: [tr('Nicht lesbar'), tr('Lumen hat keine Leserechte (NAS-Gruppe prüfen) oder die Platte meldet einen Fehler.')],
+    verweis: [tr('Verweis auf einen Ordner'), tr('Einem Verweis (Symlink) zurück in die Bibliothek, in Lumens Datenordner oder auf einen schon gelesenen Ordner folgt Lumen nicht.')],
+    defekt_leer: [tr('Leere Datei'), tr('Die Datei hat 0 Byte – vielleicht wird sie noch kopiert. Ist sie fertig, liest Lumen sie beim nächsten Durchlauf ein.')],
+    defekt_gesperrt: [tr('Keine Leserechte'), tr('Lumen darf die Datei nicht öffnen (Rechte auf dem NAS prüfen). Sie wird nicht angeboten, bis sie lesbar ist.')],
+    defekt_kaputt: [tr('Defekte Datei'), tr('FFmpeg erkennt darin kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten.')],
   };
   const ausgelassen = (d.ausgelassen || []).map(b => b.liste.map(a => `
     <details class="orow" style="height:auto;padding:12px 16px;display:block">
@@ -5040,9 +5046,10 @@ function viewCleanup() {
     ${dupFassungen ? `<section style="margin-top:22px"><div class="section-h">${tr('Mehrere Fassungen · {n}', { n: fassungen.length })}</div>
       <div class="group group--inset">${dupFassungen}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: Beim Film wählt man unter „Ansehen“, welche läuft. Gehört eine Datei zu einem anderen Film, trenne sie ab.')}</p></section>` : ''}
-    ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: d.missing.length })}</div>
+    ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
-      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben stehen — eine abgehängte Platte soll die Mediathek nicht leeren.')}</p></section>` : ''}
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>
+      ${voll() ? `<div style="margin:10px 16px 0"><button class="btn btn-pill" style="height:32px;font-size:13px" data-fehlende-weg-alle>${tr('Alle entfernen, die länger als einen Tag fehlen')}</button></div>` : ''}</section>` : ''}
     ${unmatched ? `<section style="margin-top:22px"><div class="section-h">${tr('Nicht erkannt · {n}', { n: nUnmatched })}</div>
       <div class="group group--inset">${unmatched}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0;line-height:1.5">${tr('Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. „Suchen“ sucht frei bei TMDb, „ID eingeben“ nimmt eine IMDb-, TMDb- oder TheTVDB-Kennung oder einen Link. Zugewiesenes gilt als von Hand zugeordnet und bleibt so.')}
@@ -5815,6 +5822,12 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-fassung'))) {
     const [item, datei] = n.dataset.fassung.split(':');
     try { await api.call(`/admin/items/${encodeURIComponent(item)}/fassung`, { method: 'PUT', body: { fileId: datei } }); toast(tr('Fassung gewählt')); }
+    catch (err) { toast(err.message); }
+    return load();
+  }
+  if ((n = hit('data-fehlend-weg')) || (n = hit('data-fehlende-weg-alle'))) {
+    const ids = n.dataset.fehlendWeg ? [n.dataset.fehlendWeg] : [];
+    try { await api.call('/admin/cleanup/fehlende-entfernen', { method: 'POST', body: { fileIds: ids } }); toast(tr('Endgültig entfernt')); }
     catch (err) { toast(err.message); }
     return load();
   }

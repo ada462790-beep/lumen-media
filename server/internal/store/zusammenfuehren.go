@@ -266,19 +266,7 @@ func (s *Store) serieUeberfuehren(ctx context.Context, alt, neu string, konten [
 		rows.Close()
 
 		for von, nach := range paare {
-			for _, acc := range konten {
-				for _, q := range []string{
-					`UPDATE OR IGNORE progress SET item_id = ? WHERE account_id = ? AND item_id = ?`,
-					`UPDATE OR IGNORE watchlist SET item_id = ? WHERE account_id = ? AND item_id = ?`,
-					`UPDATE OR IGNORE rating SET item_id = ? WHERE account_id = ? AND item_id = ?`,
-				} {
-					if _, err := t.ExecContext(ctx, q, nach, acc, von); err != nil {
-						return err
-					}
-				}
-			}
-			if _, err := t.ExecContext(ctx,
-				`UPDATE OR IGNORE playlist_item SET item_id = ? WHERE item_id = ?`, nach, von); err != nil {
+			if err := persoenlichesUmhaengen(ctx, t, von, nach, konten); err != nil {
 				return err
 			}
 		}
@@ -311,4 +299,32 @@ func (s *Store) FilmeOhneDatei(ctx context.Context) (int, error) {
 	}
 	n, _ := res.RowsAffected()
 	return int(n), nil
+}
+
+// persoenlichesUmhaengen hängt Fortschritt, Merkliste, Favoriten und
+// Bewertungen von einem Titel an einen anderen — für jedes Konto einzeln,
+// ohne über Konten hinweg zu lesen —, dazu die Einträge in Listen. Hat
+// ein Konto am Ziel schon etwas, bleibt das (OR IGNORE).
+//
+// Gebraucht beim Zusammenführen von Serien, bei umbenannten Filmen und
+// beim Wegräumen leerer Folgen (scan_aufraeumen.go).
+func persoenlichesUmhaengen(ctx context.Context, t *sql.Tx, von, nach string, konten []string) error {
+	if von == nach || von == "" || nach == "" {
+		return nil
+	}
+	for _, acc := range konten {
+		for _, q := range []string{
+			`UPDATE OR IGNORE progress SET item_id = ? WHERE account_id = ? AND item_id = ?`,
+			`UPDATE OR IGNORE watchlist SET item_id = ? WHERE account_id = ? AND item_id = ?`,
+			`UPDATE OR IGNORE rating SET item_id = ? WHERE account_id = ? AND item_id = ?`,
+			`UPDATE OR IGNORE favorit SET item_id = ? WHERE account_id = ? AND item_id = ?`,
+		} {
+			if _, err := t.ExecContext(ctx, q, nach, acc, von); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := t.ExecContext(ctx,
+		`UPDATE OR IGNORE playlist_item SET item_id = ? WHERE item_id = ?`, nach, von)
+	return err
 }

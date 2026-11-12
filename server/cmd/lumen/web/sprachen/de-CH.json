@@ -145,10 +145,10 @@
   "one": "Gespeichert. OpenSubtitles antwortet — heute noch {rest} Download.",
   "other": "Gespeichert. OpenSubtitles antwortet — heute noch {rest} Downloads."
  },
- "{doppel} Doppel · {fehlen} fehlen": {
+ "{doppel} in Teilen · {fehlen} fehlen": {
   "zahl": "fehlen",
-  "one": "{doppel} Doppel · {fehlen} fehlt",
-  "other": "{doppel} Doppel · {fehlen} fehlen"
+  "one": "{doppel} in Teilen · {fehlen} fehlt",
+  "other": "{doppel} in Teilen · {fehlen} fehlen"
  },
  "{n} Folgen untersucht.": {
   "one": "{n} Folge untersucht.",

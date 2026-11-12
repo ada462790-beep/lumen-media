@@ -68,6 +68,8 @@ type Server struct {
 	bz bzWaechter
 	// jetzt: die Uhr für Bildschirmzeit-Fenster; nil = time.Now (Tests stellen sie).
 	jetzt func() time.Time
+	// begleiter: Goroutinen, auf die das Herunterfahren wartet (begleitet.go).
+	begleiter begleitZaehler
 }
 
 // SetzeGrund gibt den Kontext, der beim Herunterfahren endet.
@@ -359,6 +361,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/admin/sessions/{id}", admin(s.adminStopSession))
 	mux.Handle("GET /api/v1/admin/log", admin(s.adminLog))
 	mux.Handle("GET /api/v1/admin/cleanup", admin(s.adminCleanup))
+	mux.Handle("POST /api/v1/admin/cleanup/fehlende-entfernen", admin(s.adminFehlendeEntfernen))
 	mux.Handle("GET /api/v1/admin/accounts", admin(s.adminAccounts))
 	mux.Handle("POST /api/v1/admin/invites", admin(s.adminCreateInvite))
 	// Offene Einladungen sehen und zurückziehen (ein Link, der versehentlich

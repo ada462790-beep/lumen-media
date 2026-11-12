@@ -72,6 +72,11 @@ func (s *Server) spurenNachmessen(ctx context.Context, f *store.MediaFile) {
 	} else {
 		tracks = scan.SpurenFuerStore(scan.SidecarSubtitles(f.Path))
 	}
+	// Abgebrochen (Lumen fährt herunter): nichts als „gemessen" vermerken
+	// — und nicht in eine Datenbank schreiben, die gleich zugeht.
+	if ctx.Err() != nil {
+		return
+	}
 	if err := s.st.SpurenSetzen(ctx, f.ID, tracks, chapters); err != nil {
 		s.log.Warn("spuren speichern", "err", err)
 	}
