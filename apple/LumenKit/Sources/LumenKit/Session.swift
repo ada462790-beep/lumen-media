@@ -542,14 +542,36 @@ public final class Session {
 
     public func unlock(_ card: ProfileCard, secret: String) async {
         lastError = nil
+        let einmal = einmalCode?.wer == card.id ? einmalCode?.code : nil
         do {
-            _ = try await client.unlock(profileId: card.id, secret: secret,
-                                        deviceName: DeviceProfile.current.name)
+            _ = try await client.unlock(profileId: card.id, secret: einmal ?? secret,
+                                        deviceName: DeviceProfile.current.name,
+                                        neu: einmal == nil ? nil : secret)
+            einmalCode = nil
             let neu = await client.token
             speichereToken(neu)
             try await hinein()
         } catch {
+            neuePinNoetig(error, wer: card.id, code: einmal ?? secret)
             lastError = Self.text(error)
+        }
+    }
+
+    /// Nach einem Zurücksetzen durch die Verwaltung: der Einmal-Code, mit
+    /// dem die nächste Eingabe als eigene neue PIN mitgeht. Der Server sagt
+    /// das mit 409 („neue_pin_noetig"); sein Text bittet um die eigene PIN,
+    /// und das PIN-Feld bleibt dasselbe.
+    @ObservationIgnored private var einmalCode: (wer: String, code: String)?
+
+    private func neuePinNoetig(_ error: any Error, wer: String, code: String) {
+        guard case LumenError.server(_, let status)? = error as? LumenError else {
+            einmalCode = nil
+            return
+        }
+        if status == 409 {
+            einmalCode = (wer: wer, code: code)
+        } else if status != 400 || einmalCode?.wer != wer {
+            einmalCode = nil
         }
     }
 
@@ -558,13 +580,18 @@ public final class Session {
     /// warten"), Profil ohne PIN —, steht danach unverändert in `lastError`.
     public func unlockUnterwegs(name: String, secret: String) async {
         lastError = nil
+        let wer = "name:" + name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let einmal = einmalCode?.wer == wer ? einmalCode?.code : nil
         do {
-            _ = try await client.unlock(name: name, secret: secret,
-                                        deviceName: DeviceProfile.current.name)
+            _ = try await client.unlock(name: name, secret: einmal ?? secret,
+                                        deviceName: DeviceProfile.current.name,
+                                        neu: einmal == nil ? nil : secret)
+            einmalCode = nil
             let neu = await client.token
             speichereToken(neu)
             try await hinein()
         } catch {
+            neuePinNoetig(error, wer: wer, code: einmal ?? secret)
             lastError = Self.text(error)
         }
     }

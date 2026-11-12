@@ -27,7 +27,6 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
-	"time"
 )
 
 type Progress struct {
@@ -169,13 +168,24 @@ func (s *Store) ClearProgress(ctx context.Context, accountID, itemID string) err
 	return err
 }
 
-// ClearAllProgress ist der Knopf „Verlauf löschen" in den Einstellungen.
+// ClearAllProgress ist der Knopf „Verlauf löschen" in den Einstellungen:
+// Fortschritte und Haken, die Reihenfolge von „Weiterschauen", die je
+// Serie gemerkten Spuren (verraten, welche Serien man schaut) und wann die
+// Neuigkeiten zuletzt offen waren. Merkliste, Favoriten und Bewertungen
+// sind kein Verlauf, sondern eigene Entscheidungen — sie bleiben.
 func (s *Store) ClearAllProgress(ctx context.Context, accountID string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM progress WHERE account_id = ?`, accountID)
-	if err == nil {
-		_, err = s.db.ExecContext(ctx, `DELETE FROM progress_reihe WHERE account_id = ?`, accountID)
-	}
-	return err
+	return s.tx(ctx, func(t *sql.Tx) error {
+		for _, q := range []string{
+			`DELETE FROM progress WHERE account_id = ?`,
+			`DELETE FROM progress_reihe WHERE account_id = ?`,
+			`DELETE FROM prefs WHERE account_id = ? AND (key LIKE 'spuren:%' OR key = 'newsSeen')`,
+		} {
+			if _, err := t.ExecContext(ctx, q, accountID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Store) Progress(ctx context.Context, accountID, itemID string) (*Progress, error) {
@@ -358,24 +368,43 @@ func (s *Store) Weiterschauen(ctx context.Context, accountID string, limit int) 
 // nichts (nie angefangen, oder bis zur letzten Folge geschaut), die erste
 // ungesehene von vorn, und wenn alles gesehen ist, die erste überhaupt.
 func (s *Store) WeiterInSerie(ctx context.Context, accountID, serieID string) (string, error) {
+	return s.WeiterInSerieSichtbar(ctx, accountID, serieID, nil)
+}
+
+// WeiterInSerieSichtbar wie WeiterInSerie, aber nur unter den Folgen, für
+// die sichtbar wahr ist (nil: alle). Fiele die Wahl auf eine verborgene
+// Folge, gilt die nächste sichtbare danach.
+func (s *Store) WeiterInSerieSichtbar(ctx context.Context, accountID, serieID string, sichtbar func(string) bool) (string, error) {
 	folgen, err := s.SerienFolgen(ctx, []string{serieID})
 	if err != nil {
 		return "", err
 	}
 	fs := folgen[serieID]
-	inSerie := map[string]bool{}
-	ids := make([]string, len(fs))
+	pos := map[string]int{}
+	alle := make([]string, len(fs))
 	for i, f := range fs {
-		inSerie[f.ID] = true
-		ids[i] = f.ID
+		pos[f.ID] = i
+		alle[i] = f.ID
+	}
+	var ids []string
+	for _, id := range alle {
+		if sichtbar == nil || sichtbar(id) {
+			ids = append(ids, id)
+		}
 	}
 	weiter, err := s.Weiterschauen(ctx, accountID, 1<<20)
 	if err != nil {
 		return "", err
 	}
 	for _, w := range weiter {
-		if inSerie[w.ItemID] {
-			return w.ItemID, nil
+		i, da := pos[w.ItemID]
+		if !da {
+			continue
+		}
+		for ; i < len(alle); i++ {
+			if sichtbar == nil || sichtbar(alle[i]) {
+				return alle[i], nil
+			}
 		}
 	}
 	fertig, err := s.FinishedIDs(ctx, accountID, ids)
@@ -485,7 +514,9 @@ func (s *Store) RatingsFor(ctx context.Context, accountID string, itemIDs []stri
 
 // SharedRatings sind die Bewertungen, die jemand ausdrücklich freigegeben hat.
 // Ohne das Häkchen taucht hier nichts auf — auch nicht für den Besitzer.
-func (s *Store) SharedRatings(ctx context.Context, itemID string) ([]struct {
+// ich: wer fragt. Ein Gast (haushalt.go) sieht keine, und die eines Gasts
+// sieht niemand.
+func (s *Store) SharedRatings(ctx context.Context, ich, itemID string) ([]struct {
 	Name   string `json:"name"`
 	Avatar string `json:"avatar"`
 	Stars  int    `json:"stars"`
@@ -495,10 +526,13 @@ func (s *Store) SharedRatings(ctx context.Context, itemID string) ([]struct {
 		Avatar string `json:"avatar"`
 		Stars  int    `json:"stars"`
 	}
+	if s.IstGast(ctx, ich) {
+		return []row{}, nil
+	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT a.name, a.avatar, r.stars
 		   FROM rating r JOIN account a ON a.id = r.account_id
-		  WHERE r.item_id = ? AND r.shared = 1
+		  WHERE r.item_id = ? AND r.shared = 1 AND NOT `+gastSQL("r.account_id")+`
 		  ORDER BY a.name`, itemID)
 	if err != nil {
 		return nil, err
@@ -521,7 +555,7 @@ func (s *Store) SharedRatings(ctx context.Context, itemID string) ([]struct {
 func (s *Store) AddToWatchlist(ctx context.Context, accountID, itemID string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO watchlist (account_id, item_id, added_at) VALUES (?,?,?)`,
-		accountID, itemID, time.Now().Unix())
+		accountID, itemID, heute()) // nur der Tag; die Reihenfolge hält rowid
 	return err
 }
 

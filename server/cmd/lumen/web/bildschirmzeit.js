@@ -10,9 +10,11 @@
  * Durchgesetzt wird sie auf dem Server (api/bildschirmzeit.go) — die
  * Oberfläche zeigt nur:
  *   - in der Verwaltung (Konten): die Regel bearbeiten, „heute genutzt:
- *     ungefähr 45 von 90 Min." (der Server rundet auf Viertelstunden ab,
- *     damit sich aus der Liste nicht ablesen lässt, wann das Kind schaut)
- *     und „heute einmalig 30 Min. mehr";
+ *     ungefähr 45 von 90 Min." (der Server rundet auf Viertelstunden ab
+ *     und zeigt einen älteren Stand, damit sich aus der Liste nicht
+ *     ablesen lässt, wann das Kind schaut) und „heute einmalig mehr"
+ *     (15, 30 oder 60 Min. – verlängert Tagesgrenze und Zeitfenster, mit
+ *     „Rückgängig");
  *   - dem Kind: unter „Ich", wie viel heute noch geht; beim Schauen einen
  *     leisen Hinweis, wenn es weniger als zehn Minuten sind; und eine
  *     freundliche Seite über dem Player, wenn die Zeit um ist.
@@ -28,9 +30,10 @@ import { U, escH, fenster, meldung, fehlerText, beschaeftigt } from './fenster.j
 export function bzKontoText(a) {
   const b = a?.bildschirmzeit;
   if (!b || !b.regel?.aktiv) return '';
-  return b.budgetMinuten
+  const text = b.budgetMinuten
     ? tr('Bildschirmzeit heute: ungefähr {genutzt} von {budget} Min.', { genutzt: b.genutztMinuten, budget: b.budgetMinuten })
     : tr('Bildschirmzeit heute: ungefähr {genutzt} Min.', { genutzt: b.genutztMinuten });
+  return b.verlaengertBis ? text + ' · ' + tr('heute verlängert bis {bis}', { bis: b.verlaengertBis }) : text;
 }
 
 function tagesart(name, titel, r) {
@@ -46,7 +49,7 @@ function tagesart(name, titel, r) {
         <input id="bz-${name}-bis" name="${name}-bis" type="time" value="${escH(r.bis === '24:00' ? '00:00' : r.bis || '19:30')}"></div>
     </div>
     <div class="ff"><div class="ff-kopf"><label for="bz-${name}-min">${tr('Höchstens Minuten am Tag')}</label></div>
-      <input id="bz-${name}-min" name="${name}-min" type="number" min="0" max="1440" step="5" value="${Number(r.minuten) || 0}">
+      <input id="bz-${name}-min" name="${name}-min" type="number" min="0" max="1440" step="1" value="${Number(r.minuten) || 0}">
       <span class="ff-hinweis">${tr('0 heisst: ohne Tagesgrenze.')}</span></div>
   </fieldset>`;
 }
@@ -67,9 +70,25 @@ function regelAus(form) {
 function standText(b) {
   if (!b) return '';
   if (!b.regel?.aktiv) return tr('Ausgeschaltet — es gilt keine Bildschirmzeit.');
-  return b.budgetMinuten
-    ? tr('Heute genutzt: ungefähr {genutzt} von {budget} Min. (in Viertelstunden abgerundet)', { genutzt: b.genutztMinuten, budget: b.budgetMinuten })
-    : tr('Heute genutzt: ungefähr {genutzt} Min. (in Viertelstunden abgerundet)', { genutzt: b.genutztMinuten });
+  const text = b.budgetMinuten
+    ? tr('Heute genutzt: ungefähr {genutzt} von {budget} Min. (in Viertelstunden abgerundet, Stand vor einer Weile)', { genutzt: b.genutztMinuten, budget: b.budgetMinuten })
+    : tr('Heute genutzt: ungefähr {genutzt} Min. (in Viertelstunden abgerundet, Stand vor einer Weile)', { genutzt: b.genutztMinuten });
+  const extra = [];
+  if (b.geschenkt) extra.push(tr('Heute {n} Min. dazugegeben.', { n: b.geschenkt }));
+  if (b.verlaengertBis) extra.push(tr('Zeitfenster heute verlängert bis {bis}.', { bis: b.verlaengertBis }));
+  return [text, ...extra].join(' ');
+}
+
+/* „Heute einmalig mehr": Wahl der Minuten und, wenn heute schon etwas
+   dazugegeben wurde, „Rückgängig". Verlängert die Tagesgrenze und das
+   Zeitfenster (ist es schon zu, ab jetzt). */
+function mehrKnoepfe(b) {
+  if (!b.regel?.aktiv || (!b.budgetMinuten && !b.fensterHeute)) return '';
+  return `<div class="bz-mehr" role="group" aria-label="${tr('Heute einmalig mehr')}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span class="t-caption c-2">${tr('Heute einmalig mehr:')}</span>
+      ${[15, 30, 60].map(n => `<button type="button" class="btn btn-pill btn-pill--fill" style="height:34px" data-bz-mehr="${n}" data-laeuft="${tr('Einen Moment …')}">${tr('+{n} Min.', { n })}</button>`).join('')}
+      ${b.geschenkt || b.verlaengertBis ? `<button type="button" class="btn btn-pill" style="height:34px" data-bz-zurueck data-laeuft="${tr('Einen Moment …')}">${tr('Rückgängig')}</button>` : ''}
+    </div>`;
 }
 
 /* Das Fenster zum Einstellen. nachher() lädt die Kontenliste neu. */
@@ -82,14 +101,14 @@ export function bzBearbeiten(konto, nachher) {
       <form autocomplete="off" data-bz-form>
         <label class="wahl-check"><input type="checkbox" name="aktiv"${r.aktiv ? ' checked' : ''}>
           <span style="flex:1">${tr('Bildschirmzeit einschalten')}</span></label>
-        <p class="ff-hinweis" style="margin:4px 0 12px">${tr('Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag — ausser mitten in einem Zeitfenster über Mitternacht, das zählt bis zu seinem Ende zum Vortag. Die Verwaltung sieht die Minuten nur ungefähr, in Viertelstunden. Mit einer Tagesgrenze gibt es keine Downloads.')}</p>
+        <p class="ff-hinweis" style="margin:4px 0 12px">${tr('Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag — ausser mitten in einem Zeitfenster über Mitternacht, das zählt bis zu seinem Ende zum Vortag. Die Verwaltung sieht die Minuten nur ungefähr, in Viertelstunden, und erst eine Weile später. Mit einer Tagesgrenze gibt es keine Downloads.')}</p>
         ${tagesart('schultage', tr('Schultage (Montag bis Freitag)'), r.schultage)}
         ${tagesart('wochenende', tr('Wochenende (Samstag und Sonntag)'), r.wochenende)}
         <p class="ff-hinweis">${tr('Liegt „Bis" vor „Ab", geht die Zeit über Mitternacht.')}</p>
         <div class="fenster-meldung fenster-meldung--info" role="status" data-bz-stand>${escH(standText(b))}</div>
+        ${mehrKnoepfe(b)}
         <div data-meldung hidden></div>
         <div class="fenster-fuss">
-          ${r.aktiv && b.budgetMinuten ? `<button type="button" class="btn btn-pill btn-pill--fill" style="height:40px" data-bz-mehr data-laeuft="${tr('Einen Moment …')}">${tr('Heute einmalig 30 Min. mehr')}</button>` : ''}
           <button class="btn btn-primary" style="height:40px" data-laeuft="${tr('Speichert …')}">${tr('Speichern')}</button></div>
       </form>`;
   };
@@ -100,12 +119,22 @@ export function bzBearbeiten(konto, nachher) {
   });
   d.addEventListener('click', async e => {
     const mehr = e.target.closest('[data-bz-mehr]');
-    if (!mehr) return;
+    const zurueck = e.target.closest('[data-bz-zurueck]');
+    if (!mehr && !zurueck) return;
+    const n = mehr ? Number(mehr.dataset.bzMehr) || 30 : 0;
     try {
-      b = await beschaeftigt(mehr, () => api.adminBildschirmzeitGeschenk(konto.id, 30));
+      b = await beschaeftigt(mehr || zurueck, () => mehr
+        ? api.adminBildschirmzeitGeschenk(konto.id, n)
+        : api.adminBildschirmzeitGeschenkZurueck(konto.id));
       konto.bildschirmzeit = b;
       zeichnen();
-      meldung(d, tr('{name} hat heute 30 Minuten mehr.', { name: konto.name }), 'gut');
+      // Mit Tagesgrenze zählen die Minuten; ohne sagt das Fensterende,
+      // wie lange es heute geht.
+      meldung(d, mehr
+        ? (b.verlaengertBis && !b.budgetMinuten
+          ? tr('{name} darf heute bis {bis} schauen.', { name: konto.name, bis: b.verlaengertBis })
+          : tr('{name} hat heute {n} Minuten mehr.', { name: konto.name, n }))
+        : tr('Zurückgenommen – heute gilt wieder die Regel.'), 'gut');
     } catch (err) { meldung(d, fehlerText(err)); }
   });
   d.addEventListener('submit', async e => {
@@ -144,7 +173,8 @@ export function bzIchZeile(s = stand) {
   else haupt = tr('Heute ohne Grenze');
   const teile = [];
   if (s.budgetMinuten) teile.push(tr('{genutzt} von {budget} Min. gebraucht', { genutzt: s.genutztMinuten, budget: s.budgetMinuten }));
-  if (s.von) teile.push(tr('heute {von} bis {bis}', { von: s.von, bis: s.bis }));
+  if (s.von) teile.push(tr('heute {von} bis {bis}', { von: s.von, bis: s.verlaengertBis || s.bis }));
+  else if (s.verlaengertBis) teile.push(tr('heute bis {bis}', { bis: s.verlaengertBis }));
   return `<div class="row" style="min-height:54px"><span style="flex:1">
       <span class="t-body">${escH(haupt)}</span>
       ${teile.length ? `<span class="t-caption c-2" style="display:block">${escH(teile.join(' · '))}</span>` : ''}</span></div>`;
@@ -199,4 +229,23 @@ export function bzSchluss(text) {
   knopf.addEventListener('click', () => el.remove());
   el.addEventListener('keydown', e => { if (e.key === 'Escape') el.remove(); });
   knopf.focus();
+}
+
+/* Ein schmales Band oben auf der Startseite, wenn die Zeit um ist — sonst
+   erfährt das Kind es erst beim Tippen auf „Ansehen". */
+export function bzBand(s = stand) {
+  if (!s?.aktiv || s.erlaubt) return '';
+  return `<div class="bz-band" role="status" style="display:flex;gap:10px;align-items:center;padding:12px 16px;margin:0 0 18px;border-radius:14px;background:var(--fill)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <span class="t-body">${escH(s.meldung || tr('Für heute ist Schluss.'))}</span></div>`;
+}
+
+/* Der Satz unter „Ich": Bei einem Zeitfenster über Mitternacht beginnt der
+   neue Tag erst, wenn das Fenster endet. */
+export function bzTagText(s = stand) {
+  if (s?.von && s?.bis && s.bis !== '24:00' && s.bis <= s.von) {
+    return tr('Gezählt wird, solange ein Video läuft. Ein neuer Tag beginnt, wenn das Zeitfenster um {bis} endet.', { bis: s.bis });
+  }
+  return tr('Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.');
 }

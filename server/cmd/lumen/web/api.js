@@ -181,9 +181,12 @@ export const api = {
     return r.account;
   },
 
-  async unlock(profileId, secret) {
+  /* neu: { neu, neuArt } – nach einem Zurücksetzen durch die Verwaltung
+     legt die Person hier gleich ihren eigenen Schutz fest (Fehlercode
+     „neue_pin_noetig" ohne). */
+  async unlock(profileId, secret, neu = {}) {
     const r = await this.call('/unlock', { method: 'POST',
-      body: { profileId, secret, deviceName: deviceName(), deviceKind: 'browser' } });
+      body: { profileId, secret, ...neu, deviceName: deviceName(), deviceKind: 'browser' } });
     // Einmaliger Hinweis des Servers (etwa: die Verwaltung hat den PIN
     // zurückgesetzt). app.js zeigt ihn nach dem Anmelden an.
     this.anmeldeHinweis = r.hinweis || null;
@@ -193,9 +196,9 @@ export const api = {
   },
 
   // Von unterwegs gibt es keine Profilauswahl: Name und PIN oder Passwort.
-  async unlockName(name, secret) {
+  async unlockName(name, secret, neu = {}) {
     const r = await this.call('/unlock', { method: 'POST',
-      body: { name, secret, deviceName: deviceName(), deviceKind: 'browser' } });
+      body: { name, secret, ...neu, deviceName: deviceName(), deviceKind: 'browser' } });
     // Einmaliger Hinweis des Servers (etwa: die Verwaltung hat den PIN
     // zurückgesetzt). app.js zeigt ihn nach dem Anmelden an.
     this.anmeldeHinweis = r.hinweis || null;
@@ -554,11 +557,16 @@ export const api = {
   adminBildschirmzeitGeschenk(id, minuten) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}/bildschirmzeit/geschenk`, { method: 'POST', body: { minuten } });
   },
+  /* Nimmt zurück, was heute dazugegeben wurde. */
+  adminBildschirmzeitGeschenkZurueck(id) {
+    return this.call(`/admin/accounts/${encodeURIComponent(id)}/bildschirmzeit/geschenk`, { method: 'DELETE' });
+  },
   adminDeleteAccount(id) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
-  adminSetLimits(id, limits, libraries, kinderprofil) {
-    return this.call(`/admin/accounts/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: { limits, libraries, kinderprofil } });
+  /* gast: true/false – gehört nicht zum Haushalt (undefined: unverändert). */
+  adminSetLimits(id, limits, libraries, kinderprofil, gast) {
+    return this.call(`/admin/accounts/${encodeURIComponent(id)}/limits`, { method: 'PUT', body: { limits, libraries, kinderprofil, gast } });
   },
   /* zusatz: { kinderprofil: true, altersgrenze: 0|6|12|16 } für ein Kind. */
   adminInvite(libraries, limits, days = 7, zusatz = {}) {
@@ -567,8 +575,9 @@ export const api = {
   /* Offene Einladungen (ohne Code) und Zurückziehen. */
   adminInvites() { return this.call('/admin/invites'); },
   adminInviteZurueckziehen(kennung) { return this.call('/admin/invites/' + encodeURIComponent(kennung), { method: 'DELETE' }); },
-  /* PIN oder Passwort eines Haushaltsprofils neu setzen (mit Bestätigung). */
-  adminKontoSperre(id, art, neu) {
+  /* Schutz eines Haushaltsprofils zurücksetzen (mit Bestätigung). Ohne
+     „neu" vergibt der Server einen Einmal-Code → { einmalCode, art }. */
+  adminKontoSperre(id, art, neu = '') {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}/sperre`, { method: 'PUT', body: { art, neu } });
   },
   /* Das eigene Profil schützen: mit dem bisherigen Code. */

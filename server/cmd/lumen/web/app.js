@@ -25,7 +25,7 @@ import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBe
   sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter } from './funktionen.js';
 // Bildschirmzeit der Kinderprofile (durchgesetzt vom Server).
 import { grenzenBearbeiten } from './konto.js';
-import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
+import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss, bzBand, bzTagText } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
 import { tastaturEinrichten } from './tastatur.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
@@ -122,11 +122,25 @@ const S = {
   })(),
 };
 
+/* Welcher Code die Bestätigung öffnet: Ist eine Verwaltungssperre
+   gesetzt, gilt nur deren Code – nicht das Passwort des Profils. Früher
+   nannte der Dialog alles auf einmal, und das Profil-Passwort scheiterte
+   still mit „Das stimmt nicht". */
+function bestaetigenText() {
+  const art = S?.me?.account?.adminLock || 'none';
+  if (art === 'totp') return tr('Zur Sicherheit noch einmal den Code aus der Authenticator-App (Verwaltungssperre).');
+  if (art === 'pin') return tr('Zur Sicherheit noch einmal die PIN der Verwaltungssperre – nicht die PIN deines Profils.');
+  if (art === 'password') return tr('Zur Sicherheit noch einmal das Passwort der Verwaltungssperre – nicht das deines Profils.');
+  return tr('Zur Sicherheit noch einmal deine PIN oder dein Passwort.');
+}
+
 /* ---------------------------------------------------------------- Hilfen */
 
 // Auch das einfache Hochkomma: sonst bräche ein Wert in einem Attribut
-// mit '…' aus, und der Rest des Texts würde zu Markup.
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
+// mit '…' aus, und der Rest des Texts würde zu Markup. Steuerzeichen für
+// die Schreibrichtung (U+202A–202E, U+2066–2069) fallen weg: Ein Dateiname
+// mit „Rechts-nach-links" täuschte sonst einen anderen Namen vor.
+const esc = s => String(s ?? '').replace(/[\u202A-\u202E\u2066-\u2069]/g, '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Staffel und Folge kurz: „S1 F2" auf Deutsch, „S1 E2" auf Englisch.
@@ -187,6 +201,23 @@ const ADMIN_VIEWS = ['admin', 'adminBackups', 'adminUmwandlung', 'adminLibraries
 /* Was der Server beim Anmelden einmal sagen will (api.anmeldeHinweis) –
    bisher nur, dass die Verwaltung den PIN zurückgesetzt und dabei den
    Verlauf gelöscht hat. Der Text kommt übersetzt vom Server. */
+/* Nach einem Zurücksetzen durch die Verwaltung: Mit dem Einmal-Code gibt
+   es erst eine Anmeldung, wenn die Person ihre eigene PIN festlegt
+   (Server-Code „neue_pin_noetig"). anmelden(neu) schickt die Anmeldung
+   mit dem neuen Schutz noch einmal. */
+async function eigenePinFestlegen(text, anmelden) {
+  const ok = await schutzDialog({
+    titel: tr('Eigene PIN festlegen'),
+    hinweis: text,
+    ohneErlaubt: false,
+    senden: ({ art, neu }) => anmelden({ neu, neuArt: art }),
+  });
+  if (!ok) { S.error = ''; return render(); }
+  S.me = await api.me();
+  go('home');
+  return anmeldeHinweis();
+}
+
 function anmeldeHinweis() {
   const h = api.anmeldeHinweis;
   api.anmeldeHinweis = null;
@@ -823,7 +854,10 @@ async function fetchFor(view) {
       catch (e) { if (e.code === 'unterwegs') return { unterwegs: true }; throw e; }
     case 'home': {
       // Die Startseite zeigt höchstens zwölf Reihen — nur die holen, nicht alle.
-      const [h, reihen] = await Promise.all([api.home(), api.call('/collections?limit=12').catch(() => [])]);
+      // Kinderprofil: auch die Bildschirmzeit — ist sie um, sagt es ein
+      // Band oben (bzBand), nicht erst der Knopf „Ansehen".
+      const [h, reihen] = await Promise.all([api.home(), api.call('/collections?limit=12').catch(() => []),
+        S.me?.account?.isKid ? bzLaden() : null]);
       return { ...h, collections: reihen };
     }
     case 'collections': return { collections: await api.collections() };
@@ -1143,7 +1177,10 @@ function viewRedeem() {
   const art = S.redeemLock;
   const code = S.id || f.code || '';
 
-  const wahl = [['pin', 'PIN'], ['password', tr('Passwort')], ['none', tr('Ohne Schutz')]].map(([v, n]) =>
+  // Von unterwegs kein „Ohne Schutz": so ein Profil öffnet sich nur zu
+  // Hause – wer es von unterwegs anlegt, sperrte sich aus.
+  const wahl = [['pin', 'PIN'], ['password', tr('Passwort')], ['none', tr('Ohne Schutz')]]
+    .filter(([v]) => v !== 'none' || !S.hello?.unterwegs).map(([v, n]) =>
     `<button type="button" class="tab-pill" role="radio" aria-checked="${art === v}"
        tabindex="${art === v ? 0 : -1}" data-lockkind="${v}" style="height:32px;font-size:.875rem">${n}</button>`).join('');
 
@@ -1308,7 +1345,7 @@ function viewHome() {
     <section class="sec"><h2 class="t-title3">
       <a href="#" class="titel-link" data-go="collections">${tr('Filmreihen')} ${svg(I.chev, 16, 2.4)}</a></h2>
       <div class="rail">${reihen.slice(0, 12).map(reiheKarte).join('')}</div></section>` : '';
-  return shell(`<div class="wrap"><h1 class="sr-only">${tr('Startseite')}</h1>${hero}
+  return shell(`<div class="wrap"><h1 class="sr-only">${tr('Startseite')}</h1>${S.me?.account?.isKid ? bzBand() : ''}${hero}
     ${rows.slice(0, 1).map(r => rail(r.title, r.items, r.wide)).join('')}
     ${reihenRail}
     ${rows.slice(1).map(r => rail(r.title, r.items, r.wide)).join('')}
@@ -1442,7 +1479,7 @@ function viewFavorites() {
   return shell(`<div class="wrap wrap--flat">
     <h1 class="t-large">${tr('Favoriten')}</h1>
     ${tabs}
-    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Was dir besonders gefallen hat · nur du siehst das')}</div>
+    <div class="t-sub c-2" style="margin:4px 0 24px">${offenesProfil() ? tr('Was dir besonders gefallen hat · alle in diesem Profil sehen das') : tr('Was dir besonders gefallen hat · nur du siehst das')}</div>
     ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>`
       : leer({ symbol: I.herz, titel: art === 'movie' ? tr('Noch keine Lieblingsfilme') : tr('Noch keine Lieblingsserien'),
           text: tr('Tippe auf einer Titelseite auf das Herz, dann steht der Titel hier.') })}
@@ -1462,7 +1499,7 @@ function viewGesehen() {
   return shell(`<div class="wrap wrap--flat">
     <h1 class="t-large">${tr('Gesehen')}</h1>
     ${merkReiter('gesehen')}
-    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Was du fertig geschaut hast, zuletzt Beendetes zuerst — Serien, sobald alle Folgen gesehen sind. Nur du siehst das.')}</div>
+    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Was du fertig geschaut hast, zuletzt Beendetes zuerst — Serien, sobald alle Folgen gesehen sind.')} ${offenesProfil() ? tr('Alle in diesem Profil sehen das.') : tr('Nur du siehst das.')}</div>
     ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>`
       : leer({ symbol: I.check, titel: tr('Noch nichts zu Ende geschaut'), text: tr('Was du fertig schaust, steht hier — nur für dich.') })}
     <div style="height:40px"></div></div>`);
@@ -1473,7 +1510,7 @@ function viewWatchlist() {
   return shell(`<div class="wrap wrap--flat">
     <h1 class="t-large">${tr('Merkliste')}</h1>
     ${merkReiter('watchlist')}
-    <div class="t-sub c-2" style="margin:4px 0 24px">${tr('Nur du siehst diese Liste')}</div>
+    <div class="t-sub c-2" style="margin:4px 0 24px">${offenesProfil() ? tr('Alle in diesem Profil sehen diese Liste') : tr('Nur du siehst diese Liste')}</div>
     ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>`
       : leer({ symbol: I.mark, titel: tr('Noch nichts gemerkt'), text: tr('Auf einer Titelseite legst du mit „Merken“ etwas hierher.'),
           aktion: `<button class="btn btn-primary" data-go="movies">${tr('Filme ansehen')}</button>` })}
@@ -1877,7 +1914,9 @@ function viewDetail() {
             <span style="flex:1"></span>
             ${it.myRating ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-rate="0">${tr('Löschen')}</button>` : ''}
           </div>
-          <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Nur für dich sichtbar.')}</p></section>
+          <p class="t-caption c-2" style="margin:8px 16px 0">${(S.me?.prefs || {}).shareRatings === '1'
+            ? tr('Im Haushalt sichtbar, mit deinem Namen – abschalten unter „Ich“ › Privatsphäre.')
+            : tr('Nur für dich sichtbar.')}</p></section>
         ${(d.sharedRatings || []).length ? `<section style="margin-top:22px"><div class="section-h">${tr('Im Haushalt')}</div>
             <div class="group group--inset">${d.sharedRatings.map(r => `
               <div class="row" style="min-height:44px">
@@ -2698,7 +2737,7 @@ function zufallsKennung() {
      - abgelaufen (lange Pause) oder unbekannt: still an der aktuellen
        Stelle neu ansetzen — höchstens einmal je Fehler, sonst Meldung;
      - beendet: sagen und den Player schliessen;
-     - ersetzt (dasselbe Gerät spielt anderes): still schliessen;
+     - ersetzt (dieselbe Anmeldung spielt anderes): sagen und schliessen;
      - fehler: den Text des Servers zeigen (keine Umwandlung erlaubt,
        zu viele Geräte, Server ausgelastet …). */
 async function stromAbgerissen(p, lief) {
@@ -2716,6 +2755,9 @@ async function stromAbgerissen(p, lief) {
   if (S.playing !== p || p.strom !== strom) return;
   switch (g.code) {
     case 'wiedergabe_ersetzt':
+      // Dieselbe Anmeldung (etwa ein zweiter Tab) spielt jetzt etwas
+      // anderes – sagen, statt still mitten im Film zu schliessen.
+      toast(tr('Auf diesem Gerät läuft jetzt etwas anderes.'));
       return stopPlayer();
     case 'wiedergabe_beendet':
       toast(tr('Die Wiedergabe wurde beendet.'));
@@ -3711,7 +3753,7 @@ function viewPlaylist() {
         lswRow(tr('Im Haushalt zeigen'), l.geteilt, 'geteilt') +
         lswRow(tr('Alle dürfen mitschreiben'), l.gemeinsam, 'gemeinsam'),
         l.geteilt ? tr('Wer sie sieht, sieht nur die Titel, die er ohnehin sehen darf.')
-                  : tr('Nur du siehst diese Liste.'))}</section>` : ''}
+                  : offenesProfil() ? tr('Alle in diesem Profil sehen diese Liste.') : tr('Nur du siehst diese Liste.'))}</section>` : ''}
     <section style="margin-top:${l.meine ? 4 : 28}px"><div class="group group--inset">
       ${zeilen || `<p class="hint" style="padding:18px 16px;margin:0">${tr('Noch leer. Auf einer Titelseite legst du mit „Zur Liste“ etwas hinein.')}</p>`}</div></section>
     <div style="height:40px"></div></div>`);
@@ -3835,6 +3877,10 @@ function viewWishes() {
 
 /* ---------------------------------------------------------------- Einstellungen */
 
+// Ein Profil ohne PIN öffnet zu Hause jede Person – „nur du siehst das"
+// wäre dort nicht ehrlich.
+const offenesProfil = () => (S.me?.account?.lockKind || 'none') === 'none';
+
 const swRow = (label, on, value, key) => `
   <div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${esc(label)}</span>
     ${on === null ? `<span style="color:var(--label-2);font-size:.9375rem">${esc(value)}</span>`
@@ -3926,12 +3972,14 @@ function viewSettings() {
               ({ name: n, an: textgroesse() === v, attr: `data-textgroesse="${v}"` })))}
             </div>`, tr('Gilt für diesen Browser. Die Schrift wächst auch mit der Textgrösse von Browser und System.'))}
         ${a.isKid && bzStand()?.aktiv ? grp(tr('Bildschirmzeit'), bzIchZeile(),
-          tr('Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.')) : ''}
+          bzTagText()) : ''}
         ${grp(tr('Privatsphäre'),
           swRow(tr('Bewertungen im Haushalt zeigen'), prefs.shareRatings === '1', null, 'shareRatings'),
-          a.isKid && bzStand()?.aktiv
-            ? tr('Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur ungefähr, in Viertelstunden, wie viel Bildschirmzeit du heute gebraucht hast — nicht, was du geschaut hast, und nicht, wann.')
-            : tr('Dein Verlauf und deine Bewertungen gehören dir. Auch der Besitzer des Servers kann nicht sehen, wann oder wie lange du etwas schaust.'))}
+          [a.isKid && bzStand()?.aktiv
+            ? tr('Dein Verlauf und deine Bewertungen gehören dir. Die Verwaltung sieht nur ungefähr, wie viel Bildschirmzeit du heute gebraucht hast, und erst eine Weile später — nicht, was du geschaut hast, und nicht, wann.')
+            : tr('Dein Verlauf und deine Bewertungen gehören dir. Auch der Besitzer des Servers kann nicht sehen, wann oder wie lange du etwas schaust.'),
+           prefs.shareRatings === '1' ? tr('Deine Bewertungen sieht der Haushalt mit deinem Namen; ausschalten nimmt auch die bisherigen zurück.') : '',
+           offenesProfil() ? tr('Ohne PIN kann jede Person zu Hause dieses Profil öffnen und alles darin sehen.') : ''].filter(Boolean).join(' '))}
       </div>
       <div>
         ${grp(tr('Profil schützen'),
@@ -4308,7 +4356,7 @@ function viewAdminLibraries() {
     ${libs.length ? `<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
       <button class="btn btn-pill btn-pill--fill" data-metaneu="">${tr('Alle Metadaten neu laden')}</button>
       <span class="t-caption c-2" style="align-self:center">${tr('Holt Beschreibungen, Besetzung und Bilder für alle Titel noch einmal. Von Hand zugewiesene bleiben.')}</span></div>` : ''}
-    <section style="margin-top:26px"><div class="section-h">${tr('Neue Bibliothek')}</div>
+    ${voll() ? `<section style="margin-top:26px"><div class="section-h">${tr('Neue Bibliothek')}</div>
       <form id="libform" class="group group--inset" style="padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px">
         <div class="field"><label for="lname">${tr('Name')}</label>
           <input id="lname" name="name" placeholder="${tr('Filme')}" required></div>
@@ -4325,7 +4373,7 @@ function viewAdminLibraries() {
           <span class="hint">${tr('Der Pfad, unter dem der Server die Dateien sieht — bei Docker der Pfad im Container. Unterordner werden mitgelesen.')}</span></div>
         <div id="bibwaehler">${bibWaehler()}</div>
         <button class="btn btn-primary" style="height:44px">${tr('Anlegen und prüfen')}</button>
-      </form></section>
+      </form></section>` : ''}
     <div style="height:40px"></div></div>`);
 }
 
@@ -4644,7 +4692,8 @@ function viewAdminGroups() {
       ${ROLLEN_GRUPPEN[a.groupId] ? `<span class="t-caption c-2">${tr('Rolle „{rolle}“ – unter Konten und Rechte', { rolle: rollenName(a.groupId) })}</span>`
         : `<select class="takt" data-grpacc="${esc(a.id)}" aria-label="${tr('Gruppe von {name}', { name: esc(a.name) })}">
         <option value="">${tr('keine Gruppe')}</option>
-        ${eigene.map(x => `<option value="${esc(x.id)}"${a.groupId === x.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`}</label>`).join('');
+        ${eigene.filter(x => !a.isKid || !x.verwaltung || a.groupId === x.id)
+          .map(x => `<option value="${esc(x.id)}"${a.groupId === x.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`}</label>`).join('');
   const form = `
     <form id="grpform" style="margin-top:24px">
       <!-- nicht name="id": das würde form.id überdecken -->
@@ -4659,7 +4708,7 @@ function viewAdminGroups() {
               <option value="voll"${g?.vollzugriff ? ' selected' : ''}>${tr('Vollzugriff — alles wie der Besitzer')}</option></select>
             <span class="hint">${tr('Wer was schaut, sieht auch hier niemand.')}</span></div>
           <div class="field"><label>${tr('Bibliotheken')}</label>
-            ${libs.length ? libs.map(l => `<label class="row" style="min-height:36px;padding:0;cursor:pointer"><input type="checkbox" name="lib" value="${esc(l.id)}"${(g?.libraries || []).includes(l.id) ? ' checked' : ''} style="margin-right:10px"><span class="t-body">${esc(l.name)}</span></label>`).join('')
+            ${libs.length ? libs.map(l => `<label class="row" style="min-height:36px;padding:0;cursor:pointer"><input type="checkbox" name="lib" value="${esc(l.id)}"${(g ? (g.libraries || []).includes(l.id) : true) ? ' checked' : ''} style="margin-right:10px"><span class="t-body">${esc(l.name)}</span></label>`).join('')
               : `<span class="hint">${tr('Noch keine Bibliotheken.')}</span>`}</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
             <div class="field"><label for="gstreams">${tr('Gleichzeitig')}</label><input id="gstreams" name="maxStreams" type="number" min="1" max="20" value="${lim.maxStreams}"></div>
@@ -4671,7 +4720,7 @@ function viewAdminGroups() {
             <label class="t-sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="allowTranscode"${lim.allowTranscode ? ' checked' : ''}>${tr('Umwandeln')}</label>
             <label class="t-sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="allowDownload"${lim.allowDownload ? ' checked' : ''}>${tr('Herunterladen')}</label>
           </div>
-          <span class="hint">${tr('Ohne „Herunterladen“ gibt es keinen Download-Knopf, und Lumen liefert Filme nur etwa doppelt so schnell aus, wie sie laufen. Wer technisch versiert ist, kann einen Strom trotzdem mitschneiden.')}</span>
+          <span class="hint">${tr('Ohne „Herunterladen“ gibt es keinen Download-Knopf, und Lumen liefert Filme nur etwa doppelt so schnell aus, wie sie laufen (Kinderprofile mit Bildschirmzeit ungefähr in Echtzeit). Wer technisch versiert ist, kann einen Strom trotzdem mitschneiden.')}</span>
         </div>`)}
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:-10px">
         ${g ? `<button class="btn btn-pill" type="button" data-grpneu>${tr('Abbrechen')}</button>` : ''}
@@ -5037,7 +5086,9 @@ function viewAccounts() {
   const ich = S.me?.account?.id;
   // PIN zurücksetzen: nie beim Besitzer, nicht beim eigenen Profil (das
   // geht unter „Ich"), und ein Mitverwalter nur bei Konten ohne Verwaltung.
-  const darfPin = a => !a.isOwner && a.id !== ich && (voll() || !a.isAdmin);
+  // verwaltbar: Mitverwaltende mit nur einem Teil der Bibliotheken
+  // ändern nur Konten ganz innerhalb ihres Bereichs (der Server prüft es).
+  const darfPin = a => !a.isOwner && a.id !== ich && (voll() || !a.isAdmin) && a.verwaltbar !== false;
   const rows = (S.data?.accounts || []).map(a => `
     <div class="orow" style="height:auto;padding:14px 16px;gap:12px;flex-wrap:wrap">
       ${avatar(a, 34, 'flex:none')}
@@ -5047,13 +5098,16 @@ function viewAccounts() {
           · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
-      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
-      ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
+      ${!a.isOwner && !a.isAdmin && a.id !== ich && a.verwaltbar !== false ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
+      ${a.bildschirmzeit && a.verwaltbar !== false ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
       ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
       ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
         <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
-          ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]].map(([k, n]) =>
+          ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]]
+            // Ein Kinderprofil bekommt keine Verwaltung (der Server lehnt
+            // es ab) – dann gar nicht erst anbieten.
+            .filter(([k]) => !a.isKid || k === 'schauen' || rolle(a) === k).map(([k, n]) =>
             `<option value="${k}"${rolle(a) === k ? ' selected' : ''}>${n}</option>`).join('')}</select>`
         : `<span class="t-caption c-2">${{ schauen: tr('Nur schauen'), verwalten: tr('Verwaltet mit'), voll: tr('Vollzugriff') }[rolle(a)]}</span>`}
       </div>
@@ -5322,17 +5376,22 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-pinreset'))) {
     const a = (S.data?.accounts || []).find(x => x.id === n.dataset.pinreset);
     if (!a) return;
-    const ok = await schutzDialog({
-      titel: tr('Schutz für {name}', { name: a.name }),
-      hinweis: tr('Die neue PIN gibst du der Person weiter. Sie kann sie danach unter „Ich“ selbst ändern.'),
-      // Der Server löscht beim Zurücksetzen den privaten Stand des
-      // Profils (store/vergessen.go) – das muss vorher dastehen.
-      warnung: tr('Der Verlauf, die Merkliste und die Bewertungen dieses Profils werden gelöscht – sonst könnte die Verwaltung sie einsehen.'),
-      ohneErlaubt: !a.isAdmin,
-      senden: ({ art, neu }) => api.adminKontoSperre(a.id, art, neu),
+    // Die Verwaltung wählt die PIN nicht mehr selbst: Lumen vergibt einen
+    // Einmal-Code, und beim Anmelden legt die Person ihre eigene PIN fest.
+    // Der Server löscht beim Zurücksetzen den privaten Stand des Profils
+    // (store/vergessen.go) – das muss vorher dastehen.
+    const ok = await rueckfrage({
+      titel: tr('PIN von {name} zurücksetzen?', { name: a.name }),
+      text: tr('Lumen zeigt dir gleich einen Einmal-Code für {name}. Damit meldet sich {name} an und legt dabei eine eigene PIN fest – du kennst sie danach nicht. Verlauf, Merkliste und Bewertungen dieses Profils werden gelöscht, sonst könnte die Verwaltung sie einsehen.', { name: a.name }),
+      ja: tr('Zurücksetzen'), gefaehrlich: true,
     });
-    if (ok) { toast(tr('Gespeichert')); return load(); }
-    return;
+    if (!ok) return;
+    try {
+      const r = await api.adminKontoSperre(a.id, 'pin');
+      await mitteilung(tr('Einmal-Code für {name}', { name: a.name }),
+        tr('{code} – gib diesen Code {name} weiter. Er gilt für eine einzige Anmeldung; dabei legt {name} eine eigene PIN fest. Lumen zeigt ihn nur jetzt.', { code: r?.einmalCode || '', name: a.name }));
+      return load();
+    } catch (err) { if (!err?.abgebrochen) toast(err.message); return; }
   }
   if ((n = hit('data-einladungsart'))) {
     // Nur das Feld ein- oder ausblenden: Neu zeichnen verlöre die gewählte
@@ -5492,7 +5551,8 @@ app.addEventListener('click', async e => {
   if (hit('data-vorherige-nein')) { if (S.data) S.data.vorherigeFrage = null; return render(); }
   if ((n = hit('data-rate'))) {
     const stars = Number(n.dataset.rate);
-    try { await api.rate(S.id, stars, (S.me.prefs || {}).shareRatings === '1'); toast(stars ? tr('Bewertung gespeichert — nur für dich sichtbar') : tr('Bewertung gelöscht')); }
+    const geteilt = (S.me.prefs || {}).shareRatings === '1';
+    try { await api.rate(S.id, stars, geteilt); toast(!stars ? tr('Bewertung gelöscht') : geteilt ? tr('Bewertung gespeichert — im Haushalt sichtbar') : tr('Bewertung gespeichert — nur für dich sichtbar')); }
     catch (err) { toast(err.message); }
     return load();
   }
@@ -5597,7 +5657,7 @@ app.addEventListener('click', async e => {
     api.signOut(); S.me = null; abgemeldet(); return go('profiles');
   }
   if (hit('data-clearhistory')) {
-    if (!(await rueckfrage({ titel: tr('Verlauf löschen?'), text: tr('Alle Fortschritte und Haken in deinem Profil verschwinden. Die Dateien bleiben.'), ja: tr('Löschen'), gefaehrlich: true }))) return;
+    if (!(await rueckfrage({ titel: tr('Verlauf löschen?'), text: tr('Alle Fortschritte und Haken, „Weiterschauen“ und die gemerkten Spuren je Serie verschwinden. Merkliste, Favoriten und Bewertungen bleiben, die Dateien auch.'), ja: tr('Löschen'), gefaehrlich: true }))) return;
     try { await api.clearHistory(); toast(tr('Verlauf gelöscht')); }
     catch (err) { toast(err.message); }
     return;
@@ -5948,6 +6008,10 @@ async function formularAbschicken(e) {
     const g = { name: fd.get('name'), verwaltung: recht === 'verwalten' || recht === 'voll', vollzugriff: recht === 'voll', libraries: fd.getAll('lib'),
       limits: { maxStreams: Number(fd.get('maxStreams')) || 2, maxAge: Number(fd.get('maxAge')), maxDownloads: Number(fd.get('maxDownloads')) || 0,
         allowUnrated: !!fd.get('allowUnrated'), allowTranscode: !!fd.get('allowTranscode'), allowDownload: !!fd.get('allowDownload'), remoteQuality: '1080p' } };
+    // Eine Gruppe ohne Bibliothek: Wer darin ist, sieht gar nichts –
+    // früher ohne jeden Hinweis (ein Kind stand dann vor „Noch nichts da").
+    if (!g.libraries.length && !(await rueckfrage({ titel: tr('Keine Bibliothek gewählt'),
+      text: tr('Wer in dieser Gruppe ist, sieht dann gar nichts. Trotzdem speichern?'), ja: tr('Speichern') }))) return;
     try {
       if (fd.get('gid')) await api.adminUpdateGroup(fd.get('gid'), g); else await api.adminCreateGroup(g);
       toast(tr('Gespeichert')); S.gruppe = null; return load();
@@ -5993,20 +6057,28 @@ async function formularAbschicken(e) {
   }
 
   if (f.id === 'unterwegsform') {
+    const name = f.uname.value.trim(), geheim = f.usecret.value;
     try {
-      await api.unlockName(f.uname.value.trim(), f.usecret.value);
+      await api.unlockName(name, geheim);
       S.me = await api.me();
       go('home');
       return anmeldeHinweis();
-    } catch (err) { S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render(); }
+    } catch (err) {
+      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlockName(name, geheim, neu));
+      S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
+    }
   }
   if (f.id === 'unlockform') {
+    const id = S.id, geheim = f.secret.value;
     try {
-      await api.unlock(S.id, f.secret.value);
+      await api.unlock(id, geheim);
       S.me = await api.me();
       go('home');
       return anmeldeHinweis();
-    } catch (err) { S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render(); }
+    } catch (err) {
+      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlock(id, geheim, neu));
+      S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
+    }
   }
 
   if (f.id === 'searchform') { $('#q')?.blur(); S.suchTastaturZu = true; return load(); }
@@ -6115,8 +6187,14 @@ app.addEventListener('change', async e => {
     return load();
   }
   if (z.matches && z.matches('select[data-grpacc]')) {
+    // Eine Gruppe ohne Bibliothek nimmt der Person alles: vorher fragen.
+    const ziel = (S.data?.groups || []).find(x => x.id === z.value);
+    if (ziel && !(ziel.libraries || []).length && !(await rueckfrage({ titel: tr('Gruppe ohne Bibliothek'),
+      text: tr('„{gruppe}“ sieht keine Bibliothek – wer darin ist, sieht danach nichts mehr. Trotzdem zuordnen?', { gruppe: ziel.name }), ja: tr('Zuordnen') }))) return load();
     try { await api.adminSetGroup(z.dataset.grpacc, z.value); toast(z.value ? tr('Zugeordnet') : tr('Aus der Gruppe genommen')); return load(); }
-    catch (err) { return toast(err.message); }
+    // Abgelehnt (etwa: Kinderprofil in eine Gruppe mit Verwaltung): die
+    // Auswahl springt zurück, statt etwas anzuzeigen, das nicht gilt.
+    catch (err) { toast(err.message); return load(); }
   }
   if (z.matches && z.matches('input[name=kind]') && z.form?.id === 'lockform') {
     const box = document.getElementById('lockdetail'); if (box) box.innerHTML = lockDetail(z.value); return;

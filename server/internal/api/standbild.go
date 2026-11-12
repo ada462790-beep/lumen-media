@@ -372,6 +372,10 @@ func (s *Server) standbildMachen(it *store.Item) (string, error) {
 		return "", err
 	}
 	_ = os.WriteFile(ziel+".quelle", []byte(dateiKennung(datei)), 0o644)
+	// Auch der Vermerk und der Ordner ohne echte Uhrzeit: Sonst stünde
+	// daran, wann eine Karte zum ersten Mal offen war.
+	zeitlos(ziel + ".quelle")
+	zeitlos(filepath.Dir(ziel))
 	return ziel, nil
 }
 

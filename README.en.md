@@ -88,7 +88,8 @@ for new versions and install signed updates — no GitHub token required.
 `... zuruecksetzen --konto NAME` sets a new PIN (`--art password` for a
 password, `--verwaltung` also clears the admin PIN). The owner keeps all
 history; resetting someone else's profile this way deletes their history,
-watchlist and ratings, just like in the app.
+watchlist and ratings, just like in the app, and the new PIN only works as
+a one-time code: at the next sign-in that person sets their own PIN.
 On a Synology this also works **without SSH**: create a user-defined
 script task as **root** in *Control Panel › Task Scheduler* with
 `printf '2580\n2580\n' | /usr/local/bin/docker exec -i lumen lumen zuruecksetzen --konto NAME --verwaltung > /volume1/docker/lumen/zuruecksetzen.txt 2>&1`

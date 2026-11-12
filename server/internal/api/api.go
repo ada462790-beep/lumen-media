@@ -10,6 +10,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -327,7 +328,7 @@ func (s *Server) Handler() http.Handler {
 	// Sicherung: sehen, jetzt sichern, wiederherstellen — nur der Besitzer.
 	mux.Handle("GET /api/v1/admin/backups", owner(s.adminSicherungen))
 	mux.Handle("POST /api/v1/admin/backups", owner(s.adminSichernJetzt))
-	mux.Handle("POST /api/v1/admin/backups/{nr}/restore", owner(s.adminWiederherstellen))
+	mux.Handle("POST /api/v1/admin/backups/{nr}/restore", owner(s.bestaetigt(s.adminWiederherstellen)))
 	mux.Handle("GET /api/v1/admin/update", owner(s.adminUpdate))
 	mux.Handle("POST /api/v1/admin/update/check", owner(s.adminUpdatePruefen))
 	mux.Handle("POST /api/v1/admin/update/settings", owner(s.adminUpdateEinstellen))
@@ -369,6 +370,7 @@ func (s *Server) Handler() http.Handler {
 	// mehr") ohne erneuten Code, es gilt nur heute (bildschirmzeit.go).
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/bildschirmzeit", admin(s.bestaetigt(s.adminBildschirmzeit)))
 	mux.Handle("POST /api/v1/admin/accounts/{id}/bildschirmzeit/geschenk", admin(s.adminBildschirmzeitGeschenk))
+	mux.Handle("DELETE /api/v1/admin/accounts/{id}/bildschirmzeit/geschenk", admin(s.adminBildschirmzeitGeschenkZurueck))
 	// PIN eines Haushaltsprofils zurücksetzen — nie die des Besitzers.
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/sperre", admin(s.bestaetigt(s.adminKontoSperre)))
 	mux.Handle("PUT /api/v1/admin/wishes/{id}", admin(s.adminSetWishState))
@@ -515,9 +517,33 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	w.WriteHeader(status)
-	enc := json.NewEncoder(w)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(v)
+	_, _ = w.Write(ohneRichtungszeichen(buf.Bytes()))
+}
+
+// ohneRichtungszeichen nimmt die Steuerzeichen für die Schreibrichtung
+// (U+202A–202E, U+2066–2069) aus einer Antwort. Ein Dateiname mit
+// „Rechts-nach-links" (U+202E) stand sonst verdreht in jeder App — gut,
+// um einen anderen Namen oder eine andere Endung vorzutäuschen. In UTF-8
+// sind das E2 80 AA–AE und E2 81 A6–A9; in JSON stehen sie roh.
+func ohneRichtungszeichen(b []byte) []byte {
+	if !bytes.Contains(b, []byte{0xE2, 0x80}) && !bytes.Contains(b, []byte{0xE2, 0x81}) {
+		return b
+	}
+	out := b[:0:0]
+	for i := 0; i < len(b); i++ {
+		if b[i] == 0xE2 && i+2 < len(b) &&
+			((b[i+1] == 0x80 && b[i+2] >= 0xAA && b[i+2] <= 0xAE) ||
+				(b[i+1] == 0x81 && b[i+2] >= 0xA6 && b[i+2] <= 0xA9)) {
+			i += 2
+			continue
+		}
+		out = append(out, b[i])
+	}
+	return out
 }
 
 func ok(w http.ResponseWriter, v any) { writeJSON(w, http.StatusOK, v) }

@@ -374,7 +374,7 @@ func TestRatingsNeedConsentToBeShared(t *testing.T) {
 	if err := s.SetRating(ctx, a.ID, "it", 5, false); err != nil {
 		t.Fatal(err)
 	}
-	shared, err := s.SharedRatings(ctx, "it")
+	shared, err := s.SharedRatings(ctx, "", "it")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,7 +384,7 @@ func TestRatingsNeedConsentToBeShared(t *testing.T) {
 	if err := s.SetRating(ctx, a.ID, "it", 5, true); err != nil {
 		t.Fatal(err)
 	}
-	if shared, _ = s.SharedRatings(ctx, "it"); len(shared) != 1 {
+	if shared, _ = s.SharedRatings(ctx, "", "it"); len(shared) != 1 {
 		t.Fatal("freigegebene Bewertung fehlt")
 	}
 }

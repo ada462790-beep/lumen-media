@@ -242,12 +242,12 @@ func TestDirektstromGedrosseltOhneDownload(t *testing.T) {
 	_, fileID := h.film("Nordlicht", 2)
 	ohne := h.gast("Mara", false, h.lib.ID)
 	mit := h.gast("Lou", false, h.lib.ID)
-	mara, _, _ := h.st.LookupToken(t.Context(), ohne)
+	mara, maraGeraet, _ := h.st.LookupToken(t.Context(), ohne)
 	lim, _ := h.st.Limits(t.Context(), mara.ID)
 	lim.AllowDownload = false
 	lim.AllowUnrated = true
 	_ = h.st.SetLimits(t.Context(), mara.ID, lim)
-	lou, _, _ := h.st.LookupToken(t.Context(), mit)
+	lou, louGeraet, _ := h.st.LookupToken(t.Context(), mit)
 	lim2, _ := h.st.Limits(t.Context(), lou.ID)
 	lim2.AllowUnrated = true
 	_ = h.st.SetLimits(t.Context(), lou.ID, lim2)
@@ -262,10 +262,10 @@ func TestDirektstromGedrosseltOhneDownload(t *testing.T) {
 		}
 		resp.Body.Close()
 	}
-	if id := h.live.Finden(mara.ID, "iPad", fileID, "direct"); id == "" || h.live.DrosselVon(id) == nil {
+	if id := h.live.Finden(mara.ID, geraetKennung(maraGeraet), fileID, "direct"); id == "" || h.live.DrosselVon(id) == nil {
 		t.Fatal("ohne Herunterladen keine Drossel")
 	}
-	if id := h.live.Finden(lou.ID, "iPad", fileID, "direct"); id == "" || h.live.DrosselVon(id) != nil {
+	if id := h.live.Finden(lou.ID, geraetKennung(louGeraet), fileID, "direct"); id == "" || h.live.DrosselVon(id) != nil {
 		t.Fatal("mit Herunterladen gedrosselt")
 	}
 	if resp, _ := h.do("GET", "/api/v1/stream/"+fileID+"/download", "", ohne); resp.StatusCode != http.StatusForbidden {

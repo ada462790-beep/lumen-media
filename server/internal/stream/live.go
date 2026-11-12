@@ -48,6 +48,10 @@ type Session struct {
 	Avatar     string
 	DeviceName string
 	DeviceKind string
+	// Geraet: woran ein Gerät erkannt wird — seine Anmeldung, nicht sein
+	// Name. Zwei iPads oder zwei Browser heissen oft gleich („Chrome ·
+	// Linux") und verdrängten sich früher gegenseitig. Leer: der Name.
+	Geraet string
 
 	// FileID ist die Datei, die diese Wiedergabe ausliefern darf. Nur
 	// damit lässt sich ein Segment abholen — eine fremde Kennung in der
@@ -208,15 +212,24 @@ func (l *Live) Grund(id string) string {
 	return l.vorbei[id].grund
 }
 
+// geraet: die Kennung des Geräts (Geraet, sonst der Name).
+func (s *Session) geraet() string {
+	if s.Geraet != "" {
+		return s.Geraet
+	}
+	return s.DeviceName
+}
+
 // ReplaceFor beendet eine laufende Wiedergabe desselben Kontos auf
 // demselben Gerät. Ein Gerät spielt immer nur eine Sache — springt jemand
 // im Film, ist das kein zweiter Zuschauer. Ohne das zählte die Grenze
 // „gleichzeitig schauen" gegen den eigenen Player.
+// deviceName: die Gerätekennung (Session.Geraet) oder der Name.
 func (l *Live) ReplaceFor(accountID, deviceName string) {
 	l.mu.Lock()
 	var ids []string
 	for id, s := range l.byID {
-		if s.AccountID == accountID && s.DeviceName == deviceName {
+		if s.AccountID == accountID && s.geraet() == deviceName {
 			ids = append(ids, id)
 		}
 	}
@@ -232,7 +245,7 @@ func (l *Live) ReplaceForAusser(accountID, deviceName, behalten string) {
 	l.mu.Lock()
 	var ids []string
 	for id, s := range l.byID {
-		if s.AccountID == accountID && s.DeviceName == deviceName && id != behalten {
+		if s.AccountID == accountID && s.geraet() == deviceName && id != behalten {
 			ids = append(ids, id)
 		}
 	}
@@ -250,7 +263,7 @@ func (l *Live) Finden(accountID, deviceName, fileID, mode string) string {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	for id, s := range l.byID {
-		if s.AccountID == accountID && s.DeviceName == deviceName && s.FileID == fileID && s.Mode == mode {
+		if s.AccountID == accountID && s.geraet() == deviceName && s.FileID == fileID && s.Mode == mode {
 			return id
 		}
 	}
@@ -345,7 +358,7 @@ func (l *Live) Beitreten(neu *Session, max int) (*Session, int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, s := range l.byID {
-		if s.AccountID == neu.AccountID && s.DeviceName == neu.DeviceName &&
+		if s.AccountID == neu.AccountID && s.geraet() == neu.geraet() &&
 			s.FileID == neu.FileID && s.Mode == neu.Mode {
 			s.zuletzt = time.Now()
 			return s, 0
@@ -353,7 +366,7 @@ func (l *Live) Beitreten(neu *Session, max int) (*Session, int) {
 	}
 	var alt []string
 	for id, s := range l.byID {
-		if s.AccountID == neu.AccountID && s.DeviceName == neu.DeviceName {
+		if s.AccountID == neu.AccountID && s.geraet() == neu.geraet() {
 			alt = append(alt, id)
 		}
 	}

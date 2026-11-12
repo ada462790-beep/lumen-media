@@ -59,16 +59,22 @@ func scanListe(sc interface{ Scan(...any) error }, ich string) (*Liste, error) {
 	l.Geteilt, l.Gemeinsam = geteilt == 1, gemeinsam == 1
 	l.Meine = l.Von.ID == ich
 	l.DarfAendern = l.Meine || (l.Geteilt && l.Gemeinsam)
-	l.ErstelltAm = time.Unix(am, 0)
+	l.ErstelltAm = time.Unix(am-am%86400, 0).UTC() // nur der Tag, auch bei alten Listen
 	return &l, nil
 }
 
 // Listen gibt die eigenen Listen und die, die andere im Haushalt geteilt
 // haben. Eigene zuerst.
+// geteiltFuer: eine fremde Liste ist sichtbar, wenn sie geteilt ist und
+// weder die fragende Person (der Platzhalter) noch die Besitzerin der
+// Liste ein Gast ist (haushalt.go).
+var geteiltFuer = `(p.shared = 1 AND NOT EXISTS (SELECT 1 FROM setting
+	  WHERE key IN ('gast:' || ?, 'gast:' || p.account_id)))`
+
 func (s *Store) Listen(ctx context.Context, ich string) ([]Liste, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+listeCols+` FROM playlist p JOIN account a ON a.id = p.account_id
-		  WHERE p.account_id = ? OR p.shared = 1`, ich)
+		  WHERE p.account_id = ? OR `+geteiltFuer+``, ich, ich)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +102,7 @@ func (s *Store) Listen(ctx context.Context, ich string) ([]Liste, error) {
 func (s *Store) Liste(ctx context.Context, ich, id string) (*Liste, error) {
 	l, err := scanListe(s.db.QueryRowContext(ctx,
 		`SELECT `+listeCols+` FROM playlist p JOIN account a ON a.id = p.account_id
-		  WHERE p.id = ? AND (p.account_id = ? OR p.shared = 1)`, id, ich), ich)
+		  WHERE p.id = ? AND (p.account_id = ? OR `+geteiltFuer+`)`, id, ich, ich), ich)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -133,7 +139,7 @@ func (s *Store) ListeAnlegen(ctx context.Context, ich, name string) (*Liste, err
 	id := newID("pl")
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO playlist (id, account_id, name, shared, collaborative, created_at)
-		 VALUES (?, ?, ?, 0, 0, ?)`, id, ich, name, time.Now().Unix()); err != nil {
+		 VALUES (?, ?, ?, 0, 0, ?)`, id, ich, name, heute()); err != nil { // nur der Tag
 		return nil, err
 	}
 	return s.Liste(ctx, ich, id)
@@ -295,7 +301,7 @@ func (s *Store) ListeOrdnen(ctx context.Context, ich, id string, itemIDs []strin
 func (s *Store) ListenMitTitel(ctx context.Context, ich, itemID string) (map[string]bool, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT p.id FROM playlist p JOIN playlist_item pi ON pi.playlist_id = p.id
-		  WHERE pi.item_id = ? AND (p.account_id = ? OR p.shared = 1)`, itemID, ich)
+		  WHERE pi.item_id = ? AND (p.account_id = ? OR `+geteiltFuer+`)`, itemID, ich, ich)
 	if err != nil {
 		return nil, err
 	}

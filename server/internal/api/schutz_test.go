@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"lumen/internal/store"
 	"lumen/internal/stream"
@@ -60,7 +61,7 @@ func TestPinZuruecksetzen(t *testing.T) {
 		t.Fatalf("ohne Bestätigung: %d", resp.StatusCode)
 	}
 	h.ohneBestaetigung = false
-	if resp, raw := h.do("PUT", "/api/v1/admin/accounts/"+lea.ID+"/sperre", `{"art":"pin","neu":"4321"}`, h.tok); resp.StatusCode != 204 {
+	if resp, raw := h.do("PUT", "/api/v1/admin/accounts/"+lea.ID+"/sperre", `{"art":"pin","neu":"4321"}`, h.tok); resp.StatusCode != 200 {
 		t.Fatalf("zurücksetzen: %d %s", resp.StatusCode, raw)
 	}
 	if h.st.CheckSecret(ctx, lea.ID, "4321") != nil {
@@ -383,9 +384,16 @@ func TestPinZuruecksetzenVergisstVerlauf(t *testing.T) {
 	// Eine laufende Wiedergabe von Lea.
 	h.live.Start(&stream.Session{AccountID: lea.ID, DeviceName: "iPad", FileID: "f", Mode: "direct"})
 
-	if resp, raw := h.do("PUT", "/api/v1/admin/accounts/"+lea.ID+"/sperre", `{"art":"pin","neu":"4321"}`, h.tok); resp.StatusCode != 204 {
+	beendenVerzug = func() time.Duration { return 0 }
+	defer func() { beendenVerzug = func() time.Duration { return 20 * time.Second } }()
+	// Die Verwaltung wählt keine PIN: Lumen vergibt einen Einmal-Code.
+	resp, raw := h.do("PUT", "/api/v1/admin/accounts/"+lea.ID+"/sperre", `{"art":"pin"}`, h.tok)
+	var zurueck struct{ EinmalCode string }
+	_ = json.Unmarshal(raw, &zurueck)
+	if resp.StatusCode != 200 || len(zurueck.EinmalCode) != 6 {
 		t.Fatalf("zurücksetzen: %d %s", resp.StatusCode, raw)
 	}
+	ausschreibenWG.Wait()
 
 	// Das alte Token gilt nicht mehr.
 	if resp, _ := h.do("GET", "/api/v1/me", "", ltok); resp.StatusCode != 401 {
@@ -426,10 +434,26 @@ func TestPinZuruecksetzenVergisstVerlauf(t *testing.T) {
 		t.Fatal("Mias Fortschritt ist weg")
 	}
 
-	// Beim nächsten Anmelden: Hinweis in der Antwort und als Neuigkeit.
-	resp, raw := h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":"4321"}`, lea.ID), "")
+	// Mit dem Einmal-Code allein gibt es keine Anmeldung — erst die eigene
+	// PIN. Wer den Code kennt (die Verwaltung), kommt so nie an ein
+	// Token, ohne dass die Person es merkt, und der Hinweis bleibt für sie.
+	code := zurueck.EinmalCode
+	resp, raw = h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":%q}`, lea.ID, code), "")
+	if resp.StatusCode != 409 || !strings.Contains(string(raw), `"neue_pin_noetig"`) || strings.Contains(string(raw), "token") {
+		t.Fatalf("Einmal-Code ohne neue PIN: %d %s", resp.StatusCode, raw)
+	}
+	// Der Einmal-Code als neue PIN: nein.
+	if resp, raw := h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":%q,"neu":%q}`, lea.ID, code, code), ""); resp.StatusCode != 409 {
+		t.Fatalf("Einmal-Code als eigene PIN: %d %s", resp.StatusCode, raw)
+	}
+	// Beim Festlegen: Hinweis in der Antwort und als Neuigkeit.
+	resp, raw = h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":%q,"neu":"9753"}`, lea.ID, code), "")
 	if resp.StatusCode != 200 || !strings.Contains(string(raw), `"pin_zurueckgesetzt"`) {
 		t.Fatalf("Hinweis beim Anmelden: %d %s", resp.StatusCode, raw)
+	}
+	// Der Einmal-Code gilt nicht mehr.
+	if resp, _ := h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":%q}`, lea.ID, code), ""); resp.StatusCode != 401 {
+		t.Fatalf("Einmal-Code gilt noch: %d", resp.StatusCode)
 	}
 	var out struct{ Token string }
 	_ = json.Unmarshal(raw, &out)
@@ -443,8 +467,8 @@ func TestPinZuruecksetzenVergisstVerlauf(t *testing.T) {
 	if strings.Contains(string(raw), "Verwaltung zurückgesetzt") {
 		t.Fatalf("Hinweis bleibt: %s", raw)
 	}
-	_, raw = h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":"4321"}`, lea.ID), "")
-	if strings.Contains(string(raw), "pin_zurueckgesetzt") {
+	_, raw = h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":"9753"}`, lea.ID), "")
+	if strings.Contains(string(raw), "pin_zurueckgesetzt") || !strings.Contains(string(raw), "token") {
 		t.Fatalf("Hinweis zweimal: %s", raw)
 	}
 }
@@ -504,5 +528,34 @@ func TestPinAendernTeiltBremse(t *testing.T) {
 	resp, _ := h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":"1234"}`, lea.ID), "")
 	if resp.StatusCode != 429 {
 		t.Fatalf("Anmelden ungebremst nach Rateversuchen beim Ändern: %d", resp.StatusCode)
+	}
+}
+
+// Wer zu Hause ausgesperrt ist, kommt mit einem X-Forwarded-For-Kopf
+// nicht in einen frischen Zähler (Sicherheitsbericht N-1).
+func TestBremseOhneUmwegUeberKopf(t *testing.T) {
+	h := newHarness(t)
+	lea, _ := h.st.CreateAccount(t.Context(), store.NewAccount{Name: "Lea", LockKind: "pin", Secret: "1234"})
+	versuch := func(geheim string, kopf bool) int {
+		req, _ := http.NewRequest("POST", h.srv.URL+"/api/v1/unlock",
+			strings.NewReader(fmt.Sprintf(`{"profileId":%q,"name":"Lea","secret":%q}`, lea.ID, geheim)))
+		if kopf {
+			req.Header.Set("X-Forwarded-For", "8.8.8.8")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	for i := 0; i < 4; i++ {
+		versuch("0000", false)
+	}
+	if c := versuch("1234", false); c != 429 {
+		t.Fatalf("zu Hause nicht gebremst: %d", c)
+	}
+	if c := versuch("1234", true); c != 429 {
+		t.Fatalf("mit X-Forwarded-For an der Bremse vorbei: %d", c)
 	}
 }

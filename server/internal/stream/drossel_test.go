@@ -18,7 +18,7 @@ import (
 // mehreren gleichzeitigen Anfragen derselben Wiedergabe.
 func TestDrosselHaeltRate(t *testing.T) {
 	d := NeueDrossel(8_000_000) // 2 × 8 Mbit/s = 2 MB/s, Anlauf 60 MB
-	d.vorrat = 0                // Anlauf aufgebraucht
+	d.vorrat = 0                // Anlauf aufgebraucht (in Sekunden Film)
 	start := time.Now()
 	var wg sync.WaitGroup
 	for i := 0; i < 4; i++ {
@@ -56,5 +56,24 @@ func TestDrosselAnlauf(t *testing.T) {
 	defer cancel()
 	if err := d.Nehmen(ctx, 100<<20); err == nil {
 		t.Fatal("Warten nicht abgebrochen")
+	}
+}
+
+// Zwei Geräte mit demselben Namen („Chrome · Linux") sind zwei Geräte:
+// Sie verdrängen sich nicht mehr gegenseitig. Dieselbe Anmeldung ersetzt
+// ihre eigene Wiedergabe weiterhin.
+func TestGleicherNameIstNichtGleichesGeraet(t *testing.T) {
+	l := NewLive()
+	a, _ := l.Beitreten(&Session{AccountID: "k", DeviceName: "Chrome · Linux", Geraet: "t:1", FileID: "f1", Mode: "direct"}, 5)
+	b, _ := l.Beitreten(&Session{AccountID: "k", DeviceName: "Chrome · Linux", Geraet: "t:2", FileID: "f2", Mode: "direct"}, 5)
+	if a == nil || b == nil || !l.Laeuft(a.ID) || !l.Laeuft(b.ID) {
+		t.Fatal("ein Gerät hat das andere verdrängt")
+	}
+	l.ReplaceFor("k", "t:2")
+	if !l.Laeuft(a.ID) || l.Laeuft(b.ID) {
+		t.Fatal("ReplaceFor traf das falsche Gerät")
+	}
+	if l.Grund(b.ID) != GrundErsetzt {
+		t.Fatalf("Grund: %q", l.Grund(b.ID))
 	}
 }

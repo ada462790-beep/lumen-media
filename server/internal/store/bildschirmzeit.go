@@ -38,6 +38,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -269,6 +270,65 @@ func (b Bildschirmzeit) Pruefen(jetzt time.Time, genutzt time.Duration, geschenk
 	return u
 }
 
+// PruefenMit wie Pruefen, dazu eine Verlängerung des Fensters für heute:
+// Bis verlaengertBis (Nullzeit: keine) gilt das Fenster als offen, auch
+// ausserhalb der Regel — „heute einmalig 30 Min. mehr" um 22:15, wenn das
+// Fenster um 19:30 zu ging. Die Tagesgrenze gilt weiter (samt
+// Geschenktem).
+func (b Bildschirmzeit) PruefenMit(jetzt time.Time, genutzt time.Duration, geschenkt int, verlaengertBis time.Time) Urteil {
+	u := b.Pruefen(jetzt, genutzt, geschenkt)
+	if verlaengertBis.IsZero() || !jetzt.Before(verlaengertBis) || !b.Wirksam() {
+		return u
+	}
+	if u.Erlaubt {
+		// Schon offen: Die Verlängerung kann das Ende hinausschieben.
+		if u.Rest >= 0 && verlaengertBis.Sub(jetzt) > u.Rest {
+			r := verlaengertBis.Sub(jetzt)
+			if u.Budget > 0 && u.Budget-genutzt < r {
+				r = u.Budget - genutzt
+			}
+			u.Rest = r
+		}
+		return u
+	}
+	if u.Grund != "fenster" {
+		return u // Tagesgrenze erreicht: die gilt
+	}
+	r := verlaengertBis.Sub(jetzt)
+	if u.Budget > 0 {
+		if genutzt >= u.Budget {
+			return u
+		}
+		if u.Budget-genutzt < r {
+			r = u.Budget - genutzt
+		}
+	}
+	return Urteil{Erlaubt: true, Rest: r, Budget: u.Budget}
+}
+
+// FensterEnde: wann das Fenster des Schautags von t endet (Nullzeit: kein
+// Fenster, der ganze Tag ist frei).
+func (b Bildschirmzeit) FensterEnde(t time.Time) time.Time {
+	tag := b.SchautagBeginn(t)
+	r := b.Regel(tag)
+	if r.Von == "" {
+		return time.Time{}
+	}
+	if e := b.nachtfensterEnde(tag); !e.IsZero() {
+		return e
+	}
+	bis, _ := uhrzeit(r.Bis, true)
+	return tagUm(tag, bis)
+}
+
+// NachtfensterVorbei: Heute nach Mitternacht ist ein Fenster des Vortags
+// (über Mitternacht) schon zu Ende gegangen — für die Texte: Dann ist es
+// keine „Pause", sondern Schluss bis zum nächsten Fenster.
+func (b Bildschirmzeit) NachtfensterVorbei(t time.Time) bool {
+	e := b.nachtfensterEnde(mitternacht(t).AddDate(0, 0, -1))
+	return !e.IsZero() && !t.Before(e)
+}
+
 // budget: die Tagesgrenze des Schautags, der um tag (Mitternacht) beginnt.
 func (b Bildschirmzeit) budget(tag time.Time, geschenkt int) time.Duration {
 	r := b.Regel(tag)
@@ -442,6 +502,41 @@ func (s *Store) BildschirmzeitSchenken(ctx context.Context, accountID, tag strin
 		return err
 	})
 	return neu, err
+}
+
+// Verlängerung des Fensters für heute: als Einstellung
+// „bz.verlaengert:<konto>" = „<schautag> <unix-ende>". Eine Handlung der
+// Verwaltung, nichts über das Schauen; sie gilt nur am selben Schautag.
+
+// BildschirmzeitVerlaengerung: bis wann das Fenster am Schautag tag
+// verlängert ist (Nullzeit: nicht).
+func (s *Store) BildschirmzeitVerlaengerung(ctx context.Context, accountID, tag string) time.Time {
+	v := s.Setting(ctx, "bz.verlaengert:"+accountID, "")
+	t, rest, ok := strings.Cut(v, " ")
+	if !ok || t != tag {
+		return time.Time{}
+	}
+	n, err := strconv.ParseInt(rest, 10, 64)
+	if err != nil {
+		return time.Time{}
+	}
+	return time.Unix(n, 0)
+}
+
+// BildschirmzeitVerlaengern setzt das Ende der Verlängerung für heute.
+func (s *Store) BildschirmzeitVerlaengern(ctx context.Context, accountID, tag string, bis time.Time) error {
+	return s.SetSetting(ctx, "bz.verlaengert:"+accountID, tag+" "+strconv.FormatInt(bis.Unix(), 10))
+}
+
+// BildschirmzeitGeschenkZurueck nimmt alles zurück, was heute dazugegeben
+// wurde: die Minuten und die Verlängerung des Fensters.
+func (s *Store) BildschirmzeitGeschenkZurueck(ctx context.Context, accountID, tag string) error {
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE bildschirmzeit_tag SET geschenkt = 0 WHERE account_id = ? AND tag = ?`, accountID, tag); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM setting WHERE key = ?`, "bz.verlaengert:"+accountID)
+	return err
 }
 
 // BildschirmzeitAufraeumen löscht die Zahlen aller Profile, die älter als

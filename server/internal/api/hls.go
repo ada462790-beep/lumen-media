@@ -99,7 +99,7 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 			hlsStartMu.Unlock()
 		}
 	}()
-	s.live.ReplaceFor(acc.ID, dev.Name)
+	s.live.ReplaceFor(acc.ID, geraetKennung(dev))
 	if n := s.live.CountFor(acc.ID); n >= lim.MaxStreams {
 		failW(w, http.StatusTooManyRequests,
 			"du schaust schon auf {n} Geräten — in spätestens 2 Minuten ist wieder ein Platz frei, "+
@@ -114,11 +114,11 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 	}
 	sess := s.live.Start(&stream.Session{
 		AccountID: acc.ID, Name: acc.Name, Avatar: acc.Avatar,
-		DeviceName: dev.Name, DeviceKind: dev.Kind, FileID: f.ID,
+		DeviceName: dev.Name, DeviceKind: dev.Kind, Geraet: geraetKennung(dev), FileID: f.ID,
 		Mode: mode, Reason: reason, Bitrate: plan.Bitrate,
 		FromCodec: f.VideoCodec, ToCodec: zielCodec(plan, f),
 		FromHeight: f.Height, ToHeight: zielHoehe(plan, f),
-		Drossel: drosselFuer(lim, f),
+		Drossel: s.drosselFuer(r, lim, f, &plan),
 	})
 	hlsStartMu.Unlock()
 	gesperrt = false
@@ -280,7 +280,17 @@ func (s *Server) hlsSegment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=600")
 	// Ohne „Herunterladen" mit der Drossel der Wiedergabe (drosselFuer);
 	// sonst direkt — dann darf der Kern die Datei per sendfile schicken.
-	if d := s.live.DrosselVon(sid); d != nil {
+	// Ein Kinderprofil mit Bildschirmzeit bucht das Segment mit seiner
+	// Länge: Schneller als ungefähr in Echtzeit gibt es keine Segmente,
+	// und jedes zählt als Bildschirmzeit.
+	if d := s.live.DrosselVon(sid); d.Kinder() {
+		if err := d.Sekunden(ctx, segmentLaenge(j, idx)); err != nil {
+			return
+		}
+		http.ServeContent(&stoppableWriter{ResponseWriter: w, ctx: ctx},
+			r.WithContext(ctx), name, info.ModTime(), fh)
+		return
+	} else if d != nil {
 		http.ServeContent(&stoppableWriter{ResponseWriter: w, ctx: ctx, drossel: d},
 			r.WithContext(ctx), name, info.ModTime(), fh)
 		return
@@ -366,3 +376,17 @@ func (s *Server) maxUmwandlungen() int {
 
 // hlsStartMu schützt den Schritt „Grenzen prüfen, Wiedergabe anmelden".
 var hlsStartMu sync.Mutex
+
+// segmentLaenge: wie viele Sekunden Film Segment idx trägt.
+func segmentLaenge(j stream.Job, idx int) float64 {
+	g := j.SegmentGrenzen()
+	if idx >= 0 && idx+1 < len(g) {
+		return g[idx+1] - g[idx]
+	}
+	if idx >= 0 && idx < len(g) && j.DurationMS > 0 {
+		if rest := float64(j.DurationMS)/1000 - g[idx]; rest > 0 {
+			return rest
+		}
+	}
+	return stream.SegmentSeconds
+}

@@ -508,19 +508,28 @@ Tagesgrenze für Schultage (Montag bis Freitag) und das Wochenende — etwa
 Zeit nach Mitternacht zählt dann noch zum Vortag, mit dessen Tagesgrenze —
 um Mitternacht gibt es kein zweites Budget. Die Verwaltung sieht ungefähr,
 wie viel heute genutzt ist, in Viertelstunden abgerundet („heute genutzt:
-ungefähr 45 von 90 Min."), und kann mit einem Klick „heute einmalig 30 Min.
-mehr" geben. Genauer nicht: Wer die Liste immer wieder lädt, soll nicht
-ablesen können, in welcher Minute ein Kind zu schauen beginnt oder aufhört.
+ungefähr 45 von 90 Min."), und das als älteren Stand: Die Zahl erneuert
+sich erst eine Weile, nachdem das Kind aufgehört hat (oder spätestens nach
+einer Stunde). Wer die Liste immer wieder lädt, soll nicht ablesen können,
+wann ein Kind zu schauen beginnt oder aufhört. Mit „heute einmalig mehr"
+(15, 30 oder 60 Min., mit „Rückgängig") wächst die Tagesgrenze und das
+Zeitfenster — ist es schon zu, ab jetzt. Die Verwaltung gibt es nur am
+Computer, nicht auf Handy und Tablet.
 
 - Durchgesetzt wird auf dem Server, nicht in den Apps: Ausserhalb der Zeit
   beginnt keine Wiedergabe und kein Download (HTTP 403, Code
   `bildschirmzeit`, mit einem Satz wie „Für heute ist Schluss — morgen ab
-  07:00 geht es weiter."). Läuft gerade etwas, endet es nach einer Minute
-  Nachfrist; Browser, iPhone, Apple TV und Android zeigen dann die Meldung.
+  07:00 geht es weiter."). Läuft gerade etwas, endet es nach ein bis zwei
+  Minuten Nachfrist; Browser, iPhone, Apple TV und Android zeigen dann die Meldung.
 - Gezählt wird nur Video, solange es wirklich läuft, auf die Sekunde: von
   Meldung zu Meldung der Geräte (eine Pause zählt nicht, nach dem Anhalten
   läuft nichts nach). Zwei Geräte gleichzeitig zählen einmal —
   Bildschirmzeit ist Uhrzeit, nicht die Summe der Geräte.
+- Schneller als ungefähr in Echtzeit gibt es für ein Kinderprofil mit
+  Bildschirmzeit keinen Film: Direktstrom, Browser-Strom und HLS-Segmente
+  kommen höchstens 1,25-fach so schnell, wie sie laufen (20 Sekunden
+  Anlauf). Holt ein Programm trotzdem schneller, als die Uhr läuft, zählt
+  die ausgelieferte Filmzeit statt der Uhrzeit.
 - Es gilt die Uhr des Servers (Zeitzone aus `TZ`); um Mitternacht beginnt
   ein neuer Tag, ausser mitten in einem Fenster über Mitternacht. Die Uhr
   eines Geräts zählt nie. Lässt sich die Regel nicht lesen, bleibt das
@@ -751,7 +760,12 @@ das Volume ist unberührt.
 ### PIN vergessen
 
 Hat ein Profil seinen PIN vergessen, setzt die Verwaltung ihn in der App
-zurück (*Verwaltung › Konten*). Hat der Besitzer seinen eigenen PIN oder
+zurück (*Verwaltung › Konten*). Lumen zeigt dann einmal einen Einmal-Code
+mit sechs Ziffern. Mit ihm meldet sich die Person an und legt dabei ihre
+eigene PIN fest — die Verwaltung kennt sie danach nicht. Erst dann sagt
+Lumen der Person, dass ihre PIN zurückgesetzt und ihr Verlauf gelöscht
+wurde.
+Hat der Besitzer seinen eigenen PIN oder
 den PIN der Verwaltungssperre vergessen, geht das **nur auf dem Server
 selbst** — mit Absicht, sonst könnte es jeder im Heimnetz. Auf einem
 Synology geht es auch **ohne SSH**, über den Aufgabenplaner (wie beim
@@ -786,7 +800,8 @@ zusätzlich den Verwaltungs-PIN auf. Ohne Docker:
 
 Beim Besitzer bleibt alles erhalten; alle seine Geräte werden abgemeldet.
 Setzt man so das Profil von jemand anderem zurück, werden dessen Verlauf,
-Merkliste und Bewertungen gelöscht — genau wie in der App.
+Merkliste und Bewertungen gelöscht — genau wie in der App —, und der
+gesetzte PIN gilt nur als Einmal-Code.
 
 ---
 
@@ -949,13 +964,14 @@ Das ist kein Abschnitt in den Einstellungen, sondern die Bauweise:
 | Keine Abfrage über mehrere Profile hinweg | Ein Test liest den Quelltext und verlangt, dass jede Abfrage auf Fortschritt, Bewertungen und Merkliste genau ein Konto nennt |
 | „Wer schaut am meisten" ist nicht beantwortbar | Ein Test verbietet `count`, `sum` und `GROUP BY` auf diesen Tabellen |
 | Es gibt keinen Wiedergabe-Verlauf | Ein Test verbietet die entsprechenden Tabellen im Schema |
-| Der Besitzer sieht nur die Last — nicht Titel, Person, Gerät, Ort oder Startzeit | Was er zu sehen bekommt, ist eine eigene Struktur; ein Test lässt genau deren fünf Felder zu und keines mehr |
+| Der Besitzer sieht nur die Last — nicht Titel, Person, Gerät, Ort oder Startzeit | Was er zu sehen bekommt, ist eine eigene Struktur mit zwei Feldern (Einmalkennung, direkt oder umgewandelt); ein Test lässt genau diese zu und keines mehr |
 | Auch im Betrieb nicht | Ein Test spielt wirklich einen Film ab und durchsucht die Antwort an den Besitzer nach Titel, Pfad, Kennung, Person und Gerät |
 | Keine Spuren auf der Platte | Ein Test spielt einen Film samt Untertiteln ab und prüft jede neu entstandene Datei: kein Name darf auf den Film zeigen |
 | Keine Uhrzeiten, die mit Schauen zusammenhängen | Der Fortschritt trägt eine laufende Nummer statt einer Uhrzeit; Geräte merken sich nur den Tag |
 | Das Protokoll ist kein Verlauf | Beim Abspielen steht dort nur „Umwandlung gestartet" und der technische Grund — kein Gerät, keine Person, keine Datei |
-| Bewertungen nur mit Freigabe | Ohne Häkchen taucht nichts im Haushalt auf |
-| Bildschirmzeit ist kein Verlauf | Je Kinderprofil steht nur eine Zahl für heute in der Datenbank; ein Test verlangt, dass jede Abfrage darauf genau ein Konto nennt, und gestern wird beim Zählen gelöscht; die Verwaltung sieht die Minuten nur in Viertelstunden, ein Test pollt Minute für Minute und darf keine Änderung dazwischen sehen |
+| Bewertungen nur mit Freigabe | Nur mit „Bewertungen im Haushalt zeigen" taucht etwas im Haushalt auf; ausschalten nimmt auch die bisherigen zurück; Gäste (von unterwegs eingeladen) sehen nichts davon |
+| Zurücksetzen heisst vergessen | Nach „PIN zurücksetzen" ist der private Stand auch aus der WAL-Datei und den beiden Sicherungen gelöscht; die Verwaltung vergibt nur einen Einmal-Code, die neue PIN legt die Person selbst fest |
+| Bildschirmzeit ist kein Verlauf | Je Kinderprofil steht nur eine Zahl für heute in der Datenbank; ein Test verlangt, dass jede Abfrage darauf genau ein Konto nennt, und gestern wird beim Zählen gelöscht; die Verwaltung sieht die Minuten nur in Viertelstunden und erst eine Weile, nachdem das Kind aufgehört hat; ein Test zählt während des Schauens weiter und verlangt, dass die Zahl der Verwaltung dabei stehen bleibt |
 
 Wer das ändern will, muss Tests löschen. Das soll man merken.
 

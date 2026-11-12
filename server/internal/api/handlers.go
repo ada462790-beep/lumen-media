@@ -48,6 +48,11 @@ type helloBody struct {
 	License   string `json:"license"`
 	SourceURL string `json:"sourceUrl"`
 
+	// Unterwegs: die Anfrage kommt nicht aus dem Heimnetz. Die Web-App
+	// bietet dann beim Einlösen einer Einladung kein „Ohne Schutz" an —
+	// so ein Profil liesse sich von unterwegs nie öffnen.
+	Unterwegs bool `json:"unterwegs,omitempty"`
+
 	// Sprache des Servers und die Auswahl — schon vor der Anmeldung, damit
 	// Profilwahl und Einrichtung in der richtigen Sprache erscheinen.
 	Sprache  string            `json:"sprache"`
@@ -67,6 +72,8 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 
 		Sprache:  s.serverSprache(r.Context()),
 		Sprachen: sprachAuswahl(),
+
+		Unterwegs: vonAussen(r),
 	})
 }
 
@@ -160,6 +167,10 @@ func (s *Server) unlock(w http.ResponseWriter, r *http.Request) {
 		Secret     string `json:"secret"`
 		DeviceName string `json:"deviceName"`
 		DeviceKind string `json:"deviceKind"`
+		// Nach einem Zurücksetzen durch die Verwaltung: der eigene neue
+		// Schutz, gleich beim ersten Anmelden mit dem Einmal-Code.
+		Neu    string `json:"neu"`
+		NeuArt string `json:"neuArt"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -176,14 +187,8 @@ func (s *Server) unlock(w http.ResponseWriter, r *http.Request) {
 	if id == "" && in.Name != "" {
 		id = s.profilZuName(r.Context(), in.Name)
 	}
-	// Gebremst wird je Profil — und zu Hause zusätzlich je Absender. Von
-	// unterwegs kommen alle über denselben Weg; eine Bremse je Absender
-	// träfe dort jeden, und ein Fremder könnte mit ein paar falschen
-	// Versuchen alle anderen aussperren.
-	//
-	// Die Zähler für zu Hause und unterwegs sind getrennt: Wer von aussen
-	// den PIN von „Alex" errät, sperrt damit nur die Anmeldung von
-	// unterwegs — nicht die Profilauswahl im Wohnzimmer.
+	// Gebremst wird je Profil, egal woher (profilBremse), und zusätzlich
+	// je Absender nach der echten Adresse der Verbindung.
 	schluessel := s.profilBremse(r, id, in.Name)
 	frei, warte := s.bremse.anfangen(schluessel...)
 	if !frei {
@@ -224,6 +229,30 @@ func (s *Server) unlock(w http.ResponseWriter, r *http.Request) {
 	}
 	erfolg = true
 	in.ProfileID = id
+	// Die Verwaltung hat den Schutz zurückgesetzt: Mit dem Einmal-Code
+	// gibt es erst eine Anmeldung, wenn die Person ihren eigenen Schutz
+	// festlegt. Die Verwaltung kennt ihn danach nicht — und kann sich
+	// nicht mehr als diese Person anmelden.
+	if s.st.NeueSperreNoetig(r.Context(), id) {
+		if in.Neu == "" {
+			failCode(w, http.StatusConflict, "neue_pin_noetig",
+				"Deine PIN wurde zurückgesetzt. Lege jetzt deine eigene PIN fest – nur du kennst sie.")
+			return
+		}
+		if in.Neu == in.Secret {
+			failCode(w, http.StatusConflict, "neue_pin_noetig",
+				"Wähle eine andere PIN als den Einmal-Code.")
+			return
+		}
+		art := in.NeuArt
+		if art == "" {
+			art = "pin"
+		}
+		if err := s.st.EigeneSperreNachZuruecksetzen(r.Context(), id, art, in.Neu); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
 	tok, err := s.st.IssueToken(r.Context(), in.ProfileID,
 		kuerzen(orElse(in.DeviceName, tr(w, "Gerät")), 60), kuerzen(orElse(in.DeviceKind, "browser"), 20))
 	if err != nil {
@@ -235,7 +264,7 @@ func (s *Server) unlock(w http.ResponseWriter, r *http.Request) {
 	// Hat die Verwaltung den PIN zurückgesetzt, sagt Lumen das beim
 	// nächsten Anmelden — einmal hier (die Web-App zeigt es sofort) und
 	// als Neuigkeit, bis sie gelesen ist (das sehen alle Apps).
-	if _, da := s.pinHinweis(r.Context(), id); da {
+	if _, da := s.pinHinweis(r.Context(), id); da && !s.st.NeueSperreNoetig(r.Context(), id) {
 		antwort["hinweis"] = map[string]string{"code": "pin_zurueckgesetzt", "text": tr(w, pinHinweisText)}
 	}
 	ok(w, antwort)
@@ -254,6 +283,12 @@ func (s *Server) redeemInvite(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
+	// Von unterwegs öffnet sich ein Profil ohne PIN nie — wer so einlöst,
+	// sperrte sich selbst aus.
+	if vonAussen(r) && (in.LockKind == "none" || in.LockKind == "") {
+		fail(w, http.StatusBadRequest, "Von unterwegs braucht dein Profil eine PIN oder ein Passwort – ohne lässt es sich von hier aus nie öffnen.")
+		return
+	}
 	frei, warte := s.bremse.anfangen("einladung:" + quelle(r))
 	if !frei {
 		fail(w, http.StatusTooManyRequests, wartetext(w, warte))
@@ -266,6 +301,12 @@ func (s *Server) redeemInvite(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		failErr(w, err)
 		return
+	}
+	// Von unterwegs eingelöst: ein Gast, nicht der Haushalt — er sieht
+	// keine geteilten Listen und Bewertungen mit Namen (store/haushalt.go).
+	// Die Verwaltung kann das am Konto ändern.
+	if vonAussen(r) {
+		_ = s.st.GastSetzen(r.Context(), acc.ID, true)
 	}
 	tok, err := s.st.IssueToken(r.Context(), acc.ID,
 		kuerzen(orElse(in.DeviceName, tr(w, "Neues Gerät")), 60), kuerzen(orElse(in.DeviceKind, "browser"), 20))
@@ -351,6 +392,14 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// „Bewertungen im Haushalt zeigen" aus: auch die bisher geteilten
+	// gehen zurück — nicht nur die künftigen.
+	if v, da := in.Prefs["shareRatings"]; da && v != "1" {
+		if err := s.st.BewertungenNichtMehrTeilen(r.Context(), acc.ID); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
 	if v, da := in.Prefs[prefSprache]; da {
 		s.merkeProfilSprache(acc.ID, v)
 		// Die Antwort kommt schon in der neuen Sprache.
@@ -410,6 +459,8 @@ func (s *Server) clearAllProgress(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Auch aus der WAL-Datei (store.Ausschreiben).
+	s.privatesAusschreiben("")
 	ok(w, map[string]string{"status": "verlauf gelöscht"}) // sprache: fest – eine Kennung
 }
 
@@ -756,7 +807,7 @@ func (s *Server) item(w http.ResponseWriter, r *http.Request) {
 		files[i].Path = pfadFuer(accountOf(r), files[i].Path)
 	}
 	s.mitSpuren(r.Context(), files)
-	shared, _ := s.st.SharedRatings(r.Context(), it.ID)
+	shared, _ := s.st.SharedRatings(r.Context(), accountOf(r).ID, it.ID)
 
 	body := map[string]any{"item": out[0], "files": files, "sharedRatings": shared}
 	if l := s.links(r.Context(), it); len(l) > 0 {
@@ -848,12 +899,71 @@ func (s *Server) itemChildren(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Eine Folge kann eine strengere Freigabe haben als ihre Serie. Sie
+	// bleibt dann auch in der Liste verborgen, nicht erst beim Abspielen —
+	// sonst stünde sie samt Titel und Freigabe da und führte ins Leere.
+	if kids, err = s.nurSichtbare(r, kids); err != nil {
+		failErr(w, err)
+		return
+	}
 	out, err := s.decorate(r, kids)
 	if err != nil {
 		failErr(w, err)
 		return
 	}
 	ok(w, out)
+}
+
+// nurSichtbare filtert Staffeln und Folgen mit denselben Rechten wie die
+// Mediathek (Bibliothek, Altersgrenze über die ganze Kette). Ohne
+// Altersgrenze bleibt die Liste, wie sie ist.
+func (s *Server) nurSichtbare(r *http.Request, items []store.Item) ([]store.Item, error) {
+	if len(items) == 0 {
+		return items, nil
+	}
+	alle := make([]string, len(items))
+	arten := map[string]bool{}
+	for i, it := range items {
+		alle[i] = it.ID
+		arten[it.Kind] = true
+	}
+	kinds := make([]string, 0, len(arten))
+	for k := range arten {
+		kinds = append(kinds, k)
+	}
+	ids, err := s.sichtbareIDs(r, alle, kinds)
+	if err != nil || ids == nil {
+		return items, err
+	}
+	out := items[:0:0]
+	for _, it := range items {
+		if ids[it.ID] {
+			out = append(out, it)
+		}
+	}
+	return out, nil
+}
+
+// sichtbareIDs: welche dieser Titel das Konto sehen darf. nil heisst:
+// alle (keine Altersgrenze).
+func (s *Server) sichtbareIDs(r *http.Request, alle, kinds []string) (map[string]bool, error) {
+	q, err := s.scope(r)
+	if err != nil {
+		return nil, err
+	}
+	if !(q.MaxAge > 0 || q.MitAltersgrenze) || len(alle) == 0 {
+		return nil, nil
+	}
+	q.IDs, q.Kinds, q.Limit = alle, kinds, len(alle)
+	treffer, err := s.st.Query(r.Context(), q)
+	if err != nil {
+		return nil, err
+	}
+	ids := make(map[string]bool, len(treffer))
+	for _, t := range treffer {
+		ids[t.ID] = true
+	}
+	return ids, nil
 }
 
 // visibleItem holt einen Titel und prüft dabei, ob das Konto ihn sehen darf.
@@ -1165,7 +1275,24 @@ func (s *Server) weiterInSerie(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "nur für serien")
 		return
 	}
-	id, err := s.st.WeiterInSerie(r.Context(), accountOf(r).ID, it.ID)
+	// Nur Folgen, die das Profil sehen darf: Eine Folge ab 16 in einer
+	// Serie ab 6 ist für ein Kind mit 6 nie „die nächste".
+	var sichtbar func(string) bool
+	if folgen, err := s.st.SerienFolgen(r.Context(), []string{it.ID}); err == nil {
+		alle := make([]string, 0, len(folgen[it.ID]))
+		for _, f := range folgen[it.ID] {
+			alle = append(alle, f.ID)
+		}
+		ids, err := s.sichtbareIDs(r, alle, []string{"episode"})
+		if err != nil {
+			failErr(w, err)
+			return
+		}
+		if ids != nil {
+			sichtbar = func(id string) bool { return ids[id] }
+		}
+	}
+	id, err := s.st.WeiterInSerieSichtbar(r.Context(), accountOf(r).ID, it.ID, sichtbar)
 	if err != nil {
 		failErr(w, err)
 		return
@@ -1342,6 +1469,18 @@ func (s *Server) createWish(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminOverview(w http.ResponseWriter, r *http.Request) {
 	libs, _ := s.st.Libraries(r.Context())
+	// Mitverwaltung mit einem Teil der Bibliotheken: nur ihre — fremde
+	// Namen und Ordner gehen sie nichts an (/admin/libraries filtert
+	// ebenso).
+	if darf := s.verwalteteMediatheken(r); darf != nil {
+		sichtbar := libs[:0:0]
+		for _, l := range libs {
+			if darf[l.ID] {
+				sichtbar = append(sichtbar, l)
+			}
+		}
+		libs = sichtbar
+	}
 	accs, _ := s.st.Accounts(r.Context())
 	// Die Übersicht zeigt nur die Zahlen — gezählt wird in der Datenbank,
 	// statt alle Doppel samt Dateien und alle fehlenden Dateien zu laden.
@@ -1580,7 +1719,36 @@ func (s *Server) adminLog(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Mitverwaltung mit einem Teil der Bibliotheken sieht nur Zeilen, die
+	// eine ihrer Bibliotheken nennen — Durchläufe und Namen fremder
+	// Bibliotheken, Verwaltungsschritte anderer gehen sie nichts an.
+	if darf := s.verwalteteMediatheken(r); darf != nil {
+		libs, _ := s.st.Libraries(r.Context())
+		var namen []string
+		for _, l := range libs {
+			if darf[l.ID] && strings.TrimSpace(l.Name) != "" {
+				namen = append(namen, l.Name)
+			}
+		}
+		gefiltert := lines[:0:0]
+		for _, z := range lines {
+			for _, n := range namen {
+				if strings.Contains(z.Message, n) {
+					gefiltert = append(gefiltert, z)
+					break
+				}
+			}
+		}
+		lines = gefiltert
+	}
 	ok(w, lines)
+}
+
+// verwaltetKonto: ob das fragende Konto dieses Konto verwaltet — mit
+// Besitzerrechten jedes ausser dem Besitzer, sonst Konten ohne Verwaltung
+// ganz innerhalb der eigenen Bibliotheken (wie mitverwalterDarf).
+func (s *Server) verwaltetKonto(r *http.Request, id string) bool {
+	return s.mitverwalterDarf(r, id, nil) == nil
 }
 
 func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
@@ -1722,13 +1890,33 @@ func (s *Server) adminAccounts(w http.ResponseWriter, r *http.Request) {
 		Devices   int          `json:"devices"`
 		// Nur bei Kinderprofilen: Regel und heute verbrauchte Minuten.
 		Bildschirmzeit *bzVerwaltung `json:"bildschirmzeit,omitempty"`
+		// Verwaltbar: ob das fragende Konto dieses ändern darf (Grenzen,
+		// PIN, Bildschirmzeit) — ein Mitverwalter nur Konten ohne
+		// Verwaltung ganz innerhalb seiner Bibliotheken (mitverwalterDarf).
+		Verwaltbar bool `json:"verwaltbar"`
+		// Gast: gehört nicht zum Haushalt (store/haushalt.go).
+		Gast bool `json:"gast,omitempty"`
+	}
+	ich := accountOf(r)
+	eigene, err := s.eigeneBibliotheken(r)
+	if err != nil {
+		failErr(w, err)
+		return
 	}
 	out := make([]entry, 0, len(accs))
 	for _, a := range accs {
 		lim, _ := s.st.Limits(r.Context(), a.ID)
 		libs, _ := s.st.GrantedLibraries(r.Context(), a.ID)
 		devs, _ := s.st.Devices(r.Context(), a.ID)
-		out = append(out, entry{a, lim, libs, len(devs), s.bildschirmzeitVerwaltung(r.Context(), &a)})
+		darf := !a.IsOwner && a.ID != ich.ID
+		if darf && !ich.Besitzerrechte() {
+			darf = !a.IsAdmin
+			for _, l := range libs {
+				darf = darf && eigene[l]
+			}
+		}
+		out = append(out, entry{a, lim, libs, len(devs), s.bildschirmzeitVerwaltung(r.Context(), &a), darf,
+			s.st.IstGast(r.Context(), a.ID)})
 	}
 	ok(w, out)
 }
@@ -1740,6 +1928,8 @@ func (s *Server) adminSetLimits(w http.ResponseWriter, r *http.Request) {
 		// Kinderprofil: optional, macht ein Konto zum Kinderprofil oder
 		// nimmt es zurück. Fehlt es, bleibt es, wie es ist.
 		Kinderprofil *bool `json:"kinderprofil"`
+		// Gast: gehört nicht zum Haushalt (optional, store/haushalt.go).
+		Gast *bool `json:"gast"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -1761,6 +1951,26 @@ func (s *Server) adminSetLimits(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		failErr(w, err)
 		return
+	}
+	// Mitverwalter (ohne Besitzerrechte) ändern weder den Kinderschutz
+	// noch die Altersgrenze eines Erwachsenen — das wäre ein Weg, jemanden
+	// aus dem Haushalt auszusperren oder ein Kind freizuschalten.
+	if !accountOf(r).Besitzerrechte() {
+		if in.Kinderprofil != nil && *in.Kinderprofil != ziel.IsKid {
+			fail(w, http.StatusForbidden, "Den Kinderschutz eines Profils ändert der Besitzer.")
+			return
+		}
+		if !ziel.IsKid {
+			alt, err := s.st.Limits(r.Context(), ziel.ID)
+			if err != nil {
+				failErr(w, err)
+				return
+			}
+			if alt.MaxAge != in.Limits.MaxAge || alt.AllowUnrated != in.Limits.AllowUnrated {
+				fail(w, http.StatusForbidden, "Die Altersgrenze eines Erwachsenen ändert der Besitzer.")
+				return
+			}
+		}
 	}
 	kind := ziel.IsKid
 	if in.Kinderprofil != nil {
@@ -1787,6 +1997,12 @@ func (s *Server) adminSetLimits(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Libraries != nil {
 		if err := s.st.SetGrants(r.Context(), r.PathValue("id"), in.Libraries); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	if in.Gast != nil {
+		if err := s.st.GastSetzen(r.Context(), ziel.ID, *in.Gast); err != nil {
 			failErr(w, err)
 			return
 		}
@@ -1883,6 +2099,14 @@ func (s *Server) adminSetWishState(w http.ResponseWriter, r *http.Request) {
 	}
 	if !readJSON(w, r, &in) {
 		return
+	}
+	// Mitverwaltung: nur Wünsche aus dem eigenen Bereich (adminWishes).
+	if acc := accountOf(r); !acc.Besitzerrechte() {
+		von, err := s.st.WunschVon(r.Context(), r.PathValue("id"))
+		if err != nil || (von != acc.ID && !s.verwaltetKonto(r, von)) {
+			fail(w, http.StatusNotFound, "nicht gefunden")
+			return
+		}
 	}
 	if err := s.st.SetWishState(r.Context(), r.PathValue("id"), in.State, in.Note); err != nil {
 		failErr(w, err)
@@ -1982,6 +2206,10 @@ func (s *Server) mitverwalterDarf(r *http.Request, zielID string, bibliotheken [
 		}
 		return nil
 	}
+	erlaubt, err := s.eigeneBibliotheken(r)
+	if err != nil {
+		return err
+	}
 	if zielID != "" {
 		ziel, err := s.st.Account(r.Context(), zielID)
 		if err != nil {
@@ -1990,17 +2218,19 @@ func (s *Server) mitverwalterDarf(r *http.Request, zielID string, bibliotheken [
 		if ziel.IsOwner || ziel.IsAdmin {
 			return errors.New("konten mit verwaltungsrecht ändert nur der besitzer")
 		}
-	}
-	if len(bibliotheken) == 0 {
-		return nil
-	}
-	eigene, err := s.st.GrantedLibraries(r.Context(), ich.ID)
-	if err != nil {
-		return err
-	}
-	erlaubt := map[string]bool{}
-	for _, l := range eigene {
-		erlaubt[l] = true
+		// Nur Konten ganz innerhalb des eigenen Bereichs: Wer nur
+		// „Kinder" verwaltet, setzt nicht die PIN eines Erwachsenen mit
+		// allen Bibliotheken zurück (und schaut dann als er), und entzieht
+		// ihm auch keine Filme.
+		seine, err := s.st.GrantedLibraries(r.Context(), zielID)
+		if err != nil {
+			return err
+		}
+		for _, l := range seine {
+			if !erlaubt[l] {
+				return errAusserhalbBereich
+			}
+		}
 	}
 	for _, l := range bibliotheken {
 		if !erlaubt[l] {
@@ -2008,6 +2238,24 @@ func (s *Server) mitverwalterDarf(r *http.Request, zielID string, bibliotheken [
 		}
 	}
 	return nil
+}
+
+// errAusserhalbBereich: das Konto sieht Bibliotheken, die der
+// Mitverwalter nicht verwaltet.
+var errAusserhalbBereich = errors.New("Dieses Konto sieht Bibliotheken ausserhalb deines Bereichs — das ändert der Besitzer.")
+
+// eigeneBibliotheken: die Bibliotheken, die das fragende Konto selbst
+// sehen darf (bei Besitzerrechten alle).
+func (s *Server) eigeneBibliotheken(r *http.Request) (map[string]bool, error) {
+	eigene, err := s.st.GrantedLibraries(r.Context(), accountOf(r).ID)
+	if err != nil {
+		return nil, err
+	}
+	erlaubt := make(map[string]bool, len(eigene))
+	for _, l := range eigene {
+		erlaubt[l] = true
+	}
+	return erlaubt, nil
 }
 
 // pfadFuer: Den ganzen Pfad einer Datei sieht nur die Verwaltung. Alle
