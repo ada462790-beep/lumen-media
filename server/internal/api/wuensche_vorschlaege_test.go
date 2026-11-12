@@ -133,6 +133,7 @@ type wunschZeile struct {
 	Mine   bool     `json:"mine"`
 	Dabei  bool     `json:"dabei"`
 	Auch   []string `json:"auch"`
+	Note   string   `json:"note"`
 }
 
 func (h *harness) wuensche(tok string) []wunschZeile {
@@ -380,9 +381,138 @@ func TestWunschErfuelltSichUeberKennung(t *testing.T) {
 	pro := &store.Item{LibraryID: h.lib.ID, Kind: "series", Title: "Dune: Prophecy", Year: 2024, MatchState: "matched"}
 	_ = h.st.UpsertItem(t.Context(), pro)
 	_ = h.st.SetSourceID(t.Context(), pro.ID, "tmdb", "90228")
-	_, _ = h.st.WuenscheErfuellen(t.Context())
-	if l := h.wuensche(ohne); len(l) != 1 || l[0].State != "done" || l[0].ItemID != "" {
-		t.Errorf("unsichtbarer Titel verlinkt: %+v", l)
+	_, _ = h.st.WuenscheErfuellenFuer(t.Context(), h.api.wunschSicht)
+	if l := h.wuensche(ohne); len(l) != 1 || l[0].State != "open" || l[0].ItemID != "" || l[0].Note != "" {
+		t.Errorf("unsichtbarer Titel verlinkt oder als erfüllt verraten: %+v", l)
+	}
+}
+
+// Ein Kind wünscht sich einen Film, der in einer Bibliothek liegt, die es
+// nicht sieht: Der Wunsch bleibt offen — „Ist jetzt in der Bibliothek"
+// verriete, dass es ihn gibt. Auch wer sich einem erfüllten Wunsch
+// angeschlossen hat und den Titel nicht sieht, sieht ihn offen.
+func TestWunschErfuelltNurWennSichtbar(t *testing.T) {
+	h, _ := mitTMDb(t)
+	h.film("Etwas", 1)
+	ctx := t.Context()
+	kinderLib, err := h.st.CreateLibrary(ctx, "Kinder", "movie", t.TempDir(), "de")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kira := h.gast("Kira", true, kinderLib.ID)
+	lea := h.gast("Lea", false, h.lib.ID, kinderLib.ID)
+	// Nur nach Titel und Jahr.
+	h.wuenschen(kira, `{"title":"Horror Nacht","year":2020}`)
+	// Über die Kennung, Kira schliesst sich Lea an.
+	h.wuenschen(lea, `{"title":"Dune","year":2021,"art":"movie","tmdbId":"438631"}`)
+	h.wuenschen(kira, `{"title":"Dune","year":2021,"art":"movie","tmdbId":"438631"}`)
+
+	horror := &store.Item{LibraryID: h.lib.ID, Kind: "movie", Title: "Horror Nacht", Year: 2020, MatchState: "matched"}
+	dune := &store.Item{LibraryID: h.lib.ID, Kind: "movie", Title: "Dune", Year: 2021, MatchState: "matched"}
+	for _, it := range []*store.Item{horror, dune} {
+		if err := h.st.UpsertItem(ctx, it); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = h.st.SetSourceID(ctx, dune.ID, "tmdb", "438631")
+	if n, err := h.st.WuenscheErfuellenFuer(ctx, h.api.wunschSicht); err != nil || n != 1 {
+		t.Fatalf("erfüllt: %d %v (erwartet nur Leas Dune)", n, err)
+	}
+	for _, w := range h.wuensche(kira) {
+		if w.State != "open" || w.Note != "" || w.ItemID != "" {
+			t.Errorf("Kira sieht %q als %q („%s“, %q)", w.Title, w.State, w.Note, w.ItemID)
+		}
+	}
+	if l := h.wuensche(lea); len(l) != 1 || l[0].State != "done" || l[0].ItemID != dune.ID {
+		t.Errorf("Lea: %+v", l)
+	}
+}
+
+// Wer sich angeschlossen hat, sieht nicht die Notiz der Verwaltung an die
+// Person, die den Wunsch hatte — nur den allgemeinen Stand. Wird ihr Konto
+// gelöscht, geht der Wunsch an die erste, die sich angeschlossen hat.
+func TestWunschAngeschlossenNotizUndLoeschen(t *testing.T) {
+	h, _ := mitTMDb(t)
+	h.film("Etwas", 1)
+	ctx := t.Context()
+	lea := h.gast("Lea", false, h.lib.ID)
+	noa := h.gast("Noa", false, h.lib.ID)
+	mia := h.gast("Mia", false, h.lib.ID)
+	_, a := h.wuenschen(lea, `{"title":"Dune","year":2021,"art":"movie","tmdbId":"438631"}`)
+	h.wuenschen(noa, `{"title":"Dune","year":2021,"art":"movie","tmdbId":"438631"}`)
+	h.wuenschen(mia, `{"title":"Dune","year":2021,"art":"movie","tmdbId":"438631"}`)
+	_ = h.st.SetWishState(ctx, a.ID, "declined", "Lea, den haben wir schon auf DVD")
+	if l := h.wuensche(noa); len(l) != 1 || l[0].Note != "" || l[0].State != "declined" {
+		t.Errorf("Noa sieht die Notiz an Lea: %+v", l)
+	}
+	_ = h.st.SetWishState(ctx, a.ID, "done", store.WunschNotizErfuellt)
+	if l := h.wuensche(noa); len(l) != 1 || l[0].Note != store.WunschNotizErfuellt {
+		t.Errorf("allgemeiner Stand fehlt: %+v", l)
+	}
+	_ = h.st.SetWishState(ctx, a.ID, "open", "Lea, frag mich morgen")
+	if err := h.st.DeleteAccount(ctx, h.idVon(lea)); err != nil {
+		t.Fatal(err)
+	}
+	l := h.wuensche(noa)
+	if len(l) != 1 || l[0].ID != a.ID || !l[0].Mine || l[0].Dabei || l[0].Note != "" {
+		t.Fatalf("Wunsch nach dem Löschen: %+v", l)
+	}
+	if m := h.wuensche(mia); len(m) != 1 || m[0].ID != a.ID || !m[0].Dabei {
+		t.Errorf("Mia: %+v", m)
+	}
+}
+
+// Eine Mitverwalterin „nur Kinder" sieht unter „auch" nur Namen aus ihrem
+// Bereich — und den Wunsch von jemandem ausserhalb, dem sich ein Kind aus
+// ihrem Bereich angeschlossen hat, ohne den Namen der Person.
+func TestWunschAuchNurImBereich(t *testing.T) {
+	h, _ := mitTMDb(t)
+	h.film("Etwas", 1)
+	ctx := t.Context()
+	kinderLib, err := h.st.CreateLibrary(ctx, "Kinder", "movie", t.TempDir(), "de")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctok, _ := h.mitverwalter("Carla")
+	g, _ := h.st.GruppeAnlegen(ctx, store.Gruppe{Name: "Kinderverwaltung", Verwaltung: true,
+		Libraries: []string{kinderLib.ID}, Limits: store.VerwaltungsLimits()})
+	_ = h.st.GruppeZuweisen(ctx, h.idVon(ctok), g.ID)
+	anna := h.gast("Anna", false, h.lib.ID, kinderLib.ID)
+	kira := h.gast("Kira", true, kinderLib.ID)
+	h.wuenschen(anna, `{"title":"Dune","year":2021,"art":"movie","tmdbId":"438631"}`)
+	h.wuenschen(kira, `{"title":"Dune","year":2021,"art":"movie","tmdbId":"438631"}`)
+	h.wuenschen(kira, `{"title":"Paddington","year":2014,"art":"movie","tmdbId":"116149"}`)
+	h.wuenschen(anna, `{"title":"Paddington","year":2014,"art":"movie","tmdbId":"116149"}`)
+	h.wuenschen(anna, `{"title":"Erwachsenenwunsch"}`)
+
+	for _, weg := range []string{"/api/v1/admin/wishes", "/api/v1/wishes"} {
+		_, raw := h.do("GET", weg, "", ctok)
+		if strings.Contains(string(raw), "Anna") || strings.Contains(string(raw), "Erwachsenenwunsch") {
+			t.Errorf("%s zeigt Anna: %s", weg, raw)
+		}
+		var liste []wunschZeile
+		if weg == "/api/v1/admin/wishes" {
+			var adm struct{ Wishes []wunschZeile }
+			_ = json.Unmarshal(raw, &adm)
+			liste = adm.Wishes
+		} else {
+			_ = json.Unmarshal(raw, &liste)
+		}
+		titel := map[string]wunschZeile{}
+		for _, w := range liste {
+			titel[w.Title] = w
+		}
+		if d, da := titel["Dune"]; !da || len(d.Auch) != 1 || d.Auch[0] != "Kira" || d.By == "" {
+			t.Errorf("%s: Annas Wunsch, dem Kira sich anschloss: %+v", weg, d)
+		}
+		if p, da := titel["Paddington"]; !da || p.By != "Kira" || len(p.Auch) != 0 {
+			t.Errorf("%s: Kiras Wunsch: %+v", weg, p)
+		}
+	}
+	// Der Besitzer sieht alle Namen.
+	_, raw := h.do("GET", "/api/v1/admin/wishes", "", h.tok)
+	if !strings.Contains(string(raw), `"Anna"`) {
+		t.Errorf("Besitzer: %s", raw)
 	}
 }
 

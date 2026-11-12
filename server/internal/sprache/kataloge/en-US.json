@@ -318,5 +318,6 @@
   "Zu viele Anfragen – bitte einen Moment warten.": "Too many requests – please wait a moment.",
   "Dieser Einmal-Code ist abgelaufen – er gilt 72 Stunden. Bitte die Verwaltung um einen neuen.": "This one-time code has expired – it is valid for 72 hours. Please ask an admin for a new one.",
   "Dein Passwort wurde zurückgesetzt. Lege jetzt dein eigenes Passwort fest – nur du kennst es.": "Your password was reset. Set your own password now – only you will know it.",
-  "Wähle ein anderes Passwort als den Einmal-Code.": "Choose a password other than the one-time code."
+  "Wähle ein anderes Passwort als den Einmal-Code.": "Choose a password other than the one-time code.",
+  "jemandem ausserhalb deines Bereichs": "someone outside your scope"
 }

@@ -210,7 +210,7 @@ func (s *Server) metadatenNachholen(ctx context.Context, lib string, grenze int)
 	// rücken danach zurecht.
 	s.Nacheinander(ctx, s.ReihenBilden)
 	// Mit den Kennungen erfüllen sich Wünsche (store/wunsch_kennung.go).
-	if n, err := s.st.WuenscheErfuellen(ctx); err == nil && n > 0 {
+	if n, err := s.st.WuenscheErfuellenFuer(ctx, s.wunschSicht); err == nil && n > 0 {
 		s.st.Log(ctx, "info", "wuensche", fmt.Sprintf("%d Wunsch/Wünsche von selbst erfüllt", n))
 	}
 }

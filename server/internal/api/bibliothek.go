@@ -449,21 +449,7 @@ func (s *Server) adminWishes(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	// Mitverwaltung mit einem Teil der Bibliotheken: nur die Wünsche der
-	// Konten in ihrem Bereich (und die eigenen).
-	if !acc.Besitzerrechte() {
-		sichtbar := alle[:0:0]
-		darf := map[string]bool{}
-		for _, x := range alle {
-			if _, da := darf[x.AccountID]; !da {
-				darf[x.AccountID] = x.AccountID == acc.ID || s.verwaltetKonto(r, x.AccountID)
-			}
-			if darf[x.AccountID] {
-				sichtbar = append(sichtbar, x)
-			}
-		}
-		alle = sichtbar
-	}
+	alle = s.wuenscheImBereich(w, r, alle)
 	s.wuenscheAufbereiten(r, alle)
 	offen := 0
 	for _, w := range alle {
@@ -472,6 +458,46 @@ func (s *Server) adminWishes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ok(w, map[string]any{"wishes": alle, "offen": offen})
+}
+
+// wuenscheImBereich: Mitverwaltung mit einem Teil der Bibliotheken sieht
+// nur die Wünsche der Konten in ihrem Bereich (und die eigenen) — und
+// unter „auch" nur die Namen aus ihrem Bereich. Hat sich jemand aus ihrem
+// Bereich (etwa ein Kind) einem Wunsch von ausserhalb angeschlossen, sieht
+// sie den Wunsch trotzdem, aber ohne den Namen der Person von ausserhalb.
+func (s *Server) wuenscheImBereich(w http.ResponseWriter, r *http.Request, alle []store.Wish) []store.Wish {
+	acc := accountOf(r)
+	if acc.Besitzerrechte() {
+		return alle
+	}
+	darf := map[string]bool{}
+	pruefen := func(id string) bool {
+		if v, da := darf[id]; da {
+			return v
+		}
+		v := id == acc.ID || s.verwaltetKonto(r, id)
+		darf[id] = v
+		return v
+	}
+	sichtbar := alle[:0:0]
+	for _, x := range alle {
+		var auch, auchIDs []string
+		for i, id := range x.AuchIDs {
+			if pruefen(id) && i < len(x.Auch) {
+				auch, auchIDs = append(auch, x.Auch[i]), append(auchIDs, id)
+			}
+		}
+		eigen := pruefen(x.AccountID)
+		if !eigen && len(auch) == 0 {
+			continue
+		}
+		x.Auch, x.AuchIDs = auch, auchIDs
+		if !eigen {
+			x.By, x.Avatar = tr(w, "jemandem ausserhalb deines Bereichs"), ""
+		}
+		sichtbar = append(sichtbar, x)
+	}
+	return sichtbar
 }
 
 func oeffnenFehler(pfad string, err error) string {

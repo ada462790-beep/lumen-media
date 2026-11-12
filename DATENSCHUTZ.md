@@ -49,7 +49,16 @@ Statistik.
   sieht und ändert nur Konten, deren Bibliotheken ganz in ihrem Bereich
   liegen, und sieht in Übersicht, Protokoll und Wünschen nur ihren Bereich.
   Kinderschutz und Altersgrenze eines Erwachsenen ändert nur, wer
-  Besitzerrechte hat. Wünsche tragen nur den Tag, keine Uhrzeit.
+  Besitzerrechte hat. Wünsche tragen nur den Tag, keine Uhrzeit. Unter
+  „auch" stehen nur die Namen aus ihrem Bereich; einen Wunsch von
+  ausserhalb, dem sich jemand aus ihrem Bereich angeschlossen hat, sieht
+  sie ohne den Namen der Person von ausserhalb.
+- **Gemeinsame Wünsche:** „Schon gewünscht" sagt nicht, wer. In einem
+  kleinen Haushalt lässt sich aber manchmal erraten, wer es war — ein
+  geteilter Wunsch kann also Interesse an einem Titel verraten. Wer sich
+  anschliesst, sieht die Notiz der Verwaltung an die erste Person nicht,
+  nur den allgemeinen Stand („Ist jetzt in der Bibliothek"). Ein Wunsch
+  meldet sich nur bei denen als erfüllt, die den Titel sehen dürfen.
 
 - **PIN zurücksetzen:** Hast du deine PIN vergessen, kann die Verwaltung sie
   zurücksetzen. Sie wählt dabei keine PIN, sondern bekommt einmal einen

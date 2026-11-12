@@ -251,7 +251,7 @@ func (s *Server) durchlaufGesperrt(ctx context.Context, lib store.Library, vonSe
 	// Neue Dateien: Vorschaubilder und Untertitel vorbereiten (hintergrund.go).
 	s.hintergrundAnstossen()
 	// Ist ein gewünschter Titel jetzt da, schliesst sich der Wunsch selbst.
-	if n, err := s.st.WuenscheErfuellen(ctx); err == nil && n > 0 {
+	if n, err := s.st.WuenscheErfuellenFuer(ctx, s.wunschSicht); err == nil && n > 0 {
 		s.st.Log(ctx, "info", "wuensche", fmt.Sprintf("%d Wunsch/Wünsche von selbst erfüllt", n))
 	}
 }

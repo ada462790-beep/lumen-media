@@ -456,14 +456,38 @@ func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 		id, id); err != nil {
 		return err
 	}
-	res, err := s.db.ExecContext(ctx, `DELETE FROM account WHERE id = ? AND is_owner = 0`, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return errors.New("konto nicht gefunden oder es ist der besitzer")
-	}
-	return nil
+	var weg int64
+	err := s.tx(ctx, func(t *sql.Tx) error {
+		// Wünsche, denen sich andere angeschlossen haben, gehen an die
+		// Person, die sich zuerst angeschlossen hat — sonst verschwänden
+		// sie für alle mit dem Konto. Die Notiz der Verwaltung galt der
+		// bisherigen Person; nur der allgemeine Stand bleibt.
+		if _, err := t.ExecContext(ctx,
+			`UPDATE wish SET
+			   account_id = (SELECT d.account_id FROM wish_dabei d
+			                  WHERE d.wish_id = wish.id AND d.account_id <> ? ORDER BY d.rowid LIMIT 1),
+			   note = CASE WHEN note = ? THEN note ELSE NULL END
+			 WHERE account_id = ?
+			   AND EXISTS (SELECT 1 FROM wish_dabei d WHERE d.wish_id = wish.id AND d.account_id <> ?)`,
+			id, WunschNotizErfuellt, id, id); err != nil {
+			return err
+		}
+		if _, err := t.ExecContext(ctx,
+			`DELETE FROM wish_dabei WHERE EXISTS (SELECT 1 FROM wish w
+			   WHERE w.id = wish_dabei.wish_id AND w.account_id = wish_dabei.account_id)`); err != nil {
+			return err
+		}
+		res, err := t.ExecContext(ctx, `DELETE FROM account WHERE id = ? AND is_owner = 0`, id)
+		if err != nil {
+			return err
+		}
+		weg, _ = res.RowsAffected()
+		if weg == 0 {
+			return errors.New("konto nicht gefunden oder es ist der besitzer")
+		}
+		return nil
+	})
+	return err
 }
 
 // ---------------------------------------------------------------- Entsperren

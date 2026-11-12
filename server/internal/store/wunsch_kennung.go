@@ -147,13 +147,17 @@ func (s *Store) wunschFuer(ctx context.Context, accountID, id string) (*Wish, er
 
 // wunschErgaenzen füllt die Felder mit Kennung in die Liste von
 // Wishes und nimmt — für die eigene Liste — die Wünsche dazu, denen sich
-// das Profil angeschlossen hat. Bei denen steht nicht, von wem sie sind.
+// das Profil angeschlossen hat. Bei denen steht nicht, von wem sie sind,
+// und auch nicht die Notiz der Verwaltung — die galt der Person, die ihn
+// sich zuerst gewünscht hat; nur der allgemeine Stand („Ist jetzt in der
+// Bibliothek") bleibt.
 func (s *Store) wunschErgaenzen(ctx context.Context, out []Wish, accountID string, all bool) ([]Wish, error) {
 	if !all {
 		rows, err := s.db.QueryContext(ctx,
-			`SELECT w.id, w.title, COALESCE(w.year,0), w.state, COALESCE(w.note,''), w.created_at
+			`SELECT w.id, w.title, COALESCE(w.year,0), w.state,
+			        CASE WHEN w.note = ? THEN w.note ELSE '' END, w.created_at
 			   FROM wish w JOIN wish_dabei d ON d.wish_id = w.id
-			  WHERE d.account_id = ? AND w.account_id <> ?`, accountID, accountID)
+			  WHERE d.account_id = ? AND w.account_id <> ?`, WunschNotizErfuellt, accountID, accountID)
 		if err != nil {
 			return nil, err
 		}
@@ -207,19 +211,20 @@ func (s *Store) wunschErgaenzen(ctx context.Context, out []Wish, accountID strin
 		// Der Besitzer sieht ohnehin, wer was wünscht — also auch, wer
 		// sich angeschlossen hat.
 		rows, err := s.db.QueryContext(ctx,
-			`SELECT d.wish_id, a.name FROM wish_dabei d JOIN account a ON a.id = d.account_id
+			`SELECT d.wish_id, a.id, a.name FROM wish_dabei d JOIN account a ON a.id = d.account_id
 			  ORDER BY a.name`)
 		if err != nil {
 			return nil, err
 		}
 		for rows.Next() {
-			var id, name string
-			if err := rows.Scan(&id, &name); err != nil {
+			var id, konto, name string
+			if err := rows.Scan(&id, &konto, &name); err != nil {
 				rows.Close()
 				return nil, err
 			}
 			if i, da := index[id]; da {
 				out[i].Auch = append(out[i].Auch, name)
+				out[i].AuchIDs = append(out[i].AuchIDs, konto)
 			}
 		}
 		rows.Close()
@@ -391,40 +396,36 @@ func (s *Store) TitelDa(ctx context.Context, q Query, kand []TitelKandidat) ([]s
 
 // wuenscheNachKennungErfuellen schliesst offene Wünsche, zu deren Kennung
 // jetzt ein Titel in einer Bibliothek steht, und merkt sich den Titel.
-func (s *Store) wuenscheNachKennungErfuellen(ctx context.Context) (int, error) {
+func (s *Store) wuenscheNachKennungErfuellen(ctx context.Context, sieht WunschSicht) (int, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT w.id, min(i.id) FROM wish w
+		`SELECT w.id, w.account_id, i.id FROM wish w
 		   JOIN item i ON i.kind IN ('movie','series')
 		    AND ((COALESCE(w.tmdb_id,'') <> '' AND i.tmdb_id = w.tmdb_id AND (COALESCE(w.art,'') = '' OR i.kind = w.art))
 		      OR (COALESCE(w.imdb_id,'') <> '' AND i.imdb_id = w.imdb_id))
 		  WHERE w.state IN ('open','working')
-		  GROUP BY w.id`)
+		  ORDER BY w.id, i.id`)
 	if err != nil {
 		return 0, err
 	}
-	treffer := map[string]string{}
-	for rows.Next() {
-		var w, it string
-		if err := rows.Scan(&w, &it); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		treffer[w] = it
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	kand, err := wunschKandidaten(rows)
+	if err != nil {
 		return 0, err
 	}
 	n := 0
 	jetzt := heute() // nur der Tag (Datenschutz)
-	for w, it := range treffer {
+	for _, k := range kand {
+		// Nur mit einem Titel, den die Person sehen darf (WuenscheErfuellenFuer).
+		it := k.waehle(ctx, sieht)
+		if it == "" {
+			continue
+		}
 		res, err := s.db.ExecContext(ctx,
 			`UPDATE wish SET state = 'done', note = 'Ist jetzt in der Bibliothek', erfuellt_item = ?, updated_at = ?
-			  WHERE id = ? AND state IN ('open','working')`, it, jetzt, w)
+			  WHERE id = ? AND state IN ('open','working')`, it, jetzt, k.wunsch)
 		if err != nil {
 			return n, err
 		}
-		if k, _ := res.RowsAffected(); k > 0 {
+		if x, _ := res.RowsAffected(); x > 0 {
 			n++
 		}
 	}

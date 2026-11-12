@@ -9,6 +9,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 )
@@ -42,8 +43,12 @@ type Wish struct {
 	// Dabei: jemand anders hatte den Wunsch schon, dieses Profil hat sich
 	// angeschlossen. Von wem er ist, steht dann nicht da.
 	Dabei bool `json:"dabei,omitempty"`
-	// Auch: wer sich angeschlossen hat — nur in der Liste des Besitzers.
+	// Auch: wer sich angeschlossen hat — nur in der Liste der Verwaltung,
+	// und dort nur, wen sie verwaltet (die API filtert nach AuchIDs).
 	Auch []string `json:"auch,omitempty"`
+	// AuchIDs: die Konten zu Auch, in derselben Reihenfolge — nie in der
+	// Antwort.
+	AuchIDs []string `json:"-"`
 }
 
 func (s *Store) CreateWish(ctx context.Context, accountID, title string, year int) (*Wish, error) {
@@ -145,30 +150,104 @@ func (s *Store) SetWishState(ctx context.Context, id, state, note string) error 
 	return err
 }
 
-// WuenscheErfuellen schliesst offene Wünsche, deren Titel inzwischen in
-// der Bibliothek steht — gleicher Titel (ohne Rücksicht auf Gross- und
+// WunschNotizErfuellt: die Notiz, die Lumen selbst an einen erfüllten
+// Wunsch schreibt — ein allgemeiner Stand, keine Nachricht der Verwaltung.
+const WunschNotizErfuellt = "Ist jetzt in der Bibliothek"
+
+// WunschSicht wählt aus den Titeln, die einen Wunsch erfüllen würden,
+// den ersten, den das Konto sehen darf ("" = keinen). Die Regeln dafür
+// (Bibliotheken, Altersgrenze) kennt die API.
+type WunschSicht func(ctx context.Context, kontoID string, itemIDs []string) string
+
+// WuenscheErfuellen wie WuenscheErfuellenFuer, ohne Blick auf die Rechte
+// (für Tests und Werkzeuge).
+func (s *Store) WuenscheErfuellen(ctx context.Context) (int, error) {
+	return s.WuenscheErfuellenFuer(ctx, nil)
+}
+
+// WuenscheErfuellenFuer schliesst offene Wünsche, deren Titel inzwischen
+// in der Bibliothek steht — gleicher Titel (ohne Rücksicht auf Gross- und
 // Kleinschreibung), und das Jahr, wenn der Wunsch eines nennt. Die Notiz
 // sagt der Person, dass es da ist. Zurück kommt, wie viele es waren.
-func (s *Store) WuenscheErfuellen(ctx context.Context) (int, error) {
+//
+// Aber nur, wenn die Person den Titel auch sehen darf (sieht): Wünscht
+// sich ein Kind einen Film, der in einer Bibliothek liegt, die es nicht
+// sieht, verriete „Ist jetzt in der Bibliothek", dass es ihn gibt. Dann
+// bleibt der Wunsch offen.
+func (s *Store) WuenscheErfuellenFuer(ctx context.Context, sieht WunschSicht) (int, error) {
 	// Zuerst über TMDb-/IMDb-Kennung (wunsch_kennung.go).
-	nk, err := s.wuenscheNachKennungErfuellen(ctx)
+	nk, err := s.wuenscheNachKennungErfuellen(ctx, sieht)
 	if err != nil {
 		return 0, err
 	}
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE wish SET state = 'done', note = 'Ist jetzt in der Bibliothek', updated_at = ?
-		  WHERE state IN ('open', 'working')
-		    AND EXISTS (SELECT 1 FROM item i
-		                 WHERE i.kind IN ('movie', 'series')
-		                   AND lower(i.title) = lower(trim(wish.title))
-		                   AND (COALESCE(wish.year, 0) = 0 OR i.year = wish.year))`,
-		heute())
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT w.id, w.account_id, i.id FROM wish w
+		   JOIN item i ON i.kind IN ('movie', 'series')
+		    AND lower(i.title) = lower(trim(w.title))
+		    AND (COALESCE(w.year, 0) = 0 OR i.year = w.year)
+		  WHERE w.state IN ('open', 'working')
+		  ORDER BY w.id, i.id`)
 	if err != nil {
 		return 0, err
 	}
-	n, _ := res.RowsAffected()
+	kand, err := wunschKandidaten(rows)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, k := range kand {
+		it := k.waehle(ctx, sieht)
+		if it == "" {
+			continue
+		}
+		res, err := s.db.ExecContext(ctx,
+			`UPDATE wish SET state = 'done', note = 'Ist jetzt in der Bibliothek', updated_at = ?,
+			                 erfuellt_item = COALESCE(erfuellt_item, ?)
+			  WHERE id = ? AND state IN ('open', 'working')`, heute(), it, k.wunsch)
+		if err != nil {
+			return n + nk, err
+		}
+		if x, _ := res.RowsAffected(); x > 0 {
+			n++
+		}
+	}
 	if err := s.WuenscheVerknuepfen(ctx); err != nil {
-		return int(n) + nk, err
+		return n + nk, err
 	}
-	return int(n) + nk, nil
+	return n + nk, nil
+}
+
+// wunschKandidat: ein offener Wunsch, wer ihn hat, und die Titel, die ihn
+// erfüllen würden.
+type wunschKandidat struct {
+	wunsch, konto string
+	items         []string
+}
+
+// wunschKandidaten liest Zeilen (wunsch, konto, item), nach Wunsch sortiert.
+func wunschKandidaten(rows *sql.Rows) ([]wunschKandidat, error) {
+	defer rows.Close()
+	var out []wunschKandidat
+	for rows.Next() {
+		var w, konto, it string
+		if err := rows.Scan(&w, &konto, &it); err != nil {
+			return nil, err
+		}
+		if n := len(out); n > 0 && out[n-1].wunsch == w {
+			out[n-1].items = append(out[n-1].items, it)
+			continue
+		}
+		out = append(out, wunschKandidat{wunsch: w, konto: konto, items: []string{it}})
+	}
+	return out, rows.Err()
+}
+
+func (k wunschKandidat) waehle(ctx context.Context, sieht WunschSicht) string {
+	if len(k.items) == 0 {
+		return ""
+	}
+	if sieht == nil {
+		return k.items[0]
+	}
+	return sieht(ctx, k.konto, k.items)
 }

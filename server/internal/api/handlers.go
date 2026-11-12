@@ -654,12 +654,16 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 // scope baut die Abfrage aus den Rechten des Kontos — was jemand nicht sehen
 // darf, taucht gar nicht erst in der Antwort auf.
 func (s *Server) scope(r *http.Request) (store.Query, error) {
-	acc := accountOf(r)
-	libs, err := s.st.GrantedLibraries(r.Context(), acc.ID)
+	return s.sichtVon(r.Context(), accountOf(r))
+}
+
+// sichtVon: was dieses Konto sehen darf — Bibliotheken, Altersgrenze.
+func (s *Server) sichtVon(ctx context.Context, acc *store.Account) (store.Query, error) {
+	libs, err := s.st.GrantedLibraries(ctx, acc.ID)
 	if err != nil {
 		return store.Query{}, err
 	}
-	lim, err := s.st.Limits(r.Context(), acc.ID)
+	lim, err := s.st.Limits(ctx, acc.ID)
 	if err != nil {
 		return store.Query{}, err
 	}
@@ -1473,6 +1477,9 @@ func (s *Server) wishes(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		failErr(w, err)
 		return
+	}
+	if acc.IsAdmin {
+		list = s.wuenscheImBereich(w, r, list)
 	}
 	s.wuenscheAufbereiten(r, list)
 	ok(w, list)

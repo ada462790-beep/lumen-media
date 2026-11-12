@@ -446,7 +446,12 @@ Kinderprofile sehen nur Vorschläge, deren Freigabe bei TMDb zu ihrer
 Altersgrenze passt (ohne bekannte Freigabe keine). Kommt der Titel später
 in die Bibliothek (gleiche TMDb- oder IMDb-Kennung, sonst gleicher Titel
 und Jahr), ist der Wunsch von selbst erfüllt: mit „Ansehen" in der
-Wunschliste und als Neuigkeit für alle, die ihn sich gewünscht haben.
+Wunschliste und als Neuigkeit für alle, die ihn sich gewünscht haben —
+aber nur für die, die den Titel auch sehen dürfen. Liegt er in einer
+Bibliothek, die ein Kind nicht sieht, bleibt sein Wunsch offen. Wer sich
+angeschlossen hat, sieht die Notiz der Verwaltung an die erste Person
+nicht; wird deren Konto gelöscht, geht der Wunsch an die Person, die sich
+zuerst angeschlossen hat.
 Die Verwaltung sieht zu jedem Wunsch Poster, Jahr, Art und Verweise auf
 IMDb und TMDb. Lumen fragt TMDb sparsam (Zwischenspeicher, Bremse je
 Profil), die Poster laufen über den eigenen Server; der Browser spricht

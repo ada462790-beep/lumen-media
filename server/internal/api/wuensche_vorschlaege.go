@@ -587,8 +587,42 @@ func (s *Server) wuenscheAufbereiten(r *http.Request, liste []store.Wish) {
 	for i := range liste {
 		if !sichtbar[liste[i].ItemID] {
 			liste[i].ItemID = ""
+			// Angeschlossen an einen Wunsch, der mit einem Titel erfüllt
+			// ist, den dieses Profil nicht sehen darf: „erfüllt" verriete,
+			// dass es ihn gibt. Für dieses Profil bleibt er offen.
+			if liste[i].Dabei && liste[i].State == "done" {
+				liste[i].State, liste[i].Note = "open", ""
+			}
 		}
 	}
+}
+
+// wunschSicht: der erste der Titel, die dieses Konto sehen darf — für
+// store.WuenscheErfuellenFuer. Dieselben Regeln wie scope.
+func (s *Server) wunschSicht(ctx context.Context, kontoID string, itemIDs []string) string {
+	acc, err := s.st.Account(ctx, kontoID)
+	if err != nil {
+		return ""
+	}
+	q, err := s.sichtVon(ctx, acc)
+	if err != nil {
+		return ""
+	}
+	q.IDs, q.Limit = itemIDs, len(itemIDs)
+	items, err := s.st.Query(ctx, q)
+	if err != nil || len(items) == 0 {
+		return ""
+	}
+	da := map[string]bool{}
+	for _, it := range items {
+		da[it.ID] = true
+	}
+	for _, id := range itemIDs {
+		if da[id] {
+			return id
+		}
+	}
+	return ""
 }
 
 // ---------------------------------------------------------------- Poster
