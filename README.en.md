@@ -67,8 +67,9 @@ arm64). No registry login, no token.
 4. Open `http://<your-nas>:8097`, create the owner account and add your
    libraries.
 
-Updating: `sudo docker compose pull && sudo docker compose up -d` (or the
-optional Watchtower service in the compose file, at night). Lumen always
+Updating: `sudo docker compose pull && sudo docker compose up -d`, or with
+one click in the admin pages — see [One-click updates](#one-click-updates).
+Lumen always
 listens on port **8097** — never forward it in your router; use the relay
 or Tailscale/WireGuard for remote access.
 
@@ -105,6 +106,92 @@ phones and tablets Lumen is for watching. Open invitations can be listed
 and revoked under *Admin › Accounts*. Arrow keys and a TV remote's D-pad
 move focus between cards and buttons, Backspace/Back goes back, F6 jumps
 between content and navigation; text follows the browser/system text size.
+
+## One-click updates
+
+Inside a container Lumen can't replace itself — the whole image is
+swapped. A small companion does that: the **updater**
+([Watchtower](https://github.com/nicholas-fedor/watchtower), the
+maintained fork by Nick Fedor, pinned to `nickfedor/watchtower:1.24.0`).
+Once it is set up, *Admin › Updates* shows an **Update Now** button, and
+*Update automatically* (night window) works in a container too.
+
+When you press it, Lumen asks first if someone is watching, asks for your
+PIN or password again, writes the database cleanly to disk, logs the
+update and tells the updater "now". The updater pulls the new image, stops
+Lumen (30 seconds to shut down cleanly), starts it with the new image and
+removes the old one. The page shows "Updating" and reports back once the
+new version is running. In the night window the same happens, but only
+when nobody is watching.
+
+**Security:** only the updater gets Docker access (`/var/run/docker.sock`),
+Lumen does not. The updater listens only on the project's internal
+network (no published port) and accepts only requests carrying the secret
+token, so all Lumen can tell it is "update now". It only touches
+containers labelled `com.centurylinklabs.watchtower.enable=true` — i.e.
+Lumen. The token never appears in API responses, logs or error messages,
+and the address can only be set in `docker-compose.yml`, not in the UI.
+
+Settings on the `lumen` service: `LUMEN_AKTUALISIERER_URL` (e.g.
+`http://aktualisierer:8080`) and `LUMEN_AKTUALISIERER_TOKEN` (same value
+as the updater's `WATCHTOWER_HTTP_API_TOKEN`). The
+[`docker-compose.yml`](docker-compose.yml) in this repository already
+contains everything. With an older file, on a Synology:
+
+1. **Create the token** — one line in a `.env` file next to
+   `docker-compose.yml`. Without SSH: *Control Panel › Task Scheduler ›
+   Create › Scheduled Task › User-defined script*, user **root**, with this
+   script, then select the task and *Run* it once (delete it afterwards):
+
+   ```sh
+   grep -qs LUMEN_AKTUALISIERER_TOKEN /volume1/docker/lumen/.env || \
+     echo "LUMEN_AKTUALISIERER_TOKEN=$(openssl rand -hex 32)" >> /volume1/docker/lumen/.env
+   ```
+
+   Any random 64-character string of letters and digits works too. If you
+   prefer no `.env`, put the token directly in both places below instead of
+   `${LUMEN_AKTUALISIERER_TOKEN:-}`.
+2. **Edit the YAML:** *Container Manager › Project › lumen*, *Stop*, then
+   edit the *YAML configuration*. Add to the `lumen` service (`labels` at
+   the same level as `restart`, the two lines under `environment`):
+
+   ```yaml
+       labels:
+         - com.centurylinklabs.watchtower.enable=true
+       environment:
+         # … existing lines, plus:
+         - LUMEN_AKTUALISIERER_URL=http://aktualisierer:8080
+         - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
+   ```
+
+   and a second service under `services:`, at the same level as `lumen:`:
+
+   ```yaml
+     aktualisierer:
+       image: nickfedor/watchtower:1.24.0
+       container_name: lumen-aktualisierer
+       restart: unless-stopped
+       volumes:
+         - /var/run/docker.sock:/var/run/docker.sock
+       environment:
+         - TZ=Europe/Zurich
+         - WATCHTOWER_HTTP_API_ENDPOINTS=update
+         - WATCHTOWER_HTTP_API_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
+         - WATCHTOWER_LABEL_ENABLE=true
+         - WATCHTOWER_CLEANUP=true
+         - WATCHTOWER_TIMEOUT=30s
+         - WATCHTOWER_NO_STARTUP_MESSAGE=true
+   ```
+3. **Save, then *Action › Build*.** The button appears in *Admin › Updates*
+   as soon as a newer version is available (*Check Now*).
+
+The updater does nothing on its own: with its HTTP API on, its own
+schedule is off, and Lumen's night window decides — only Lumen knows
+whether someone is watching. Its version is pinned; bump it now and then.
+Your Synology may report that container "lumen" stopped unexpectedly
+during an update — that's the updater and harmless. If something goes
+wrong, the page says why (token rejected, updater not reachable, no newer
+image yet); details are in the log of container `lumen-aktualisierer`.
 
 ## Contributing
 

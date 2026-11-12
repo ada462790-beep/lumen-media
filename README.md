@@ -92,8 +92,9 @@ legst du dich als Besitzer an und sagst Lumen, wo die Filme liegen: unter
 **Aktualisieren:** *Projekt › lumen › Aktion › Erstellen*. Weil in der
 Datei `pull_policy: always` steht, holt der Container Manager dabei das
 neue Abbild; die Daten im Ordner `daten` bleiben. Alte, nicht mehr
-benutzte Abbilder kann man unter *Image* löschen. Von selbst, jede Nacht:
-siehe [Watchtower](#updates-von-selbst-watchtower).
+benutzte Abbilder kann man unter *Image* löschen. Per Knopfdruck in der
+Verwaltung oder von selbst nachts: siehe
+[Updates per Knopfdruck](#updates-per-knopfdruck).
 
 #### Wenn das Abbild nicht lädt
 
@@ -238,18 +239,118 @@ Bibliothek dort bleibt leer. Fehlt nur das Schreibrecht, läuft alles
 ausser dem Zusammenführen von Teilen („Lumen darf in diesen Ordner nicht
 schreiben"). Nummern ändern und das Projekt neu *Erstellen* genügt.
 
-### Updates von selbst (Watchtower)
+### Updates per Knopfdruck
 
-Im Container ersetzt sich Lumen nicht selbst; die Verwaltung zeigt nur an,
-dass es eine neue Fassung gibt. Wer nachts automatisch aktualisieren will,
-nimmt den auskommentierten Dienst `watchtower` aus der
-`docker-compose.yml` (und bei `lumen` die zwei `labels`-Zeilen). Läuft
-gerade eine Wiedergabe, bricht sie ab — darum nachts um 4.
+Im Container kann sich Lumen nicht selbst ersetzen — das Abbild wird als
+Ganzes getauscht. Das übernimmt ein kleiner Begleiter, der
+**Aktualisierer** ([Watchtower](https://github.com/nicholas-fedor/watchtower)
+in der gepflegten Fassung von Nick Fedor). Ist er eingerichtet, zeigt die
+Verwaltung unter *Updates* den Knopf **Jetzt aktualisieren**, und „Von
+selbst aktualisieren" geht auch im Container.
 
-Weil das Abbild öffentlich ist, braucht Watchtower keine Zugangsdaten.
-Nur wer ein eigenes, privates Abbild nutzt, trägt bei `watchtower`
-`REPO_USER` (GitHub-Name) und `REPO_PASS` (Token mit `read:packages`) ein —
-sonst scheitert das Update dort jede Nacht still.
+Was beim Drücken passiert: Lumen fragt nach, falls gerade jemand schaut,
+und will deine PIN oder dein Passwort noch einmal. Dann schreibt es die
+Datenbank sauber auf die Platte, trägt das Update ins Protokoll ein und
+sagt dem Aktualisierer „jetzt". Der holt das neue Abbild, stoppt Lumen
+(30 Sekunden Zeit zum sauberen Herunterfahren), startet es mit dem neuen
+Abbild und löscht das alte. Die Seite zeigt solange „Wird aktualisiert" und
+meldet sich, sobald die neue Fassung läuft. Nachts im Zeitfenster
+(Verwaltung › Updates › *Von selbst aktualisieren*) läuft es genauso —
+aber nur, wenn niemand schaut.
+
+**Sicherheit:** Nur der Aktualisierer bekommt Zugriff auf Docker
+(`/var/run/docker.sock`), Lumen nicht. Er hört nur im internen Netz des
+Projekts, ohne Port nach aussen, und nimmt nur Anfragen mit dem geheimen
+Token an. Lumen kann ihm damit genau eines sagen: „aktualisiere jetzt".
+Er tauscht nur Container mit dem Label
+`com.centurylinklabs.watchtower.enable=true` — also nur Lumen. Das Token
+steht in keiner Antwort, keinem Protokoll und keiner Fehlermeldung; die
+Adresse lässt sich nur in der `docker-compose.yml` festlegen, nicht in der
+Oberfläche.
+
+In der `docker-compose.yml` dieses Repositorys ist alles schon drin. Wer
+eine ältere Datei hat, ergänzt sie so:
+
+**1. Das Token anlegen** — eine Zeile in der Datei `.env` neben der
+`docker-compose.yml`. Ohne SSH: *Systemsteuerung › Aufgabenplaner ›
+Erstellen › Geplante Aufgabe › Benutzerdefiniertes Skript*, Benutzer
+**root**, unter *Aufgabeneinstellungen* dieses Skript:
+
+```sh
+grep -qs LUMEN_AKTUALISIERER_TOKEN /volume1/docker/lumen/.env || \
+  echo "LUMEN_AKTUALISIERER_TOKEN=$(openssl rand -hex 32)" >> /volume1/docker/lumen/.env
+```
+
+Speichern, die Aufgabe markieren, *Ausführen* — danach kann sie wieder
+weg. Per SSH ist es derselbe Befehl. Es geht auch jede andere zufällige
+Zeichenfolge aus 64 Buchstaben und Ziffern. Wer keine `.env` mag, schreibt
+das Token an beiden Stellen unten direkt statt `${LUMEN_AKTUALISIERER_TOKEN:-}`
+hin.
+
+**2. Die `docker-compose.yml` ergänzen:** *Container Manager › Projekt ›
+lumen*, *Stoppen*, dann *YAML-Konfiguration* bearbeiten. Beim Dienst
+`lumen` dazu (`labels` auf derselben Höhe wie `restart`, die zwei Zeilen
+unter `environment`):
+
+```yaml
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    environment:
+      # … was schon da ist, und dazu:
+      - LUMEN_AKTUALISIERER_URL=http://aktualisierer:8080
+      - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
+```
+
+Und unter `services:` einen zweiten Dienst, auf derselben Höhe wie
+`lumen:` (zwei Leerzeichen eingerückt):
+
+```yaml
+  aktualisierer:
+    image: nickfedor/watchtower:1.24.0
+    container_name: lumen-aktualisierer
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Europe/Zurich
+      - WATCHTOWER_HTTP_API_ENDPOINTS=update
+      - WATCHTOWER_HTTP_API_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_TIMEOUT=30s
+      - WATCHTOWER_NO_STARTUP_MESSAGE=true
+```
+
+**3. Speichern, dann *Aktion › Erstellen*.** Der Container Manager holt
+den Aktualisierer und startet beide. In der Verwaltung unter *Updates*
+erscheint der Knopf, sobald es eine neuere Fassung gibt (*Jetzt prüfen*).
+
+Gut zu wissen:
+
+- Von selbst tut der Aktualisierer nichts — mit eingeschalteter
+  HTTP-Schnittstelle sind seine eigenen Zeitpläne aus. Nachts aktualisiert
+  Lumen über sein Zeitfenster, weil nur Lumen weiss, ob gerade jemand
+  schaut. (Wer trotzdem einen festen Zeitplan will:
+  `WATCHTOWER_HTTP_API_PERIODIC_POLLS=true` und
+  `WATCHTOWER_SCHEDULE=0 0 4 * * *` — dann aber ohne Rücksicht auf
+  laufende Wiedergaben.)
+- Die Fassung des Aktualisierers ist fest (`1.24.0`). Ab und zu eine
+  neuere eintragen und *Erstellen* — er aktualisiert sich nicht selbst.
+- Der Synology meldet beim Update womöglich, der Container „lumen" sei
+  unerwartet gestoppt worden. Das ist der Aktualisierer und harmlos.
+- Klappt es nicht, sagt die Seite warum: *Token abgelehnt* (die beiden
+  Token-Zeilen müssen denselben Wert bekommen — steht die `.env` am
+  richtigen Ort?), *nicht erreichbar* (läuft `lumen-aktualisierer` im
+  selben Projekt?), *kein neueres Abbild* (es wird nach einer
+  Veröffentlichung noch ein paar Minuten gebaut). Näheres steht im
+  Protokoll des Containers `lumen-aktualisierer`.
+- Weil das Abbild öffentlich ist, braucht der Aktualisierer keine
+  Zugangsdaten. Nur wer ein eigenes, privates Abbild nutzt, trägt dort
+  `REPO_USER` (GitHub-Name) und `REPO_PASS` (Token mit `read:packages`) ein.
+
+Ohne Aktualisierer bleibt es beim Weg oben: *Projekt › lumen › Aktion ›
+Erstellen* (mit `pull_policy: always`) oder per SSH
+`sudo docker compose pull && sudo docker compose up -d`.
 
 ### Ohne Docker
 
@@ -278,9 +379,9 @@ GitHub-Token braucht es dafür nicht — das Repository ist öffentlich.
 *Optional*, nur falls die Updates aus einem privaten Repository kommen
 sollen: ein Token, das die Veröffentlichungen lesen darf (klassisch mit
 Bereich `repo`, oder fein-granular mit Lesezugriff auf *Contents*), in der
-Verwaltung eintragen oder `LUMEN_GITHUB_TOKEN` setzen. Im Container geht
-das Einsetzen nicht: dort heisst Aktualisieren, das Abbild neu zu holen
-(siehe oben).
+Verwaltung eintragen oder `LUMEN_GITHUB_TOKEN` setzen. Im Container setzt
+Lumen nichts selbst ein: dort holt der Aktualisierer das neue Abbild (siehe
+[Updates per Knopfdruck](#updates-per-knopfdruck)).
 
 Im Paket liegt neben `lumen` noch `lumen-relay` — der gehört nicht hierhin,
 sondern auf eine Maschine mit öffentlicher Adresse. Siehe „Von unterwegs
@@ -681,6 +782,8 @@ Im Container stehen sie bei `environment`, ohne Docker gehen sie genauso
 | `LUMEN_RELAY_SECRET` | `--relay-secret` | — | Gemeinsames Geheimnis mit dem Vermittler |
 | `LUMEN_RELAY_FINGERPRINT` | `--relay-fingerprint` | — | Fingerabdruck des Vermittler-Zertifikats (gibt der Vermittler beim Start aus) |
 | `LUMEN_GITHUB_TOKEN` | — | — | *Optional.* Die Update-Prüfung braucht kein Token; nur für Updates aus einem privaten Repository (siehe „Aktuell bleiben"). Ein Token aus der Verwaltung hat Vorrang |
+| `LUMEN_AKTUALISIERER_URL` | — | — | Adresse des Aktualisierers für Updates per Knopfdruck im Container, etwa `http://aktualisierer:8080` (siehe [Updates per Knopfdruck](#updates-per-knopfdruck)). Nur hier einstellbar, nicht in der Verwaltung |
+| `LUMEN_AKTUALISIERER_TOKEN` | — | — | Geheimes Token für den Aktualisierer, dasselbe wie dort `WATCHTOWER_HTTP_API_TOKEN` (am besten über die Datei `.env`). Wird nie angezeigt, nie protokolliert und nie an Geräte geschickt |
 | `LUMEN_SOURCE_URL` | — | dieses Repository | Wo der Quelltext deiner Fassung liegt (AGPL, siehe [Lizenz](#lizenz)) |
 | `LUMEN_TMDB_URL`, `LUMEN_TMDB_IMG_URL`, `LUMEN_OMDB_URL` | — | die echten Dienste | Andere Adressen für die Metadaten-Quellen — nur für Tests oder einen eigenen Spiegel. Absichtlich nicht in der Verwaltung einstellbar |
 | `LUMEN_UPDATE_API` | — | `https://api.github.com` | Nur für Tests |
