@@ -84,7 +84,7 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 
 	// Dasselbe Gerät spielt immer nur eine Sache: ein Sprung im Film startet
 	// den Strom neu, ist aber keine zweite Wiedergabe.
-	s.live.ReplaceFor(acc.ID, dev.Name)
+	s.live.ReplaceFor(acc.ID, geraetKennung(dev))
 	// Erst nach dem Ersetzen zählen: Ein Sprung im eigenen Film ist keine
 	// weitere Wiedergabe und keine weitere Umwandlung.
 	if n := s.live.CountFor(acc.ID); n >= lim.MaxStreams {
@@ -102,7 +102,7 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 
 	sess := s.live.Start(&stream.Session{
 		AccountID: acc.ID, Name: acc.Name, Avatar: acc.Avatar,
-		DeviceName: dev.Name, DeviceKind: dev.Kind, FileID: f.ID,
+		DeviceName: dev.Name, DeviceKind: dev.Kind, Geraet: geraetKennung(dev), FileID: f.ID,
 		Mode: bp.mode, Reason: bp.reason, Bitrate: bp.plan.Bitrate,
 		FromCodec: f.VideoCodec, ToCodec: zielCodec(bp.plan, f),
 		FromHeight: f.Height, ToHeight: zielHoehe(bp.plan, f),

@@ -180,14 +180,8 @@ func (s *Server) unlock(w http.ResponseWriter, r *http.Request) {
 	if id == "" && in.Name != "" {
 		id = s.profilZuName(r.Context(), in.Name)
 	}
-	// Gebremst wird je Profil — und zu Hause zusätzlich je Absender. Von
-	// unterwegs kommen alle über denselben Weg; eine Bremse je Absender
-	// träfe dort jeden, und ein Fremder könnte mit ein paar falschen
-	// Versuchen alle anderen aussperren.
-	//
-	// Die Zähler für zu Hause und unterwegs sind getrennt: Wer von aussen
-	// den PIN von „Alex" errät, sperrt damit nur die Anmeldung von
-	// unterwegs — nicht die Profilauswahl im Wohnzimmer.
+	// Gebremst wird je Profil, egal woher (profilBremse), und zusätzlich
+	// je Absender nach der echten Adresse der Verbindung.
 	schluessel := s.profilBremse(r, id, in.Name)
 	frei, warte := s.bremse.anfangen(schluessel...)
 	if !frei {

@@ -9,6 +9,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -65,7 +66,7 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request) {
 	// Bildschirmzeit: keine neue Wiedergabe ausserhalb der Zeit. Eine
 	// laufende holt weiter ihre Bereiche, bis der Wächter sie nach der
 	// Nachfrist beendet (bildschirmzeit.go).
-	if s.live.Finden(acc.ID, dev.Name, f.ID, "direct") == "" && s.bildschirmzeitGesperrt(w, r) {
+	if s.live.Finden(acc.ID, geraetKennung(dev), f.ID, "direct") == "" && s.bildschirmzeitGesperrt(w, r) {
 		return
 	}
 
@@ -92,7 +93,7 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request) {
 	// auf 2 Geräten".
 	sess, n := s.live.Beitreten(&stream.Session{
 		AccountID: acc.ID, Name: acc.Name, Avatar: acc.Avatar,
-		DeviceName: dev.Name, DeviceKind: dev.Kind, FileID: f.ID,
+		DeviceName: dev.Name, DeviceKind: dev.Kind, Geraet: geraetKennung(dev), FileID: f.ID,
 		Mode: "direct", Reason: plan.Reason, Bitrate: f.Bitrate,
 		FromCodec: f.VideoCodec, ToCodec: f.VideoCodec,
 		FromHeight: f.Height, ToHeight: f.Height,
@@ -145,6 +146,19 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(&stoppableWriter{ResponseWriter: w, ctx: ctx, drossel: sess.Drossel,
 		melder: &melder{live: s.live, id: sess.ID, letzt: time.Now()}},
 		r.WithContext(ctx), filepath.Base(f.Path), info.ModTime(), fh)
+}
+
+// geraetKennung: woran Lumen ein Gerät erkennt — seine Anmeldung (ein
+// Stück des Token-Prüfwerts), nicht sein Name. Zwei Geräte mit demselben
+// Namen sind zwei Geräte.
+func geraetKennung(dev *store.Device) string {
+	if dev == nil {
+		return ""
+	}
+	if len(dev.TokenHash) >= 8 {
+		return "t:" + hex.EncodeToString(dev.TokenHash[:8])
+	}
+	return dev.Name
 }
 
 // fileForRequest holt die Datei und prüft dabei, ob das Konto den Titel

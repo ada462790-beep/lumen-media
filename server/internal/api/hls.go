@@ -99,7 +99,7 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 			hlsStartMu.Unlock()
 		}
 	}()
-	s.live.ReplaceFor(acc.ID, dev.Name)
+	s.live.ReplaceFor(acc.ID, geraetKennung(dev))
 	if n := s.live.CountFor(acc.ID); n >= lim.MaxStreams {
 		failW(w, http.StatusTooManyRequests,
 			"du schaust schon auf {n} Geräten — in spätestens 2 Minuten ist wieder ein Platz frei, "+
@@ -114,7 +114,7 @@ func (s *Server) hlsMaster(w http.ResponseWriter, r *http.Request) {
 	}
 	sess := s.live.Start(&stream.Session{
 		AccountID: acc.ID, Name: acc.Name, Avatar: acc.Avatar,
-		DeviceName: dev.Name, DeviceKind: dev.Kind, FileID: f.ID,
+		DeviceName: dev.Name, DeviceKind: dev.Kind, Geraet: geraetKennung(dev), FileID: f.ID,
 		Mode: mode, Reason: reason, Bitrate: plan.Bitrate,
 		FromCodec: f.VideoCodec, ToCodec: zielCodec(plan, f),
 		FromHeight: f.Height, ToHeight: zielHoehe(plan, f),

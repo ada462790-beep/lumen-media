@@ -58,3 +58,22 @@ func TestDrosselAnlauf(t *testing.T) {
 		t.Fatal("Warten nicht abgebrochen")
 	}
 }
+
+// Zwei Geräte mit demselben Namen („Chrome · Linux") sind zwei Geräte:
+// Sie verdrängen sich nicht mehr gegenseitig. Dieselbe Anmeldung ersetzt
+// ihre eigene Wiedergabe weiterhin.
+func TestGleicherNameIstNichtGleichesGeraet(t *testing.T) {
+	l := NewLive()
+	a, _ := l.Beitreten(&Session{AccountID: "k", DeviceName: "Chrome · Linux", Geraet: "t:1", FileID: "f1", Mode: "direct"}, 5)
+	b, _ := l.Beitreten(&Session{AccountID: "k", DeviceName: "Chrome · Linux", Geraet: "t:2", FileID: "f2", Mode: "direct"}, 5)
+	if a == nil || b == nil || !l.Laeuft(a.ID) || !l.Laeuft(b.ID) {
+		t.Fatal("ein Gerät hat das andere verdrängt")
+	}
+	l.ReplaceFor("k", "t:2")
+	if !l.Laeuft(a.ID) || l.Laeuft(b.ID) {
+		t.Fatal("ReplaceFor traf das falsche Gerät")
+	}
+	if l.Grund(b.ID) != GrundErsetzt {
+		t.Fatalf("Grund: %q", l.Grund(b.ID))
+	}
+}

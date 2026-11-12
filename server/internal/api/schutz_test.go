@@ -530,3 +530,32 @@ func TestPinAendernTeiltBremse(t *testing.T) {
 		t.Fatalf("Anmelden ungebremst nach Rateversuchen beim Ändern: %d", resp.StatusCode)
 	}
 }
+
+// Wer zu Hause ausgesperrt ist, kommt mit einem X-Forwarded-For-Kopf
+// nicht in einen frischen Zähler (Sicherheitsbericht N-1).
+func TestBremseOhneUmwegUeberKopf(t *testing.T) {
+	h := newHarness(t)
+	lea, _ := h.st.CreateAccount(t.Context(), store.NewAccount{Name: "Lea", LockKind: "pin", Secret: "1234"})
+	versuch := func(geheim string, kopf bool) int {
+		req, _ := http.NewRequest("POST", h.srv.URL+"/api/v1/unlock",
+			strings.NewReader(fmt.Sprintf(`{"profileId":%q,"name":"Lea","secret":%q}`, lea.ID, geheim)))
+		if kopf {
+			req.Header.Set("X-Forwarded-For", "8.8.8.8")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	for i := 0; i < 4; i++ {
+		versuch("0000", false)
+	}
+	if c := versuch("1234", false); c != 429 {
+		t.Fatalf("zu Hause nicht gebremst: %d", c)
+	}
+	if c := versuch("1234", true); c != 429 {
+		t.Fatalf("mit X-Forwarded-For an der Bremse vorbei: %d", c)
+	}
+}

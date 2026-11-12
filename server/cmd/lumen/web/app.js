@@ -105,8 +105,10 @@ const S = {
 /* ---------------------------------------------------------------- Hilfen */
 
 // Auch das einfache Hochkomma: sonst bräche ein Wert in einem Attribut
-// mit '…' aus, und der Rest des Texts würde zu Markup.
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
+// mit '…' aus, und der Rest des Texts würde zu Markup. Steuerzeichen für
+// die Schreibrichtung (U+202A–202E, U+2066–2069) fallen weg: Ein Dateiname
+// mit „Rechts-nach-links" täuschte sonst einen anderen Namen vor.
+const esc = s => String(s ?? '').replace(/[\u202A-\u202E\u2066-\u2069]/g, '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Staffel und Folge kurz: „S1 F2" auf Deutsch, „S1 E2" auf Englisch.
@@ -2466,7 +2468,7 @@ function zufallsKennung() {
      - abgelaufen (lange Pause) oder unbekannt: still an der aktuellen
        Stelle neu ansetzen — höchstens einmal je Fehler, sonst Meldung;
      - beendet: sagen und den Player schliessen;
-     - ersetzt (dasselbe Gerät spielt anderes): still schliessen;
+     - ersetzt (dieselbe Anmeldung spielt anderes): sagen und schliessen;
      - fehler: den Text des Servers zeigen (keine Umwandlung erlaubt,
        zu viele Geräte, Server ausgelastet …). */
 async function stromAbgerissen(p, lief) {
@@ -2484,6 +2486,9 @@ async function stromAbgerissen(p, lief) {
   if (S.playing !== p || p.strom !== strom) return;
   switch (g.code) {
     case 'wiedergabe_ersetzt':
+      // Dieselbe Anmeldung (etwa ein zweiter Tab) spielt jetzt etwas
+      // anderes – sagen, statt still mitten im Film zu schliessen.
+      toast(tr('Auf diesem Gerät läuft jetzt etwas anderes.'));
       return stopPlayer();
     case 'wiedergabe_beendet':
       toast(tr('Die Wiedergabe wurde beendet.'));

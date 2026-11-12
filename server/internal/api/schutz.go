@@ -256,23 +256,29 @@ func (s *Server) pinHinweis(ctx context.Context, accountID string) (time.Time, b
 }
 
 // profilBremse: die Schlüssel der Bremse für Rateversuche am PIN eines
-// Profils. Derselbe Zähler für Anmelden und PIN-Ändern; getrennt nach zu
-// Hause und unterwegs (siehe unlock), zu Hause zusätzlich je Absender.
+// Profils. Derselbe Zähler für Anmelden und PIN-Ändern; zusätzlich je
+// Absender.
+//
+// Welcher Zähler gilt, richtet sich nur nach dem, was sich nicht fälschen
+// lässt: Kam die Anfrage über den Vermittler (VonAussen), zählt der Zähler
+// „Vermittler" — so sperrt ein Fremder, der von aussen den PIN von „Alex"
+// rät, nicht die Profilauswahl im Wohnzimmer. Alles andere zählt am
+// Zähler der direkten Verbindung, und der Absender ist die echte Adresse
+// der Verbindung. Köpfe wie X-Forwarded-For machen eine Anfrage zwar
+// strenger zu „unterwegs" (vonAussen), wählen aber nie den Zähler: Früher
+// schickte, wer zu Hause ausgesperrt war, einfach den Kopf mit und riet im
+// frischen Zähler weiter.
 // name: wenn das Profil (von unterwegs) nur über den Namen bekannt ist.
 func (s *Server) profilBremse(r *http.Request, id, name string) []string {
-	aussen := vonAussen(r)
-	herkunft := ":heim"
-	if aussen {
-		herkunft = ":aussen"
+	weg := ":direkt"
+	if v, _ := r.Context().Value(ctxVonAussen).(bool); v {
+		weg = ":vermittler"
 	}
-	schluessel := []string{"profil:" + id + herkunft}
+	profil := "profil:" + id
 	if id == "" {
-		schluessel = []string{"profil:?" + strings.ToLower(strings.TrimSpace(name)) + herkunft}
+		profil = "profil:?" + strings.ToLower(strings.TrimSpace(name))
 	}
-	if !aussen {
-		schluessel = append(schluessel, quelle(r))
-	}
-	return schluessel
+	return []string{profil + weg, quelle(r)}
 }
 
 // besitzerName nennt, wer bei einem vergessenen PIN helfen kann.

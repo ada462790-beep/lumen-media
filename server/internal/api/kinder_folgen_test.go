@@ -68,3 +68,17 @@ func TestFolgeMitHoehererFreigabeBleibtVerborgen(t *testing.T) {
 		t.Fatalf("Weiter mit nach Fortschritt: %d %s", resp.StatusCode, raw)
 	}
 }
+
+// Steuerzeichen für die Schreibrichtung verlassen den Server nicht
+// (Sicherheitsbericht N-3): Ein Titel „Evil ‮cod" käme sonst verdreht an.
+func TestTitelOhneRichtungszeichen(t *testing.T) {
+	h := newHarness(t)
+	id, _ := h.film("Evil ‮cod⁦x⁩ — „gut“", 1)
+	_, raw := h.do("GET", "/api/v1/items/"+id, "", h.tok)
+	if strings.ContainsAny(string(raw), "‪‫‬‭‮⁦⁧⁨⁩") {
+		t.Fatalf("Richtungszeichen in der Antwort: %q", raw)
+	}
+	if !strings.Contains(string(raw), "Evil codx — „gut“") {
+		t.Fatalf("Titel beschädigt: %s", raw)
+	}
+}

@@ -33,7 +33,7 @@ export const U = {};
   document.head.appendChild(l);
 })();
 
-export const escH = s => String(s ?? '').replace(/[&<>"']/g,
+export const escH = s => String(s ?? '').replace(/[\u202A-\u202E\u2066-\u2069]/g, '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* Verwaltung nur am Schreibtisch: mit Maus oder Trackpad, nicht auf einem
