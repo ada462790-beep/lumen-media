@@ -65,6 +65,11 @@ func (s *Store) Sichern(ctx context.Context, ordner string) error {
 	if ergebnis != "ok" {
 		return fmt.Errorf("die datenbank ist beschädigt (%s) — die alten sicherungen bleiben unberührt", ergebnis)
 	}
+	frei, err := sicherungSperren(ctx, ordner)
+	if err != nil {
+		return fmt.Errorf("sichern: %w", err)
+	}
+	defer frei()
 
 	neu := filepath.Join(ordner, "lumen-neu.db")
 	_ = os.Remove(neu)
@@ -118,6 +123,11 @@ func Wiederherstellen(ordner string, nr int, dbPfad string) error {
 	if nr < 1 || nr > SicherungsGenerationen {
 		return errors.New("diese sicherung gibt es nicht")
 	}
+	frei, err := sicherungSperren(context.Background(), ordner)
+	if err != nil {
+		return err
+	}
+	defer frei()
 	quelle := sicherungsPfad(ordner, nr)
 	if err := pruefeDatei(quelle); err != nil {
 		return err

@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"lumen/internal/store"
 )
@@ -160,7 +161,11 @@ func zuruecksetzenBefehl(args []string, ein io.Reader, aus io.Writer) error {
 		// Gelöscht heisst gelöscht: auch aus der WAL-Datei und den
 		// Sicherungen (store/vergessen.go).
 		_ = st.Ausschreiben(ctx)
-		if err := store.SicherungenVergessen(ctx, filepath.Join(*dataDir, "sicherungen"), ziel.ID); err != nil {
+		// Läuft gerade die nächtliche Sicherung des Servers, wartet das
+		// Bereinigen auf sie (dieselbe Sperre wie im Server).
+		sctx, abbrechen := context.WithTimeout(ctx, 10*time.Minute)
+		defer abbrechen()
+		if err := store.SicherungenVergessen(sctx, filepath.Join(*dataDir, "sicherungen"), ziel.ID); err != nil {
 			fmt.Fprintln(aus, "Achtung: Eine Sicherung liess sich nicht bereinigen:", err)
 		}
 		defer fmt.Fprintln(aus, "Der neue Code gilt nur für eine Anmeldung innerhalb von 72 Stunden: Dabei legt die Person ihren eigenen Schutz fest.")

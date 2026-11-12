@@ -254,7 +254,18 @@ func (s *Store) PrefLoeschen(ctx context.Context, accountID, key string) error {
 //
 // Eine Sicherung aus einer älteren Fassung kennt vielleicht nicht jede
 // Tabelle: Was fehlt, wird übersprungen.
+//
+// Sie nimmt dafür die Sperre der Sicherungen (sicherung_sperre.go): Läuft
+// gerade das nächtliche Sichern, wartet sie, bis es fertig ist.
 func SicherungenVergessen(ctx context.Context, ordner, accountID string) error {
+	if _, err := os.Stat(ordner); err != nil {
+		return nil // noch keine Sicherungen
+	}
+	frei, err := sicherungSperren(ctx, ordner)
+	if err != nil {
+		return err
+	}
+	defer frei()
 	var fehler error
 	for i := 1; i <= SicherungsGenerationen; i++ {
 		pfad := sicherungsPfad(ordner, i)

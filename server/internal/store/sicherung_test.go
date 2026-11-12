@@ -8,9 +8,12 @@
 package store
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // Genau zwei Generationen, nur für den Besitzer lesbar — und eine davon
@@ -281,5 +284,50 @@ func TestGesehenListe(t *testing.T) {
 	}
 	if ids, _ := st.GesehenIDs(ctx, b.ID); len(ids) != 0 {
 		t.Fatalf("fremdes Konto sieht etwas: %v", ids)
+	}
+}
+
+// Sichern und Bereinigen nehmen dieselbe Sperre: Läuft das eine (etwa die
+// nächtliche Sicherung im Server), wartet das andere (etwa „lumen
+// zuruecksetzen" von der Kommandozeile) — statt gleichzeitig dieselben
+// Dateien umzuschreiben.
+func TestSicherungenGesperrt(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	ordner := filepath.Join(t.TempDir(), "sicherungen")
+	if err := st.Sichern(ctx, ordner); err != nil {
+		t.Fatal(err)
+	}
+	frei, err := sicherungSperren(ctx, ordner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kurz, abbrechen := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer abbrechen()
+	if err := SicherungenVergessen(kurz, ordner, "acc_x"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Bereinigen lief trotz Sperre: %v", err)
+	}
+	kurz2, abbrechen2 := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer abbrechen2()
+	if err := st.Sichern(kurz2, ordner); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Sichern lief trotz Sperre: %v", err)
+	}
+	// Wird die Sperre frei, geht es weiter.
+	fertig := make(chan error, 1)
+	go func() { fertig <- SicherungenVergessen(ctx, ordner, "acc_x") }()
+	time.Sleep(150 * time.Millisecond)
+	select {
+	case err := <-fertig:
+		t.Fatalf("nicht gewartet: %v", err)
+	default:
+	}
+	frei()
+	select {
+	case err := <-fertig:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("wartet nach dem Freigeben noch immer")
 	}
 }
