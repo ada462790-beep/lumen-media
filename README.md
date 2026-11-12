@@ -41,6 +41,9 @@ nicht, steht in [DATENSCHUTZ.md](DATENSCHUTZ.md).
 
 ## Loslegen
 
+> **Anleitung als PDF:** [Lumen-Installationsanleitung.pdf](docs/Lumen-Installationsanleitung.pdf) —
+> Schritt für Schritt auf einem Synology-NAS, ohne Terminal (zum Ausdrucken).
+
 Lumen läuft am einfachsten als Docker-Container. Das fertige Abbild gibt es
 für **amd64** (Intel/AMD) und **arm64** (64-Bit-ARM) — siehe
 [Welches NAS passt](#welches-nas-passt).

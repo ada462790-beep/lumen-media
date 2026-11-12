@@ -43,6 +43,8 @@ Tests make sure it stays that way. What is stored and what isn't is listed
 
 ## Install with Docker
 
+> **Step-by-step guide (PDF, German):** [Lumen-Installationsanleitung.pdf](docs/Lumen-Installationsanleitung.pdf)
+
 The image is public: **`ghcr.io/ada462790-beep/lumen-media`** (amd64 and
 arm64). No registry login, no token.
 
