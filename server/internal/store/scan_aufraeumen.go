@@ -230,8 +230,18 @@ func scanVerfuegbarkeitNachruesten(db *sql.DB) error {
 			return err
 		}
 	}
-	_, err := db.Exec(`CREATE INDEX IF NOT EXISTS file_defekt ON media_file (defekt) WHERE defekt IS NOT NULL`)
-	return err
+	for _, stmt := range []string{
+		`CREATE INDEX IF NOT EXISTS file_defekt ON media_file (defekt) WHERE defekt IS NOT NULL`,
+		// Personen- und Genre-Suche, ähnliche Titel (kennzahlen.go,
+		// suche.go): von einem Namen bzw. Genre zu den Titeln.
+		`CREATE INDEX IF NOT EXISTS besetzung_by_name ON besetzung (name, ord)`,
+		`CREATE INDEX IF NOT EXISTS genre_by_name ON genre (name, item_id)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // FehlendFrist: So lange bleibt ein Titel ohne abspielbare Datei für die

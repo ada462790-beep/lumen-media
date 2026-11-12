@@ -137,29 +137,16 @@ func Deuten(eingabe string, genres []string, personen []string) Deutung {
 	return d
 }
 
-// PersonenNamen nennt alle Namen aus der Besetzung sichtbarer Titel —
-// fürs Deuten. Mehr als ein paar tausend werden es in einem Haushalt nicht.
+// PersonenNamen nennt die Namen aus der Besetzung — fürs Deuten einer
+// Sucheingabe. Aus dem Speicher (personen_vorrat.go), ohne Grenze. Ob die
+// Titel einer Person sichtbar sind, entscheidet danach die Abfrage selbst
+// (q.Person geht durch bedingung).
 func (s *Store) PersonenNamen(ctx context.Context, q Query) ([]string, error) {
-	where, args, ok := bedingung(q)
-	if !ok {
+	if _, _, ok := bedingung(q); !ok {
 		return []string{}, nil
 	}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT DISTINCT b.name FROM besetzung b JOIN item i ON i.id = b.item_id
-		  WHERE `+strings.Join(where, " AND ")+` LIMIT 5000`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []string{}
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			return nil, err
-		}
-		out = append(out, n)
-	}
-	return out, rows.Err()
+	namen, _, err := s.allePersonen(ctx)
+	return namen, err
 }
 
 // PersonenSuchen findet Leute aus der Besetzung, deren Name die Eingabe
@@ -176,13 +163,33 @@ func (s *Store) PersonenSuchen(ctx context.Context, q Query, text string, limit 
 	if limit <= 0 {
 		limit = 8
 	}
-	args = append(args, "%"+text+"%", limit)
+	// Die passenden Namen aus dem Speicher (höchstens 200), dann nur für
+	// diese über den Index besetzung_by_name zählen — statt LIKE '%…%'
+	// über die ganze Besetzung.
+	namen, klein, err := s.allePersonen(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var kandidaten []string
+	for i, k := range klein {
+		if strings.Contains(k, text) {
+			kandidaten = append(kandidaten, namen[i])
+			if len(kandidaten) >= 200 {
+				break
+			}
+		}
+	}
+	if len(kandidaten) == 0 {
+		return []PersonTreffer{}, nil
+	}
+	args = append(append(toAny(kandidaten), args...), limit)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT b.name, count(DISTINCT i.id),
 		        COALESCE(MAX(CASE WHEN b.bild != '' THEN b.item_id END), ''),
 		        COALESCE(MAX(CASE WHEN b.bild != '' THEN b.bild END), '')
-		   FROM besetzung b JOIN item i ON i.id = b.item_id
-		  WHERE `+strings.Join(where, " AND ")+` AND lower(b.name) LIKE ?
+		   FROM besetzung b INDEXED BY besetzung_by_name CROSS JOIN item i
+		  WHERE b.name IN (`+placeholders(len(kandidaten))+`) AND i.id = b.item_id
+		    AND `+strings.Join(where, " AND ")+`
 		  GROUP BY b.name ORDER BY count(DISTINCT i.id) DESC, b.name LIMIT ?`, args...)
 	if err != nil {
 		return nil, err

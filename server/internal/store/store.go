@@ -334,7 +334,7 @@ func optimieren(ctx context.Context, db *sql.DB) error {
 	if da > 0 {
 		_ = conn.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_stat1 WHERE tbl = 'item'`).Scan(&da)
 	}
-	if da == 0 {
+	if da == 0 || statistikVeraltet(ctx, conn) {
 		_, err = conn.ExecContext(ctx, `ANALYZE`)
 		return err
 	}
@@ -343,6 +343,38 @@ func optimieren(ctx context.Context, db *sql.DB) error {
 	}
 	_, err = conn.ExecContext(ctx, `PRAGMA optimize`)
 	return err
+}
+
+// statistikVeraltet: Die Zeilenzahl von item oder media_file weicht um
+// mehr als ein Viertel von der ab, die beim letzten ANALYZE galt.
+//
+// PRAGMA optimize zählt erst nach einer Verzehnfachung neu. Nach „erst
+// Filme, dann Serien" (5 000 Filme, dann 5 000 Folgen dazu) blieb so die
+// Statistik vom Film-Durchlauf stehen, in der parent_id überall NULL war
+// — für den Planer ein wertloser Index —, auch über jeden Neustart
+// hinweg. Ein volles ANALYZE kostet bei 10 000 Titeln 20 ms.
+func statistikVeraltet(ctx context.Context, conn *sql.Conn) bool {
+	for _, tbl := range []string{"item", "media_file"} {
+		var stat string
+		if err := conn.QueryRowContext(ctx,
+			// Der Index des Primärschlüssels: Er enthält jede Zeile (ein
+			// Teil-Index wie file_fehlt zählte nur die fehlenden).
+			`SELECT stat FROM sqlite_stat1 WHERE tbl = ?1 AND idx = 'sqlite_autoindex_' || ?1 || '_1'`, tbl).Scan(&stat); err != nil {
+			return true
+		}
+		var damals int64
+		if _, err := fmt.Sscan(stat, &damals); err != nil {
+			return true
+		}
+		var jetzt int64
+		if err := conn.QueryRowContext(ctx, `SELECT count(*) FROM `+tbl).Scan(&jetzt); err != nil {
+			return false
+		}
+		if jetzt*4 > damals*5 || jetzt*5 < damals*4 {
+			return true
+		}
+	}
+	return false
 }
 
 // nachUmbauIndizes legt Indizes an, die eine Spalte erst nach umbauen()

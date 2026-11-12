@@ -237,8 +237,7 @@ func (s *Store) MetadatenZuruecksetzen(ctx context.Context, libraryID, itemID st
 	switch {
 	case itemID != "":
 		res, err = s.db.ExecContext(ctx,
-			`UPDATE item SET match_state = 'pending' WHERE id = ? OR parent_id = ?
-			    OR parent_id IN (SELECT id FROM item WHERE parent_id = ?)`, itemID, itemID, itemID)
+			`UPDATE item SET match_state = 'pending' WHERE id IN (`+titelUndKinder+`)`, itemID)
 	case libraryID != "":
 		res, err = s.db.ExecContext(ctx,
 			`UPDATE item SET match_state = 'pending' WHERE library_id = ? AND match_state != 'manual'`, libraryID)
@@ -1097,16 +1096,22 @@ func (s *Store) SetArtwork(ctx context.Context, itemID, kind, path, sourceURL st
 	return err
 }
 
+// titelUndKinder: die Kennungen eines Titels (?1), seiner Kinder und
+// Enkel — drei Zweige über item_by_parent statt eines OR, mit dem SQLite
+// keinen Index fand.
+const titelUndKinder = `SELECT ?1
+	UNION ALL SELECT id FROM item WHERE parent_id = ?1
+	UNION ALL SELECT e.id FROM item st JOIN item e ON e.parent_id = st.id WHERE st.parent_id = ?1`
+
 // PendingUnter sind die wartenden Titel eines Films oder einer Serie samt
 // deren Folgen — für „Zuweisen" und „Neu laden", die genau diesen Titel
 // meinen und nicht die ersten paar hundert der ganzen Mediathek.
 func (s *Store) PendingUnter(ctx context.Context, id string) ([]Item, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+itemCols+` FROM item i
 		WHERE i.match_state = 'pending' AND i.kind != 'season'
-		  AND (i.id = ? OR i.parent_id = ?
-		       OR i.parent_id IN (SELECT id FROM item WHERE parent_id = ?))
+		  AND i.id IN (`+titelUndKinder+`)
 		ORDER BY CASE i.kind WHEN 'series' THEN 0 WHEN 'movie' THEN 1 ELSE 2 END,
-		         i.season_no, i.episode_no, i.id`, id, id, id)
+		         i.season_no, i.episode_no, i.id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -1283,6 +1288,7 @@ type Person struct {
 }
 
 func (s *Store) BesetzungSetzen(ctx context.Context, itemID string, leute []Person) error {
+	defer s.personenVeraltet() // personen_vorrat.go
 	return s.tx(ctx, func(t *sql.Tx) error {
 		// Von Hand gepflegt: keine Quelle schreibt darüber (sperren.go).
 		if gesperrt(ctx, t, itemID, FeldBesetzung) {
@@ -1405,18 +1411,7 @@ func (s *Store) ErstePfade(ctx context.Context, ids []string) (map[string]string
 	out := map[string]string{}
 	for a := 0; a < len(ids); a += 300 {
 		teil := ids[a:min(a+300, len(ids))]
-		ph := placeholders(len(teil))
-		args := append(append(toAny(teil), toAny(teil)...), toAny(teil)...)
-		rows, err := s.db.QueryContext(ctx,
-			`SELECT x.t, f.path, COALESCE(e.season_no, 0), COALESCE(e.episode_no, 0)
-			   FROM (SELECT id AS t, id AS e FROM item WHERE id IN (`+ph+`)
-			         UNION ALL
-			         SELECT parent_id, id FROM item WHERE parent_id IN (`+ph+`)
-			         UNION ALL
-			         SELECT st.parent_id, e.id FROM item st JOIN item e ON e.parent_id = st.id
-			          WHERE st.parent_id IN (`+ph+`)) x
-			   JOIN item e ON e.id = x.e
-			   JOIN media_file f ON f.item_id = x.e`, args...)
+		rows, err := s.db.QueryContext(ctx, erstePfadeSQL(len(teil)), erstePfadeArgs(teil)...)
 		if err != nil {
 			return out, err
 		}
@@ -1446,6 +1441,24 @@ func (s *Store) ErstePfade(ctx context.Context, ids []string) (map[string]string
 		}
 	}
 	return out, nil
+}
+
+func erstePfadeSQL(n int) string {
+	ph := placeholders(n)
+	return `SELECT x.t, f.path, COALESCE(e.season_no, 0), COALESCE(e.episode_no, 0)
+	   FROM (SELECT id AS t, id AS e FROM item WHERE id IN (` + ph + `)
+	         UNION ALL
+	         SELECT parent_id, id FROM item INDEXED BY item_by_parent WHERE parent_id IN (` + ph + `)
+	         UNION ALL
+	         SELECT st.parent_id, e.id FROM item st INDEXED BY item_by_parent
+	           JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
+	          WHERE st.parent_id IN (` + ph + `)) x
+	   CROSS JOIN item e CROSS JOIN media_file f INDEXED BY file_by_item
+	  WHERE e.id = x.e AND f.item_id = x.e`
+}
+
+func erstePfadeArgs(ids []string) []any {
+	return append(append(toAny(ids), toAny(ids)...), toAny(ids)...)
 }
 
 // SerienOhneIMDb: zugeordnete Serien ohne IMDb-Kennung, bei denen noch
