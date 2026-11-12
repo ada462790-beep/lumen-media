@@ -303,7 +303,6 @@
  "Gilt eine Viertelstunde, dann fragt Lumen wieder.": "Valid for 15 minutes, then Lumen asks again.",
  "Gilt für dein Profil auf allen Geräten.": "Applies to your profile on all devices.",
  "Gilt für die Profilauswahl, neue Geräte und alle Profile ohne eigene Wahl. Sprache und Region der Metadaten stellst du unter „Poster und Beschreibungen“ ein.": "Applies to the profile picker, new devices and all profiles without their own choice. Set the language and region for metadata under “Posters and Descriptions”.",
- "Gilt für diesen Browser.": "Applies to this browser.",
  "Gilt im Browser und in den Apps.": "Applies in the browser and in the apps.",
  "Gilt jetzt für alle": "Now applies to everyone",
  "Gilt sieben Tage und nur einmal.": "Valid for seven days and only once.",
@@ -784,7 +783,6 @@
  "Wer sie sieht, sieht nur die Titel, die er ohnehin sehen darf.": "Anyone who sees it only sees the titles they’re allowed to see anyway.",
  "Wer was schaut, sieht auch hier niemand.": "Nobody can see who watches what here either.",
  "Wie das Gerät": "Match Device",
- "Wie der Server ({name})": "Same as server ({name})",
  "Wie der Titel im Alphabet einsortiert wird, z. B. „Herr der Ringe 1“. Leer = nach dem Titel.": "How the title is sorted alphabetically, e.g. “Lord of the Rings 1”. Empty = by title.",
  "Wie oft Lumen von selbst nachsieht": "How often Lumen checks automatically",
  "Wieder offen": "Reopen",
@@ -1324,5 +1322,10 @@
  "Bild im Bild ist hier nicht möglich.": "Picture in Picture isn’t available here.",
  "Die Verbindung ist gerade langsam. Lumen lädt weiter …": "The connection is slow right now. Lumen keeps loading …",
  "Im Bild-im-Bild-Fenster erscheinen die Untertitel nicht.": "Subtitles don’t appear in the Picture in Picture window.",
- "{titel} – Wiedergabe": "{titel} – Playback"
+ "{titel} – Wiedergabe": "{titel} – Playback",
+ "Ordner wählen": "Choose a Folder",
+ "Sehr gross": "Extra Large",
+ "Textgrösse": "Text Size",
+ "Gilt für diesen Browser. Die Schrift wächst auch mit der Textgrösse von Browser und System.": "Applies to this browser. Text also grows with your browser and system text size.",
+ "Wie der Server – {name}": "Same as server – {name}"
 }

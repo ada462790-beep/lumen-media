@@ -16,5 +16,8 @@
  "Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag — ausser mitten in einem Zeitfenster über Mitternacht, das zählt bis zu seinem Ende zum Vortag. Die Verwaltung sieht die Minuten nur ungefähr, in Viertelstunden. Mit einer Tagesgrenze gibt es keine Downloads.": "Gezählt wird nur, solange ein Video läuft. Zwei Geräte gleichzeitig zählen einmal. Es gilt die Uhr des Servers; um Mitternacht beginnt ein neuer Tag — außer mitten in einem Zeitfenster über Mitternacht, das zählt bis zu seinem Ende zum Vortag. Die Verwaltung sieht die Minuten nur ungefähr, in Viertelstunden. Mit einer Tagesgrenze gibt es keine Downloads.",
  "Das läuft auch weiter, wenn du das Fenster schliesst. Bilder und Folgen kommen danach im Hintergrund.": "Das läuft auch weiter, wenn du das Fenster schließt. Bilder und Folgen kommen danach im Hintergrund.",
  "Der Name endet auf „-trailer“, „-sample“, „-featurette“ … oder ist nur „sample“. Heisst ein Film wirklich so, die Datei umbenennen.": "Der Name endet auf „-trailer“, „-sample“, „-featurette“ … oder ist nur „sample“. Heißt ein Film wirklich so, die Datei umbenennen.",
- "Das Update liess sich nicht einsetzen: {grund}": "Das Update ließ sich nicht einsetzen: {grund}"
+ "Das Update liess sich nicht einsetzen: {grund}": "Das Update ließ sich nicht einsetzen: {grund}",
+ "Sehr gross": "Sehr groß",
+ "Textgrösse": "Textgröße",
+ "Gilt für diesen Browser. Die Schrift wächst auch mit der Textgrösse von Browser und System.": "Gilt für diesen Browser. Die Schrift wächst auch mit der Textgröße von Browser und System."
 }

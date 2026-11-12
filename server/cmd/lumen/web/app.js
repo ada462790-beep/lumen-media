@@ -27,6 +27,7 @@ import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBe
 import { grenzenBearbeiten } from './konto.js';
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
+import { tastaturEinrichten } from './tastatur.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -172,6 +173,31 @@ function anmeldeHinweis() {
   return mitteilung(tr('PIN zurückgesetzt'), h.text);
 }
 
+/* Leise Ansage für Bildschirmleser (eigene Live-Region, damit sie keine
+   Meldung verdrängt). */
+function ansagen(text) {
+  let el = document.getElementById('ansage');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ansage'; el.className = 'sr-only';
+    el.setAttribute('aria-live', 'polite'); el.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(el);
+  }
+  el.textContent = '';
+  setTimeout(() => { el.textContent = text; }, 60);
+}
+// Suchtreffer: nach einer kurzen Pause die Zahl ansagen, nicht bei jedem Zeichen.
+let ansageZeit = null, letzteAnsage = '';
+function trefferAnsagen() {
+  clearTimeout(ansageZeit);
+  const q = S.query.trim();
+  if (!q || S.busy || S.error) return;
+  const d = S.data || {};
+  const n = (d.items || []).length + (d.folgen || []).length;
+  const text = n ? tr('{n} Treffer', { n }) : tr('Keine Treffer für „{q}“', { q });
+  ansageZeit = setTimeout(() => { if (text !== letzteAnsage) { letzteAnsage = text; ansagen(text); } }, 500);
+}
+
 function toast(msg) {
   const bereich = document.getElementById('meldungen') || document.body;
   bereich.querySelector('.toast')?.remove();
@@ -315,7 +341,7 @@ function posterCard(it, hier = false) {
     <div class="thumb thumb--poster" style="position:relative;width:168px;height:252px;border-radius:12px;overflow:hidden">
       ${artOf(it)}
       ${abzeichen(it)}
-      ${it.finished ? `<span class="seen-dot" aria-hidden="true">${svg(I.check, 13, 2.6)}</span>` : ''}
+      ${it.finished ? `<span class="watched" aria-hidden="true">${svg(I.check, 13, 2.6)}</span>` : ''}
       ${pct > 1 && !it.finished ? `<div class="progress progress--onart"><i style="width:${pct}%"></i></div>` : ''}
     </div>
     <div class="t-body clamp-1" style="margin-top:10px">${esc(it.title)}</div>
@@ -556,7 +582,7 @@ function sidebar() {
   const p = S.me?.account;
   if (!p) return '';
   const items = NAV().map(([v, d, label]) =>
-    `<a href="#" class="nav" data-go="${v}" title="${esc(label)}"${
+    `<a href="${adresseFuer(v) || '#'}" class="nav" data-go="${v}" title=""${esc(label)}"${
       S.view === v || (v === 'watchlist' && ['gesehen', 'playlists', 'playlist'].includes(S.view))
         || (v === 'collections' && ['collection', 'sammlungen', 'sammlung'].includes(S.view)) ? ' aria-current="page"' : ''}>${svg(d, 20)}${label}${
       v === 'news' && S.me.neuigkeiten ? `<span class="punkt" aria-hidden="true">${S.me.neuigkeiten > 9 ? '9+' : S.me.neuigkeiten}</span><span class="sr-only">${tr(', {n} ungelesen', { n: S.me.neuigkeiten })}</span>` : ''}</a>`).join('');
@@ -571,8 +597,8 @@ function sidebar() {
     <button class="sidebar-search" data-go="search" title="${tr('Suchen')}">${svg(I.search, 16, 2)}${tr('Suchen')}</button>
     ${items}
     <div class="sidebar-foot">
-      ${verwaltungHier() ? `<a href="#" class="nav nav--quiet" data-go="admin"${ADMIN_VIEWS.includes(S.view) ? ' aria-current="page"' : ''}>${svg(I.gear, 19)}${tr('Verwaltung')}</a>` : ''}
-      <a href="#" class="nav" data-go="settings"${S.view === 'settings' ? ' aria-current="page"' : ''}>
+      ${verwaltungHier() ? `<a href="${adresseFuer('admin') || '#'}" class="nav nav--quiet" data-go="admin"${ADMIN_VIEWS.includes(S.view) ? ' aria-current="page"' : ''}>${svg(I.gear, 19)}${tr('Verwaltung')}</a>` : ''}
+      <a href="${adresseFuer('settings') || '#'}" class="nav" data-go="settings"${S.view === 'settings' ? ' aria-current="page"' : ''}>
         ${avatar(p, 28)}${esc(p.name)}</a>
     </div>
   </aside>`;
@@ -597,9 +623,9 @@ function tabbar() {
   const ich = ['settings', 'wishes', 'news', 'favorites', 'collections', 'collection', 'sammlungen', 'sammlung', 'playlists', 'playlist',
     ...ADMIN_VIEWS].includes(S.view);
   return `<nav class="tabbar glass glass--regular" aria-label="${tr('Navigation')}">
-    ${TABS().map(([v, d, label]) => `<a href="#" class="tab" data-go="${v}"${
+    ${TABS().map(([v, d, label]) => `<a href="${adresseFuer(v) || '#'}" class="tab" data-go="${v}"${
       S.view === v || (v === 'watchlist' && S.view === 'gesehen') ? ' aria-current="page"' : ''}>${svg(d, 22)}<span>${label}</span></a>`).join('')}
-    <a href="#" class="tab" data-go="settings"${ich ? ' aria-current="page"' : ''} style="position:relative">
+    <a href="${adresseFuer('settings') || '#'}" class="tab" data-go="settings"${ich ? ' aria-current="page"' : ''} style="position:relative">
       ${avatar(p, 24)}${S.me.neuigkeiten ? '<span class="punkt punkt--tab" aria-hidden="true"></span>' : ''}
       <span>${tr('Ich')}</span></a>
   </nav>`;
@@ -934,7 +960,10 @@ function render() {
     return;
   }
 
-  if (S.hinweis && !S.me && !S.busy) html = `<div class="anmelde-hinweis" role="alert">${esc(S.hinweis)}</div>` + html;
+  // Ansichten ohne Gerüst (Einrichtung, Einladung, Profilwahl) bekommen
+  // trotzdem eine Hauptlandmarke — für Bildschirmleser der Einstieg.
+  if (!html.includes('<main')) html = `<main id="inhalt">${html}</main>`;
+  if (S.hinweis && !S.me && !S.busy) html =`<div class="anmelde-hinweis" role="alert">${esc(S.hinweis)}</div>` + html;
   const vorherFokus = fokusSchluessel();
   // Dieselbe Seite neu gezeichnet (Stern gesetzt, Folge abgehakt, Schalter
   // umgelegt): an derselben Stelle bleiben. Vorher sprang jede solche
@@ -953,7 +982,10 @@ function render() {
   else { mehrBeobachter?.disconnect(); mehrBeobachter = null; }
   if (S.view === 'search') {
     const q = $('#q');
-    if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    // Nach Enter bleibt die Tastatur des Handys zu (sie verdeckte die Treffer).
+    if (q && !S.suchTastaturZu) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+    S.suchTastaturZu = false;
+    trefferAnsagen();
   }
   if (S.view === 'player') mountPlayer();
   else nachDemZeichnen(vorherFokus);
@@ -982,12 +1014,21 @@ addEventListener('resize', () => randHinweise(), { passive: true });
 
 /* ---------------------------------------------------------------- Darstellung */
 
-/* Hell oder dunkel. Die Farben für hell standen im Designsystem längst
-   bereit; es fehlte nur der Schalter. Voreingestellt bleibt dunkel —
-   so sieht ein Kino aus, und so kennen es alle, die Lumen schon haben. */
+/* Hell oder dunkel. Voreingestellt ist „Wie das Gerät" — so, wie es
+   jede Apple-App hält. Player und grosses Bild bleiben ohnehin dunkel. */
 function darstellung() {
-  try { return localStorage.getItem('lumen.darstellung') || 'dunkel'; } catch { return 'dunkel'; }
+  try { return localStorage.getItem('lumen.darstellung') || 'auto'; } catch { return 'auto'; }
 }
+/* Textgrösse der Oberfläche, zusätzlich zur Einstellung von Browser und
+   System (alle Schriften sind in rem). */
+const TEXTGROESSEN = { normal: '100%', gross: '112.5%', sehrgross: '125%' };
+function textgroesse() {
+  try { const w = localStorage.getItem('lumen.textgroesse'); return TEXTGROESSEN[w] ? w : 'normal'; } catch { return 'normal'; }
+}
+function textgroesseAnwenden() {
+  document.documentElement.style.fontSize = TEXTGROESSEN[textgroesse()];
+}
+textgroesseAnwenden();
 function darstellungAnwenden() {
   const w = darstellung();
   const hell = w === 'hell' || (w === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
@@ -1016,7 +1057,7 @@ function viewSetupSprache() {
   const aktiv = S.setupSprache || sprache();
   return `<div class="center"><div class="panel">
     <div style="text-align:center;margin-bottom:8px">
-      <div class="t-large">${tr('Willkommen bei Lumen')}</div>
+      <h1 class="t-large" style="margin:0">${tr('Willkommen bei Lumen')}</h1>
       <p class="hint" style="margin-top:8px">${tr('Wähle Sprache und Region. Sie gilt für den ganzen Server; jedes Profil kann später seine eigene wählen.')}</p>
     </div>
     <form id="setupsprache" class="panel">
@@ -1034,7 +1075,7 @@ function viewSetup() {
   if (!S.setupSpracheFertig) return viewSetupSprache();
   return `<div class="center"><div class="panel">
     <div style="text-align:center;margin-bottom:8px">
-      <div class="t-large">${tr('Willkommen bei Lumen')}</div>
+      <h1 class="t-large" style="margin:0">${tr('Willkommen bei Lumen')}</h1>
       <p class="hint" style="margin-top:8px">${tr('Du richtest diesen Server ein und wirst sein Besitzer. Später lädst du andere mit einem Link dazu ein — jede Person bekommt ein eigenes Profil.')}</p>
       <p class="hint" style="margin-top:6px">${tr('Lumen war hier schon in Gebrauch? Dann ist der Datenordner falsch eingehängt — bitte nicht einrichten, sondern zuerst die Compose-Datei prüfen.')}</p>
     </div>
@@ -1046,12 +1087,12 @@ function viewSetup() {
                minlength="8" required>
         <span class="hint">${tr('Mindestens acht Zeichen. Damit meldest du dich auf allen Geräten an.')}</span></div>
       <div class="field"><span class="hint">${tr('Sprache und Region: {name}', { name: esc(sprachNameVon(sprache())) })} ·
-        <a href="#" data-setupsprache-zurueck style="color:#4aa3ff">${tr('Ändern')}</a></span></div>
+        <a href="#" class="link" data-setupsprache-zurueck>${tr('Ändern')}</a></span></div>
       <div class="err">${esc(S.error)}</div>
       <button class="btn btn-primary" style="height:46px">${tr('Server einrichten')}</button>
     </form>
     <p class="hint" style="text-align:center">
-      ${tr('Du wurdest eingeladen?')} <a href="#" data-go="redeem" style="color:#4aa3ff">${tr('Einladung einlösen')}</a></p>
+      ${tr('Du wurdest eingeladen?')} <a href="#" class="link" data-go="redeem">${tr('Einladung einlösen')}</a></p>
   </div></div>`;
 }
 
@@ -1070,8 +1111,8 @@ function viewRedeem() {
   const code = S.id || f.code || '';
 
   const wahl = [['pin', 'PIN'], ['password', tr('Passwort')], ['none', tr('Ohne Schutz')]].map(([v, n]) =>
-    `<button type="button" class="tab-pill" role="tab" aria-selected="${art === v}"
-       data-lockkind="${v}" style="height:32px;font-size:.875rem">${n}</button>`).join('');
+    `<button type="button" class="tab-pill" role="radio" aria-checked="${art === v}"
+       tabindex="${art === v ? 0 : -1}" data-lockkind="${v}" style="height:32px;font-size:.875rem">${n}</button>`).join('');
 
   const geheim = art === 'none' ? `
     <p class="hint">${tr('{schutzOhne} Das passt für den Fernseher im Wohnzimmer, weniger für ein Profil, das nur dir gehört.', { schutzOhne: esc(T.schutzOhne) })}</p>`
@@ -1085,7 +1126,7 @@ function viewRedeem() {
 
   return `<div class="center"><div class="panel">
     <div style="text-align:center;margin-bottom:8px">
-      <div class="t-large">${tr('Du bist eingeladen')}</div>
+      <h1 class="t-large" style="margin:0">${tr('Du bist eingeladen')}</h1>
       <p class="hint" style="margin-top:8px">${tr('Leg dir ein Profil an. Was du zu sehen bekommst, hat die Person festgelegt, die dich eingeladen hat.')}</p>
     </div>
     <form id="redeemform" class="panel">
@@ -1096,15 +1137,15 @@ function viewRedeem() {
       <div class="field"><label for="rname">${tr('Dein Name')}</label>
         <input id="rname" name="name" autocomplete="name" required
           value="${esc(f.name || '')}" ${S.id ? 'autofocus' : ''}></div>
-      <div class="field"><label>${tr('Anmelden mit')}</label>
-        <div role="tablist" style="display:inline-flex;padding:3px;border-radius:999px;
+      <div class="field"><span id="ranmelden" style="font-size:.8125rem;color:var(--label-2)">${tr('Anmelden mit')}</span>
+        <div role="radiogroup" aria-labelledby="ranmelden" data-radiogruppe style="display:inline-flex;padding:3px;border-radius:999px;
           background:var(--fill);gap:2px">${wahl}</div></div>
       ${geheim}
       <div class="err">${esc(S.error)}</div>
       <button class="btn btn-primary" style="height:46px">${tr('Profil anlegen')}</button>
     </form>
     <p class="hint" style="text-align:center">
-      ${tr('Schon ein Profil?')} <a href="#" data-go="profiles" style="color:#4aa3ff">${tr('Zur Übersicht')}</a></p>
+      ${tr('Schon ein Profil?')} <a href="#" class="link" data-go="profiles">${tr('Zur Übersicht')}</a></p>
   </div></div>`;
 }
 
@@ -1128,7 +1169,7 @@ function viewProfiles() {
     <button class="pcard" data-pick="${esc(p.id)}" data-lock="${esc(p.lockKind)}">
       ${avatar(p, 104)}
       <span class="t-body">${esc(p.name)}${p.lockKind !== 'none' ? ' ' + svg(I.lock, 13, 2.2) : ''}</span>
-      ${p.isKid ? `<span class="badge" style="border:0;background:rgba(48,209,88,.16);color:#30d158">${esc(T.kinderprofil)}</span>` : ''}
+      ${p.isKid ? `<span class="badge badge--gruen">${esc(T.kinderprofil)}</span>` : ''}
     </button>`).join('');
   return `<div class="pwrap">
     <h1 class="t-large" style="margin:0">${tr('Wer schaut?')}</h1>
@@ -1422,7 +1463,8 @@ function viewSearch() {
     <h1 class="t-large" style="margin:0 0 16px">${tr('Suchen')}</h1>
     <form id="searchform" class="sfield" autocomplete="off" role="search">
       ${svg(I.search, 18, 2)}
-      <input id="q" name="q" value="${esc(S.query)}" placeholder="${tr('Titel, Schauspieler, Genre, Jahr …')}" aria-label="${tr('Suchen')}">
+      <input id="q" name="q" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false"
+        value="${esc(S.query)}" placeholder="${tr('Titel, Schauspieler, Genre, Jahr …')}" aria-label="${tr('Suchen')}">
       ${q ? `<button type="button" class="btn btn-round sm" data-clear aria-label="${tr('Leeren')}">${svg(I.x, 15, 2.2)}</button>` : ''}
     </form>
     <div style="margin-top:28px">
@@ -3725,9 +3767,10 @@ function viewSettings() {
             ${['av-a', 'av-b', 'av-c', 'av-d', 'av-k'].map(c => `<button class="avatar ${c}${a.avatar === c ? ' gewaehlt' : ''}" style="--av:44px;border:0" data-avatar="${c}" aria-label="${tr('Farbe {nr}', { nr: c.slice(3).toUpperCase() })}">${esc(a.name[0])}</button>`).join('')}
             ${Object.keys(FIGUREN).map(f => `<button class="avatar avatar--figur${a.avatar === 'fig-' + f ? ' gewaehlt' : ''}" style="--av:44px;border:0;background:${FIGUREN[f][0]}" data-avatar="fig-${f}" aria-label="${f}">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${FIGUREN[f][1]}</svg></button>`).join('')}
-            <label class="avatar${a.avatar === 'bild' ? ' gewaehlt' : ''}" style="--av:44px;background:var(--fill-2);color:var(--label-2);cursor:pointer" aria-label="${tr('Eigenes Bild hochladen')}">
+            <label class="avatar avatar-hochladen${a.avatar === 'bild' ? ' gewaehlt' : ''}" style="--av:44px;background:var(--fill-2);color:var(--label-2);cursor:pointer">
+              <span class="sr-only">${tr('Eigenes Bild hochladen')}</span>
               ${a.avatar === 'bild' ? `<img src="/api/v1/avatar/${esc(a.id)}?v=${S.avatarStand || 0}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : svg('<path d="M12 5v14M5 12h14"/>', 18, 2.2)}
-              <input type="file" accept="image/*" data-avatarbild style="display:none"></label>
+              <input type="file" accept="image/*" data-avatarbild class="sr-only"></label>
           </div>`, tr('Eine Farbe, eine Figur oder ein eigenes Bild — Lumen verkleinert es auf 256 Pixel.'))}
         ${grp(tr('Untertitel'), `<div class="row" style="min-height:54px"><span class="t-body" style="flex:1" id="ut-groesse">${tr('Grösse')}</span>
             ${segment(tr('Grösse der Untertitel'), [['klein', tr('Klein')], ['normal', tr('Normal')], ['gross', tr('Gross')]].map(([v, n]) =>
@@ -3738,13 +3781,17 @@ function viewSettings() {
         ${grp(tr('Sprache'), `<div class="row" style="min-height:54px;gap:12px">
             <label for="prefsprache" class="sr-only">${tr('Sprache und Region')}</label>
             <select id="prefsprache" class="takt" data-prefsprache style="flex:1;min-width:0">
-              <option value="">${tr('Wie der Server ({name})', { name: esc(sprachNameVon(S.hello?.sprache || 'de-CH')) })}</option>
+              <option value="">${tr('Wie der Server – {name}', { name: esc(sprachNameVon(S.hello?.sprache || 'de-CH')) })}</option>
               ${sprachWahl().map(s => `<option value="${esc(s.id)}" lang="${esc(s.id)}"${prefs.sprache === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
             </select></div>`, tr('Gilt für dein Profil auf allen Geräten.'))}
         ${grp(tr('Darstellung'), `<div class="row" style="min-height:54px">
             ${segment(tr('Darstellung'), [['dunkel', tr('Dunkel')], ['hell', tr('Hell')], ['auto', tr('Wie das Gerät')]].map(([v, n]) =>
               ({ name: n, an: darstellung() === v, attr: `data-darstellung="${v}"` })))}
-            </div>`, tr('Gilt für diesen Browser.'))}
+            </div>
+            <div class="row" style="min-height:54px;flex-wrap:wrap"><span class="t-body" style="flex:1">${tr('Textgrösse')}</span>
+            ${segment(tr('Textgrösse'), [['normal', tr('Normal')], ['gross', tr('Gross')], ['sehrgross', tr('Sehr gross')]].map(([v, n]) =>
+              ({ name: n, an: textgroesse() === v, attr: `data-textgroesse="${v}"` })))}
+            </div>`, tr('Gilt für diesen Browser. Die Schrift wächst auch mit der Textgrösse von Browser und System.'))}
         ${a.isKid && bzStand()?.aktiv ? grp(tr('Bildschirmzeit'), bzIchZeile(),
           tr('Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.')) : ''}
         ${grp(tr('Privatsphäre'),
@@ -4075,7 +4122,8 @@ function bibWaehler() {
   const b = S.browse;
   if (!b) return '';
   const zeilen = (b.ordner || []).map(o => `
-    <div class="orow" style="height:auto;padding:11px 16px;cursor:pointer" data-into="${esc(o.pfad)}">
+    <button type="button" class="orow orow-link" style="width:100%;text-align:left;height:auto;padding:11px 16px" data-into="${esc(o.pfad)}"
+      aria-label="${esc(o.name)}${o.freigabe ? ', ' + tr('für Lumen freigegeben') : ''}${o.gesperrt ? ', ' + tr('kein Zugriff') : o.filme ? ', ' + tr('{n} Videos', { n: o.filme >= 200 ? '200+' : o.filme }) : ''}">
       <span style="color:var(--label-2);display:flex;flex:none">
         ${svg('<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4L10 8h9.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>', 17)}</span>
       <span style="flex:1;min-width:0">
@@ -4087,17 +4135,17 @@ function bibWaehler() {
         ? `<span class="badge" style="flex:none">${tr('{n} Videos', { n: o.filme >= 200 ? '200+' : o.filme })}</span>`
         : `<span class="t-caption c-3" style="flex:none">${tr('keine Videos')}</span>`}
       <span style="color:var(--label-3);display:flex;flex:none">${svg(I.chev, 15)}</span>
-    </div>`).join('');
+    </button>`).join('');
 
-  return `<div class="group group--inset" style="padding:0;margin-top:4px">
+  return `<div class="group group--inset" style="padding:0;margin-top:4px" role="group" aria-label="${tr('Ordner wählen')}">
     <div class="orow" style="height:auto;padding:12px 16px;gap:10px;background:var(--fill)">
-      <span class="mono t-caption c-2 clamp-1" style="flex:1;min-width:0">
+      <span class="${b.pfad ? 'mono ' : ''}t-caption c-2 clamp-1" style="flex:1;min-width:0" id="waehlerpfad" tabindex="-1">
         ${esc(b.pfad || tr('Wo möchtest du anfangen?'))}</span>
       ${b.pfad ? `<button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:.8125rem"
         data-into="${esc(b.oben || '')}">${tr('Höher')}</button>` : ''}
       ${b.pfad ? `<button type="button" class="btn btn-pill btn-pill--fill" style="flex:none;height:30px;font-size:.8125rem"
         data-take="${esc(b.pfad)}">${tr('Diesen nehmen')}</button>` : ''}
-      <button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:.8125rem" data-browseoff>${tr('Zu')}</button>
+      <button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:.8125rem" data-browseoff>${tr('Schliessen')}</button>
     </div>
     ${zeilen || `<p class="hint" style="padding:14px 16px">${tr('Hier liegen keine Unterordner.')}</p>`}
     ${!b.pfad && b.imContainer ? `<p class="t-caption c-2" style="padding:10px 16px 12px;margin:0">
@@ -4141,6 +4189,15 @@ function viewAdminLibraries() {
 /* Zeichnet Liste und Ordnerwähler neu — aber nicht das Formular. Wer
    gerade einen Namen eingetippt hat, soll ihn nicht verlieren, nur weil
    er daneben einen Ordner aufklappt. */
+// Ordnerwähler schliessen; der Fokus geht zurück auf „Durchsuchen".
+function waehlerZu() {
+  if (!S.browse) return false;
+  S.browse = null;
+  bibMalen();
+  app.querySelector('[data-browse]')?.focus();
+  return true;
+}
+
 function bibMalen() {
   const liste = document.getElementById('biblist');
   if (liste) liste.innerHTML = bibListe(S.data?.libraries || []);
@@ -4272,7 +4329,7 @@ function viewAdminUpdate() {
       <div style="flex:1;min-width:0">
         <div class="t-body">${tr('Lumen {version} ist da — du hast {installiert}', { version: esc(u.neueste.version), installiert: esc(u.installiert) })}</div>
         <div class="t-sub c-2">${tr('veröffentlicht {wann}', { wann: zeit(u.neueste.published) })} ·
-          <a href="${esc(u.neueste.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${tr('Was sich geändert hat')}</a></div>
+          <a href="${esc(u.neueste.url)}" target="_blank" rel="noopener" class="link">${tr('Was sich geändert hat')}</a></div>
         ${u.container ? `<div class="t-caption c-2" style="margin-top:8px">${esc(u.anleitung)}</div>` : ''}
       </div>
       ${u.container ? '' : `<button class="btn btn-pill btn-pill--fill" data-updjetzt style="flex:none"${u.laeuft ? ' disabled' : ''}>
@@ -5281,6 +5338,11 @@ app.addEventListener('click', async e => {
     n.setAttribute('aria-checked', String(n.getAttribute('aria-checked') !== 'true'));
     return;
   }
+  if ((n = hit('data-textgroesse'))) {
+    try { localStorage.setItem('lumen.textgroesse', n.dataset.textgroesse); } catch {}
+    textgroesseAnwenden();
+    return render();
+  }
   if ((n = hit('data-darstellung'))) {
     try { localStorage.setItem('lumen.darstellung', n.dataset.darstellung); } catch {}
     darstellungAnwenden();
@@ -5429,9 +5491,13 @@ app.addEventListener('click', async e => {
     const pfad = n ? n.dataset.into : '';
     try { S.browse = await api.adminBrowse(pfad); }
     catch (err) { return toast(err.message); }
-    return bibMalen();
+    bibMalen();
+    // Der Fokus geht mit: auf den ersten Ordner, sonst auf den Pfad.
+    const w = document.getElementById('bibwaehler');
+    (w?.querySelector('[data-into]:not(.btn)') || w?.querySelector('#waehlerpfad'))?.focus();
+    return;
   }
-  if (hit('data-browseoff')) { S.browse = null; return bibMalen(); }
+  if (hit('data-browseoff')) return waehlerZu();
   if ((n = hit('data-take'))) {
     const pfad = n.dataset.take;
     const feld = $('#lpath'), name = $('#lname');
@@ -5672,7 +5738,7 @@ async function formularAbschicken(e) {
     } catch (err) { S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render(); }
   }
 
-  if (f.id === 'searchform') return load();
+  if (f.id === 'searchform') { $('#q')?.blur(); S.suchTastaturZu = true; return load(); }
 
   if (f.id === 'wishform') {
     const t = f.title.value.trim();
@@ -5857,6 +5923,7 @@ document.addEventListener('keydown', e => {
   } else if (e.key === 'Escape' && S.view === 'detail') {
     escAufTitelseite();
   } else if (e.key === 'Escape') {
+    if (S.view === 'adminLibraries' && waehlerZu()) return;
     mehrMenueZu(true);
   } else if (e.key === '/' && S.me && S.view !== 'search') {
     e.preventDefault(); go('search');
@@ -6351,6 +6418,9 @@ function escAufTitelseite() {
   }
   zurueck();
 }
+
+// Pfeiltasten und Fernbedienung (räumliche Navigation, Zurück-Taste, F6).
+tastaturEinrichten({ app, imPlayer: () => S.view === 'player', zurueck: () => { if (S.me && S.view !== 'home') zurueck(); } });
 
 app.addEventListener('keydown', e => {
   const eintrag = e.target instanceof Element && e.target.closest('[role="menuitem"]');
