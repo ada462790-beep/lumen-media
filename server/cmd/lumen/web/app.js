@@ -6394,17 +6394,19 @@ setInterval(() => { if (api.signedIn) api.medienSchluessel().catch(() => {}); },
 // Bilder und Videos, die nicht laden, verschwinden; ein Profilbild, das
 // fehlt, wird zum Anfangsbuchstaben. „error" steigt nicht auf, darum in der
 // Einfangphase.
-// Standbilder (data-nochmal) bekommen vorher noch vier Versuche, mit
-// wachsendem Abstand: Sie entstehen erst, wenn jemand sie sehen will.
+// Standbilder (data-nochmal) bekommen vorher noch einige Versuche, mit
+// wachsendem Abstand (zusammen rund anderthalb Minuten): Sie entstehen
+// erst, wenn jemand sie sehen will, eins nach dem anderen.
+const NOCHMAL_SEK = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
 document.addEventListener('error', e => {
   const el = e.target;
   if (!(el instanceof Element)) return;
   if (el.hasAttribute('data-ersatz')) { el.parentNode.textContent = el.getAttribute('data-ersatz'); return; }
   const n = Number(el.getAttribute('data-nochmal'));
-  if (el.hasAttribute('data-nochmal') && n < 4) {
+  if (el.hasAttribute('data-nochmal') && n < NOCHMAL_SEK.length) {
     el.setAttribute('data-nochmal', String(n + 1));
     const src = el.getAttribute('src');
-    setTimeout(() => { if (el.isConnected) el.setAttribute('src', src); }, 3000 * 2 ** n);
+    setTimeout(() => { if (el.isConnected) el.setAttribute('src', src); }, NOCHMAL_SEK[n] * 1000);
     return;
   }
   if (el.hasAttribute('data-weg')) el.remove();

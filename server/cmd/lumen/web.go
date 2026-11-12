@@ -68,8 +68,8 @@ const (
 
 // webDatei ist eine Datei, wie sie ausgeliefert wird.
 type webDatei struct {
-	roh    []byte
-	gz     []byte // nil: Packen lohnt sich nicht
+	roh  []byte
+	gz   []byte // nil: Packen lohnt sich nicht
 	etag string
 	typ  string
 }

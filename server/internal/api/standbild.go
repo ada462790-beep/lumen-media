@@ -40,13 +40,16 @@ import (
 //   - Die Bilder entstehen in einer Warteschlange, mit niedrigster
 //     Priorität (wie alles im Hintergrund), höchstens eins (auf zwei
 //     Kernen) oder zwei gleichzeitig.
-//   - Zuerst kommt dran, was zuletzt gewollt wurde — die Karten, die
-//     gerade auf dem Bildschirm sind. Was seit einer Minute niemand mehr
-//     wollte (weggescrollt, Seite zu), fällt heraus, bevor es anfängt.
-//   - Eine Anfrage wartet höchstens kurz (standbildWarten). Ist das Bild
-//     bis dahin nicht fertig, kommt 503 mit Retry-After: Die Verbindung
-//     ist frei, die Karte zeigt so lange den Titel, und die Web-App fragt
-//     später noch einmal.
+//   - Zuerst kommt dran, was zuletzt angefragt wurde — die Karten, die
+//     gerade auf dem Bildschirm sind (nach dem Scrollen die neuen). Was
+//     zugleich kam (eine Seite), der Reihe nach: oben zuerst. Was seit
+//     einer Minute niemand mehr wollte (weggescrollt, Seite zu), fällt
+//     heraus, bevor es anfängt.
+//   - Eine Anfrage wartet nur, wenn ihr Bild gleich drankommt, und auch
+//     dann höchstens kurz (standbildWarten). Sonst kommt sofort 503 mit
+//     Retry-After: Die Verbindung ist frei (der Browser hat nur sechs, und
+//     die Liste soll nicht hinter den Bildern warten), die Karte zeigt so
+//     lange den Titel, und die Web-App fragt später noch einmal.
 
 var (
 	standbildPlaetze = make(chan struct{}, standbildParallel(runtime.NumCPU()))
@@ -62,22 +65,28 @@ var (
 
 const (
 	standbildPause = 6 * time.Hour
-	// So lange wartet eine Anfrage auf ihr Bild.
+	// So lange wartet eine Anfrage höchstens auf ihr Bild.
 	standbildWarten = 2 * time.Second
 	// Was so lange niemand mehr wollte, wird nicht mehr angefangen.
 	standbildVergessen = 60 * time.Second
 )
 
-// standbildParallel: wie viele Standbilder gleichzeitig entstehen dürfen.
+// standbildParallel: wie viele Standbilder gleichzeitig entstehen dürfen —
+// zwei, auf einem einzigen Kern eins. Mehr nicht: Sie laufen mit
+// niedrigster Priorität und weichen der Wiedergabe, aber die Platte teilen
+// sie sich trotzdem.
 func standbildParallel(kerne int) int {
-	if kerne <= 2 {
+	if kerne <= 1 {
 		return 1
 	}
 	return 2
 }
 
 type standbildAuftrag struct {
-	it      store.Item
+	it store.Item
+	// erst: die erste Anfrage (bestimmt die Reihenfolge); gewollt: die
+	// letzte (zeigt, dass noch jemand wartet).
+	erst    time.Time
 	gewollt time.Time
 	laeuft  bool
 	fertig  chan struct{}
@@ -165,13 +174,14 @@ func (s *Server) standbildDa(ctx context.Context, it *store.Item) (string, bool)
 }
 
 // standbildAnfordern stellt den Titel in die Warteschlange (oder sagt
-// einem wartenden Auftrag, dass er noch gewollt ist).
-func (s *Server) standbildAnfordern(it *store.Item) *standbildAuftrag {
+// einem wartenden Auftrag, dass er noch gewollt ist). bald: Er läuft schon
+// oder kommt als Nächstes dran — dann lohnt sich kurzes Warten.
+func (s *Server) standbildAnfordern(it *store.Item) (a *standbildAuftrag, bald bool) {
 	standbildMu.Lock()
 	defer standbildMu.Unlock()
 	a, ok := standbildAuftraege[it.ID]
 	if !ok {
-		a = &standbildAuftrag{it: *it, fertig: make(chan struct{})}
+		a = &standbildAuftrag{it: *it, erst: time.Now(), fertig: make(chan struct{})}
 		standbildAuftraege[it.ID] = a
 	}
 	a.gewollt = time.Now()
@@ -179,7 +189,31 @@ func (s *Server) standbildAnfordern(it *store.Item) *standbildAuftrag {
 		standbildArbeiter++
 		go s.standbildArbeiten()
 	}
-	return a
+	if a.laeuft {
+		return a, true
+	}
+	// Wie viele kommen vorher dran?
+	vorher := 0
+	for _, x := range standbildAuftraege {
+		if !x.laeuft && x != a && standbildVor(x, a) {
+			vorher++
+		}
+	}
+	return a, vorher < cap(standbildPlaetze)
+}
+
+// standbildWelle: Anfragen innerhalb von zwei Sekunden gehören zu einer
+// Seite.
+const standbildWelle = 2 * time.Second
+
+// standbildVor: Kommt x vor y dran? Die neuere Welle zuerst, in einer
+// Welle die frühere Anfrage (oben auf der Seite).
+func standbildVor(x, y *standbildAuftrag) bool {
+	wx, wy := x.erst.Truncate(standbildWelle), y.erst.Truncate(standbildWelle)
+	if !wx.Equal(wy) {
+		return wx.After(wy)
+	}
+	return x.erst.Before(y.erst)
 }
 
 // standbildArbeiten nimmt Aufträge, bis keiner mehr da ist — zuletzt
@@ -199,7 +233,7 @@ func (s *Server) standbildArbeiten() {
 				delete(standbildAuftraege, id)
 				continue
 			}
-			if a == nil || x.gewollt.After(a.gewollt) {
+			if a == nil || standbildVor(x, a) {
 				a = x
 			}
 		}
@@ -240,7 +274,10 @@ func (s *Server) standbild(ctx context.Context, it *store.Item) (pfad string, wa
 	if gescheitert && time.Since(wann) < standbildPause {
 		return "", false, errors.New("kein standbild")
 	}
-	a := s.standbildAnfordern(it)
+	a, bald := s.standbildAnfordern(it)
+	if !bald {
+		return "", true, errors.New("kein standbild")
+	}
 	frist := time.NewTimer(standbildWarten)
 	defer frist.Stop()
 	select {
@@ -345,7 +382,7 @@ func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *sto
 	pfad, warte, err := s.standbild(r.Context(), it)
 	if err != nil {
 		if warte {
-			w.Header().Set("Retry-After", "3")
+			w.Header().Set("Retry-After", "2")
 			w.Header().Set("Cache-Control", "no-store")
 			fail(w, http.StatusServiceUnavailable, "kein bild")
 			return
