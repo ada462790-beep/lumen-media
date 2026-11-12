@@ -832,12 +832,71 @@ func (s *Server) itemChildren(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Eine Folge kann eine strengere Freigabe haben als ihre Serie. Sie
+	// bleibt dann auch in der Liste verborgen, nicht erst beim Abspielen —
+	// sonst stünde sie samt Titel und Freigabe da und führte ins Leere.
+	if kids, err = s.nurSichtbare(r, kids); err != nil {
+		failErr(w, err)
+		return
+	}
 	out, err := s.decorate(r, kids)
 	if err != nil {
 		failErr(w, err)
 		return
 	}
 	ok(w, out)
+}
+
+// nurSichtbare filtert Staffeln und Folgen mit denselben Rechten wie die
+// Mediathek (Bibliothek, Altersgrenze über die ganze Kette). Ohne
+// Altersgrenze bleibt die Liste, wie sie ist.
+func (s *Server) nurSichtbare(r *http.Request, items []store.Item) ([]store.Item, error) {
+	if len(items) == 0 {
+		return items, nil
+	}
+	alle := make([]string, len(items))
+	arten := map[string]bool{}
+	for i, it := range items {
+		alle[i] = it.ID
+		arten[it.Kind] = true
+	}
+	kinds := make([]string, 0, len(arten))
+	for k := range arten {
+		kinds = append(kinds, k)
+	}
+	ids, err := s.sichtbareIDs(r, alle, kinds)
+	if err != nil || ids == nil {
+		return items, err
+	}
+	out := items[:0:0]
+	for _, it := range items {
+		if ids[it.ID] {
+			out = append(out, it)
+		}
+	}
+	return out, nil
+}
+
+// sichtbareIDs: welche dieser Titel das Konto sehen darf. nil heisst:
+// alle (keine Altersgrenze).
+func (s *Server) sichtbareIDs(r *http.Request, alle, kinds []string) (map[string]bool, error) {
+	q, err := s.scope(r)
+	if err != nil {
+		return nil, err
+	}
+	if !(q.MaxAge > 0 || q.MitAltersgrenze) || len(alle) == 0 {
+		return nil, nil
+	}
+	q.IDs, q.Kinds, q.Limit = alle, kinds, len(alle)
+	treffer, err := s.st.Query(r.Context(), q)
+	if err != nil {
+		return nil, err
+	}
+	ids := make(map[string]bool, len(treffer))
+	for _, t := range treffer {
+		ids[t.ID] = true
+	}
+	return ids, nil
 }
 
 // visibleItem holt einen Titel und prüft dabei, ob das Konto ihn sehen darf.
@@ -1149,7 +1208,24 @@ func (s *Server) weiterInSerie(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "nur für serien")
 		return
 	}
-	id, err := s.st.WeiterInSerie(r.Context(), accountOf(r).ID, it.ID)
+	// Nur Folgen, die das Profil sehen darf: Eine Folge ab 16 in einer
+	// Serie ab 6 ist für ein Kind mit 6 nie „die nächste".
+	var sichtbar func(string) bool
+	if folgen, err := s.st.SerienFolgen(r.Context(), []string{it.ID}); err == nil {
+		alle := make([]string, 0, len(folgen[it.ID]))
+		for _, f := range folgen[it.ID] {
+			alle = append(alle, f.ID)
+		}
+		ids, err := s.sichtbareIDs(r, alle, []string{"episode"})
+		if err != nil {
+			failErr(w, err)
+			return
+		}
+		if ids != nil {
+			sichtbar = func(id string) bool { return ids[id] }
+		}
+	}
+	id, err := s.st.WeiterInSerieSichtbar(r.Context(), accountOf(r).ID, it.ID, sichtbar)
 	if err != nil {
 		failErr(w, err)
 		return

@@ -358,24 +358,43 @@ func (s *Store) Weiterschauen(ctx context.Context, accountID string, limit int) 
 // nichts (nie angefangen, oder bis zur letzten Folge geschaut), die erste
 // ungesehene von vorn, und wenn alles gesehen ist, die erste überhaupt.
 func (s *Store) WeiterInSerie(ctx context.Context, accountID, serieID string) (string, error) {
+	return s.WeiterInSerieSichtbar(ctx, accountID, serieID, nil)
+}
+
+// WeiterInSerieSichtbar wie WeiterInSerie, aber nur unter den Folgen, für
+// die sichtbar wahr ist (nil: alle). Fiele die Wahl auf eine verborgene
+// Folge, gilt die nächste sichtbare danach.
+func (s *Store) WeiterInSerieSichtbar(ctx context.Context, accountID, serieID string, sichtbar func(string) bool) (string, error) {
 	folgen, err := s.SerienFolgen(ctx, []string{serieID})
 	if err != nil {
 		return "", err
 	}
 	fs := folgen[serieID]
-	inSerie := map[string]bool{}
-	ids := make([]string, len(fs))
+	pos := map[string]int{}
+	alle := make([]string, len(fs))
 	for i, f := range fs {
-		inSerie[f.ID] = true
-		ids[i] = f.ID
+		pos[f.ID] = i
+		alle[i] = f.ID
+	}
+	var ids []string
+	for _, id := range alle {
+		if sichtbar == nil || sichtbar(id) {
+			ids = append(ids, id)
+		}
 	}
 	weiter, err := s.Weiterschauen(ctx, accountID, 1<<20)
 	if err != nil {
 		return "", err
 	}
 	for _, w := range weiter {
-		if inSerie[w.ItemID] {
-			return w.ItemID, nil
+		i, da := pos[w.ItemID]
+		if !da {
+			continue
+		}
+		for ; i < len(alle); i++ {
+			if sichtbar == nil || sichtbar(alle[i]) {
+				return alle[i], nil
+			}
 		}
 	}
 	fertig, err := s.FinishedIDs(ctx, accountID, ids)
