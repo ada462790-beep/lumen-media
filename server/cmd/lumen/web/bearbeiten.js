@@ -232,7 +232,7 @@ function bildFeld(stand, art) {
   const url = art === 'poster' ? stand.poster : stand.backdrop;
   const hoch = art === 'poster';
   const name = art === 'poster' ? (stand.item.kind === 'episode' ? tr('Vorschaubild') : tr('Poster')) : tr('Hintergrund');
-  const src = url ? url + (url.includes('?') ? '&' : '?') + api.keyParam() : '';
+  const src = url ? url + (url.includes('?') ? '&' : '?') + api.bildParam() : '';
   return `<div class="bild-feld">
     <div class="ff-kopf"><span style="flex:1">${name}</span>${schloss(stand, art)}</div>
     <div class="bild-vorschau ${hoch && stand.item.kind !== 'episode' ? 'bild-vorschau--hoch' : 'bild-vorschau--quer'}" data-bildbox="${art}">

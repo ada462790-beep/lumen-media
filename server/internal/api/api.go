@@ -379,7 +379,8 @@ func (s *Server) Handler() http.Handler {
 	// Handbearbeitung, Sammlungen, Übernahme, Untertitel (routen_funktionen.go).
 	s.routenFunktionen(mux)
 
-	return s.withCommonHeaders(mux)
+	// JSON und Text gepackt, wo der Client es versteht (kompression.go).
+	return kompression(s.withCommonHeaders(mux))
 }
 
 // ---------------------------------------------------------------- Anmeldung
@@ -411,6 +412,15 @@ func (s *Server) requireAuth(h http.HandlerFunc) http.Handler {
 		var err error
 		if tok := bearer(r); tok != "" {
 			acc, dev, err = s.st.LookupToken(r.Context(), tok)
+		} else if k := r.URL.Query().Get("key"); strings.HasPrefix(k, bildPraefix) && bildWeg(r) {
+			// Der Bildschlüssel: bleibt über Neuladen und Neustart gleich,
+			// damit Bilder im Browser liegen bleiben (medienschluessel.go).
+			sum, gueltig := bilder.pruefen(r.Context(), k, s.st.TokenPruefwerte)
+			if !gueltig {
+				fail(w, http.StatusUnauthorized, "medienschlüssel abgelaufen")
+				return
+			}
+			acc, dev, err = s.st.LookupTokenHash(r.Context(), sum)
 		} else if k := r.URL.Query().Get("key"); k != "" && medienWeg(r) {
 			sum, gueltig := medien.pruefen(k)
 			if !gueltig {

@@ -61,6 +61,7 @@ var erlaubtOhneKonto = []struct{ datei, stueck, grund string }{
 	{"playback.go", "WHERE r.item_id = ? AND r.shared = 1", "nur Bewertungen, die ihre Besitzer selbst freigegeben haben"},
 	{"bildschirmzeit.go", "DELETE FROM bildschirmzeit_tag WHERE tag < ?", "Wartung: Zahlen vergangener Tage löschen, liest nichts"},
 	{"zusammenfuehren.go", "UPDATE OR IGNORE playlist_item SET item_id = ? WHERE item_id = ?", "Wartung: Titel umhängen, liest nichts"},
+	{"token_pruefwerte.go", "SELECT hash FROM token", "nur die Prüfwerte, um einen Bildschlüssel nachzurechnen; kein Konto, kein Gerät, keine Zeit"},
 }
 
 func erlaubterFall(datei, sql string) bool {

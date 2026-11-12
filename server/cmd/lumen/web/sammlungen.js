@@ -21,7 +21,7 @@ export const sammlungenLaden = () => api.call('/sammlungen');
 export const sammlungLaden = id => api.call('/sammlungen/' + encodeURIComponent(id));
 
 const verwalten = () => !!U.S?.me?.account?.isAdmin && amSchreibtisch();
-const mitSchluessel = url => url + (url.includes('?') ? '&' : '?') + api.keyParam();
+const mitSchluessel = url => url + (url.includes('?') ? '&' : '?') + api.bildParam();
 const SORT_NAME = texte({ hand: 'von Hand sortiert', jahr: 'nach Jahr', titel: 'nach Titel' });
 
 /* „Filmreihen | Sammlungen" — oben auf beiden Seiten. */
