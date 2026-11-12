@@ -57,7 +57,9 @@ type durchlaufMerker struct {
 	// neuePfade: Dateien, die Lumen vor diesem Durchlauf nicht kannte —
 	// Kandidaten für umbenannte Dateien (umbenannt.go).
 	neuePfade []string
-	// neueTitel und aktualisiert: für das Ergebnis (scan.go, zaehlen).
+	// neueTitel und aktualisiert: für das Ergebnis (scan.go, zaehlen);
+	// aktualisiert enthält auch Titel, deren schon bekannte NFO sich
+	// geändert hat (nfoGeaendert).
 	neueTitel    map[string]bool
 	aktualisiert map[string]bool
 }
@@ -170,4 +172,14 @@ func gleicheDatei(alt, neu *store.MediaFile) bool {
 		alt.DurationMS == neu.DurationMS && alt.Bitrate == neu.Bitrate &&
 		alt.Width == neu.Width && alt.Height == neu.Height &&
 		alt.VideoCodec == neu.VideoCodec && alt.HDR == neu.HDR
+}
+
+// nfoGeaendert: Die schon bekannte NFO eines Titels hat sich geändert —
+// er zählt im Ergebnis als aktualisiert.
+func nfoGeaendert(ctx context.Context, id string) {
+	if m := merkerVon(ctx); m != nil {
+		m.mu.Lock()
+		m.aktualisiert[id] = true
+		m.mu.Unlock()
+	}
 }

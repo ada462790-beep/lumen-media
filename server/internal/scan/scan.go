@@ -514,7 +514,7 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	// „Aktualisiert": Titel, deren Datei sich geändert hat, die wieder da
 	// ist, die eine weitere Fassung bekommen haben oder deren NFO neu ist
 	// — ohne die, die dieser Durchlauf erst angelegt hat.
-	res.Updated = aktualisiertZahl(ctx, lauf)
+	res.Updated = aktualisiertZahl(ctx)
 	res.Took = time.Since(start)
 	res.TookMS = res.Took.Milliseconds()
 	s.ergebnisSetzen(ctx, lib, store.ScanErgebnis{
@@ -626,18 +626,13 @@ func zaehlen(ctx context.Context, res *Result, itemID string, added, gleich bool
 
 // aktualisiertZahl: die Titel, die dieser Durchlauf aktualisiert hat,
 // ohne die, die er neu angelegt hat — samt geänderter NFO-Dateien.
-func aktualisiertZahl(ctx context.Context, lauf *lokalLauf) int {
+func aktualisiertZahl(ctx context.Context) int {
 	m := merkerVon(ctx)
 	if m == nil {
 		return 0
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if lauf != nil {
-		for id := range lauf.nfoGeaendert {
-			m.aktualisiert[id] = true
-		}
-	}
 	n := 0
 	for id := range m.aktualisiert {
 		if !m.neueTitel[id] {

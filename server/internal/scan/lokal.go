@@ -45,14 +45,11 @@ type lokalLauf struct {
 	ordner     map[string]*lokal.Ordner
 	// eigen: Gehört der Ordner einem Film allein? (je Ordner einmal)
 	eigen map[string]bool
-	// nfoGeaendert: Titel, deren schon bekannte NFO sich geändert hat —
-	// sie zählen im Ergebnis als aktualisiert.
-	nfoGeaendert map[string]bool
 }
 
 func (s *Scanner) lokalLauf(ctx context.Context, lib store.Library) *lokalLauf {
 	return &lokalLauf{s: s, lib: lib, bevorzugen: meta.NFOBevorzugt(ctx, s.st),
-		ordner: map[string]*lokal.Ordner{}, eigen: map[string]bool{}, nfoGeaendert: map[string]bool{}}
+		ordner: map[string]*lokal.Ordner{}, eigen: map[string]bool{}}
 }
 
 func (l *lokalLauf) dir(p string) *lokal.Ordner {
@@ -170,7 +167,7 @@ func (l *lokalLauf) nfo(ctx context.Context, id, pfad string) {
 		return
 	}
 	if hatte {
-		l.nfoGeaendert[id] = true
+		nfoGeaendert(ctx, id) // zählt im Ergebnis als aktualisiert
 	}
 	it, err := st.Item(ctx, id)
 	if err != nil || it.MatchState == "manual" {
