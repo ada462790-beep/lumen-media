@@ -164,6 +164,8 @@ const I = {
   vollbild: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   kapitel: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   vollbildAus: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
+  vonVorn: '<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/>',
+  laden: '<path d="M12 4v11M7 10.5l5 5 5-5M5 19.5h14"/>',
   bildImBild: '<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11.5" width="6.5" height="5" rx="1" fill="currentColor" stroke="none"/>',
   liste: '<path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4.6" cy="6" r=".9"/><circle cx="4.6" cy="12" r=".9"/><circle cx="4.6" cy="18" r=".9"/>',
   hoch: '<path d="M6 15l6-6 6 6"/>',
@@ -1220,8 +1222,32 @@ function viewUnlock() {
 
 /* ---------------------------------------------------------------- Mediathek */
 
+/* Startseite bei kleiner Bibliothek: „Neu", „Gut bewertet", „Drama",
+   „Noch nicht angefangen" zeigten dieselben acht Titel. Eine Reihe, die
+   zu über 70 % wiederholt, was weiter oben schon stand, und weniger als
+   vier eigene Titel hat, fällt weg. Weiterschauen bleibt immer. */
+function reihenOhneWiederholung(rows) {
+  const schon = new Set();
+  return rows.filter(r => {
+    const ids = (r.items || []).map(x => x.id);
+    if (r.wide || r.key === 'resume') return true;
+    const eigene = ids.filter(id => !schon.has(id)).length;
+    if (ids.length && (ids.length - eigene) / ids.length > 0.7 && eigene < 4) return false;
+    ids.forEach(id => schon.add(id));
+    return true;
+  });
+}
+/* „Neu" auf dem Poster sagt nur etwas, wenn es nicht auf allem steht: In
+   der Reihe „Neu dazugekommen" sagt es die Reihe schon, und wo mehr als
+   ein Drittel neu ist, fällt die Plakette weg. */
+function neuGedaempft(r) {
+  const items = r.items || [];
+  const neu = items.filter(x => x.neu && !x.finished).length;
+  return r.key === 'new' || neu > items.length / 3 ? items.map(x => (x.neu ? { ...x, neu: false } : x)) : items;
+}
+
 function viewHome() {
-  const rows = S.data?.rows || [];
+  const rows = reihenOhneWiederholung(S.data?.rows || []).map(r => ({ ...r, items: neuGedaempft(r) }));
   if (!rows.length) {
     return shell(`<div class="wrap"><div style="padding-top:90px;max-width:560px">
       <h1 class="t-large">${tr('Noch nichts da')}</h1>
@@ -1357,7 +1383,7 @@ function viewGrid(title) {
       S.filter !== 'Alle' ? ' · ' + esc(S.filter) : ''}</div>
     ${genres.length ? `<div role="group" aria-label="${tr('Genre')}" class="chips chips--rollen">${chips}</div>` : ''}
     ${leiste}
-    ${items.length ? `<div class="grid" id="raster">${items.map(posterCard).join('')}</div>` : leerHtml}
+    ${items.length ? `<div class="grid" id="raster">${neuGedaempft({ items }).map(posterCard).join('')}</div>` : leerHtml}
     ${d.weiter ? '<div id="mehr" class="loading" style="padding:30px 0"><span class="spin"></span></div>' : ''}
     <div style="height:40px"></div></div>`);
 }
@@ -1386,7 +1412,7 @@ function mehrLadenEinrichten() {
       if (S.data !== d) return; // inzwischen woanders
       d.items.push(...naechste.items);
       d.weiter = naechste.weiter;
-      document.getElementById('raster')?.insertAdjacentHTML('beforeend', naechste.items.map(posterCard).join(''));
+      document.getElementById('raster')?.insertAdjacentHTML('beforeend', neuGedaempft({ items: naechste.items }).map(posterCard).join(''));
       if (!d.weiter) { ziel.remove(); mehrBeobachter?.disconnect(); }
     } catch (err) { toast(err.message); }
     finally { laeuft = false; }
@@ -1751,27 +1777,36 @@ function viewDetail() {
                 ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}</button>`) : ''}
           ${it.kind === 'series' && (d.seasons || []).length ? `<button class="btn btn-primary" data-serie-play="${esc(it.id)}">
               ${PLAY(16)} ${esc(serienKnopfText)}</button>` : ''}
-          ${resumeSec > 60 && fassungen.length <= 1 ? `<button class="btn btn-pill btn-pill--fill" data-play="${it.id}" data-file="${esc(playable?.id || '')}" data-from="0">${tr('Von vorn')}</button>` : ''}
-          <button class="btn btn-pill btn-pill--fill" data-list="${it.onList ? 'off' : 'on'}">
-            ${svg(it.onList ? I.check : I.plus, 15, 2.2)} ${it.onList ? tr('Gemerkt') : tr('Merken')}</button>
-          ${it.kind === 'movie' || it.kind === 'series' ? `<button class="btn btn-pill btn-pill--fill herz-knopf" data-fav="${it.favorite ? 'off' : 'on'}"
-              aria-pressed="${!!it.favorite}">${it.favorite
-                ? svg(I.herz, 16, 2).replace('fill="none"', 'fill="currentColor"') : svg(I.herz, 16, 2)} ${tr('Favorit')}</button>` : ''}
+          ${'' /* Eine Hauptaktion (Ansehen), daneben runde Symbole mit kurzer
+                 Beschriftung — wie in der TV-App von Apple. Vorher standen
+                 sechs gleich grosse Kapseln da, am Handy auf drei Zeilen. */}
+          <div class="aktionen">
+          ${resumeSec > 60 && fassungen.length <= 1 ? `<button class="aktion" data-play="${it.id}" data-file="${esc(playable?.id || '')}" data-from="0">
+              <span class="aktion-rund">${svg(I.vonVorn, 18, 2)}</span><span class="aktion-text">${tr('Aktion|Von vorn')}</span></button>` : ''}
+          <button class="aktion" data-list="${it.onList ? 'off' : 'on'}" aria-pressed="${!!it.onList}">
+            <span class="aktion-rund">${svg(it.onList ? I.check : I.plus, 18, 2.2)}</span><span class="aktion-text">${it.onList ? tr('Gemerkt') : tr('Merken')}</span></button>
+          ${it.kind === 'movie' || it.kind === 'series' ? `<button class="aktion herz-knopf" data-fav="${it.favorite ? 'off' : 'on'}"
+              aria-pressed="${!!it.favorite}"><span class="aktion-rund">${it.favorite
+                ? svg(I.herz, 18, 2).replace('fill="none"', 'fill="currentColor"') : svg(I.herz, 18, 2)}</span><span class="aktion-text">${tr('Favorit')}</span></button>` : ''}
+          ${it.finished
+            ? `<button class="aktion" data-fokus="gesehen" data-unseen aria-pressed="true" aria-label="${tr('Gesehen')}" title="${tr('Nicht mehr als gesehen')}">
+                <span class="aktion-rund">${svg(I.check, 18, 2.6)}</span><span class="aktion-text">${tr('Gesehen')}</span></button>`
+            : `<button class="aktion" data-fokus="gesehen" data-seen aria-pressed="false" aria-label="${tr('Gesehen')}" title="${tr('Als gesehen markieren')}">
+                <span class="aktion-rund">${svg(I.check, 18, 2.6)}</span><span class="aktion-text">${tr('Gesehen')}</span></button>`}
           ${it.kind === 'movie' || it.kind === 'series'
-            ? `<button class="btn btn-pill btn-pill--fill" data-zurliste aria-expanded="false">
-                ${svg(I.liste, 15, 2)} ${tr('Zur Liste')}</button>` : ''}
+            ? `<button class="aktion" data-zurliste aria-expanded="false">
+                <span class="aktion-rund">${svg(I.liste, 18, 2)}</span><span class="aktion-text">${tr('Zur Liste')}</span></button>` : ''}
           ${(() => {
             // Herunterladen: die Fassung, die „Ansehen" spielt, sonst die erste.
             const dl = d.download?.erlaubt ? (d.download.dateien || []) : [];
             const datei = dl.find(x => x.fileId === playable?.id) || dl[0];
             if (!datei) return '';
             const gb = datei.groesse ? `${(datei.groesse / 1e9).toLocaleString(sprache(), { maximumFractionDigits: 1 })} GB` : '';
-            return `<a class="btn btn-pill btn-pill--fill" href="${esc(api.downloadURL(datei.fileId))}" download
-              title="${esc(gb ? tr('Originaldatei herunterladen ({gb})', { gb }) : tr('Originaldatei herunterladen'))}">${tr('Herunterladen')}</a>`;
+            return `<a class="aktion" href="${esc(api.downloadURL(datei.fileId))}" download
+              title="${esc(gb ? tr('Originaldatei herunterladen ({gb})', { gb }) : tr('Originaldatei herunterladen'))}">
+              <span class="aktion-rund">${svg(I.laden, 18, 2)}</span><span class="aktion-text">${tr('Herunterladen')}</span></a>`;
           })()}
-          ${it.finished
-            ? `<button class="btn btn-pill btn-pill--fill" data-unseen>${tr('Nicht mehr als gesehen')}</button>`
-            : `<button class="btn btn-pill btn-pill--fill" data-seen>${tr('Als gesehen markieren')}</button>`}
+          </div>
           ${detailUntertitel(it, files)}
         </div>
       </div>

@@ -1322,6 +1322,7 @@
  "Textgrösse": "Text Size",
  "{titel} – Wiedergabe": "{titel} – Playback",
  "Wie der Server – {name}": "Same as server – {name}",
+ "Aktion|Von vorn": "Restart",
  "Alles, was seither geändert wurde – neue Profile, Einladungen, Einstellungen, Bewertungen und wer wo im Film stand –, geht verloren. Lumen startet dafür neu; laufende Wiedergaben brechen ab.": "Everything changed since then – new profiles, invitations, settings, ratings and where everyone was in a film – will be lost. Lumen restarts to do this; anything playing will stop.",
  "Code aus der Authenticator-App": "Code from the authenticator app",
  "Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: Beim Film wählt man unter „Ansehen“, welche läuft. Gehört eine Datei zu einem anderen Film, trenne sie ab.": "The same film in several files, for example in two qualities. That’s fine: on the film, “Watch” lets you choose which one plays. If a file belongs to a different film, split it off.",
