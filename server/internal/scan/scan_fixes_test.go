@@ -264,3 +264,71 @@ func TestTeileInCDOrdnern(t *testing.T) {
 		t.Fatalf("Teile: %+v", d)
 	}
 }
+
+// Emby-Bericht B1: Fassungen und Teile in einem Ordner mit movie.nfo,
+// deren NFO-Titel anders lautet als der Dateiname, wurden getrennte Filme.
+func TestNFOTitelTrenntFassungenNicht(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	dateiMitGroesse(t, wurzel, "The Matrix (1999)/The Matrix (1999) - 1080p.mkv", 10)
+	dateiMitGroesse(t, wurzel, "The Matrix (1999)/The Matrix (1999) - 4K.mkv", 20)
+	textDatei(t, wurzel, "The Matrix (1999)/movie.nfo",
+		`<movie><title>Matrix</title><originaltitle>The Matrix</originaltitle><uniqueid type="tmdb">603</uniqueid></movie>`)
+	dateiMitGroesse(t, wurzel, "Die Hard (1988)/Die Hard (1988)-pt1.mkv", 10)
+	dateiMitGroesse(t, wurzel, "Die Hard (1988)/Die Hard (1988)-pt2.mkv", 11)
+	textDatei(t, wurzel, "Die Hard (1988)/movie.nfo", `<movie><title>Stirb langsam</title></movie>`)
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	for i := 0; i < 2; i++ {
+		if _, err := New(st, nil).Scan(ctx, *lib); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Limit: 10})
+	if len(alle) != 2 {
+		t.Fatalf("%d Filme statt 2: %v", len(alle), titles(alle))
+	}
+	for _, it := range alle {
+		if d, _ := st.FilesFor(ctx, it.ID); len(d) != 2 {
+			t.Errorf("%s: %d Dateien statt 2", it.Title, len(d))
+		}
+	}
+}
+
+// Was ältere Fassungen schon zerlegt haben, wird wieder ein Film, wenn
+// beide Einträge im selben Ordner dieselbe Kennung tragen.
+func TestZerlegterFilmImOrdnerWirdGeheilt(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	a := filepath.Join(wurzel, "The Matrix (1999)", "The Matrix (1999) - 1080p.mkv")
+	b := filepath.Join(wurzel, "The Matrix (1999)", "The Matrix (1999) - 4K.mkv")
+	dateiMitGroesse(t, wurzel, "The Matrix (1999)/The Matrix (1999) - 1080p.mkv", 10)
+	dateiMitGroesse(t, wurzel, "The Matrix (1999)/The Matrix (1999) - 4K.mkv", 20)
+	textDatei(t, wurzel, "The Matrix (1999)/movie.nfo",
+		`<movie><title>Matrix</title><uniqueid type="tmdb">603</uniqueid></movie>`)
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	var ids []string
+	for _, p := range []string{a, b} {
+		it := &store.Item{LibraryID: lib.ID, Kind: "movie", Title: "Matrix", Year: 1999, MatchState: "pending"}
+		_ = st.UpsertItem(ctx, it)
+		_ = st.UpsertFile(ctx, &store.MediaFile{ItemID: it.ID, Path: p, Container: "mkv"})
+		_ = st.SetSourceID(ctx, it.ID, "tmdb", "603")
+		ids = append(ids, it.ID)
+	}
+	acc, _ := st.CreateAccount(ctx, store.NewAccount{Name: "Mia"})
+	_ = st.AddToWatchlist(ctx, acc.ID, ids[1])
+	if _, err := New(st, nil).Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Limit: 10})
+	if len(alle) != 1 {
+		t.Fatalf("%d Filme statt 1: %v", len(alle), titles(alle))
+	}
+	if d, _ := st.FilesFor(ctx, alle[0].ID); len(d) != 2 {
+		t.Fatalf("%d Dateien statt 2", len(d))
+	}
+	if w, _ := st.WatchlistIDs(ctx, acc.ID); len(w) != 1 || w[0] != alle[0].ID {
+		t.Error("die Merkliste ist nicht mitgewandert")
+	}
+}

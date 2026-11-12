@@ -13,6 +13,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -154,4 +155,59 @@ func (s *Store) FehlendVermerken(ctx context.Context, libraryID string, gesehen 
 		return nil, 0, err
 	}
 	return weg, verschont, nil
+}
+
+// FilmeImOrdner nennt die Filme einer Bibliothek, von denen eine Datei
+// direkt in diesem Ordner liegt (nicht in Unterordnern) — älteste zuerst.
+// Gesucht wird über den Index auf path (Bereich „ordner/…").
+func (s *Store) FilmeImOrdner(ctx context.Context, libraryID, ordner string) ([]string, error) {
+	ordner = strings.TrimRight(ordner, "/") + "/"
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT f.path, i.id FROM media_file f JOIN item i ON i.id = f.item_id
+		  WHERE f.path >= ? AND f.path < ? AND i.library_id = ? AND i.kind = 'movie'
+		  ORDER BY i.added_at, i.id`, ordner, ordner[:len(ordner)-1]+"0", libraryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	schon := map[string]bool{}
+	for rows.Next() {
+		var p, id string
+		if err := rows.Scan(&p, &id); err != nil {
+			return nil, err
+		}
+		if strings.Contains(p[len(ordner):], "/") || schon[id] {
+			continue
+		}
+		schon[id] = true
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// FilmZusammenlegen hängt die Dateien von quelle an ziel, dazu je Konto
+// Stand, Merkliste, Favoriten und Bewertung, und entfernt quelle.
+func (s *Store) FilmZusammenlegen(ctx context.Context, ziel, quelle string) error {
+	if ziel == quelle {
+		return nil
+	}
+	konten, err := s.kontenIDs(ctx)
+	if err != nil {
+		return err
+	}
+	return s.tx(ctx, func(t *sql.Tx) error {
+		if _, err := t.ExecContext(ctx, `UPDATE media_file SET item_id = ? WHERE item_id = ?`, ziel, quelle); err != nil {
+			return err
+		}
+		if _, err := t.ExecContext(ctx,
+			`UPDATE OR IGNORE collection_item SET item_id = ? WHERE item_id = ?`, ziel, quelle); err != nil {
+			return err
+		}
+		if err := persoenlichesUmhaengen(ctx, t, quelle, ziel, konten); err != nil {
+			return err
+		}
+		_, err := t.ExecContext(ctx, `DELETE FROM item WHERE id = ?`, quelle)
+		return err
+	})
 }

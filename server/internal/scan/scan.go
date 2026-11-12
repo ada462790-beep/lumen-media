@@ -324,7 +324,8 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		}
 
 		gleich := s.unveraendert(ctx, path, info.Size(), info.ModTime().Unix())
-		added, err := s.upsertMovie(ctx, lib, g, path, info.Size(), info.ModTime().Unix())
+		eigen := discOrdner(dirs) >= 0 || lauf.eigenerOrdner(path, dirs, g.Title)
+		added, err := s.upsertMovie(ctx, lib, g, path, info.Size(), info.ModTime().Unix(), eigen)
 		if err != nil {
 			// Ohne Dateinamen: Das Protokoll verrät keine Titel (DATENSCHUTZ.md).
 			s.st.Log(ctx, "error", "scan", "eine Datei liess sich nicht eintragen: "+ohnePfad(err))
@@ -336,6 +337,9 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			res.Updated++
 		}
 		lauf.film(ctx, path, dirs, g)
+		if eigen {
+			s.ordnerZusammenlegen(ctx, lib, filepath.Dir(path))
+		}
 		s.melden(lib.ID, func(f *Fortschritt) { f.Fertig++ })
 		if !g.Confident {
 			res.Unmatched++
@@ -375,7 +379,7 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 					g.PartNo = 1
 				}
 				gleich := s.unveraendert(ctx, h.path, h.size, h.mtime)
-				if added, err := s.upsertMovie(ctx, lib, g, h.path, h.size, h.mtime); err == nil {
+				if added, err := s.upsertMovie(ctx, lib, g, h.path, h.size, h.mtime, false); err == nil {
 					if added {
 						res.Added++
 					} else if !gleich {
@@ -551,7 +555,7 @@ type episodeHit struct {
 // ---------------------------------------------------------------- Filme
 
 func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
-	path string, size, mtime int64) (added bool, err error) {
+	path string, size, mtime int64, ordnerEigen bool) (added bool, err error) {
 
 	// „pulp fiction" aus einem kleingeschriebenen Dateinamen wird „Pulp
 	// Fiction" — bis die Metadaten den richtigen Namen bringen.
@@ -597,14 +601,28 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 		}
 	}
 
+	var item *store.Item
+	// Gehört der Ordner einem Film allein (alle Videos darin heissen nach
+	// ihrem Namen gleich) und hängt dort schon eine Datei an einem Film,
+	// kommt diese dazu — als Fassung oder Teil. Nach dem Titel allein ging
+	// das schief, sobald die NFO der ersten Datei den Titel umbenannt
+	// hatte („The Matrix" → „Matrix"): Die zweite Fassung fand ihn nicht
+	// und wurde ein eigener Film.
+	if ordnerEigen {
+		if ids, err := s.st.FilmeImOrdner(ctx, lib.ID, filepath.Dir(path)); err == nil && len(ids) > 0 {
+			if it, err := s.st.Item(ctx, ids[0]); err == nil {
+				item = it
+			}
+		}
+	}
+
 	// Gibt es den Titel schon? Dann hängt die Datei als weitere Fassung dran —
 	// so entstehen die Doppel, die das Aufräumen später zeigt.
 	existing, err := s.st.TitelGleich(ctx, lib.ID, "movie", title, false)
 	if err != nil {
 		return false, err
 	}
-	var item *store.Item
-	for i := range existing {
+	for i := 0; item == nil && i < len(existing); i++ {
 		if strings.EqualFold(existing[i].Title, title) &&
 			(g.Year == 0 || existing[i].Year == 0 || existing[i].Year == g.Year) &&
 			s.dateienPassen(ctx, lib, existing[i].ID, title) {
@@ -631,6 +649,32 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 	}
 	s.fillFromProbe(ctx, f)
 	return added, s.dateiSchreiben(ctx, s.st, f)
+}
+
+// ordnerZusammenlegen heilt, was ältere Fassungen in einem Ordner, der
+// einem Film allein gehört, zerlegt haben: zwei Einträge mit derselben
+// TMDb-Kennung (aus der NFO) werden einer — der ältere bleibt, Stand und
+// Merkliste der Leute wandern mit. Ohne gemeinsame Kennung bleibt alles,
+// wie es ist; so bleibt auch eine von Hand abgetrennte Fassung getrennt.
+func (s *Scanner) ordnerZusammenlegen(ctx context.Context, lib store.Library, ordner string) {
+	ids, err := s.st.FilmeImOrdner(ctx, lib.ID, ordner)
+	if err != nil || len(ids) < 2 {
+		return
+	}
+	je := map[string]string{} // tmdb → ältester Eintrag
+	for _, id := range ids {
+		k, _ := s.st.SourceID(ctx, id, "tmdb")
+		if k == "" {
+			continue
+		}
+		if ziel, ok := je[k]; ok {
+			if err := s.st.FilmZusammenlegen(ctx, ziel, id); err == nil {
+				s.st.Log(ctx, "info", "scan", "zwei Einträge desselben Films zusammengelegt (gleicher Ordner, gleiche Kennung)")
+			}
+			continue
+		}
+		je[k] = id
+	}
 }
 
 // ---------------------------------------------------------------- Serien
