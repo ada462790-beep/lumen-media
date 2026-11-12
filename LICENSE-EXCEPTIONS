@@ -1,0 +1,31 @@
+Lumen — additional permissions under GNU AGPL version 3, section 7
+==================================================================
+
+Lumen is licensed under the GNU Affero General Public License version 3
+(see LICENSE). The Lumen authors grant the following additional permission.
+It applies to the entire Program. As section 7 allows, anyone who conveys a
+copy may remove it from that copy.
+
+1. Google Play services (Google Cast)
+-------------------------------------
+
+If you modify this Program, or any covered work, by linking or combining
+it with the Google Play services client libraries
+(com.google.android.gms:*) and the Google Android Data Transport
+libraries (com.google.android.datatransport:*), or a modified version
+of those libraries, containing parts covered by the terms of the Android
+Software Development Kit License Agreement, the licensors of this Program
+grant you additional permission to convey the resulting work.
+Corresponding Source for a non-source form of such a combination shall
+not include the source code for the parts of those libraries used as well
+as that of the covered work.
+
+Granted by the Lumen authors on 2026-11-12.
+
+---
+
+Deutsch (Erläuterung, massgebend ist der englische Text oben):
+Die Android-App darf zusammen mit Googles Cast-Bibliothek (Google Play
+services) weitergegeben werden, obwohl deren Quelltext nicht offen ist. Für
+alles andere gilt die AGPL-3.0 unverändert: Der Quelltext von Lumen selbst
+muss weiterhin offen bleiben.

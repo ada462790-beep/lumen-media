@@ -119,8 +119,9 @@ Keine fremden Skripte, Stylesheets, Schriften oder Bilder.
 | JUnit | 4.13.2 | EPL-1.0 | <https://junit.org/junit4/> | nur Bau |
 | Android Gradle Plugin, Gradle, Kotlin-Compiler | 8.7.3 / – / 2.0.21 | Apache-2.0 | – | nur Bau |
 
-Apache-2.0 und die Classpath-Ausnahme sind mit der AGPL-3.0 vereinbar. Zum
-**Cast-SDK** siehe „Offene Punkte" – das ist der einzige echte Konflikt.
+Apache-2.0 und die Classpath-Ausnahme sind mit der AGPL-3.0 vereinbar. Für das
+**Cast-SDK** erteilen die Lumen-Autoren eine zusätzliche Erlaubnis nach
+AGPL §7, siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 Die TV-App enthält kein Cast und keine Google-Play-Bibliothek.
 
 ## 5. Apple-Apps (`apple/`)
@@ -183,13 +184,9 @@ ausgeliefert wird.
 Die folgenden Punkte sind **Vorschläge**, kein geltender Lizenztext. Nichts
 davon ist umgesetzt.
 
-1. **Cast-SDK in der Android-Handy-App.** Das Release-Paket enthält
-   `lumen-handy.apk` mit der proprietären Google-Play-services-Bibliothek.
-   Die AGPL verlangt den vollständigen Quelltext aller Teile, die keine
-   Systembibliothek sind; den gibt es für das Cast-SDK nicht. Wer das APK
-   weitergibt, kann die AGPL darum nicht vollständig einhalten.
-   Möglichkeiten: (a) eine zusätzliche Erlaubnis nach AGPL §7 (Vorschlag
-   unten), (b) eine Bauvariante „frei" ohne Cast, (c) beides.
+1. **Cast-SDK in der Android-Handy-App.** Erledigt am 12.11.2026: Die
+   Lumen-Autoren haben die zusätzliche Erlaubnis nach AGPL §7 erteilt
+   (Weg a), siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 2. **App Store.** Die Bedingungen des App Store vertragen sich nach
    verbreiteter Ansicht nicht mit der (A)GPL. Vor einer Veröffentlichung
    dort braucht es eine Ausnahme der Rechteinhaber (Vorschlag unten). Die
@@ -204,7 +201,9 @@ davon ist umgesetzt.
    das eigene). Lumen zeigt bisher nur den Satz; das Logo wäre ein fremdes
    Markenbild und gehört nur nach Entscheid und unverändert hinein.
 
-### Vorschlag: zusätzliche Erlaubnis für Google Play services (AGPL §7)
+### Erteilt: zusätzliche Erlaubnis für Google Play services (AGPL §7)
+
+Gilt seit dem 12.11.2026, siehe [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 
 > Additional permission under GNU AGPL version 3 section 7
 >

@@ -1204,6 +1204,9 @@ Fundstelle in [DRITTSOFTWARE.md](DRITTSOFTWARE.md) (englisch:
   eigenen Lizenz (im Abbild: das Alpine-Paket, GPL). Welche Alpine-Pakete in
   einem Abbild stecken und wo ihr Quelltext liegt, steht darin unter
   `/usr/share/licenses/lumen/`.
+- Die Android-App enthält Googles Cast-Bibliothek (nicht quelloffen). Das
+  erlaubt eine zusätzliche Erlaubnis nach AGPL §7 in
+  [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 - Der Aktualisierer (Watchtower, Apache-2.0) ist **nicht Teil von Lumen**:
   Wer ihn einschaltet, lädt ihn selbst vom Docker Hub seines Herausgebers.
 - Poster und Beschreibungen kommen von TMDB, mit deinem eigenen Schlüssel.

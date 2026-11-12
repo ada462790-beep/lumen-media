@@ -119,7 +119,8 @@ No third-party scripts, stylesheets, fonts or images.
 | Android Gradle Plugin, Gradle, Kotlin compiler | 8.7.3 / – / 2.0.21 | Apache-2.0 | – | build only |
 
 Apache-2.0 and the Classpath exception are compatible with the AGPL-3.0. For
-the **Cast SDK** see "Open points" – the only real conflict. The TV app
+the **Cast SDK** the Lumen authors grant an additional permission under AGPL
+section 7, see [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS). The TV app
 contains no Cast and no Google Play library.
 
 ## 5. Apple apps (`apple/`)
@@ -179,13 +180,9 @@ The scripts in `tools/` are Lumen's own; `tools/symbol_bauen.py` uses Pillow
 The following are **proposals**, not license terms in force. None of them is
 implemented.
 
-1. **Cast SDK in the Android phone app.** The release ships `lumen-handy.apk`
-   containing the proprietary Google Play services library. The AGPL
-   requires complete source for every part that is not a System Library;
-   there is none for the Cast SDK. Anyone redistributing that APK therefore
-   cannot fully comply with the AGPL. Options: (a) an additional permission
-   under AGPL section 7 (proposal below), (b) a "frei" build flavor without
-   Cast, (c) both.
+1. **Cast SDK in the Android phone app.** Resolved on 2026-11-12: the Lumen
+   authors granted the additional permission under AGPL section 7 (option a),
+   see [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 2. **App Store.** The App Store terms are widely considered incompatible
    with the (A)GPL. Publishing there needs an exception from the copyright
    holders (proposal below). Section 3 of the [CLA](CLA.md) allows the Lumen
@@ -201,7 +198,9 @@ implemented.
    logo is a third-party trademark and should only be added by decision and
    unmodified.
 
-### Proposal: additional permission for Google Play services (AGPL section 7)
+### Granted: additional permission for Google Play services (AGPL section 7)
+
+In force since 2026-11-12, see [LICENSE-EXCEPTIONS](LICENSE-EXCEPTIONS).
 
 > Additional permission under GNU AGPL version 3 section 7
 >

@@ -55,7 +55,7 @@ COPY LICENSE /usr/share/licenses/lumen/LICENSE
 # genauen Alpine-Pakete dieses Abbilds: Für FFmpeg, BusyBox und die übrigen
 # GPL-Pakete muss sich der passende Quelltext finden lassen — bei Alpine
 # (aports und distfiles) unter genau diesen Fassungen.
-COPY THIRD_PARTY.md DRITTSOFTWARE.md /usr/share/licenses/lumen/
+COPY LICENSE-EXCEPTIONS THIRD_PARTY.md DRITTSOFTWARE.md /usr/share/licenses/lumen/
 RUN { echo "Alpine Linux $(cat /etc/alpine-release)"; \
       echo "Quelltext: https://distfiles.alpinelinux.org/distfiles/ und https://gitlab.alpinelinux.org/alpine/aports"; \
       echo; apk info -v | sort; } > /usr/share/licenses/lumen/alpine-pakete.txt
