@@ -13,6 +13,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 // FolgenOhneDatei entfernt Folgen, an denen keine einzige Datei mehr
@@ -93,4 +94,64 @@ func (s *Store) FolgenOhneDatei(ctx context.Context) (int, error) {
 		n += int(weg)
 	}
 	return n, err
+}
+
+// FehlendVermerken vermerkt jede vorhandene Datei der Bibliothek als
+// fehlend, die der Durchlauf nicht gesehen hat — ausser denen, für die
+// verschonen true sagt (sie liegen unter einem Ordner, der sich nicht
+// lesen liess). Zurück kommen die eben fehlend gewordenen Dateien und wie
+// viele verschont blieben.
+func (s *Store) FehlendVermerken(ctx context.Context, libraryID string, gesehen map[string]bool,
+	verschonen func(string) bool) ([]MediaFile, int, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT f.id, f.item_id, f.path, f.size_bytes, f.mtime, f.part_no,
+		        COALESCE(f.duration_ms, 0), COALESCE(f.edition, '')
+		   FROM media_file f
+		   JOIN item i ON i.id = f.item_id
+		  WHERE i.library_id = ? AND f.missing_since IS NULL`, libraryID)
+	if err != nil {
+		return nil, 0, err
+	}
+	var weg []MediaFile
+	verschont := 0
+	for rows.Next() {
+		var f MediaFile
+		if err := rows.Scan(&f.ID, &f.ItemID, &f.Path, &f.SizeBytes, &f.MTime, &f.PartNo,
+			&f.DurationMS, &f.Edition); err != nil {
+			rows.Close()
+			return nil, 0, err
+		}
+		if gesehen[f.Path] {
+			continue
+		}
+		if verschonen != nil && verschonen(f.Path) {
+			verschont++
+			continue
+		}
+		weg = append(weg, f)
+	}
+	rows.Close()
+	// Brach das Lesen mittendrin ab, fehlen in der Liste Dateien, die
+	// gesehen wurden — und es fehlen andere. Lieber gar nichts vermerken.
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	// In einer Transaktion: Eine abgehängte Platte mit 10 000 Dateien
+	// sind sonst 10 000 einzelne Schreibvorgänge.
+	now := time.Now().Unix()
+	err = s.tx(ctx, func(t *sql.Tx) error {
+		for i := range weg {
+			if _, err := t.ExecContext(ctx,
+				`UPDATE media_file SET missing_since = ? WHERE id = ?`, now, weg[i].ID); err != nil {
+				return err
+			}
+			weg[i].Missing = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return weg, verschont, nil
 }

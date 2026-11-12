@@ -12,6 +12,8 @@ package scan
 
 import (
 	"context"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -113,3 +115,102 @@ func TestLeereFolgenWerdenAufgeraeumt(t *testing.T) {
 }
 
 var _ = os.Remove
+
+// lesefehlerIn täuscht für die genannten Ordner (relativ zur Wurzel)
+// einen Lesefehler vor, wie ihn WalkDir bei fehlenden Rechten meldet.
+func lesefehlerIn(t *testing.T, wurzel string, ordner ...string) {
+	t.Helper()
+	kaputt := map[string]bool{}
+	for _, o := range ordner {
+		kaputt[filepath.Join(wurzel, o)] = true
+	}
+	alt := walkDir
+	walkDir = func(root string, fn fs.WalkDirFunc) error {
+		return filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err == nil && d.IsDir() && kaputt[p] {
+				if r := fn(p, d, nil); r != nil {
+					return r
+				}
+				if r := fn(p, d, fs.ErrPermission); r != nil {
+					return r
+				}
+				return filepath.SkipDir
+			}
+			return fn(p, d, err)
+		})
+	}
+	t.Cleanup(func() { walkDir = alt })
+}
+
+// B3: Dateien in einem Ordner, der sich nicht lesen lässt (ACL auf dem
+// NAS geändert), wurden als fehlend vermerkt und waren gesperrt.
+func TestUnlesbarerOrdnerVermerktNichtsAlsFehlend(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	for _, f := range []string{"Sammlungen/Heat (1995)/Heat (1995).mkv",
+		"Sammlungen/Harry Potter 1 (2001)/Harry Potter 1 (2001).mkv", "Up (2009)/Up (2009).mkv"} {
+		dateiMitGroesse(t, wurzel, f, 10)
+	}
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	if _, err := New(st, nil).Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	lesefehlerIn(t, wurzel, "Sammlungen")
+	res, err := New(st, nil).Scan(ctx, *lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Missing != 0 {
+		t.Fatalf("%d Dateien als fehlend vermerkt, obwohl ihr Ordner nur nicht lesbar war", res.Missing)
+	}
+	if n, _ := st.FehlendZahl(ctx); n != 0 {
+		t.Fatalf("FehlendZahl = %d", n)
+	}
+}
+
+// B2: Fällt die Freigabe mitten im Durchlauf aus, gilt nicht der Rest der
+// Bibliothek als fehlend — der Durchlauf zählt als unvollständig.
+func TestAussetzerDerFreigabeVermerktNichtsAlsFehlend(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	var ordner []string
+	for i := 0; i < 40; i++ {
+		o := fmt.Sprintf("Film %02d (20%02d)", i, i%25)
+		ordner = append(ordner, o)
+		dateiMitGroesse(t, wurzel, filepath.Join(o, o+".mkv"), 10+i)
+	}
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	if _, err := New(st, nil).Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	// Ab dem fünften Ordner ist die Freigabe weg (ENOENT/EIO beim Lesen).
+	lesefehlerIn(t, wurzel, ordner[5:]...)
+	if _, err := New(st, nil).Scan(ctx, *lib); err == nil {
+		t.Fatal("ein Durchlauf mit 35 Lesefehlern soll als unvollständig gelten")
+	}
+	if n, _ := st.FehlendZahl(ctx); n != 0 {
+		t.Fatalf("%d Dateien als fehlend vermerkt", n)
+	}
+
+	// Ist der Stammordner am Ende weg, wird ebenso nichts vermerkt.
+	walkDir = filepath.WalkDir
+	weg := wurzel + "-weg"
+	alt := walkDir
+	walkDir = func(root string, fn fs.WalkDirFunc) error {
+		err := filepath.WalkDir(root, fn)
+		_ = os.Rename(wurzel, weg)
+		return err
+	}
+	t.Cleanup(func() { walkDir = alt; _ = os.Rename(weg, wurzel) })
+	if err := os.Remove(filepath.Join(wurzel, ordner[0], ordner[0]+".mkv")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(st, nil).Scan(ctx, *lib); err == nil {
+		t.Fatal("verschwindet der Stammordner während des Durchlaufs, soll er scheitern")
+	}
+	if n, _ := st.FehlendZahl(ctx); n != 0 {
+		t.Fatalf("%d Dateien als fehlend vermerkt, obwohl die Freigabe weg war", n)
+	}
+}

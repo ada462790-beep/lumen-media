@@ -122,6 +122,10 @@ func zaehlenFuer(wurzel, art string) int {
 	return n
 }
 
+// walkDir geht über die Ordner einer Bibliothek; Tests ersetzen es, um
+// Lesefehler vorzutäuschen (als root wirkt chmod 000 nicht).
+var walkDir = filepath.WalkDir
+
 type Scanner struct {
 	st     *store.Store
 	probe  Prober
@@ -242,14 +246,20 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	disc, teile := discWahl{}, teilOrdner{}
 	aus := neuerAuslassLauf()
 	unlesbar := 0
+	// Wo das Lesen scheiterte: Darunter wird nichts als fehlend vermerkt.
+	// Eine Freigabe, die kurz aussetzt, oder ein Ordner, dessen Rechte
+	// sich geändert haben, liess sonst Hunderte Filme als „fehlt" stehen
+	// — nicht mehr abspielbar bis zum nächsten Durchlauf am nächsten Tag.
+	var fehlerPfade []string
 
-	walkErr := filepath.WalkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
+	walkErr := walkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			// Ein unlesbarer Ordner darf den ganzen Durchlauf nicht
 			// abbrechen. Welcher es war, steht unter „Aufräumen", nicht
 			// im Protokoll (dort stehen keine Pfade).
 			aus.merken(AuslassFehler, path)
 			unlesbar++
+			fehlerPfade = append(fehlerPfade, path)
 			return nil
 		}
 		if ctx.Err() != nil {
@@ -278,6 +288,7 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		if err != nil {
 			aus.merken(AuslassFehler, path)
 			unlesbar++
+			fehlerPfade = append(fehlerPfade, path)
 			return nil
 		}
 		if s.Bremse != nil && s.Bremse() {
@@ -398,12 +409,27 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("%s: durchlauf abgebrochen: %w", lib.Name, err)
 	}
+	// War die Freigabe während des Durchlaufs weg (oder ist sie es noch),
+	// oder liess sich ein grosser Teil nicht lesen, ist das, was gesehen
+	// wurde, kein Abbild der Sammlung. Dann wird gar nichts als fehlend
+	// vermerkt, und der Durchlauf gilt nicht als erledigt: Der Hausmeister
+	// versucht es nach einer Viertelstunde wieder.
+	if unterbrochen := freigabeUnterbrochen(lib.Path, unlesbar, len(seen)); unterbrochen {
+		s.auslassenSetzen(lib.ID, aus)
+		s.st.Log(ctx, "warn", "scan", fmt.Sprintf(
+			"%s: Der Ordner war während des Durchlaufs nicht vollständig lesbar "+
+				"(%d Ordner oder Dateien mit Lesefehler) — nichts als fehlend vermerkt, "+
+				"neuer Versuch in einer Viertelstunde (Liste unter Aufräumen)", lib.Name, unlesbar))
+		return nil, fmt.Errorf("%s: durchlauf unvollständig, %d lesefehler", lib.Name, unlesbar)
+	}
+	verschont := 0
 	if len(seen) == 0 {
 		s.st.Log(ctx, "warn", "scan", fmt.Sprintf(
 			"%s: keine einzige Videodatei gefunden — nichts als verschwunden "+
 				"vermerkt. Stimmt der Ordner, und ist die Platte eingehängt?", lib.Name))
-	} else if gone, err := s.st.MarkMissing(ctx, lib.ID, seen); err == nil {
-		res.Missing = gone
+	} else if gone, n, err := s.st.FehlendVermerken(ctx, lib.ID, seen, unterFehlerPfad(fehlerPfade)); err == nil {
+		res.Missing = len(gone)
+		verschont = n
 	}
 	// Was früher aus einem Papierkorb oder Schnappschuss des NAS
 	// eingelesen wurde („#recycle", „@eaDir"), fliegt ganz heraus — als
@@ -417,7 +443,8 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	s.auslassenSetzen(lib.ID, aus)
 	if unlesbar > 0 {
 		s.st.Log(ctx, "warn", "scan", fmt.Sprintf(
-			"%s: %d Ordner oder Dateien liessen sich nicht lesen (Liste unter Aufräumen)", lib.Name, unlesbar))
+			"%s: %d Ordner oder Dateien liessen sich nicht lesen — %d bekannte Dateien darin "+
+				"bleiben, wie sie waren (Liste unter Aufräumen)", lib.Name, unlesbar, verschont))
 	}
 	res.Took = time.Since(start)
 	res.TookMS = res.Took.Milliseconds()
@@ -430,6 +457,37 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		lib.Name, res.Added, res.Updated, res.Unmatched, res.Missing,
 		res.Took.Round(time.Millisecond)))
 	return res, nil
+}
+
+// freigabeUnterbrochen: Ist der Stammordner jetzt nicht (mehr) lesbar,
+// oder scheiterte das Lesen an so vielen Stellen, dass es kein einzelner
+// gesperrter Ordner mehr sein kann, war die Freigabe weg — ein
+// SMB-Aussetzer, eine USB-Platte, die kurz verschwand.
+func freigabeUnterbrochen(wurzel string, unlesbar, gesehen int) bool {
+	if _, err := os.ReadDir(wurzel); err != nil {
+		return true
+	}
+	if unlesbar < 20 {
+		return false
+	}
+	// Mehr als ein Zehntel von allem, was der Durchlauf angefasst hat.
+	return unlesbar*10 > unlesbar+gesehen
+}
+
+// unterFehlerPfad sagt für einen Pfad, ob er an oder unter einer Stelle
+// liegt, die sich nicht lesen liess.
+func unterFehlerPfad(fehler []string) func(string) bool {
+	if len(fehler) == 0 {
+		return nil
+	}
+	return func(p string) bool {
+		for _, f := range fehler {
+			if p == f || strings.HasPrefix(p, f+string(filepath.Separator)) {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 // ergebnisSetzen vermerkt das Ergebnis — und damit, wann zuletzt geprüft

@@ -779,48 +779,8 @@ func (s *Store) BestFileFor(ctx context.Context, itemID string) (*MediaFile, err
 // MarkMissing merkt sich, dass eine Datei verschwunden ist, statt den Titel
 // gleich zu löschen — eine abgehängte Platte soll die Mediathek nicht leeren.
 func (s *Store) MarkMissing(ctx context.Context, libraryID string, seenPaths map[string]bool) (int, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT f.id, f.path FROM media_file f
-		   JOIN item i ON i.id = f.item_id
-		  WHERE i.library_id = ? AND f.missing_since IS NULL`, libraryID)
-	if err != nil {
-		return 0, err
-	}
-	type gone struct{ id, path string }
-	list := []gone{}
-	for rows.Next() {
-		var g gone
-		if err := rows.Scan(&g.id, &g.path); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		if !seenPaths[g.path] {
-			list = append(list, g)
-		}
-	}
-	rows.Close()
-	// Brach das Lesen mittendrin ab, fehlen in der Liste Dateien, die
-	// gesehen wurden — und es fehlen andere. Lieber gar nichts vermerken.
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-
-	// In einer Transaktion: Eine abgehängte Platte mit 10 000 Dateien
-	// sind sonst 10 000 einzelne Schreibvorgänge.
-	now := time.Now().Unix()
-	err = s.tx(ctx, func(t *sql.Tx) error {
-		for _, g := range list {
-			if _, err := t.ExecContext(ctx,
-				`UPDATE media_file SET missing_since = ? WHERE id = ?`, now, g.id); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	return len(list), nil
+	weg, _, err := s.FehlendVermerken(ctx, libraryID, seenPaths, nil)
+	return len(weg), err
 }
 
 // ---------------------------------------------------------------- Aufräumen
