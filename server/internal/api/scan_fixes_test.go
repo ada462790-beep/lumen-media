@@ -122,3 +122,27 @@ func TestFehlendeEndgueltigEntfernen(t *testing.T) {
 		t.Fatalf("%d Titel übrig, erwartet 1", n)
 	}
 }
+
+// B12: Die Arbeitssperre vergibt der Reihe nach — wer zuerst wartet,
+// kommt zuerst dran, auch wenn ein anderer sie immer wieder neu holt.
+func TestArbeitssperreIstFair(t *testing.T) {
+	var f faireSperre
+	f.Lock()
+	reihe := make(chan int, 10)
+	for i := 1; i <= 3; i++ {
+		go func() {
+			f.Lock()
+			reihe <- i
+			f.Unlock()
+		}()
+		for f.Wartende() < i {
+			time.Sleep(time.Millisecond)
+		}
+	}
+	f.Unlock()
+	for erwartet := 1; erwartet <= 3; erwartet++ {
+		if got := <-reihe; got != erwartet {
+			t.Fatalf("dran war %d, erwartet %d", got, erwartet)
+		}
+	}
+}

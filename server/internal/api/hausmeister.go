@@ -36,8 +36,62 @@ import (
 // umgewandelt wird, bremst der Durchlauf von selbst (siehe scan.Bremse).
 
 // arbeitMu stellt sicher, dass Durchläufe und Metadaten nacheinander
-// laufen — egal, ob der Hausmeister oder ein Knopf sie anstösst.
-var arbeitMu sync.Mutex
+// laufen — egal, ob der Hausmeister oder ein Knopf sie anstösst. Wer
+// zuerst wartet, kommt zuerst dran (faireSperre).
+//
+// Echte Gleichzeitigkeit je Bibliothek gibt es bewusst nicht: Nach jedem
+// Durchlauf räumt Lumen bibliotheksübergreifend auf (Filme ohne Datei,
+// leere Folgen, Filmreihen) — liefe daneben ein zweiter Durchlauf, sähe
+// das Aufräumen dessen eben angelegte Titel, bevor ihre Dateien
+// eingetragen sind. Und auf einem NAS sind zwei FFprobe-Durchläufe auf
+// denselben Platten nicht schneller als einer.
+var arbeitMu faireSperre
+
+// faireSperre ist eine Sperre, die der Reihe nach vergibt.
+//
+// sync.Mutex verspricht keine Reihenfolge: Die Metadaten holen sich die
+// Sperre in Häppchen zu 50 Titeln immer wieder neu, und ein wartender
+// Durchlauf einer anderen Bibliothek konnte dazwischen leer ausgehen —
+// ein schneller Film-Durchlauf wartete hinter einer langen Serie samt
+// allen ihren Metadaten. Hier kommt dran, wer am längsten wartet.
+type faireSperre struct {
+	mu     sync.Mutex
+	belegt bool
+	warte  []chan struct{}
+}
+
+func (f *faireSperre) Lock() {
+	f.mu.Lock()
+	if !f.belegt {
+		f.belegt = true
+		f.mu.Unlock()
+		return
+	}
+	c := make(chan struct{})
+	f.warte = append(f.warte, c)
+	f.mu.Unlock()
+	<-c // die Sperre wird direkt übergeben, belegt bleibt true
+}
+
+func (f *faireSperre) Unlock() {
+	f.mu.Lock()
+	if len(f.warte) > 0 {
+		c := f.warte[0]
+		f.warte = f.warte[1:]
+		f.mu.Unlock()
+		close(c)
+		return
+	}
+	f.belegt = false
+	f.mu.Unlock()
+}
+
+// Wartende: wie viele gerade auf die Sperre warten.
+func (f *faireSperre) Wartende() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.warte)
+}
 
 // wartend: Bibliotheken, deren „Prüfen" angenommen ist, die aber warten,
 // bis eine andere fertig ist. Ohne das sah ein Klick auf „Prüfen" aus, als
