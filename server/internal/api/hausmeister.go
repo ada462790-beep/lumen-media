@@ -180,6 +180,10 @@ func (s *Server) durchlaufGesperrt(ctx context.Context, lib store.Library, vonSe
 	if n, err := s.st.FilmeOhneDatei(ctx); err == nil && n > 0 {
 		s.st.Log(ctx, "info", "scan", fmt.Sprintf("%d Filme ohne Datei entfernt", n))
 	}
+	// Leere Folgen (Geisterfolgen älterer Fassungen) und leere Staffeln.
+	if n, err := s.st.FolgenOhneDatei(ctx); err == nil && n > 0 {
+		s.st.Log(ctx, "info", "scan", fmt.Sprintf("%d leere Folgen oder Staffeln entfernt", n))
+	}
 	s.ReihenBilden(ctx)
 	// Viele neue Zeilen: Statistik für den Abfrageplaner nachführen
 	// (store.Optimieren) — sonst wählt er für manche Abfragen den falschen Index.

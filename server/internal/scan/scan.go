@@ -677,6 +677,27 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 			}
 		}
 	}
+	// Kennt Lumen eine Datei ohne Nummer schon, behält sie ihre Folge.
+	// Vorher wurde bei jedem Durchlauf ab der höchsten Nummer in der
+	// Datenbank weitergezählt — und die gehörte schon der Datei selbst:
+	// Aus drei Folgen wurden nach sieben Durchläufen 21, 18 davon leer,
+	// und der Gesehen-Haken blieb an einer leeren Folge zurück.
+	bekannt := map[string]store.Item{}
+	for _, eps := range folgen {
+		for _, e := range eps {
+			bekannt[e.ID] = e
+		}
+	}
+	for i := range hits {
+		g := &hits[i].guess
+		if g.EpisodeNo != 0 || g.EpisodeTo != 0 {
+			continue
+		}
+		if e, ok := bekannt[s.itemZuPfad(ctx, hits[i].path)]; ok && e.Kind == "episode" &&
+			e.SeasonNo == g.SeasonNo && e.EpisodeNo > 0 {
+			g.EpisodeNo = e.EpisodeNo
+		}
+	}
 	for _, h := range hits {
 		if h.guess.EpisodeNo > hoechste[h.guess.SeasonNo] {
 			hoechste[h.guess.SeasonNo] = h.guess.EpisodeNo
