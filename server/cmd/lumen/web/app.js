@@ -52,10 +52,10 @@ api.bestaetigen = (hinweis = '') => new Promise(fertig => {
     'border:0;border-radius:22px;padding:22px;width:min(360px,calc(100vw - 32px));' +
     'box-sizing:border-box;overflow:hidden;color:var(--label)';
   d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-    <div id="bestaetigen-t" class="t-title" style="font-size:19px;font-weight:700">${tr('Rechte ändern')}</div>
+    <div id="bestaetigen-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${tr('Rechte ändern')}</div>
     <div class="t-caption c-2">${hinweis ? hinweis.replace(/[<&]/g, '') : tr('Zur Sicherheit noch einmal deine PIN, dein Passwort oder den Code aus der Authenticator-App.')}</div>
     <input type="password" name="code" autocomplete="current-password" required aria-label="${tr('PIN, Passwort oder Code')}"
-      style="width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:16px">
+      style="width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:1rem">
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button type="button" class="btn btn-pill" value="ab">${tr('Abbrechen')}</button>
       <button class="btn btn-pill btn-pill--fill" value="ok">${tr('Bestätigen')}</button></div></form>`;
@@ -435,9 +435,9 @@ function hoverKarteZeigen(card) {
       <button class="hoverkarte-titel" data-go="detail" data-id="${esc(id)}">${esc(it.title)}</button>
       <div class="t-caption c-2 clamp-1">${esc(unter)}</div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-hk-play="${esc(id)}">${PLAY(14)} ${it.resumeMs || (it.kind === 'series' && it.gesehen) ? tr('Weiterschauen') : tr('Ansehen')}</button>
-        <button class="btn btn-pill" style="height:32px;font-size:13px" data-hk-merken="${esc(id)}" aria-pressed="${!!it.onList}">${it.onList ? tr('Gemerkt') : tr('Merken')}</button>
-        <button class="btn btn-pill" style="height:32px;font-size:13px" data-go="detail" data-id="${esc(id)}">${tr('Info')}</button>
+        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-hk-play="${esc(id)}">${PLAY(14)} ${it.resumeMs || (it.kind === 'series' && it.gesehen) ? tr('Weiterschauen') : tr('Ansehen')}</button>
+        <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-hk-merken="${esc(id)}" aria-pressed="${!!it.onList}">${it.onList ? tr('Gemerkt') : tr('Merken')}</button>
+        <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-go="detail" data-id="${esc(id)}">${tr('Info')}</button>
       </div></div>`;
   document.body.appendChild(k);
   hoverKarte = k;
@@ -1071,7 +1071,7 @@ function viewRedeem() {
 
   const wahl = [['pin', 'PIN'], ['password', tr('Passwort')], ['none', tr('Ohne Schutz')]].map(([v, n]) =>
     `<button type="button" class="tab-pill" role="tab" aria-selected="${art === v}"
-       data-lockkind="${v}" style="height:32px;font-size:14px">${n}</button>`).join('');
+       data-lockkind="${v}" style="height:32px;font-size:.875rem">${n}</button>`).join('');
 
   const geheim = art === 'none' ? `
     <p class="hint">${tr('{schutzOhne} Das passt für den Fernseher im Wohnzimmer, weniger für ein Profil, das nur dir gehört.', { schutzOhne: esc(T.schutzOhne) })}</p>`
@@ -1476,7 +1476,7 @@ function viewPerson() {
     p.gestorben ? tr('gestorben {tag}', { tag: tag(p.gestorben) }) : ''].filter(Boolean).join(' · ');
   const quellen = (p.quellen || []).map(q => `<a href="${esc(nurHttp(q.url))}" target="_blank" rel="noopener noreferrer">${esc(q.name)}</a>`).join(', ');
   return shell(`<div class="wrap wrap--flat">
-    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
+    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
     <div style="display:flex;gap:24px;align-items:flex-start;margin-top:14px;flex-wrap:wrap">
       ${p.bild ? `<img src="${esc(p.bild)}${tokenSuffix(p.bild)}" alt="" data-weg
         style="width:150px;height:200px;object-fit:cover;border-radius:16px;flex:none;background:var(--fill)">` : ''}
@@ -1518,8 +1518,8 @@ function fassungsWahl(it, fassungen, resumeSec) {
         <span style="display:flex;width:30px;height:30px;border-radius:50%;background:var(--fill);align-items:center;justify-content:center;flex:none">${PLAY(12)}</span>
         <span><span class="t-body">${esc(fassungName(f))}</span>
           ${i === 0 ? `<span class="t-caption c-2"> ${tr('· Standard')}</span>` : ''}</span></button>
-      ${resumeSec > 60 ? `<button class="btn btn-pill" style="height:28px;font-size:12px" data-play="${esc(it.id)}" data-file="${esc(f.id)}" data-from="0">${tr('Von vorn')}</button>` : ''}
-      ${admin && i > 0 ? `<button class="btn btn-pill" style="height:28px;font-size:12px" data-fassungstandard="${esc(it.id)}:${esc(f.id)}"
+      ${resumeSec > 60 ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-play="${esc(it.id)}" data-file="${esc(f.id)}" data-from="0">${tr('Von vorn')}</button>` : ''}
+      ${admin && i > 0 ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassungstandard="${esc(it.id)}:${esc(f.id)}"
           title="${tr('Diese Qualität für alle als Standard nehmen')}">${tr('Als Standard')}</button>` : ''}
     </div>`;
   return `<div class="group group--inset listen-panel" style="max-width:560px;margin-top:14px" role="group" aria-label="${tr('Qualität wählen')}">
@@ -1616,14 +1616,14 @@ function viewDetail() {
   const staffelJetzt = (d.seasons || []).find(x => x.id === d.staffel);
   const staffelFertig = (d.episodes || []).length > 0 && d.episodes.every(e => e.finished);
   const staffelKnopf = staffelJetzt && (d.episodes || []).length ? `
-    <button class="btn btn-pill" style="height:32px;font-size:13px" data-staffel-gesehen="${esc(staffelJetzt.id)}" aria-pressed="${staffelFertig}">
+    <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-staffel-gesehen="${esc(staffelJetzt.id)}" aria-pressed="${staffelFertig}">
       ${svg(I.check, 14, 2.6)} ${staffelFertig ? tr('Staffel nicht mehr als gesehen') : tr('Staffel als gesehen markieren')}</button>` : '';
   // Nach einem Haken an einer späten Folge: auch die davor?
   const vorherFrage = d.vorherigeFrage ? `
     <div class="vorher-frage surface" role="status">
       <span class="t-sub" style="flex:1;min-width:180px">${tr('Auch alle Folgen davor als gesehen markieren?')}</span>
-      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-vorherige-ja="${esc(d.vorherigeFrage)}">${tr('Ja, alle davor')}</button>
-      <button class="btn btn-pill" style="height:32px;font-size:13px" data-vorherige-nein>${tr('Nein')}</button>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-vorherige-ja="${esc(d.vorherigeFrage)}">${tr('Ja, alle davor')}</button>
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-vorherige-nein>${tr('Nein')}</button>
     </div>` : '';
   // „Weiterschauen" auf der Serienseite: die Folge nach der zuletzt
   // geschauten — der Server weiss sie (dieselbe wie auf der Startseite).
@@ -1758,7 +1758,7 @@ function viewDetail() {
           <div class="surface" style="padding:14px 16px;border-radius:14px;display:flex;align-items:center;gap:4px">
             ${stars}
             <span style="flex:1"></span>
-            ${it.myRating ? `<button class="btn btn-pill" style="height:28px;font-size:12px" data-rate="0">${tr('Löschen')}</button>` : ''}
+            ${it.myRating ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-rate="0">${tr('Löschen')}</button>` : ''}
           </div>
           <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Nur für dich sichtbar.')}</p></section>
         ${(d.sharedRatings || []).length ? `<section style="margin-top:22px"><div class="section-h">${tr('Im Haushalt')}</div>
@@ -2006,7 +2006,7 @@ async function vonHandSetzen(wert) {
 function folgenPanel(p) {
   const f = p.folgen;
   if (!f) { folgenLaden(p); return `<div class="spuren-titel">${tr('Folgen')}</div><div class="loading" style="padding:20px"><span class="spin"></span></div>`; }
-  const pillen = f.seasons.map(st => `<button class="tab-pill" role="tab" aria-selected="${f.staffel === st.id}" data-pl-staffel="${esc(st.id)}" style="height:28px;font-size:13px">
+  const pillen = f.seasons.map(st => `<button class="tab-pill" role="tab" aria-selected="${f.staffel === st.id}" data-pl-staffel="${esc(st.id)}" style="height:28px;font-size:.8125rem">
       ${(st.seasonNo || 0) === 0 ? tr('Specials') : esc(st.title)}</button>`).join('');
   const zeilen = (f.episodes || []).map(e => {
     const aktuell = e.id === p.itemId;
@@ -3383,7 +3383,7 @@ function reiheKarte(r) {
 
 const kopf = (titel, unter, aktionen = '') => `
   <header>
-    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px" data-back>
+    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px" data-back>
       ${svg(I.back, 16, 2)}${tr('Zurück')}</button>
     <h1 class="t-large" style="margin:14px 0 0">${titel}</h1>
     <div class="t-sub c-2" style="margin-top:4px">${unter}</div>
@@ -3437,7 +3437,7 @@ function viewCollection() {
   const kopfbild = r.backdrop ? `<div class="hero" style="height:min(44vh,420px);min-height:280px">
       ${artOf({ backdrop: r.backdrop, title: r.name }, 'wide')}<div class="hero-scrim"></div>
       <div class="hero-text" style="bottom:28px">
-        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px;margin-bottom:14px" data-back>
+        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px;margin-bottom:14px" data-back>
           ${svg(I.back, 16, 2)}${tr('Zurück')}</button>
         <h1 class="t-hero">${titel}</h1>
         <div class="t-sub c-2" style="margin-top:6px">${esc(unter)}</div>
@@ -3482,7 +3482,7 @@ function viewPlaylists() {
     <form id="listeform" class="sfield" style="max-width:520px" autocomplete="off">
       ${svg(I.plus, 18, 2)}<input name="name" placeholder="${tr('Neue Liste, etwa „Filmabend“')}" maxlength="80"
         aria-label="${tr('Name der neuen Liste')}">
-      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px">${tr('Anlegen')}</button></form>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem">${tr('Anlegen')}</button></form>
     <section style="margin-top:30px"><div class="section-h" style="padding-left:0">${tr('Meine Listen')}</div>
       ${meine.length ? `<div class="listen-grid">${meine.map(listeKarte).join('')}</div>`
         : `<p class="hint">${tr('Noch keine. Leg oben eine an, oder auf einer Titelseite mit „Zur Liste“.')}</p>`}</section>
@@ -3567,11 +3567,11 @@ async function zuweisenPanel(itemId, suche, modus = 'suche') {
     <form data-zuweisenform data-item="${esc(itemId)}" class="row" style="min-height:52px;gap:10px" autocomplete="off">
       <span style="color:var(--label-2);display:flex">${svg(I.search, 16, 2)}</span>
       <input name="q" value="${esc(idModus ? '' : suche)}" placeholder="${idModus ? tr('tt0133093, TMDb-Nummer oder Link einfügen …') : tr('Titel suchen, oder Link/Kennung von TMDb, IMDb, TheTVDB einfügen …')}" aria-label="${idModus ? tr('Kennung oder Link') : tr('Suchen')}"
-        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:16px">
+        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:1rem">
       ${idModus ? '' : `<input name="year" placeholder="${tr('Jahr')}" inputmode="numeric" aria-label="${tr('Jahr')}"
-        style="width:64px;border:0;outline:0;background:var(--fill);border-radius:8px;padding:4px 8px;color:var(--label);font:inherit;font-size:14px">`}
-      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px">${idModus ? tr('Laden') : tr('Suchen')}</button>
-      <button type="button" class="btn btn-pill" style="height:30px;font-size:13px" data-zuweisen-aus="${esc(itemId)}">${tr('Zu')}</button></form>
+        style="width:64px;border:0;outline:0;background:var(--fill);border-radius:8px;padding:4px 8px;color:var(--label);font:inherit;font-size:.875rem">`}
+      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem">${idModus ? tr('Laden') : tr('Suchen')}</button>
+      <button type="button" class="btn btn-pill" style="height:30px;font-size:.8125rem" data-zuweisen-aus="${esc(itemId)}">${tr('Zu')}</button></form>
     <div data-treffer-box>${idModus
       ? `<p class="t-caption c-2" style="padding:10px 16px;margin:0;line-height:1.5">${tr('Möglich sind: IMDb-Kennung (tt…), TMDb-Nummer, TheTVDB-Nummer (tvdb:121361) oder ein Link von imdb.com, themoviedb.org oder thetvdb.com. Bei TheTVDB steht die Nummer auf der Seite der Serie unter „TheTVDB.com Series ID“.')}</p>`
       : `<p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p>`}</div></div>`;
@@ -3616,8 +3616,8 @@ async function listenPanel(itemId) {
     <form id="neuelisteform" class="row" style="min-height:52px;gap:10px" autocomplete="off">
       <span style="color:var(--label-2);display:flex">${svg(I.plus, 16, 2)}</span>
       <input name="name" placeholder="${tr('Neue Liste …')}" maxlength="80" aria-label="${tr('Neue Liste')}"
-        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:16px">
-      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px">${tr('Anlegen')}</button></form>
+        style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:1rem">
+      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem">${tr('Anlegen')}</button></form>
   </div>`;
   document.querySelector('[data-zurliste]')?.setAttribute('aria-expanded', 'true');
 }
@@ -3639,8 +3639,8 @@ function viewWishes() {
       </div>
       <span class="badge" style="border:0;background:${COL[w.state][0]};color:${COL[w.state][1]};flex:none">${NAME[w.state]}</span>
       ${owner && w.state !== 'done' ? `<div style="display:flex;gap:8px;flex:none">
-          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
+          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
         </div>` : ''}
     </div>`).join('');
 
@@ -3650,7 +3650,7 @@ function viewWishes() {
       ${owner ? tr('Was sich der Haushalt wünscht') : tr('Was du dir gewünscht hast, und wie es steht')}</div>
     <form id="wishform" class="sfield" style="max-width:560px">
       ${svg(I.plus, 18, 2)}<input name="title" placeholder="${tr('Titel wünschen …')}" aria-label="${tr('Titel wünschen')}">
-      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px">${tr('Wünschen')}</button></form>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem">${tr('Wünschen')}</button></form>
     <p class="t-caption c-2" style="margin:8px 2px 0">
       ${tr('Der Besitzer sieht den Titel und wer ihn gewünscht hat — sonst nichts.')}</p>
     <section style="margin-top:24px">${rows ? `<div class="group group--inset">${rows}</div>`
@@ -3662,7 +3662,7 @@ function viewWishes() {
 
 const swRow = (label, on, value, key) => `
   <div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${esc(label)}</span>
-    ${on === null ? `<span style="color:var(--label-2);font-size:15px">${esc(value)}</span>`
+    ${on === null ? `<span style="color:var(--label-2);font-size:.9375rem">${esc(value)}</span>`
       : `<button class="switch" role="switch" aria-checked="${!!on}" ${key ? `data-pref="${key}"` : 'data-sw="1"'}
           aria-label="${esc(label)}"><i></i></button>`}</div>`;
 
@@ -3692,7 +3692,7 @@ function viewSettings() {
     <div class="row" style="min-height:52px;gap:12px">
       <span style="flex:1;min-width:0"><span class="t-body">${esc(p.deviceName)}</span>
         <span class="t-caption c-2" style="display:block">${p.mode === 'direct' ? tr('direkt') : tr('wird umgewandelt')}${p.detail ? ' · ' + esc(p.detail) : ''}</span></span>
-      <button class="btn btn-pill" style="height:32px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
         data-meinstop="${esc(p.id)}">${tr('Beenden')}</button></div>`).join('');
 
   return shell(`<div class="wrap wrap--flat" style="max-width:1100px">
@@ -3765,7 +3765,7 @@ function viewSettings() {
             <label for="tvcode" class="t-body" style="flex:1;min-width:180px">${tr('Code vom Fernseher')}
               <span class="t-caption c-2" style="display:block">${tr('Der Fernseher meldet sich dann mit deinem Profil an.')}</span></label>
             <input id="tvcode" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" maxlength="7"
-              style="width:120px;height:38px;border-radius:10px;border:0;background:var(--fill);color:var(--label);font:inherit;font-size:18px;text-align:center;letter-spacing:.12em">
+              style="width:120px;height:38px;border-radius:10px;border:0;background:var(--fill);color:var(--label);font:inherit;font-size:1.125rem;text-align:center;letter-spacing:.12em">
             <button class="btn btn-pill btn-pill--fill" type="submit">${tr('Anmelden')}</button></form>`)}
         ${laufend ? grp(tr('Läuft gerade in deinem Profil'), laufend) : ''}
         ${grp(tr('Geräte'), devices +
@@ -3773,13 +3773,13 @@ function viewSettings() {
              <span class="t-body">${tr('Überall abmelden')}</span></button>`, tr('Zuletzt aktiv steht nur auf den Tag genau da — und nur hier, in deinem Profil.'))}
         ${grp(tr('Über Lumen'),
           `<div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${tr('Fassung')}</span>
-             <span style="color:var(--label-2);font-size:15px">${esc(S.hello?.version || '')}</span></div>
+             <span style="color:var(--label-2);font-size:.9375rem">${esc(S.hello?.version || '')}</span></div>
            <div class="row" style="min-height:50px"><span class="t-body" style="flex:1">${tr('Lizenz')}</span>
-             <span style="color:var(--label-2);font-size:15px">${esc(S.hello?.license || 'AGPL-3.0-only')}</span></div>` +
+             <span style="color:var(--label-2);font-size:.9375rem">${esc(S.hello?.license || 'AGPL-3.0-only')}</span></div>` +
           (quelle() ? `<a class="row orow-link" style="min-height:50px;text-decoration:none;color:inherit"
               href="${esc(quelle())}" target="_blank" rel="noopener noreferrer">
              <span class="t-body" style="flex:1">${tr('Quelltext')}</span>
-             <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:15px">
+             <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:.9375rem">
                ${tr('ansehen')}${svg(I.chev, 14, 2.4)}</span></a>` : ''),
           tr('Lumen ist freie Software. Du darfst sie benutzen, verändern und weitergeben — wer sie verändert und betreibt, muss seine Änderungen ebenfalls offenlegen.'))}
         ${grp(tr('Verlauf'),
@@ -3794,7 +3794,7 @@ function viewSettings() {
 
 const ohead = (title, sub, back = 'admin') => `
   <header>
-    ${back ? `<button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;gap:6px;margin-bottom:14px" data-go="${back}">
+    ${back ? `<button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px;margin-bottom:14px" data-go="${back}">
       ${svg(I.back, 16, 2)}${back === 'admin' ? tr('Verwaltung') : tr('Startseite')}</button>` : ''}
     <h1 class="t-large" style="margin:0">${esc(title)}</h1>
     <div class="t-sub c-2" style="margin-top:4px">${esc(sub)}</div>
@@ -3809,7 +3809,7 @@ const stat = (t, v, sub, bar) => `
 const linkRow = (label, value, view) =>
   `<button class="row orow-link" data-go="${view}" style="width:100%;min-height:50px;text-align:left">
      <span class="t-body" style="flex:1">${esc(label)}</span>
-     <span style="display:inline-flex;align-items:center;gap:6px;color:var(--label-2);font-size:15px">${esc(value)}${svg(I.chev, 14, 2.4)}</span></button>`;
+     <span style="display:inline-flex;align-items:center;gap:6px;color:var(--label-2);font-size:.9375rem">${esc(value)}${svg(I.chev, 14, 2.4)}</span></button>`;
 
 /* Der Fernzugriff in der Verwaltung.
  *
@@ -3822,7 +3822,7 @@ function fernzugriffGruppe(f) {
     return grp(tr('Von aussen erreichbar'),
       `<div class="row" style="min-height:52px">
          <span class="t-body" style="flex:1">${tr('Fernzugriff')}</span>
-         <span style="color:var(--label-2);font-size:15px">${tr('nicht eingerichtet')}</span></div>`,
+         <span style="color:var(--label-2);font-size:.9375rem">${tr('nicht eingerichtet')}</span></div>`,
       f.hinweis || '');
   }
   const steht = !!f.verbunden;
@@ -3867,7 +3867,7 @@ function quelltextZeile(q) {
     `<a class="row orow-link" style="min-height:50px;text-decoration:none;color:inherit"
         href="${esc(q.url)}" target="_blank" rel="noopener noreferrer">
        <span class="t-body" style="flex:1">${q.eigen ? tr('Deine Fassung') : tr('Unverändert')}</span>
-       <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:15px">
+       <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:.9375rem">
          ${esc(wo)}${svg(I.chev, 14, 2.4)}</span></a>`,
     q.eigen
       ? tr('Diese Adresse bekommen alle zu sehen, die den Server benutzen.')
@@ -4055,7 +4055,7 @@ function bibZeile(l) {
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
         <label class="t-caption c-2" style="display:inline-flex;align-items:center;gap:6px">${tr('Von selbst nachsehen')}
           <select class="takt" data-takt="${esc(l.id)}" aria-label="${tr('Wie oft Lumen von selbst nachsieht')}">${takt}</select>${uhrzeit}</label>
-        <button class="btn btn-pill" style="height:28px;font-size:12px" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>
+        <button class="btn btn-pill" style="height:28px;font-size:.75rem" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;flex:none;padding-top:2px">${knoepfe}</div>
@@ -4093,11 +4093,11 @@ function bibWaehler() {
     <div class="orow" style="height:auto;padding:12px 16px;gap:10px;background:var(--fill)">
       <span class="mono t-caption c-2 clamp-1" style="flex:1;min-width:0">
         ${esc(b.pfad || tr('Wo möchtest du anfangen?'))}</span>
-      ${b.pfad ? `<button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:13px"
+      ${b.pfad ? `<button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:.8125rem"
         data-into="${esc(b.oben || '')}">${tr('Höher')}</button>` : ''}
-      ${b.pfad ? `<button type="button" class="btn btn-pill btn-pill--fill" style="flex:none;height:30px;font-size:13px"
+      ${b.pfad ? `<button type="button" class="btn btn-pill btn-pill--fill" style="flex:none;height:30px;font-size:.8125rem"
         data-take="${esc(b.pfad)}">${tr('Diesen nehmen')}</button>` : ''}
-      <button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:13px" data-browseoff>${tr('Zu')}</button>
+      <button type="button" class="btn btn-pill" style="flex:none;height:30px;font-size:.8125rem" data-browseoff>${tr('Zu')}</button>
     </div>
     ${zeilen || `<p class="hint" style="padding:14px 16px">${tr('Hier liegen keine Unterordner.')}</p>`}
     ${!b.pfad && b.imContainer ? `<p class="t-caption c-2" style="padding:10px 16px 12px;margin:0">
@@ -4202,7 +4202,7 @@ function viewAdminWishes() {
   const NAME = { open: tr('offen'), working: tr('in Arbeit'), done: tr('erfüllt'), declined: tr('abgelehnt') };
 
   const knopf = (id, zu, text, rot) =>
-    `<button class="btn btn-pill${rot ? '' : ' btn-pill--fill'}" style="height:30px;font-size:13px;flex:none${
+    `<button class="btn btn-pill${rot ? '' : ' btn-pill--fill'}" style="height:30px;font-size:.8125rem;flex:none${
       rot ? ';background:rgba(255,69,58,.14);color:#ff6961' : ''}"
       data-wishstate="${esc(id)}:${zu}">${text}</button>`;
 
@@ -4303,8 +4303,8 @@ function viewAdminUpdate() {
     <section style="margin-top:28px"><div class="section-h">${tr('Stand')}</div>
       <div class="group group--inset">${stand}
         <div class="row" style="min-height:48px;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-pill" style="height:30px;font-size:13px" data-updpruefen>${tr('Jetzt prüfen')}</button>
-          <a class="btn btn-pill" style="height:30px;font-size:13px;text-decoration:none" href="${esc(u.releaseSeite)}" target="_blank" rel="noopener">${tr('Alle Veröffentlichungen')}</a>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-updpruefen>${tr('Jetzt prüfen')}</button>
+          <a class="btn btn-pill" style="height:30px;font-size:.8125rem;text-decoration:none" href="${esc(u.releaseSeite)}" target="_blank" rel="noopener">${tr('Alle Veröffentlichungen')}</a>
           <span class="t-caption c-2" style="margin-left:auto">${u.wiedergaben ? tr('{n} Wiedergaben laufen', { n: u.wiedergaben }) : tr('gerade schaut niemand')}</span>
         </div></div></section>
 
@@ -4434,8 +4434,8 @@ function viewAdminGroups() {
           : x.verwaltung ? ` <span class="badge" style="border:0;background:rgba(10,132,255,.16);color:#4aa3ff">${tr('Verwaltung')}</span>` : ''}</div>
         <div class="t-caption c-2">${tr('{n} Personen', { n: x.mitglieder })} · ${tr('{n} Bibliotheken', { n: x.libraries.length })}
           · ${x.verwaltung || x.vollzugriff ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: x.limits.maxStreams })}</div></div>
-      <button class="btn btn-pill" style="height:30px;font-size:13px" data-grpedit="${esc(x.id)}">${tr('Bearbeiten')}</button>
-      <button class="btn btn-pill" style="height:30px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961" data-grpdel="${esc(x.id)}">${tr('Auflösen')}</button>
+      <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-grpedit="${esc(x.id)}">${tr('Bearbeiten')}</button>
+      <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-grpdel="${esc(x.id)}">${tr('Auflösen')}</button>
     </div>`).join('');
   const zuweisung = accounts.map(a => `
     <label class="row" style="min-height:48px">
@@ -4505,7 +4505,7 @@ function viewAdminBackups() {
     <div class="row" style="min-height:56px;gap:12px">
       <span style="flex:1"><span class="t-body">${b.nr === 1 ? tr('Neueste') : tr('Davor')}</span>
         <span class="t-caption c-2" style="display:block">${esc(tagText(b.tag))} · ${b.mb ? zahl(b.mb) + ' MB' : tr('unter 1 MB')}</span></span>
-      <button class="btn btn-pill" style="height:32px;font-size:13px" data-wiederherstellen="${Number(b.nr)}">${tr('Wiederherstellen')}</button>
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-wiederherstellen="${Number(b.nr)}">${tr('Wiederherstellen')}</button>
     </div>`).join('');
   return shell(`<div class="wrap wrap--flat" style="max-width:900px">
     ${ohead(tr('Sicherung'), tr('Einmal am Tag, nach 4:30 Uhr'))}
@@ -4551,7 +4551,7 @@ function viewAdminUmwandlung() {
         </div>
         <div class="row" style="min-height:52px;gap:12px">
           <span class="t-sub c-2" style="flex:1">${esc(jetzt)} ${esc(gefunden)}${hw.ruht?.length ? ' ' + esc(`${tr('Ruht nach Fehlern:')} ` + hw.ruht.map(v => HW_NAMEN[v] || v).join(', ') + '.') : ''}</span>
-          <button class="btn btn-pill" type="button" style="height:32px;font-size:13px" data-hwpruefen>${tr('Neu prüfen')}</button>
+          <button class="btn btn-pill" type="button" style="height:32px;font-size:.8125rem" data-hwpruefen>${tr('Neu prüfen')}</button>
         </div>
         ${d.hardwareAusUmgebung ? `<p class="hint" style="padding:12px 16px">${esc(tr('Das Verfahren ist in der Umgebung (LUMEN_HARDWARE) festgelegt und lässt sich nur dort ändern.'))}</p>` : ''}
       </div></section>
@@ -4595,7 +4595,7 @@ function viewSessions() {
             ${s.mode === 'direct' ? tr('Direkt') : tr('Wird umgewandelt')}</span>
         </div>
       </div>
-      <button class="btn btn-pill" style="height:32px;font-size:13px;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
         data-kill="${esc(s.id)}">${tr('Beenden')}</button>
     </div>`).join('');
 
@@ -4617,12 +4617,12 @@ function viewLogs() {
         // Störungen beim Abspielen kommen als Tageszahl, ohne Uhrzeit.
         ? datum(l.at)
         : uhrzeitText(l.at, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
-      <span class="badge" style="border:0;flex:none;width:56px;justify-content:center;background:${TAG[l.level]};color:${COL[l.level]};text-transform:uppercase;font-size:10px">${l.level}</span>
+      <span class="badge" style="border:0;flex:none;width:56px;justify-content:center;background:${TAG[l.level]};color:${COL[l.level]};text-transform:uppercase;font-size:.625rem">${l.level}</span>
       <span class="mono" style="flex:none;width:86px;color:var(--label-3)">${esc(l.area)}</span>
       <span class="mono" style="color:${l.level === 'info' ? 'var(--label-2)' : COL[l.level]};flex:1">${esc(l.message)}</span></div>`).join('');
 
   const tabs = [['all', tr('Alles')], ['error', tr('Fehler')], ['warn', tr('Warnung')], ['info', tr('Info')]].map(([v, n]) =>
-    `<button class="tab-pill" role="tab" aria-selected="${S.logFilter === v}" data-logf="${v}" style="height:30px;font-size:13px">${n}</button>`).join('');
+    `<button class="tab-pill" role="tab" aria-selected="${S.logFilter === v}" data-logf="${v}" style="height:30px;font-size:.8125rem">${n}</button>`).join('');
 
   return shell(`<div class="wrap wrap--flat">
     ${ohead(tr('Protokoll'), tr('Was der Server tut — und wo es hakt'))}
@@ -4651,16 +4651,16 @@ function viewCleanup() {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="t-body" style="flex:1 1 200px">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
           <span class="t-caption c-2">${teile ? ` ${tr('· {n} Teile eines Films', { n: x.files.length })}` : ` ${tr('· {n} Fassungen', { n: x.files.length })}`}</span></div>
-        ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
+        ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
       </div>
       ${x.files.map(f => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
-        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:12px">${esc(f.path)}</span>
+        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(f.path)}</span>
         <span class="t-caption c-2 tnum">${[teile ? tr('Teil {nr}', { nr: f.partNo }) : '', f.height ? f.height + 'p' : '', f.container ? f.container.toUpperCase() : '',
           groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
         ${teile ? '' : f.preferred
           ? `<span class="badge" style="border:0;background:rgba(48,209,88,.16);color:#30d158">${tr('gewählt')}</span>`
-          : `<button class="btn btn-pill" style="height:28px;font-size:12px" data-fassung="${esc(x.itemId)}:${esc(f.id)}">${tr('Diese nehmen')}</button>`}
-        ${teile ? '' : `<button class="btn btn-pill" style="height:28px;font-size:12px;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
+          : `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassung="${esc(x.itemId)}:${esc(f.id)}">${tr('Diese nehmen')}</button>`}
+        ${teile ? '' : `<button class="btn btn-pill" style="height:28px;font-size:.75rem;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
           title="${tr('Ist ein anderer Film — als eigenen Titel führen')}">${tr('Abtrennen')}</button>`}
       </div>`).join('')}
     </div>`;
@@ -4690,15 +4690,15 @@ function viewCleanup() {
         <div style="flex:1;min-width:220px">
           <div class="t-body">${esc(i.title)}${i.year ? ` <span class="c-2">(${i.year})</span>` : ''}
             <span class="t-caption c-2">· ${i.kind === 'movie' ? tr('Film') : i.kind === 'series' ? tr('Serie') : esc(i.kind)}</span></div>
-          ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
+          ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:.7188rem;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
           <div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${g
             ? `${GRUND[g.art] || ''}${gesucht ? ' ' + tr('Gesucht: {was}.', { was: gesucht }) : ''}${g.vorschlag ? ' ' + tr('Am nächsten: {titel} ({prozent} %).', { titel: esc(g.vorschlag), prozent: Math.round((g.wert || 0) * 100) }) : ''}`
             : i.matchState === 'pending' ? tr('Noch nicht geprüft.') : tr('Seit dem letzten Neustart nicht mehr geprüft.')}</div>
         </div>
         <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap">
-          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:13px" data-zuo-id="${esc(i.id)}">${tr('ID eingeben')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:13px" data-go="detail" data-id="${esc(i.id)}">${tr('Öffnen')}</button>
+          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-zuo-id="${esc(i.id)}">${tr('ID eingeben')}</button>
+          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-go="detail" data-id="${esc(i.id)}">${tr('Öffnen')}</button>
         </div>
       </div>
       <div data-zuo-box="${esc(i.id)}" style="margin-top:6px"></div>
@@ -4722,7 +4722,7 @@ function viewCleanup() {
         <span class="t-body" style="flex:1">${esc((AUSLASS[a.grund] || [a.grund])[0])}</span>
         <span class="t-caption c-2">${esc(b.name)} · ${tr('{n} Einträge', { n: a.anzahl })}</span></summary>
       <p class="t-caption c-2" style="margin:6px 0">${esc((AUSLASS[a.grund] || ['', ''])[1])}</p>
-      <div class="mono c-2" style="font-size:11.5px;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
+      <div class="mono c-2" style="font-size:.7188rem;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
     </details>`).join('')).join('');
 
   return shell(`<div class="wrap wrap--flat" style="max-width:900px">
@@ -4737,7 +4737,7 @@ function viewCleanup() {
       <div class="group group--inset">${unmatched}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0;line-height:1.5">${tr('Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. „Suchen“ sucht frei bei TMDb, „ID eingeben“ nimmt eine IMDb-, TMDb- oder TheTVDB-Kennung oder einen Link. Zugewiesenes gilt als von Hand zugeordnet und bleibt so.')}
         ${tr('Tipp: Eine Kennung im Ordner- oder Dateinamen, etwa „Matrix (1999) {imdb-tt0133093}“, ordnet beim nächsten Durchlauf ohne Suche zu.')}</p>
-      <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
+      <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
     ${ausstehend ? `<section style="margin-top:22px"><div class="section-h">${tr('Wartet auf die Zuordnung · {n}', { n: nAusstehend })}</div>
       <div class="group group--inset">${ausstehend}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Diese Titel prüft der nächste Metadaten-Durchgang.')}</p></section>` : ''}
@@ -4773,10 +4773,10 @@ function viewAccounts() {
           · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
-      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
-      ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
-      ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
-      ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
+      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
+      ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
+      ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
+      ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
         <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
           ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]].map(([k, n]) =>

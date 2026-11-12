@@ -284,7 +284,7 @@ function feldHtml(stand, feld) {
     case 'leute':
       return `<div class="ff" data-feld="${feld}"><div class="ff-kopf"><span style="flex:1">${f.label}</span>${schloss(stand, feld)}</div>
         <div class="leute">${(stand.cast || []).map(person).join('')}</div>
-        <div><button type="button" class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-person-hinzu>${tr('+ Person')}</button></div></div>`;
+        <div><button type="button" class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-person-hinzu>${tr('+ Person')}</button></div></div>`;
     default:
       eingabe = `<input id="${id}" name="${feld}" value="${escH(wert || '')}" maxlength="300"${f.pflicht ? ' required' : ''}${
         f.liste ? ` list="${id}-liste"` : ''}${feld === 'sortTitle' ? ` placeholder="${escH(stand.item.title)}"` : ''}>${
@@ -304,8 +304,8 @@ function formular(stand) {
       ? `<div class="fenster-meldung fenster-meldung--info">${it.matchState === 'unmatched'
           ? tr('TMDb kennt diesen Titel nicht. Was du hier einträgst, bleibt so — der Titel steht danach nicht mehr unter „nicht erkannt“.')
           : tr('Für diesen Titel wurden noch keine Metadaten geholt. Titel oder Jahr von Hand zu setzen heisst: Lumen sucht nicht mehr selbst.')}</div>` : ''}
-    <p class="ff-hinweis" style="margin:4px 0 0;font-size:13px">${tr('Was du änderst, wird gesperrt: „Metadaten neu laden“ und NFO-Dateien überschreiben es nicht mehr. Ein Klick auf das Schloss hebt die Sperre wieder auf.')}</p>
-    ${(stand.dateien || []).length ? `<div class="ff-hinweis" style="margin:8px 0 0;font-size:12px">${tr('Datei')}:
+    <p class="ff-hinweis" style="margin:4px 0 0;font-size:.8125rem">${tr('Was du änderst, wird gesperrt: „Metadaten neu laden“ und NFO-Dateien überschreiben es nicht mehr. Ein Klick auf das Schloss hebt die Sperre wieder auf.')}</p>
+    ${(stand.dateien || []).length ? `<div class="ff-hinweis" style="margin:8px 0 0;font-size:.75rem">${tr('Datei')}:
       ${stand.dateien.map(x => `<div class="mono" style="overflow-wrap:anywhere">${escH(x)}</div>`).join('')}</div>` : ''}
     ${bilder(stand)}
     ${oben.map(f => feldHtml(stand, f)).join('')}

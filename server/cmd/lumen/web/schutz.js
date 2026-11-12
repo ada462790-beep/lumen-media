@@ -83,14 +83,14 @@ function dialogRahmen(titelId) {
 }
 
 const FELD = 'width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;' +
-  'background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:16px';
+  'background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:1rem';
 
 /* Eine Frage mit Ja/Abbrechen. Gibt true zurück, wenn bestätigt. */
 export function frage(titel, text, ja) {
   return new Promise(fertig => {
     const d = dialogRahmen('frage-t');
     d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-      <div id="frage-t" class="t-title" style="font-size:19px;font-weight:700">${esc(titel)}</div>
+      <div id="frage-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${esc(titel)}</div>
       <div class="t-body c-2">${esc(text)}</div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button type="button" class="btn btn-pill" value="ab">${tr('Abbrechen')}</button>
@@ -111,7 +111,7 @@ export function mitteilung(titel, text) {
     const d = dialogRahmen('mitteilung-t');
     d.setAttribute('role', 'alertdialog');
     d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-      <div id="mitteilung-t" class="t-title" style="font-size:19px;font-weight:700">${esc(titel)}</div>
+      <div id="mitteilung-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${esc(titel)}</div>
       <div class="t-body c-2">${esc(text)}</div>
       <div style="display:flex;justify-content:flex-end">
         <button class="btn btn-pill btn-pill--fill" value="ok">${tr('OK')}</button></div></form>`;
@@ -137,7 +137,7 @@ export function schutzDialog({ titel, hinweis = '', warnung = '', mitAlt = false
     let art = altArt === 'password' ? 'password' : 'pin';
     const zeichnen = fehler => {
       d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-        <div id="schutz-t" class="t-title" style="font-size:19px;font-weight:700">${esc(titel)}</div>
+        <div id="schutz-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${esc(titel)}</div>
         ${hinweis ? `<div class="t-caption c-2">${esc(hinweis)}</div>` : ''}
         ${warnung ? `<div class="t-caption" role="note" style="color:var(--red,#ff453a);font-weight:600">${esc(warnung)}</div>` : ''}
         ${mitAlt && altArt !== 'none' ? `<label class="t-caption c-2">${altArt === 'password' ? tr('Bisheriges Passwort') : tr('Bisherige PIN')}
@@ -145,7 +145,7 @@ export function schutzDialog({ titel, hinweis = '', warnung = '', mitAlt = false
             inputmode="${altArt === 'pin' ? 'numeric' : 'text'}"></label>` : ''}
         <div role="tablist" style="display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;align-self:flex-start">
           ${arten.map(([v, n]) => `<button type="button" class="tab-pill" role="tab" aria-selected="${art === v}" data-art="${v}"
-            style="height:30px;font-size:14px">${n}</button>`).join('')}</div>
+            style="height:30px;font-size:.875rem">${n}</button>`).join('')}</div>
         ${art === 'none' ? `<div class="t-caption c-2">${esc(T.schutzOhne)}</div>` : `
           <label class="t-caption c-2">${art === 'pin' ? tr('Neue PIN – mindestens vier Ziffern') : tr('Neues Passwort – mindestens acht Zeichen')}
             <input type="password" name="neu" autocomplete="new-password" required minlength="${art === 'pin' ? 4 : 8}"

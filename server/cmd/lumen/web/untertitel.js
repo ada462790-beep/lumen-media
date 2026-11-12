@@ -120,7 +120,7 @@ function trefferListe(treffer, mitHash) {
         <span class="t-caption c-2" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:3px">${abz}
           <span>${tr('{n} Downloads', { n: (t.downloads || 0).toLocaleString(sprache()) })}</span></span>
       </span>
-      <button type="button" class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px;flex:none" data-laeuft="${tr('Holt …')}"
+      <button type="button" class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;flex:none" data-laeuft="${tr('Holt …')}"
         data-ut-holen="${escH(JSON.stringify({ dateiId: t.dateiId, sprache: t.sprache, hoergeschaedigt: t.hoergeschaedigt, erzwungen: t.erzwungen }))}">${tr('Holen')}</button>
     </div>`;
   }).join('')}</div>
