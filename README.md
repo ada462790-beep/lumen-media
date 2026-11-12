@@ -316,16 +316,29 @@ MKV in 1080p und als alte AVI —, ist das ein Titel, nicht zwei. „Ansehen"
 fragt dann, in welcher Qualität (Auflösung, Format, Grösse); wer verwaltet,
 legt fest, welche Fassung für alle zuerst kommt.
 
-**Filme in Teilen.** `Film a.avi`, `Film b.avi`, `Film c.avi` oder `CD1`,
-`CD2` erkennt Lumen als einen Film. In der Verwaltung lassen sich die
+**Filme in Teilen.** `Film a.avi`, `Film b.avi`, `Film c.avi` (mit oder
+ohne Jahr im Namen, sobald mindestens zwei Teile im selben Ordner liegen)
+oder `CD1`, `CD2` erkennt Lumen als einen Film. In der Verwaltung lassen sich die
 Teile zu einer Datei zusammenführen — ohne neu zu rechnen, die Teile
 wandern in den Unterordner `.lumen-teile`. Dafür sind die Medienordner
 mit `:rw` eingehängt.
 
 **Lokale Metadaten.** NFO-Dateien (Kodi, Emby, Jellyfin, tinyMediaManager)
-und Bilder neben den Dateien (`poster.jpg`, `fanart.jpg`, Staffelposter)
+und Bilder neben den Dateien (`poster.jpg`, `fanart.jpg`, `logo.png`,
+`landscape.jpg`, Staffelposter, Folgenbilder auch in `metadata/`)
 übernimmt Lumen mit; was du dort gepflegt hast, geht beim Umzug nicht
-verloren. Die Verwaltung kann jeden Titel auch von Hand bearbeiten —
+verloren. Aus der NFO kommen auch Besetzung (mit Bildern aus `.actors/`),
+Regie, Drehbuch, Studio, Land, Schlagworte, Tagline und die Altersfreigabe
+in jeder Emby-Schreibweise (`DE-16`, `CH-12`, `FSK 16`, `PG-13` …); eine
+Sammlung aus `<set>` wird zur Filmreihe mit ihrem Namen aus Emby.
+**Ohne TMDb-Schlüssel** gilt ein Titel mit vollständiger NFO (Titel,
+Inhalt, Jahr) als erkannt; Kennungen aus NFO und Namen werden trotzdem
+gespeichert, und kommt später ein Schlüssel dazu, holt Lumen diese Titel
+einmal nach. Extras (Ordner `trailers/`, `featurettes/`, `behind the
+scenes/`, `deleted scenes/`, `interviews/`, `scenes/`, `shorts/`, `clips/`,
+`extras/`, `other/` oder Endungen wie `-trailer`, `-featurette`, `-clip`)
+werden nie zu Filmen; die Titelseite bietet sie unter „Extras" zum
+Abspielen an. Die Verwaltung kann jeden Titel auch von Hand bearbeiten —
 was du änderst, bleibt gesperrt und wird nicht mehr überschrieben.
 
 **Zuordnen: Welcher Film ist das?** Lumen sucht bei TMDb mit dem Titel und

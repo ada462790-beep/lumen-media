@@ -212,6 +212,13 @@ const clock = sec => {
 // dort lieber der Hintergrund, sonst das Poster, sonst das Standbild.
 function artOf(it, kind = 'poster') {
   const img = url => `<img class="art-img" src="${esc(url)}${tokenSuffix(url)}" alt="" loading="lazy">`;
+  // 'quer': eine breite Karte. Das Querformat aus der Sammlung
+  // („landscape.jpg", mit Schriftzug) passt dort besser als der
+  // Hintergrund; ohne es gilt dasselbe wie bei 'wide'.
+  if (kind === 'quer') {
+    if (it.landscape) return img(it.landscape);
+    kind = 'wide';
+  }
   if (kind === 'wide') {
     if (it.backdrop) return img(it.backdrop);
     // Bei Folgen ist das „Poster" das Standbild der Folge (breit) — es geht
@@ -347,7 +354,7 @@ function wideCard(it) {
   return `<div class="widecard-huelle" style="position:relative">
     <button class="card widecard" data-play="${esc(it.id)}" aria-label="${esc(tr('{titel} ansehen', { titel: [oben, unten].filter(Boolean).join(', ') }))}">
       <div class="thumb thumb--wide" style="position:relative;width:300px;height:169px;border-radius:12px;overflow:hidden">
-        ${artOf(it, 'wide')}
+        ${artOf(it, 'quer')}
         <span class="folge-play" aria-hidden="true">${PLAY(26)}</span>
         ${pct > 1 && !it.finished ? `<div class="progress progress--onart"><i style="width:${pct}%"></i></div>` : ''}
       </div>
@@ -428,7 +435,7 @@ function hoverKarteZeigen(card) {
   const unter = [jahre(it), it.kind === 'series' && it.folgen ? (it.gesehen ? tr('{gesehen} von {folgen} Folgen', { gesehen: it.gesehen, folgen: it.folgen }) : tr('{folgen} Folgen', { folgen: it.folgen })) : '',
     (it.genres || []).slice(0, 2).join(', '), it.ageYears != null ? tr('ab {n}', { n: it.ageYears }) : ''].filter(Boolean).join(' · ');
   k.innerHTML = `
-    <div class="hoverkarte-bild" data-hk-oeffnen="${esc(id)}">${artOf(it, 'wide')}${wenigBewegung() ? '' : vorschauVideo(id, 'hoverkarte-video')}
+    <div class="hoverkarte-bild" data-hk-oeffnen="${esc(id)}">${artOf(it, 'quer')}${wenigBewegung() ? '' : vorschauVideo(id, 'hoverkarte-video')}
       ${wenigBewegung() ? '' : `<button class="btn btn-round sm glass glass--clear hk-ton" data-vorschau-ton aria-label="${tr('Ton der Vorschau')}" aria-pressed="false">${svg(I.ton, 16, 2)}</button>`}</div>
     <div class="hoverkarte-text">
       <button class="hoverkarte-titel" data-go="detail" data-id="${esc(id)}">${esc(it.title)}</button>
@@ -1595,7 +1602,7 @@ function viewDetail() {
       </button>
       <div style="flex:1;min-width:0">
         <div class="t-body" style="display:flex;align-items:center;gap:8px">
-          <span class="c-2 tnum" style="flex:none">${e.episodeNo}</span>
+          <span class="c-2 tnum" style="flex:none">${e.episodeNoEnd > e.episodeNo ? `${e.episodeNo}–${e.episodeNoEnd}` : e.episodeNo}</span>
           <span class="clamp-1">${esc(e.title)}</span>
           ${e.finished ? `<span class="c-2" style="flex:none;display:inline-flex" title="${tr('gesehen')}">${svg(I.check, 14, 2.6)}</span>` : ''}
         </div>
@@ -1672,9 +1679,16 @@ function viewDetail() {
       <button class="btn btn-round sm glass glass--regular" style="position:absolute;top:28px;width:44px;height:44px;z-index:3"
         data-back data-heldzurueck aria-label="${tr('Zurück')}">${svg(I.back, 18, 2)}</button>
       <div class="hero-text">
-        <h1 class="t-hero">${esc(it.title)}</h1>
+        ${it.logo
+          // Der Schriftzug aus der Sammlung („logo.png") statt des Titels als
+          // Text; für Vorleseprogramme bleibt der Titel der Name.
+          ? `<h1 class="t-hero hero-logo" style="margin:0"><img src="${esc(it.logo)}${tokenSuffix(it.logo)}" alt="${esc(it.title)}"
+              style="display:block;max-width:min(460px,70%);max-height:150px;width:auto;height:auto;object-fit:contain;object-position:left bottom"
+              data-ersatz="${esc(it.title)}"></h1>`
+          : `<h1 class="t-hero">${esc(it.title)}</h1>`}
         ${it.originalTitle && it.originalTitle !== it.title
           ? `<div class="t-sub c-2" style="margin-top:4px">${esc(it.originalTitle)}</div>` : ''}
+        ${d.nfo?.tagline ? `<div class="t-sub" style="margin-top:6px;font-style:italic">${esc(d.nfo.tagline)}</div>` : ''}
         <div class="t-sub c-2" style="margin-top:8px">${esc(meta)}${tomaten}</div>
         ${technik}
         <div style="display:flex;gap:12px;margin-top:22px;flex-wrap:wrap">
@@ -1735,6 +1749,7 @@ function viewDetail() {
     <div class="detail-spalten${it.overview || (d.cast || []).length || seasons ? '' : ' detail-spalten--schmal'}" style="margin-top:34px">
       <div>
         ${it.overview ? `<p class="t-body" style="max-width:640px;line-height:1.6">${esc(it.overview)}</p>` : ''}
+        ${nfoAngaben(d.nfo)}
         ${(d.cast || []).length ? `<section style="margin-top:26px"><div class="section-h" style="padding-left:0">${tr('Besetzung')}</div>
           <div class="rail" style="gap:14px">${d.cast.map(p => `
             <button class="person card" data-go="person" data-id="${esc(p.name)}" aria-label="${tr('Alles mit {name}', { name: esc(p.name) })}">
@@ -1744,6 +1759,7 @@ function viewDetail() {
               <div class="t-caption clamp-1" style="margin-top:6px">${esc(p.name)}</div>
               ${p.rolle ? `<div class="t-caption c-2 clamp-1">${esc(p.rolle)}</div>` : ''}
             </button>`).join('')}</div></section>` : ''}
+        ${extrasAbschnitt(it, d.extras)}
         ${seasons ? `<section style="margin-top:28px">
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <div role="group" aria-label="${tr('Staffel')}" class="chips" style="display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;max-width:100%;overflow-x:auto">${seasons}</div>${staffelBearbeiten(d.staffel)}
@@ -1785,6 +1801,53 @@ function viewDetail() {
         <h2 class="t-title3">${tr('Ähnliche Titel')}</h2>
         <div class="rail">${d.similar.map(x => posterCard(x)).join('')}</div></section>` : ''}
     <div style="height:40px"></div></div>`);
+}
+
+/* Was die NFO-Datei ausserdem weiss: Regie, Drehbuch, Studio, Land,
+   Schlagworte — als kurze Zeilen unter der Beschreibung. */
+function nfoAngaben(n) {
+  if (!n) return '';
+  const zeilen = [[tr('Regie'), n.regie], [tr('Drehbuch'), n.drehbuch], [tr('Studio'), n.studios],
+    [tr('Land'), n.laender], [tr('Schlagworte'), n.tags]].filter(([, v]) => (v || []).length);
+  if (!zeilen.length) return '';
+  return `<dl class="t-sub nfo-angaben" style="margin:18px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;max-width:640px">
+    ${zeilen.map(([k, v]) => `<dt class="c-3">${k}</dt><dd class="c-2" style="margin:0">${v.map(esc).join(', ')}</dd>`).join('')}</dl>`;
+}
+
+/* Extras aus den Ordnern neben dem Film (Trailer, Featurettes …). Sie
+   laufen direkt im Browser, in einem eigenen kleinen Fenster — der grosse
+   Player gehört dem Film. */
+const EXTRA_ART = () => ({ trailer: tr('Trailer'), featurette: tr('Featurette'), behindthescenes: tr('Hinter den Kulissen'),
+  deleted: tr('Entfallene Szene'), interview: tr('Interview'), scene: tr('Szene'), short: tr('Kurzfilm'), clip: tr('Ausschnitt'), other: tr('Extra') });
+function extrasAbschnitt(it, extras) {
+  if (!(extras || []).length) return '';
+  const art = EXTRA_ART();
+  return `<section style="margin-top:26px"><div class="section-h" style="padding-left:0">${tr('Extras · {n}', { n: extras.length })}</div>
+    <div class="group group--inset">${extras.map(x => `
+      <button class="row orow-link" style="width:100%;min-height:52px;text-align:left;gap:12px" data-extra="${esc(x.url)}" data-extra-titel="${esc(x.titel || art[x.art] || art.other)}">
+        <span style="display:flex;color:var(--label-2)">${PLAY(16)}</span>
+        <span class="t-body clamp-1" style="flex:1;min-width:0">${esc(x.titel || art[x.art] || art.other)}</span>
+        ${x.titel ? `<span class="t-caption c-2" style="flex:none">${esc(art[x.art] || art.other)}</span>` : ''}</button>`).join('')}</div></section>`;
+}
+function extraAbspielen(url, titel) {
+  document.getElementById('extra-fenster')?.remove();
+  const d = document.createElement('dialog');
+  d.id = 'extra-fenster';
+  d.className = 'surface';
+  d.setAttribute('aria-label', titel);
+  d.style.cssText = 'padding:0;border:0;border-radius:14px;max-width:min(960px,94vw);width:100%;background:#000;color:#fff';
+  d.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px">
+      <span class="t-body clamp-1" style="flex:1">${esc(titel)}</span>
+      <button class="btn btn-round sm" data-extra-zu aria-label="${tr('Schliessen')}">${svg(I.x, 16, 2.2)}</button></div>
+    <video controls autoplay playsinline style="display:block;width:100%;max-height:78vh;background:#000" src="${esc(url)}${tokenSuffix(url)}"></video>
+    <p class="t-caption" data-extra-fehler hidden style="padding:10px 14px;margin:0;color:#ffb340">${tr('Dieses Extra kann der Browser nicht direkt abspielen.')}</p>`;
+  document.body.appendChild(d);
+  const v = d.querySelector('video');
+  v.addEventListener('error', () => { d.querySelector('[data-extra-fehler]').hidden = false; });
+  const zu = () => { v.pause(); v.removeAttribute('src'); v.load(); d.close(); d.remove(); };
+  d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-extra-zu]')) zu(); });
+  d.addEventListener('cancel', e => { e.preventDefault(); zu(); });
+  d.showModal();
 }
 
 /* ---------------------------------------------------------------- Player */
@@ -3466,7 +3529,16 @@ async function zuweisenSuchen(itemId, q, year) {
   box.innerHTML = `<p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p>`;
   let t;
   try { t = await api.adminItemSearch(itemId, q, year); }
-  catch (err) { box.innerHTML = `<p class="hint" style="padding:12px 16px;margin:0">${esc(err.message)}</p>`; return; }
+  catch (err) {
+    // Ohne (gültigen) TMDb-Schlüssel lässt sich eine Kennung trotzdem
+    // speichern: Poster und Beschreibungen kommen, sobald einer da ist.
+    const ohne = err.code === 'ohne_schluessel' || err.code === 'schluessel_abgelehnt';
+    box.innerHTML = `<p class="hint" style="padding:12px 16px;margin:0">${esc(err.message)}</p>${ohne ? `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;padding:0 16px 12px">
+        <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-kennung-merken="${esc(itemId)}" data-q="${esc(q)}">${tr('Nur die Kennung speichern')}</button>
+        ${S.me?.account?.isAdmin ? `<button class="btn btn-pill" style="height:30px;font-size:13px" data-go="metadata">${tr('TMDb-Schlüssel eintragen')}</button>` : ''}</div>` : ''}`;
+    return;
+  }
   box.innerHTML = t.length ? t.map(x => `
     <button class="row orow-link" style="width:100%;min-height:64px;text-align:left;gap:12px" data-treffer="${esc(x.sourceId)}" data-item="${esc(itemId)}">
       <div class="thumb" style="position:relative;width:40px;height:60px;border-radius:6px;overflow:hidden;flex:none;background:var(--fill)">
@@ -3759,7 +3831,13 @@ function quelltextZeile(q) {
    Zeile soll von selbst sagen, ob noch etwas fehlt. */
 function metaZeile(m) {
   if (!m) return tr('TMDb-Schlüssel eintragen');
-  if (!m.tmdb?.configured) return tr('kein Schlüssel — Poster fehlen');
+  if (m.schluessel === 'abgelehnt') return tr('TMDb lehnt den Schlüssel ab');
+  if (!m.tmdb?.configured) {
+    // Ohne Schlüssel zählen die Poster aus der Sammlung (NFO, poster.jpg).
+    if (m.titel && m.mitPoster >= m.titel) return tr('kein Schlüssel — alle Poster aus der Sammlung');
+    if (m.titel) return tr('kein Schlüssel — {n} von {gesamt} Titeln mit Poster', { n: m.mitPoster || 0, gesamt: m.titel });
+    return tr('kein Schlüssel');
+  }
   return m.imdb?.configured ? tr('TMDb und OMDb hinterlegt') : tr('TMDb hinterlegt');
 }
 
@@ -3826,13 +3904,17 @@ function viewAdmin() {
             </select></div>`,
             tr('Gilt für die Profilauswahl, neue Geräte und alle Profile ohne eigene Wahl. Sprache und Region der Metadaten stellst du unter „Poster und Beschreibungen“ ein.')) : ''}
         ${quelltextZeile(d.source)}
-        ${d.meta && !d.meta.tmdb?.configured ? grp(tr('Hinweis'),
+        ${d.meta && (!d.meta.tmdb?.configured || d.meta.schluessel === 'abgelehnt') ? grp(tr('Hinweis'),
           `<div class="row" style="min-height:52px">
-             <span style="color:#ff9f0a;display:flex">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20)}</span>
-             <div style="flex:1"><div class="t-body">${tr('Kein TMDb-Schlüssel hinterlegt')}</div>
-               <div class="t-sub c-2">${tr('Ohne ihn bleiben Poster und Beschreibungen leer')}</div></div>
-             <button class="btn btn-pill btn-pill--fill" data-go="metadata">${tr('Eintragen')}</button></div>`) : ''}
-        ${c.pending ? grp(tr('Hinweis'),
+             <span style="color:${d.meta.schluessel === 'abgelehnt' ? '#ff6961' : '#ff9f0a'};display:flex">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20)}</span>
+             <div style="flex:1"><div class="t-body">${d.meta.schluessel === 'abgelehnt' ? tr('TMDb lehnt den Schlüssel ab') : tr('Kein TMDb-Schlüssel hinterlegt')}</div>
+               <div class="t-sub c-2">${d.meta.schluessel === 'abgelehnt'
+                 ? tr('Bitte den langen API Read Access Token eintragen')
+                 : d.meta.titel && d.meta.mitPoster >= d.meta.titel
+                   ? tr('Poster und Beschreibungen kommen aus der Sammlung (NFO und Bilder)')
+                   : tr('{n} von {gesamt} Titeln haben ein Poster aus der Sammlung — für die übrigen braucht es den Schlüssel', { n: d.meta.mitPoster || 0, gesamt: d.meta.titel || 0 })}</div></div>
+             <button class="btn btn-pill btn-pill--fill" data-go="metadata">${d.meta.schluessel === 'abgelehnt' ? tr('Schlüssel ändern') : tr('Eintragen')}</button></div>`) : ''}
+        ${c.pending && d.meta?.tmdb?.configured && d.meta.schluessel !== 'abgelehnt' ? grp(tr('Hinweis'),
           `<div class="row" style="min-height:52px">
              <span style="color:#ff9f0a;display:flex">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20)}</span>
              <div style="flex:1"><div class="t-body">${tr('{pending} Titel ohne Metadaten', { pending: c.pending })}</div>
@@ -4560,7 +4642,13 @@ function viewCleanup() {
     unsicher: tr('Kein Treffer passt gut genug — lieber nichts als der falsche Film.'),
     zu_nah: tr('Mehrere Treffer passen gleich gut (etwa eine Neuverfilmung).'),
     fehler: tr('TMDb war nicht erreichbar — Lumen versucht es später noch einmal.'),
+    schluessel: tr('TMDb lehnt den Schlüssel ab — der Titel wartet, bis ein gültiger eingetragen ist.'),
   };
+  // Ohne (gültigen) Schlüssel wartet ein Titel nicht auf TMDb, sondern auf
+  // den Schlüssel — das soll da stehen, nicht „nicht erreichbar".
+  const schl = d.schluessel || 'ok';
+  const offenText = schl === 'fehlt' ? tr('Wartet auf einen TMDb-Schlüssel.')
+    : schl === 'abgelehnt' ? GRUND.schluessel : tr('Noch nicht geprüft.');
   const kurzPfad = p => esc(p.split('/').filter(Boolean).slice(-4).join(' / '));
   const zeileOffen = i => {
     const g = i.grund || null;
@@ -4573,8 +4661,8 @@ function viewCleanup() {
             <span class="t-caption c-2">· ${i.kind === 'movie' ? tr('Film') : i.kind === 'series' ? tr('Serie') : esc(i.kind)}</span></div>
           ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:11.5px;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
           <div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${g
-            ? `${GRUND[g.art] || ''}${gesucht ? ' ' + tr('Gesucht: {was}.', { was: gesucht }) : ''}${g.vorschlag ? ' ' + tr('Am nächsten: {titel} ({prozent} %).', { titel: esc(g.vorschlag), prozent: Math.round((g.wert || 0) * 100) }) : ''}`
-            : i.matchState === 'pending' ? tr('Noch nicht geprüft.') : tr('Seit dem letzten Neustart nicht mehr geprüft.')}</div>
+            ? `${(g.art === 'fehler' && schl === 'abgelehnt' ? GRUND.schluessel : GRUND[g.art]) || ''}${gesucht ? ' ' + tr('Gesucht: {was}.', { was: gesucht }) : ''}${g.vorschlag ? ' ' + tr('Am nächsten: {titel} ({prozent} %).', { titel: esc(g.vorschlag), prozent: Math.round((g.wert || 0) * 100) }) : ''}`
+            : i.matchState === 'pending' ? offenText : tr('Seit dem letzten Neustart nicht mehr geprüft.')}</div>
         </div>
         <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap">
           <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
@@ -4606,8 +4694,23 @@ function viewCleanup() {
       <div class="mono c-2" style="font-size:11.5px;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
     </details>`).join('')).join('');
 
+  // Der Schlüssel fehlt oder wird abgelehnt: einmal oben sagen, was das
+  // heisst und wo er hingehört — statt bei jedem Titel „nicht erreichbar".
+  const schluesselHinweis = schl === 'ok' ? '' : `
+    <div class="group group--inset" style="margin-top:22px">
+      <div class="row" style="min-height:56px;gap:12px;align-items:flex-start;padding:12px 16px">
+        <span style="color:${schl === 'abgelehnt' ? '#ff6961' : '#ff9f0a'};display:flex;flex:none;margin-top:2px">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
+        <div style="flex:1;min-width:0">
+          <div class="t-body">${schl === 'abgelehnt' ? tr('TMDb lehnt den Schlüssel ab') : tr('Kein TMDb-Schlüssel eingetragen')}</div>
+          <div class="t-caption c-2" style="line-height:1.5;margin-top:2px">${schl === 'abgelehnt'
+            ? tr('Meist ist die kurze API-Kennung statt des langen API Read Access Token eingetragen. Bis ein gültiger Schlüssel da ist, gelten Titel mit vollständiger NFO-Datei als erkannt; die übrigen warten.')
+            : tr('Titel mit vollständiger NFO-Datei gelten auch so als erkannt, mit Postern aus der Sammlung. Für die übrigen holt Lumen Poster und Beschreibungen, sobald ein Schlüssel eingetragen ist.')}
+            ${d.vorgemerkt ? ' ' + tr('{n} gespeicherte Kennungen warten auf den Schlüssel.', { n: d.vorgemerkt }) : ''}</div></div>
+        <button class="btn btn-pill btn-pill--fill" style="flex:none" data-go="metadata">${schl === 'abgelehnt' ? tr('Schlüssel ändern') : tr('Eintragen')}</button>
+      </div></div>`;
   return shell(`<div class="wrap wrap--flat" style="max-width:900px">
     ${ohead(tr('Aufräumen'), tr('Filme in Teilen, fehlende Dateien, nicht erkannte Titel'))}
+    ${schluesselHinweis}
     ${dup ? `<section style="margin-top:26px"><div class="section-h">${tr('Filme in Teilen · {n}', { n: nurTeile.length })}</div>
       <div class="group group--inset">${dup}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Im Browser laufen die Teile nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.')}</p></section>` : ''}
@@ -4621,7 +4724,8 @@ function viewCleanup() {
       <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:13px" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
     ${ausstehend ? `<section style="margin-top:22px"><div class="section-h">${tr('Wartet auf die Zuordnung · {n}', { n: nAusstehend })}</div>
       <div class="group group--inset">${ausstehend}</div>
-      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Diese Titel prüft der nächste Metadaten-Durchgang.')}</p></section>` : ''}
+      <p class="t-caption c-2" style="margin:8px 16px 0">${schl === 'ok' ? tr('Diese Titel prüft der nächste Metadaten-Durchgang.')
+        : tr('Diese Titel haben keine vollständige NFO-Datei. „ID eingeben“ speichert eine Kennung auch ohne Schlüssel.')}</p></section>` : ''}
     ${ausgelassen ? `<section style="margin-top:22px"><div class="section-h">${tr('Ausgelassene Dateien')}</div>
       <div class="group group--inset">${ausgelassen}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Was der letzte Durchlauf jeder Bibliothek mit Absicht ausgelassen hat. Die Liste gilt bis zum nächsten Durchlauf oder Neustart.')}</p></section>` : ''}
@@ -4633,7 +4737,7 @@ function viewCleanup() {
           <button class="btn btn-pill btn-pill--fill" style="flex:none" data-reihe-zurueck="${esc(r.id)}">${tr('Wiederherstellen')}</button>
         </div>`).join('')}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Lumen bildet sie nicht wieder, bis du sie zurückholst.')}</p></section>` : ''}
-    ${!dup && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
+    ${!dup && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length && !schluesselHinweis ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
     <div style="height:40px"></div></div>`);
 }
 
@@ -4694,7 +4798,8 @@ function viewMetadata() {
         `<div style="padding:16px" class="field">
           <label for="tmdb">${tr('Schlüssel (API Read Access Token)')}</label>
           <input id="tmdb" name="tmdbKey" class="mono" placeholder="${d.tmdb?.configured ? tr('•••••••• — hinterlegt') : tr('eyJhbGciOi…')}">
-          <span class="hint">${tr('Ohne diesen Schlüssel bleiben Poster und Beschreibungen leer. Kostenlos: auf {seite} anmelden, dann unter {menue} den {token} kopieren — den langen, der mit {anfang} anfängt, nicht die kurze API-Kennung.', {
+          ${d.schluessel === 'abgelehnt' ? `<span class="hint" role="status" style="color:#ff6961">${tr('TMDb lehnt den hinterlegten Schlüssel ab. Bitte neu eintragen.')}</span>` : ''}
+          <span class="hint">${tr('Ohne diesen Schlüssel kommen Poster und Beschreibungen nur aus NFO-Dateien und Bildern neben den Filmen. Kostenlos: auf {seite} anmelden, dann unter {menue} den {token} kopieren — den langen, der mit {anfang} anfängt, nicht die kurze API-Kennung.', {
               seite: '<a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener noreferrer">themoviedb.org</a>',
               menue: `<span class="mono">${tr('Einstellungen → API')}</span>`, token: '<b>API Read Access Token</b>',
               anfang: '<span class="mono">eyJ</span>' })}</span></div>`)}
@@ -5183,6 +5288,7 @@ app.addEventListener('click', async e => {
     catch (err) { toast(err.message); }
     return;
   }
+  if ((n = hit('data-extra'))) return extraAbspielen(n.dataset.extra, n.dataset.extraTitel || '');
 
   /* Verwaltung */
   if ((n = hit('data-scan'))) {
@@ -5201,6 +5307,13 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-zuweisen'))) return zuweisenPanel(n.dataset.zuweisen, S.data?.item?.title || '');
   if ((n = hit('data-zuo-suchen'))) return zuweisenPanel(n.dataset.zuoSuchen, n.dataset.titel || '');
   if ((n = hit('data-zuo-id'))) return zuweisenPanel(n.dataset.zuoId, '', 'id');
+  if ((n = hit('data-kennung-merken'))) {
+    const box = zuweisenBox(n.dataset.kennungMerken)?.querySelector('[data-treffer-box]');
+    try { await api.adminItemKennung(n.dataset.kennungMerken, n.dataset.q || ''); }
+    catch (err) { if (box) box.innerHTML = `<p class="hint" style="padding:12px 16px;margin:0">${esc(err.message)}</p>`; return; }
+    toast(tr('Kennung gespeichert — Poster und Beschreibungen kommen, sobald ein gültiger TMDb-Schlüssel eingetragen ist.'));
+    return load();
+  }
   if ((n = hit('data-zuweisen-aus'))) { const b = zuweisenBox(n.dataset.zuweisenAus); if (b) b.innerHTML = ''; return; }
   if ((n = hit('data-treffer'))) {
     toast(tr('Wird zugewiesen …'));

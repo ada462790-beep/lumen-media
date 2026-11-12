@@ -90,13 +90,15 @@ export function uebernahmeOeffnen() {
       <div class="fehlend">${(z.fehlend || []).map(escH).join('<br>')}${z.nichtGefunden > (z.fehlend || []).length ? '<br>…' : ''}</div>
       <p class="ff-hinweis">${tr('Gesucht wird über den Dateipfad (Dateiname und Ordner). Liegt die Datei in Lumen anders oder fehlt sie, bleibt der Titel unverändert.')}</p></details>` : '';
     return `<div class="t-sub c-2" style="margin:14px 0 4px">${tr('Zuordnungen (gilt für alle Profile):')}</div>
-      ${z.ohneQuelle ? `<div class="fenster-meldung fenster-meldung--info">${tr('In Lumen ist noch kein TMDb-Schlüssel eingerichtet (Verwaltung › Metadaten). Ohne ihn lassen sich keine Zuordnungen übernehmen.')}</div>` : `
+      ${z.ohneQuelle ? `<div class="fenster-meldung fenster-meldung--info">${z.schluessel === 'abgelehnt'
+        ? tr('TMDb lehnt den Schlüssel in Lumen ab (Verwaltung › Poster und Beschreibungen). Lumen speichert die Kennungen trotzdem; Poster und Beschreibungen kommen, sobald ein gültiger Schlüssel eingetragen ist.')
+        : tr('In Lumen ist kein TMDb-Schlüssel eingerichtet (Verwaltung › Poster und Beschreibungen). Lumen speichert die Kennungen trotzdem; Poster und Beschreibungen kommen, sobald ein Schlüssel eingetragen ist.')}</div>` : ''}
       <label class="wahl-check"><input type="checkbox" name="zuordnungen" ${z.neu || z.gesperrt ? 'checked' : 'disabled'}>
         <span style="flex:1">${tr('IMDb/TMDb/TVDb übernehmen')}</span>
         <span class="t-caption c-2">${z.neu ? tr('{n} neu', { n: zahl(z.neu) }) : '—'}${z.schonRichtig ? ' · ' + tr('{n} schon richtig', { n: zahl(z.schonRichtig) }) : ''}</span></label>
       ${z.gesperrt ? `<label class="wahl-check"><input type="checkbox" name="ueberschreiben">
         <span style="flex:1">${tr('Auch Titel überschreiben, die in Lumen von Hand zugewiesen sind')}</span>
-        <span class="t-caption c-2">${zahl(z.gesperrt)}</span></label>` : ''}`}
+        <span class="t-caption c-2">${zahl(z.gesperrt)}</span></label>` : ''}
       ${z.ohneKennung ? `<p class="ff-hinweis">${tr('{n} Titel haben in {art} keine Kennung.', { n: zahl(z.ohneKennung), art: escH(server?.art || '') })}</p>` : ''}
       ${fehlend}`;
   };
@@ -126,7 +128,7 @@ export function uebernahmeOeffnen() {
         <div data-meldung hidden></div>
         <div class="fenster-fuss">
           <button type="button" class="btn btn-pill btn-pill--fill" style="height:40px" data-fenster-zu>${tr('Abbrechen')}</button>
-          <button class="btn btn-primary" style="height:40px" data-laeuft="${tr('Übernimmt …')}"${v.gesehen + v.angefangen + v.favoriten + v.bewertungen || (z && !z.ohneQuelle && (z.neu || z.gesperrt)) ? '' : ' disabled'}>${tr('Übernehmen')}</button></div>
+          <button class="btn btn-primary" style="height:40px" data-laeuft="${tr('Übernimmt …')}"${v.gesehen + v.angefangen + v.favoriten + v.bewertungen || (z && (z.neu || z.gesperrt)) ? '' : ' disabled'}>${tr('Übernehmen')}</button></div>
       </form>`;
   };
 
@@ -141,7 +143,11 @@ export function uebernahmeOeffnen() {
           ${tr('Übernehme Zuordnungen … {fertig} von {gesamt}', { fertig: zahl(zs.fertig), gesamt: zahl(zs.gesamt) })}</div>
          <p class="ff-hinweis">${tr('Das läuft auch weiter, wenn du das Fenster schliesst. Bilder und Folgen kommen danach im Hintergrund.')}</p>`
       : `<div class="fenster-meldung fenster-meldung--gut" role="status" style="margin-top:10px">${tr('Zuordnungen: {neu} übernommen, {richtig} schon richtig, {hand} von Hand belassen, {fehler} nicht möglich.', {
-          neu: zahl(zs.uebernommen), richtig: zahl(zs.schonRichtig), hand: zahl(zs.gesperrt), fehler: zahl(zs.fehler) })}</div>`;
+          neu: zahl(zs.uebernommen), richtig: zahl(zs.schonRichtig), hand: zahl(zs.gesperrt), fehler: zahl(zs.fehler) })}${zs.vorgemerkt
+          ? ' ' + (zs.grund === 'abgelehnt'
+            ? tr('{n} Kennungen gespeichert — TMDb lehnt den Schlüssel ab; Poster und Beschreibungen kommen mit einem gültigen.', { n: zahl(zs.vorgemerkt) })
+            : tr('{n} Kennungen gespeichert — Poster und Beschreibungen kommen, sobald ein TMDb-Schlüssel eingetragen ist.', { n: zahl(zs.vorgemerkt) }))
+          : ''}</div>`;
     d.inhalt.innerHTML = `${schritte(4)}
       ${teile.length || !zs ? `<div class="fenster-meldung fenster-meldung--gut" role="status">${teile.length ? tr('Übernommen: {was}.', { was: teile.join(', ') }) : tr('Es gab nichts Neues zu übernehmen.')}</div>` : ''}
       ${zText}

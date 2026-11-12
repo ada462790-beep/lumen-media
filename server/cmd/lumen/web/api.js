@@ -355,6 +355,11 @@ export const api = {
     if (year) p.set('year', year);
     return this.call(`/admin/items/${encodeURIComponent(id)}/metadata/search?` + p);
   },
+  /* Kennung ohne TMDb-Schlüssel speichern (vormerken). */
+  adminItemKennung(id, eingabe) {
+    return this.call(`/admin/items/${encodeURIComponent(id)}/metadata/kennung`,
+      { method: 'POST', body: { eingabe } });
+  },
   adminItemAssign(id, sourceId) {
     return this.call(`/admin/items/${encodeURIComponent(id)}/metadata/assign`,
       { method: 'POST', body: { sourceId } });

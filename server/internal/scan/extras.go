@@ -27,7 +27,7 @@ import (
 // Extra ist eine Datei, die zu einem Film gehört, aber keiner ist.
 type Extra struct {
 	Pfad  string
-	Titel string
+	Titel string // leer: heisst wie der Film (dann zählt die Art)
 	Art   string // trailer | featurette | behindthescenes | deleted | interview | scene | short | clip | other
 }
 
@@ -85,26 +85,29 @@ func extraEndungArt(stem string) (vor, art string) {
 func ExtrasZu(dateien []string, bibliothek string) []Extra {
 	var out []Extra
 	gesehen := map[string]bool{}
+	ordner := map[string]bool{}
+	staemme := map[string]bool{}
+	for _, d := range dateien {
+		ordner[filepath.Dir(d)] = true
+		staemme[strings.ToLower(strings.TrimSuffix(filepath.Base(d), filepath.Ext(d)))] = true
+	}
 	add := func(pfad, art string) {
 		if gesehen[pfad] || len(out) >= 100 {
 			return
 		}
 		gesehen[pfad] = true
 		stem := strings.TrimSuffix(filepath.Base(pfad), filepath.Ext(pfad))
+		titel := ""
 		if v, _ := extraEndungArt(stem); v != "" {
-			stem = v
-		}
-		titel := clean(stem)
-		if titel == "" {
+			// „Inception (2010)-trailer": Der Name ist der des Films — als
+			// Titel sagt er nichts; die Titelseite zeigt dann die Art.
+			if !staemme[strings.ToLower(v)] {
+				titel = clean(v)
+			}
+		} else if titel = clean(stem); titel == "" {
 			titel = stem
 		}
 		out = append(out, Extra{Pfad: pfad, Titel: titel, Art: art})
-	}
-	ordner := map[string]bool{}
-	staemme := map[string]bool{}
-	for _, d := range dateien {
-		ordner[filepath.Dir(d)] = true
-		staemme[strings.ToLower(strings.TrimSuffix(filepath.Base(d), filepath.Ext(d)))] = true
 	}
 	wurzel := filepath.Clean(bibliothek)
 	for dir := range ordner {

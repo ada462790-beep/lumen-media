@@ -28,7 +28,7 @@ import (
 
 type extraAntwort struct {
 	ID    string `json:"id"`
-	Titel string `json:"titel"`
+	Titel string `json:"titel,omitempty"`
 	Art   string `json:"art"`
 	URL   string `json:"url"`
 }

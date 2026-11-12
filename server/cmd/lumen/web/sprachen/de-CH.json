@@ -173,5 +173,17 @@
  "{n} laufen · Last {last} — beenden, wenn der Server zu viel rechnet": {
   "one": "{n} läuft · Last {last} — beenden, wenn der Server zu viel rechnet",
   "other": "{n} laufen · Last {last} — beenden, wenn der Server zu viel rechnet"
+ },
+ "{n} gespeicherte Kennungen warten auf den Schlüssel.": {
+  "one": "{n} gespeicherte Kennung wartet auf den Schlüssel.",
+  "other": "{n} gespeicherte Kennungen warten auf den Schlüssel."
+ },
+ "{n} Kennungen gespeichert — Poster und Beschreibungen kommen, sobald ein TMDb-Schlüssel eingetragen ist.": {
+  "one": "{n} Kennung gespeichert — Poster und Beschreibungen kommen, sobald ein TMDb-Schlüssel eingetragen ist.",
+  "other": "{n} Kennungen gespeichert — Poster und Beschreibungen kommen, sobald ein TMDb-Schlüssel eingetragen ist."
+ },
+ "{n} Kennungen gespeichert — TMDb lehnt den Schlüssel ab; Poster und Beschreibungen kommen mit einem gültigen.": {
+  "one": "{n} Kennung gespeichert — TMDb lehnt den Schlüssel ab; Poster und Beschreibungen kommen mit einem gültigen.",
+  "other": "{n} Kennungen gespeichert — TMDb lehnt den Schlüssel ab; Poster und Beschreibungen kommen mit einem gültigen."
  }
 }
