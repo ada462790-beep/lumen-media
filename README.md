@@ -268,8 +268,10 @@ steht in keiner Antwort, keinem Protokoll und keiner Fehlermeldung; die
 Adresse lässt sich nur in der `docker-compose.yml` festlegen, nicht in der
 Oberfläche.
 
-In der `docker-compose.yml` dieses Repositorys ist alles schon drin. Wer
-eine ältere Datei hat, ergänzt sie so:
+In der `docker-compose.yml` dieses Repositorys sind die Zeilen beim Dienst
+`lumen` schon drin; der Aktualisierer selbst steht auskommentiert darunter,
+weil er Zugriff auf Docker bekommt — einschalten soll ihn jeder bewusst.
+Wer ihn will (oder eine ältere Datei hat), geht so vor:
 
 **1. Das Token anlegen** — eine Zeile in der Datei `.env` neben der
 `docker-compose.yml`. Ohne SSH: *Systemsteuerung › Aufgabenplaner ›

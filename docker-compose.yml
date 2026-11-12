@@ -202,34 +202,37 @@ services:
   # Das Abbild ist öffentlich, er braucht keine Zugangsdaten. Die Fassung
   # ist fest; ab und zu hier eine neuere eintragen (Docker Hub
   # nickfedor/watchtower).
-  aktualisierer:
-    image: nickfedor/watchtower:1.24.0
-    container_name: lumen-aktualisierer
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - TZ=Europe/Zurich
-      # Nur die Update-Schnittstelle (POST /v1/update), auf 8080 im
-      # Projektnetz. Damit sind seine eigenen Zeitpläne aus.
-      - WATCHTOWER_HTTP_API_ENDPOINTS=update
-      - WATCHTOWER_HTTP_API_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
-      # Nur Container mit dem Label (Lumen).
-      - WATCHTOWER_LABEL_ENABLE=true
-      # Das alte Abbild danach löschen, damit das NAS nicht vollläuft.
-      - WATCHTOWER_CLEANUP=true
-      # Lumen bis zu 30 s Zeit lassen, die Datenbank sauber zu schliessen
-      # (passt zu stop_grace_period oben).
-      - WATCHTOWER_TIMEOUT=30s
-      - WATCHTOWER_NO_STARTUP_MESSAGE=true
-      # Zusätzlich jede Nacht von sich aus nachsehen — ohne Rücksicht auf
-      # laufende Wiedergaben. Lieber Lumens eigenes Zeitfenster nehmen.
-      # - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
-      # - WATCHTOWER_SCHEDULE=0 0 4 * * *
-      # Nur für ein eigenes, privates Abbild (GitHub-Name und Token mit
-      # „read:packages"):
-      # - REPO_USER=dein-github-name
-      # - REPO_PASS=ghp_…
+  # Ausgeschaltet, bis du ihn willst (er bekommt Zugriff auf Docker):
+  # die Zeilen ab „aktualisierer:" einkommentieren — Anleitung in der
+  # README unter „Updates per Knopfdruck".
+  # aktualisierer:
+  #   image: nickfedor/watchtower:1.24.0
+  #   container_name: lumen-aktualisierer
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   environment:
+  #     - TZ=Europe/Zurich
+  #     # Nur die Update-Schnittstelle (POST /v1/update), auf 8080 im
+  #     # Projektnetz. Damit sind seine eigenen Zeitpläne aus.
+  #     - WATCHTOWER_HTTP_API_ENDPOINTS=update
+  #     - WATCHTOWER_HTTP_API_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
+  #     # Nur Container mit dem Label (Lumen).
+  #     - WATCHTOWER_LABEL_ENABLE=true
+  #     # Das alte Abbild danach löschen, damit das NAS nicht vollläuft.
+  #     - WATCHTOWER_CLEANUP=true
+  #     # Lumen bis zu 30 s Zeit lassen, die Datenbank sauber zu schliessen
+  #     # (passt zu stop_grace_period oben).
+  #     - WATCHTOWER_TIMEOUT=30s
+  #     - WATCHTOWER_NO_STARTUP_MESSAGE=true
+  #     # Zusätzlich jede Nacht von sich aus nachsehen — ohne Rücksicht auf
+  #     # laufende Wiedergaben. Lieber Lumens eigenes Zeitfenster nehmen.
+  #     # - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
+  #     # - WATCHTOWER_SCHEDULE=0 0 4 * * *
+  #     # Nur für ein eigenes, privates Abbild (GitHub-Name und Token mit
+  #     # „read:packages"):
+  #     # - REPO_USER=dein-github-name
+  #     # - REPO_PASS=ghp_…
 
 # Nur für bestehende Installationen mit benanntem Volume (siehe oben):
 # volumes:

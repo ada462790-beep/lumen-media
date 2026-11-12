@@ -135,8 +135,10 @@ and the address can only be set in `docker-compose.yml`, not in the UI.
 Settings on the `lumen` service: `LUMEN_AKTUALISIERER_URL` (e.g.
 `http://aktualisierer:8080`) and `LUMEN_AKTUALISIERER_TOKEN` (same value
 as the updater's `WATCHTOWER_HTTP_API_TOKEN`). The
-[`docker-compose.yml`](docker-compose.yml) in this repository already
-contains everything. With an older file, on a Synology:
+[`docker-compose.yml`](docker-compose.yml) in this repository has the
+lines for the `lumen` service; the updater itself is commented out because
+it gets access to Docker — switch it on deliberately. To enable it (or with
+an older file), on a Synology:
 
 1. **Create the token** — one line in a `.env` file next to
    `docker-compose.yml`. Without SSH: *Control Panel › Task Scheduler ›
