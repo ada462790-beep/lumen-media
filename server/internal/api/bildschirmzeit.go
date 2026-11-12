@@ -691,15 +691,17 @@ func (s *Server) adminBildschirmzeitGeschenk(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	if heute.Von != "" {
-		ab := regel.FensterEnde(jetzt)
+		ende := regel.FensterEnde(jetzt)
+		if jetzt.After(ende) {
+			ende = jetzt
+		}
+		ab := ende
 		if alt := s.st.BildschirmzeitVerlaengerung(r.Context(), ziel.ID, tag); alt.After(ab) {
 			ab = alt
 		}
-		if jetzt.After(ab) {
-			ab = jetzt
-		}
 		bis := ab.Add(time.Duration(in.Minuten) * time.Minute)
-		if grenze := jetzt.Add(time.Duration(store.MaxGeschenkt) * time.Minute); bis.After(grenze) {
+		// Höchstens MaxGeschenkt Minuten über das Fenster (oder jetzt) hinaus.
+		if grenze := ende.Add(time.Duration(store.MaxGeschenkt) * time.Minute); bis.After(grenze) {
 			bis = grenze
 		}
 		if err := s.st.BildschirmzeitVerlaengern(r.Context(), ziel.ID, tag, bis); err != nil {

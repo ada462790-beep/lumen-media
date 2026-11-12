@@ -75,7 +75,7 @@ const (
 	kinderAnlauf = 20.0
 	// kinderMindestBits: kleiner wird die Bitrate nicht angenommen; ohne
 	// Angabe gilt kinderOhneAngabe.
-	kinderMindestBits = 200_000
+	kinderMindestBits = 32_000
 	kinderOhneAngabe  = 2_000_000
 )
 

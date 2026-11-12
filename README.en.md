@@ -88,7 +88,8 @@ for new versions and install signed updates — no GitHub token required.
 `... zuruecksetzen --konto NAME` sets a new PIN (`--art password` for a
 password, `--verwaltung` also clears the admin PIN). The owner keeps all
 history; resetting someone else's profile this way deletes their history,
-watchlist and ratings, just like in the app.
+watchlist and ratings, just like in the app, and the new PIN only works as
+a one-time code: at the next sign-in that person sets their own PIN.
 
 ## Contributing
 

@@ -128,8 +128,10 @@ export function bzBearbeiten(konto, nachher) {
         : api.adminBildschirmzeitGeschenkZurueck(konto.id));
       konto.bildschirmzeit = b;
       zeichnen();
+      // Mit Tagesgrenze zählen die Minuten; ohne sagt das Fensterende,
+      // wie lange es heute geht.
       meldung(d, mehr
-        ? (b.verlaengertBis
+        ? (b.verlaengertBis && !b.budgetMinuten
           ? tr('{name} darf heute bis {bis} schauen.', { name: konto.name, bis: b.verlaengertBis })
           : tr('{name} hat heute {n} Minuten mehr.', { name: konto.name, n }))
         : tr('Zurückgenommen – heute gilt wieder die Regel.'), 'gut');
