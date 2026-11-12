@@ -153,8 +153,17 @@ func zuruecksetzenBefehl(args []string, ein io.Reader, aus io.Writer) error {
 		if err := st.RevokeAllTokens(ctx, ziel.ID); err != nil {
 			return err
 		}
-	} else if err := st.PinZuruecksetzen(ctx, ziel.ID, *art, neu); err != nil {
-		return err
+	} else {
+		if err := st.PinZuruecksetzen(ctx, ziel.ID, *art, neu); err != nil {
+			return err
+		}
+		// Gelöscht heisst gelöscht: auch aus der WAL-Datei und den
+		// Sicherungen (store/vergessen.go).
+		_ = st.Ausschreiben(ctx)
+		if err := store.SicherungenVergessen(ctx, filepath.Join(*dataDir, "sicherungen"), ziel.ID); err != nil {
+			fmt.Fprintln(aus, "Achtung: Eine Sicherung liess sich nicht bereinigen:", err)
+		}
+		defer fmt.Fprintln(aus, "Der neue Code gilt nur für eine Anmeldung: Dabei legt die Person ihre eigene PIN fest.")
 	}
 	if *verwaltung {
 		if err := st.VerwaltungsSperreSetzen(ctx, ziel.ID, "none", ""); err != nil {

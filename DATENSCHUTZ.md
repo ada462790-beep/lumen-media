@@ -26,7 +26,7 @@ keine Abfrage dafür. Tests im Code schlagen fehl, sobald jemand das ändert.
 | Wünsche („bitte diesen Film besorgen") | damit der Besitzer sie erfüllen kann | ja, mit deinem Namen — das ist der Sinn eines Wunsches |
 | Neuigkeiten („2 neue Folgen") | für dich | **nein** |
 | Einstellungen (Untertitel-Stil, Sprache …) | für dich | **nein** |
-| Nur bei Kinderprofilen mit Bildschirmzeit: die Regel (Zeitfenster, Minuten am Tag) und **eine Zahl für heute** — wie viele Sekunden schon geschaut sind; ältere Tage werden gelöscht (gestern spätestens am Tag danach) | damit die Bildschirmzeit gilt | die Regel ja, die Minuten von heute nur **ungefähr, in Viertelstunden abgerundet** — so lässt sich auch durch wiederholtes Nachsehen nicht ablesen, wann geschaut wurde; **nicht**, was in diesen Minuten lief |
+| Nur bei Kinderprofilen mit Bildschirmzeit: die Regel (Zeitfenster, Minuten am Tag) und **eine Zahl für heute** — wie viele Sekunden schon geschaut sind; ältere Tage werden gelöscht (gestern spätestens am Tag danach) | damit die Bildschirmzeit gilt | die Regel ja, die Minuten von heute nur **ungefähr, in Viertelstunden abgerundet, und als älteren Stand**: Die Zahl erneuert sich erst eine Weile (10–25 Min.), nachdem das Kind aufgehört hat, oder spätestens nach einer Stunde — so lässt sich auch durch wiederholtes Nachsehen nicht ablesen, wann geschaut wurde; **nicht**, was in diesen Minuten lief |
 
 Was Lumen **nicht** speichert: wann du etwas geschaut hast, wie lange
 (ausser den Minuten von heute bei einer Bildschirmzeit, siehe oben), wie
@@ -35,24 +35,44 @@ Statistik.
 
 ## Was der Besitzer in der Verwaltung sieht
 
-- **Aktive Wiedergaben:** wie viele gerade laufen und für jede nur die Last:
-  direkt abgespielt oder umgewandelt, von welcher Qualität in welche
-  („4K HEVC → 1080p H.264"), Bandbreite und warum umgewandelt wird. Dazu den
-  Knopf „Beenden". **Nicht:** Titel, Profil, Gerät, Ort, Startzeit. Jede
-  Wiedergabe hat dort eine eigene Zufallskennung, darum lässt sich auch nicht
-  erkennen, ob zwei Wiedergaben aus demselben Profil kommen.
+- **Aktive Wiedergaben:** wie viele gerade laufen und für jede nur, ob direkt
+  abgespielt oder umgewandelt wird. Dazu den Knopf „Beenden". **Nicht:**
+  Titel, Profil, Gerät, Ort, Startzeit, Qualität, Bandbreite. Jede
+  Wiedergabe hat dort eine eigene Zufallskennung, die sich bei jedem Abruf
+  ändert, darum lässt sich auch nicht erkennen, ob zwei Wiedergaben aus
+  demselben Profil kommen.
 - **Protokoll:** Serverereignisse wie „Umwandlung gestartet · Bandbreite" oder
   „eine Datei liess sich nicht ausmessen". **Nicht:** welches Gerät, welche
   Person, welche Datei. Das Protokoll wird nach 14 Tagen gelöscht.
 - **Konten:** Namen, Gruppen, Freigaben, Anzahl der Geräte.
+- **Mitverwaltung mit einem Teil der Bibliotheken** (etwa nur „Kinder")
+  sieht und ändert nur Konten, deren Bibliotheken ganz in ihrem Bereich
+  liegen, und sieht in Übersicht, Protokoll und Wünschen nur ihren Bereich.
+  Kinderschutz und Altersgrenze eines Erwachsenen ändert nur, wer
+  Besitzerrechte hat. Wünsche tragen nur den Tag, keine Uhrzeit.
 
-- **PIN zurücksetzen:** Hast du deine PIN vergessen, kann die Verwaltung eine
-  neue setzen. Damit sie sich danach nicht als du anmelden und deinen Stand
-  lesen kann, löscht Lumen dabei alles Private deines Profils: Fortschritt,
-  Gesehen-Haken, Merkliste, Favoriten, Bewertungen, deine privaten
-  Listen und die gemerkten Spuren je Serie. Alle deine Geräte werden
-  abgemeldet. Geteilte Listen bleiben, die sieht der Haushalt ohnehin. Beim
-  nächsten Anmelden sagt Lumen dir, dass das passiert ist.
+- **PIN zurücksetzen:** Hast du deine PIN vergessen, kann die Verwaltung sie
+  zurücksetzen. Sie wählt dabei keine PIN, sondern bekommt einmal einen
+  Einmal-Code. Mit ihm meldest du dich an und legst sofort deine eigene PIN
+  fest — ohne sie gibt es keine Anmeldung, und die Verwaltung kennt sie
+  nicht. Damit sie in der Zwischenzeit nicht mit dem Code als du deinen
+  Stand lesen kann, löscht Lumen dabei alles Private deines Profils:
+  Fortschritt, Gesehen-Haken, Merkliste, Favoriten, Bewertungen, deine
+  privaten Listen und die gemerkten Spuren je Serie — auch aus der
+  WAL-Datei der Datenbank und aus den beiden Sicherungen. Alle deine Geräte
+  werden abgemeldet; was gerade läuft, endet nach einer zufälligen Weile
+  (damit die Zahl der Wiedergaben nicht im selben Augenblick fällt).
+  Geteilte Listen bleiben, die sieht der Haushalt ohnehin. Wenn du deine
+  eigene PIN festlegst, sagt Lumen dir, dass das passiert ist. Hat jemand
+  den Einmal-Code vor dir benutzt, funktioniert er bei dir nicht mehr —
+  dann weisst du es.
+- **Geteilte Bewertungen und Listen:** sieht nur der Haushalt, mit Namen.
+  Wer eine Einladung von unterwegs einlöst, ist Gast und sieht sie nicht
+  (die Verwaltung kann das am Konto ändern). Schaltest du „Bewertungen im
+  Haushalt zeigen" aus, nimmt Lumen auch deine bisher geteilten zurück.
+- **Profile ohne PIN:** Ein Profil ohne PIN öffnet zu Hause jede Person,
+  auch Geschwister — dort steht darum „alle in diesem Profil sehen das",
+  nicht „nur du".
 
 Unter **Ich → Geräte** siehst nur du, was gerade in deinem Profil läuft, und
 kannst es dort selbst beenden (etwa einen vergessenen Fernseher).
@@ -71,6 +91,11 @@ Lumen läuft auf Hardware, die dem Besitzer gehört. Wer dort **vollen Zugriff
 - **Sicherungen der Datenbank.** Lumen legt vor jedem Umbau der Datenbank bei
   einem Update eine Sicherung an (`lumen.db.vor-umbau`, nur für den Besitzer
   lesbar). Sie enthält denselben Stand wie die Datenbank zu diesem Zeitpunkt.
+  Die täglichen Sicherungen (`sicherungen/lumen-1.db`, `lumen-2.db`)
+  bereinigt Lumen beim Zurücksetzen einer PIN und beim Entfernen eines
+  Kontos; die Sicherung vor einem Umbau und Kopien, die du selbst machst
+  (etwa mit Hyper Backup), erreicht Lumen nicht — dort steht der alte Stand
+  weiter. Wiederherstellen verlangt die Bestätigung mit deinem Code.
 
 Was Lumen dagegen tut: Zwischendateien beim Umwandeln liegen in Ordnern mit
 Zufallsnamen ohne Bezug zum Film oder zur Wiedergabe und werden danach
@@ -134,7 +159,7 @@ Der Quelltext liegt offen. Die wichtigsten Stellen:
   Bewertungen oder Merkliste ohne festes Konto, kein Zusammenzählen über
   Profile.
 - `server/internal/stream/live_test.go`: Die Ansicht des Besitzers hat genau
-  fünf Felder (Kennung, direkt/umgewandelt, Grund, Bandbreite, Qualität).
+  zwei Felder (Einmalkennung, direkt/umgewandelt).
 - `server/internal/api/wiedergabe_test.go`: Nach dem Abspielen liegt keine
   Datei auf der Platte, deren Name auf den Film zeigt.
 - `server/internal/store/umbau_test.go`: Fortschritt ohne Uhrzeit, Geräte nur
