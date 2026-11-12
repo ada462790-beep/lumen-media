@@ -449,6 +449,7 @@ func (s *Server) adminWishes(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	s.wuenscheAufbereiten(r, alle)
 	offen := 0
 	for _, w := range alle {
 		if w.State == "open" || w.State == "" {

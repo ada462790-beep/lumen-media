@@ -304,5 +304,7 @@
   "Das sieht nicht nach einer Kennung aus. Möglich sind etwa tt0133093, eine TMDb-Nummer, tvdb:121361 oder ein Link.": "That doesn't look like an ID. Try tt0133093, a TMDb number, tvdb:121361 or a link.",
   "TMDb lehnt den hinterlegten Schlüssel ab. Unter Verwaltung › Poster und Beschreibungen einen gültigen eintragen.": "TMDb rejects the saved key. Enter a valid one under Admin › Posters and Descriptions.",
   "Dieses Extra gibt es nicht.": "This extra doesn't exist.",
-  "diese einladung gibt es nicht (mehr)": "This invitation doesn’t exist (anymore)."
+  "diese einladung gibt es nicht (mehr)": "This invitation doesn’t exist (anymore).",
+  "Dieser Titel ist für dein Profil nicht freigegeben.": "This title isn’t allowed for your profile.",
+  "Zu viele Anfragen – bitte einen Moment warten.": "Too many requests – please wait a moment."
 }

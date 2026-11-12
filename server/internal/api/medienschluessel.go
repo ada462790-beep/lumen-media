@@ -101,7 +101,7 @@ func medienWeg(r *http.Request) bool {
 	}
 	p := r.URL.Path
 	return strings.HasPrefix(p, "/api/v1/art/") || strings.HasPrefix(p, "/api/v1/avatar/") ||
-		strings.HasPrefix(p, "/api/v1/stream/") ||
+		strings.HasPrefix(p, "/api/v1/stream/") || strings.HasPrefix(p, "/api/v1/wishes/poster/") ||
 		(strings.HasPrefix(p, "/api/v1/persons/") && strings.HasSuffix(p, "/bild"))
 }
 
