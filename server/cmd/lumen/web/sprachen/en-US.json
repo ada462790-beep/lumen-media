@@ -1395,5 +1395,6 @@
  "Zurückziehen": "Revoke",
  "gilt bis {wann}": "valid until {wann}",
  "heute, {uhr}": "today, {uhr}",
- "Änderung bestätigen": "Confirm Change"
+ "Änderung bestätigen": "Confirm Change",
+ "Du bist offline. Sobald die Verbindung wieder da ist, geht es weiter.": "You’re offline. Lumen will carry on as soon as the connection is back."
 }

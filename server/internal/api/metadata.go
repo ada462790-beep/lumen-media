@@ -311,7 +311,7 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 	// Kurz zwischenspeichern, danach fragt der Browser nach (304, wenn gleich):
 	// Beim Neuzuordnen bleibt die Adresse dieselbe, mit einem Tag sah man das
 	// falsche Bild nach der Korrektur noch bis morgen.
-	w.Header().Set("Cache-Control", "private, max-age=600")
+	bildAufbewahren(w, name, info)
 	w.Header().Set("Content-Type", fmt.Sprintf("image/%s",
 		strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")))
 	http.ServeContent(w, r, name, info.ModTime(), f)
@@ -354,7 +354,7 @@ func (s *Server) reihenBild(w http.ResponseWriter, r *http.Request) {
 	// Kurz zwischenspeichern, danach fragt der Browser nach (304, wenn gleich):
 	// Beim Neuzuordnen bleibt die Adresse dieselbe, mit einem Tag sah man das
 	// falsche Bild nach der Korrektur noch bis morgen.
-	w.Header().Set("Cache-Control", "private, max-age=600")
+	bildAufbewahren(w, name, info)
 	w.Header().Set("Content-Type", fmt.Sprintf("image/%s",
 		strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")))
 	http.ServeContent(w, r, name, info.ModTime(), f)

@@ -112,7 +112,7 @@ func (s *Server) personBild(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	bildAufbewahren(w, mitBild.BildDatei, info)
 	http.ServeContent(w, r, "bild.jpg", info.ModTime(), f)
 }
 

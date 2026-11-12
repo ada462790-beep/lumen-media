@@ -15,15 +15,25 @@ package api
 //
 //   - immer nur eine Datei zugleich, mit niedrigster Rechen- und
 //     Plattenpriorität (stream.Niedrig);
-//   - Wiedergabe hat Vorrang: Wird gerade umgewandelt, wartet der
-//     Durchgang;
+//   - Wiedergabe hat Vorrang: Läuft irgendeine Wiedergabe (auch direkt
+//     abgespielt — die liest dieselbe Platte), wartet der Durchgang, auch
+//     mitten in einer Datei;
+//   - grosse Dateien werden nicht ganz gelesen: Für die Vorschaubilder
+//     springt FFmpeg zu jeder Stelle (stream.TrickplayErzeugenMit);
+//   - Neues zuerst: Die Liste beginnt mit den zuletzt eingelesenen
+//     Dateien, und nach einem Durchlauf (hintergrundAnstossen) fängt der
+//     laufende Durchgang mit der neuen Liste von vorn an — was schon
+//     fertig ist, wird dabei nur kurz geprüft. Das hängt am Einlesen,
+//     nicht am Abspielen, und verrät darum nichts;
 //   - es gibt kein „Vorziehen" der Datei, die gerade jemand abspielt:
 //     Früher kam sie beim ersten Abruf der Vorschaubilder sofort dran —
 //     und der Zeitstempel des neu angelegten Ordners (ctime, auch nach
 //     zeitlos) verriet, wann jemand welchen Film angefangen hat. Jetzt
 //     entsteht alles nur im Durchgang über die ganze Mediathek, in fester
 //     Reihenfolge, unabhängig davon, was jemand schaut;
-//   - was fertig ist, liegt auf der Platte und wird nie neu gemacht;
+//   - was fertig ist, liegt auf der Platte und wird nicht neu gemacht —
+//     ausser die Datei wurde am selben Pfad ersetzt (dateiKennung:
+//     Kennung, Grösse, Änderungszeit);
 //   - was zu einer Datei gehört, die es nicht mehr gibt, wird weggeräumt.
 //
 // Dazwischen läuft die Erkennung von Vorspann und Abspann
@@ -120,11 +130,20 @@ func (s *Server) hintergrundDurchgang(ctx context.Context) {
 		if i > 0 && i%erkennungAlle == 0 {
 			s.erkennungDurchgang(ctx, erkennungStueck)
 		}
-		// Wiedergabe hat Vorrang: warten, bis keine Umwandlung mehr läuft.
-		if s.live != nil && s.live.Load().Transcodes > 0 {
+		// Ein Durchlauf hat Neues gebracht: mit der neuen Liste von vorn
+		// (neueste zuerst).
+		select {
+		case <-hg.wecken:
+			if neu, err := s.st.VorhandeneDateien(ctx); err == nil {
+				ids, i = neu, 0
+				continue
+			}
+		default:
+		}
+		// Wiedergabe hat Vorrang: warten, bis nichts mehr abgespielt wird.
+		if s.wiedergabeLaeuft() {
 			select {
 			case <-time.After(30 * time.Second):
-			case <-hg.wecken:
 			case <-ctx.Done():
 				return
 			}
@@ -133,6 +152,32 @@ func (s *Server) hintergrundDurchgang(ctx context.Context) {
 		s.dateiVorbereiten(ctx, ids[i])
 		i++
 	}
+}
+
+// wiedergabeLaeuft: Spielt gerade jemand etwas ab — umgewandelt oder
+// direkt? Beides braucht die Platte.
+func (s *Server) wiedergabeLaeuft() bool {
+	return s.live != nil && s.live.Load().Total > 0
+}
+
+// aufRuheWarten hält an, solange abgespielt wird — zwischen zwei
+// Vorschaubildern einer grossen Datei.
+func (s *Server) aufRuheWarten(ctx context.Context) error {
+	for s.wiedergabeLaeuft() {
+		select {
+		case <-time.After(15 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return ctx.Err()
+}
+
+// dateiKennung: welche Fassung einer Datei etwas Vorbereitetes gehört.
+// Wird eine Datei am selben Pfad ersetzt, behält sie ihre Kennung, aber
+// Grösse und Änderungszeit ändern sich (der Durchlauf trägt sie ein).
+func dateiKennung(f *store.MediaFile) string {
+	return fmt.Sprintf("%s:%d:%d", f.ID, f.SizeBytes, f.MTime)
 }
 
 // dateiVorbereiten macht, was für eine Datei noch fehlt.
@@ -151,9 +196,10 @@ func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
 		return
 	}
 	var fehler []string
-	if s.trickplayAn(ctx) && !trickplayFertig(s.trickplayOrdner(fileID)) {
+	if s.trickplayAn(ctx) && !trickplayFertig(s.trickplayOrdner(fileID), f) {
 		d, _ := s.ff.Feinmessung(ctx, f.Path)
-		if _, err := s.ff.TrickplayErzeugen(ctx, f.Path, f.DurationMS, d, s.trickplayOrdner(fileID)); err != nil {
+		if _, err := s.ff.TrickplayErzeugenMit(ctx, f.Path, f.DurationMS, d, s.trickplayOrdner(fileID),
+			stream.TrickplayOptionen{Kennung: dateiKennung(f), Warten: s.aufRuheWarten}); err != nil {
 			if ctx.Err() == nil {
 				fehler = append(fehler, "Vorschaubilder: "+stream.Bereinigt(err.Error()))
 			}
@@ -192,9 +238,20 @@ func (s *Server) trickplayOrdner(fileID string) string {
 	return filepath.Join(s.trickplayWurzel(), fileID)
 }
 
-func trickplayFertig(ordner string) bool {
-	_, err := os.Stat(filepath.Join(ordner, "info.json"))
-	return err == nil
+// trickplayFertig: Gibt es Vorschaubilder, und gehören sie zu dieser
+// Fassung der Datei? Ordner älterer Fassungen von Lumen tragen keine
+// Kennung; bei ihnen muss wenigstens die Laufzeit passen (sonst wäre die
+// ganze Mediathek nach dem Update noch einmal zu lesen).
+func trickplayFertig(ordner string, f *store.MediaFile) bool {
+	info, err := stream.TrickplayLesen(ordner)
+	if err != nil {
+		return false
+	}
+	if k := stream.TrickplayKennung(ordner); k != "" {
+		return k == dateiKennung(f)
+	}
+	soll := int((f.DurationMS/1000 + stream.TrickplayIntervall - 1) / stream.TrickplayIntervall)
+	return info.Bilder >= soll-2 && info.Bilder <= soll+2
 }
 
 // gueltigeKennung: Kennungen landen in Pfaden — nur Buchstaben, Ziffern,
@@ -230,7 +287,7 @@ func (s *Server) trickplay(w http.ResponseWriter, r *http.Request) {
 		streamFehler(w, http.StatusNotFound, "trickplay_aus", "vorschaubilder sind ausgeschaltet")
 		return
 	}
-	if info, err := stream.TrickplayLesen(s.trickplayOrdner(f.ID)); err == nil {
+	if info, err := stream.TrickplayLesen(s.trickplayOrdner(f.ID)); err == nil && trickplayFertig(s.trickplayOrdner(f.ID), f) {
 		blaetter := make([]string, info.Blaetter)
 		for i := range blaetter {
 			blaetter[i] = fmt.Sprintf("/api/v1/stream/%s/trickplay/%d.jpg", f.ID, i)
@@ -296,6 +353,29 @@ func (s *Server) vorratPfad(fileID string, idx int) string {
 	return filepath.Join(s.untertitelVorrat(), fmt.Sprintf("%s-%d.vtt", fileID, idx))
 }
 
+// vorratVermerk: aus welcher Fassung der Datei der Vorrat stammt.
+func (s *Server) vorratVermerk(fileID string) string {
+	return filepath.Join(s.untertitelVorrat(), fileID+"-quelle")
+}
+
+// vorratPruefen wirft den Untertitel-Vorrat einer Datei weg, wenn er zu
+// einer früheren Fassung gehört (Datei am selben Pfad ersetzt). Vorrat
+// älterer Fassungen von Lumen hat keinen Vermerk und bleibt.
+func (s *Server) vorratPruefen(f *store.MediaFile) {
+	if !gueltigeKennung(f.ID) {
+		return
+	}
+	b, err := os.ReadFile(s.vorratVermerk(f.ID))
+	if err != nil || string(b) == dateiKennung(f) {
+		return
+	}
+	alte, _ := filepath.Glob(filepath.Join(s.untertitelVorrat(), f.ID+"-*.vtt"))
+	for _, a := range alte {
+		_ = os.Remove(a)
+	}
+	_ = os.Remove(s.vorratVermerk(f.ID))
+}
+
 // untertitelVorbereiten zieht alle eingebetteten Text-Untertitel einer
 // Datei in einem Durchgang heraus und legt sie ab.
 func (s *Server) untertitelVorbereiten(ctx context.Context, f *store.MediaFile) error {
@@ -306,6 +386,7 @@ func (s *Server) untertitelVorbereiten(ctx context.Context, f *store.MediaFile) 
 	if err != nil {
 		return err
 	}
+	s.vorratPruefen(f)
 	var fehlt []store.Track
 	for _, t := range spuren {
 		if t.Kind == "subtitle" && !t.Bitmap && !t.External {
@@ -323,6 +404,9 @@ func (s *Server) untertitelVorbereiten(ctx context.Context, f *store.MediaFile) 
 	}
 	if err := os.MkdirAll(s.untertitelVorrat(), 0o700); err != nil {
 		return err
+	}
+	if err := os.WriteFile(s.vorratVermerk(f.ID), []byte(dateiKennung(f)), 0o600); err == nil {
+		zeitlos(s.vorratVermerk(f.ID))
 	}
 	for idx, b := range inhalte {
 		ziel := s.vorratPfad(f.ID, idx)
@@ -380,12 +464,19 @@ func (s *Server) vorratAufraeumen(ctx context.Context) {
 
 // vorratZaehlen: wie viel vorbereitet daliegt — für die Verwaltung.
 func (s *Server) vorratZaehlen() map[string]int {
-	n := func(ordner string) int {
+	n := func(ordner, endung string) int {
 		e, err := os.ReadDir(ordner)
 		if err != nil {
 			return 0
 		}
-		return len(e)
+		z := 0
+		for _, x := range e {
+			// Vermerke (…-quelle) zählen nicht mit.
+			if strings.HasSuffix(x.Name(), endung) {
+				z++
+			}
+		}
+		return z
 	}
-	return map[string]int{"trickplay": n(s.trickplayWurzel()), "untertitel": n(s.untertitelVorrat())}
+	return map[string]int{"trickplay": n(s.trickplayWurzel(), ""), "untertitel": n(s.untertitelVorrat(), ".vtt")}
 }

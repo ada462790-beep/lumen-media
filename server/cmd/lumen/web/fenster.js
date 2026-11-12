@@ -28,7 +28,8 @@ export const U = {};
   if (document.querySelector('link[data-funktionen]')) return;
   const l = document.createElement('link');
   l.rel = 'stylesheet';
-  l.href = '/funktionen.css';
+  // Die Fassung setzt der Server beim Ausliefern ein (web.go).
+  l.href = '/funktionen.css?v=__LUMEN_FASSUNG__';
   l.dataset.funktionen = '';
   document.head.appendChild(l);
 })();
@@ -125,8 +126,9 @@ export async function hochladen(pfad, datei) {
 }
 
 /* Ein Bild neu laden, nachdem es ersetzt wurde: Der Browser hält Bilder
-   einen Tag lang; so holt er das neue sofort. */
+   eine Weile; so holt er das neue sofort. Dieselbe Adresse wie im <img>
+   (mit dem Bildschlüssel), sonst frischte das einen anderen Eintrag auf. */
 export function bildAuffrischen(url) {
   if (!url) return;
-  try { fetch(url + (url.includes('?') ? '&' : '?') + api.keyParam(), { cache: 'reload' }).catch(() => {}); } catch {}
+  try { fetch(url + (url.includes('?') ? '&' : '?') + api.bildParam(), { cache: 'reload' }).catch(() => {}); } catch {}
 }

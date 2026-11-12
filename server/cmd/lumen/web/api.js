@@ -15,6 +15,17 @@
 import { tr, sprache } from './sprache.js';
 
 const TOKEN_KEY = 'lumen.token';
+// Der Bildschlüssel liegt neben dem Token: Mit ihm stehen Bilder nach dem
+// Neuladen unter derselben Adresse da, und der Browser nimmt sie aus seinem
+// Zwischenspeicher, statt sie unterwegs jedes Mal neu zu laden.
+const BILD_KEY = 'lumen.bildschluessel';
+// Stände, die noch nicht beim Server sind (Verbindung weg), je Gerät.
+const AUSGANG_KEY = 'lumen.ausgang';
+
+// Wie lange eine Anfrage höchstens dauern darf. Unterwegs hängt eine halb
+// tote Verbindung sonst endlos (kein Fehler, keine Antwort).
+const FRIST_LESEN = 20000;
+const FRIST_SCHREIBEN = 60000;
 
 function gesehenFrage(wo) {
   const q = new URLSearchParams();
@@ -30,9 +41,13 @@ export const api = {
   get signedIn() { return !!this.token; },
 
   setToken(t) {
+    // Was noch an Ständen aussteht, gehört zum bisherigen Profil: jetzt
+    // noch mit dessen Token losschicken, danach nicht mehr.
+    if (this.token && this.token !== t) ausgangAbgeben(this.token);
     this.token = t || null;
     if (t) write(TOKEN_KEY, t); else remove(TOKEN_KEY);
     this.mediaKey = null; this.mediaKeyBis = 0;
+    this.bildKey = null; remove(BILD_KEY);
   },
 
   /* Der Medienschlüssel steht in den Adressen von Bildern, Videos und
@@ -46,9 +61,23 @@ export const api = {
     const r = await this.call('/me/media-key');
     this.mediaKey = r.key;
     this.mediaKeyBis = Date.now() + (r.gueltigSek || 0) * 1000;
+    if (r.bildKey) {
+      this.bildKey = r.bildKey;
+      write(BILD_KEY, JSON.stringify({ k: r.bildKey, bis: Date.now() + (r.bildGueltigSek || 0) * 1000, t: kurz(this.token) }));
+    }
     return this.mediaKey;
   },
   keyParam() { return this.mediaKey ? 'key=' + encodeURIComponent(this.mediaKey) : ''; },
+  /* Der Bildschlüssel für Poster, Hintergründe, Standbilder, Profil- und
+     Personenbilder. Ältere Server kennen ihn nicht: dann der Medienschlüssel. */
+  bildKey: null,
+  bildParam() {
+    const k = this.bildKey || this.mediaKey;
+    return k ? 'key=' + encodeURIComponent(k) : '';
+  },
+  istBild(url) {
+    return /^\/api\/v1\/(art|avatar)\//.test(url) || /^\/api\/v1\/persons\/[^?]*\/bild/.test(url);
+  },
 
   /* ---------------------------------------------------------- Grundlage */
 
@@ -70,14 +99,29 @@ export const api = {
     headers['Accept-Language'] = sprache();
 
     let res;
-    try {
-      res = await fetch('/api/v1' + path, {
-        method, headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-    } catch (e) {
-      throw new ApiError(tr('Der Server ist nicht erreichbar.'), 0);
+    // Lesen darf einmal wiederholt werden, wenn die Verbindung kurz weg
+    // war; Schreiben nicht (es käme womöglich doppelt an).
+    const lesen = method === 'GET';
+    for (let versuch = 0; ; versuch++) {
+      try {
+        res = await fetch('/api/v1' + path, {
+          method, headers,
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: frist(lesen ? FRIST_LESEN : FRIST_SCHREIBEN),
+        });
+        break;
+      } catch (e) {
+        if (lesen && versuch === 0 && navigator.onLine !== false) {
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
+        throw new ApiError(navigator.onLine === false
+          ? tr('Du bist offline. Sobald die Verbindung wieder da ist, geht es weiter.')
+          : tr('Der Server ist nicht erreichbar.'), 0);
+      }
     }
+    // Die Verbindung steht: liegen gebliebene Stände gleich nachreichen.
+    if (ausgangOffen) setTimeout(() => this.standNachreichen(), 0);
 
     if (res.status === 401) {
       // Ein falscher PIN oder ein falsches Passwort ist auch 401 — aber
@@ -220,6 +264,65 @@ export const api = {
   saveProgress(id, positionMs, durationMs) {
     return this.call(`/items/${encodeURIComponent(id)}/progress`, { method: 'POST',
       body: { positionMs: Math.round(positionMs), durationMs: Math.round(durationMs) } });
+  },
+
+  /* Den Stand melden, ohne dass er verlorengeht.
+   *
+   * Unterwegs bricht die Verbindung oft weg, während der Film aus dem
+   * Puffer weiterläuft. Früher ging jeder Stand, der in dieser Zeit nicht
+   * ankam, verloren — beim nächsten Mal begann der Film zu früh. Jetzt
+   * liegt der jeweils letzte Stand je Titel im Browser (localStorage, je
+   * Profil), bis der Server ihn hat, und wird nachgereicht: mit wachsendem
+   * Abstand, sobald das Netz zurück ist, beim Wiederkommen in den Tab und
+   * beim nächsten Start. fertig: als gesehen melden statt der Stelle. */
+  async standMelden(itemId, positionMs, durationMs, fertig = false) {
+    this.standVormerken(itemId, positionMs, durationMs, fertig);
+    await this.standNachreichen();
+  },
+  standVormerken(itemId, positionMs, durationMs, fertig = false) {
+    if (!this.token || !itemId) return;
+    ausgangSetzen(this.token, itemId, { p: Math.round(positionMs), d: Math.round(durationMs), f: !!fertig, at: Date.now() });
+  },
+
+  /* Schickt, was ansteht. keepalive: auch beim Schliessen des Tabs. */
+  async standNachreichen({ keepalive = false } = {}) {
+    if (!this.token) return;
+    const tok = this.token;
+    const offen = ausgangLesen(tok);
+    if (!Object.keys(offen).length) { ausgangOffen = false; return; }
+    if (keepalive) {
+      // Die Seite geht gleich weg: alles sofort, ohne auf Antworten zu
+      // warten. Was ankommt, räumt sich selbst weg.
+      for (const [id, e] of Object.entries(offen)) {
+        standSenden(tok, id, e, true).then(r => { if (r !== 'nochmal') ausgangEntfernen(tok, id, e.at); });
+      }
+      return;
+    }
+    if (ausgangLaeuft) { ausgangNochmal = true; return; }
+    ausgangLaeuft = true;
+    ausgangNochmal = false;
+    let fehler = false;
+    try {
+      for (const [id, e] of Object.entries(offen)) {
+        const r = await standSenden(tok, id, e, false);
+        if (r === 'nochmal') { fehler = true; break; }
+        // Angekommen (oder vom Server endgültig abgelehnt): weg damit —
+        // ausser es kam inzwischen ein neuerer Stand dazu.
+        ausgangEntfernen(tok, id, e.at);
+      }
+    } finally {
+      ausgangLaeuft = false;
+    }
+    if (fehler) { ausgangSpaeter(() => this.standNachreichen()); return; }
+    ausgangPause = 0;
+    clearTimeout(ausgangUhr);
+    // Während des Schickens kam ein neuerer Stand dazu: gleich hinterher.
+    if (ausgangNochmal || Object.keys(ausgangLesen(tok)).length) {
+      if (this.token === tok && ausgangNochmal) setTimeout(() => this.standNachreichen(), 0);
+      ausgangOffen = true;
+    } else {
+      ausgangOffen = false;
+    }
   },
   /* Gesehen: bei einer Serie alle Folgen; { staffel: N } nur eine Staffel;
      bei einer Folge { vorherige: true } auch alle davor. */
@@ -492,6 +595,21 @@ export function canPlayAnything() {
          v.canPlayType('video/webm; codecs="vp8"') !== '';
 }
 
+// Der gemerkte Bildschlüssel gilt nur für dasselbe Token und nicht bis
+// zur letzten Minute (dann holt medienSchluessel() ohnehin einen neuen).
+try {
+  const b = JSON.parse(read(BILD_KEY) || 'null');
+  if (b && b.k && b.t === kurz(api.token) && b.bis - Date.now() > 3600 * 1000) api.bildKey = b.k;
+} catch {}
+
+// Liegen gebliebene Stände nachreichen: sobald das Netz zurück ist, beim
+// Zurückkommen in den Tab, und kurz nach dem Start.
+addEventListener('online', () => api.standNachreichen());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') api.standNachreichen();
+});
+setTimeout(() => api.standNachreichen(), 3000);
+
 export class ApiError extends Error {
   constructor(message, status) { super(message); this.status = status; }
 }
@@ -565,4 +683,90 @@ function remove(k) { try { localStorage.removeItem(k); } catch {} }
 // Sekunde zu früh an.)
 function sekunden(s) {
   return String(Math.max(0, Math.round((Number(s) || 0) * 1000) / 1000));
+}
+
+/* ---------------------------------------------------------- Netz
+
+   frist: ein Signal, das nach ms abbricht. AbortSignal.timeout gibt es
+   in älteren Safari nicht. */
+function frist(ms) {
+  try { if (AbortSignal.timeout) return AbortSignal.timeout(ms); } catch {}
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
+/* ---------------------------------------------------------- Stand-Ausgang
+
+   { <kurz(token)>: { <itemId>: { p, d, f, at } } } — je Profil getrennt
+   (ein Profil schickt nie die Stände eines anderen). Nur der letzte Stand
+   je Titel; was älter als drei Tage ist, verfällt. */
+const AUSGANG_HOECHSTENS = 3 * 24 * 3600 * 1000;
+let ausgangLaeuft = false;
+let ausgangNochmal = false;
+let ausgangOffen = true; // beim Start einmal nachsehen
+let ausgangPause = 0;
+let ausgangUhr = 0;
+
+function kurz(token) {
+  // FNV-1a: nur ein Unterscheidungsmerkmal, kein Geheimnis.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < (token || '').length; i++) { h ^= token.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+function ausgangAlles() {
+  try { return JSON.parse(read(AUSGANG_KEY) || '{}') || {}; } catch { return {}; }
+}
+function ausgangLesen(token) {
+  const alles = ausgangAlles();
+  const meins = alles[kurz(token)] || {};
+  const jetzt = Date.now();
+  for (const [id, e] of Object.entries(meins)) if (!e || jetzt - e.at > AUSGANG_HOECHSTENS) delete meins[id];
+  return meins;
+}
+function ausgangSchreiben(token, meins) {
+  const alles = ausgangAlles();
+  if (Object.keys(meins).length) alles[kurz(token)] = meins; else delete alles[kurz(token)];
+  if (Object.keys(alles).length) write(AUSGANG_KEY, JSON.stringify(alles)); else remove(AUSGANG_KEY);
+}
+function ausgangSetzen(token, id, e) {
+  const meins = ausgangLesen(token);
+  meins[id] = e;
+  ausgangSchreiben(token, meins);
+  ausgangOffen = true;
+}
+function ausgangEntfernen(token, id, at) {
+  const meins = ausgangLesen(token);
+  if (meins[id] && meins[id].at === at) { delete meins[id]; ausgangSchreiben(token, meins); }
+}
+function ausgangSpaeter(f) {
+  clearTimeout(ausgangUhr);
+  // 5 s, 10 s, 20 s … höchstens alle fünf Minuten.
+  ausgangPause = Math.min(300000, ausgangPause ? ausgangPause * 2 : 5000);
+  ausgangUhr = setTimeout(f, ausgangPause);
+}
+// Ein Profil wird verlassen: letzter Versuch mit seinem Token, dann weg.
+function ausgangAbgeben(token) {
+  const meins = ausgangLesen(token);
+  for (const [id, e] of Object.entries(meins)) standSenden(token, id, e, true);
+  ausgangSchreiben(token, {});
+}
+/* 'ok' | 'weg' (endgültig abgelehnt, etwa Titel gelöscht) | 'nochmal'. */
+async function standSenden(token, id, e, keepalive) {
+  try {
+    const res = await fetch(`/api/v1/items/${encodeURIComponent(id)}/${e.f ? 'finished' : 'progress'}`, {
+      method: 'POST', keepalive,
+      body: e.f ? undefined : JSON.stringify({ positionMs: e.p, durationMs: e.d }),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      signal: keepalive ? undefined : frist(FRIST_SCHREIBEN),
+    });
+    if (res.ok) return 'ok';
+    // Server überlastet oder kurz weg (Proxy): später nochmal.
+    if (res.status >= 500 || res.status === 408 || res.status === 429) return 'nochmal';
+    return 'weg';
+  } catch {
+    // keepalive: der Browser schickt es noch, wenn er kann — ob es ankam,
+    // erfährt niemand. Liegen lassen; der nächste Start reicht es nach.
+    return 'nochmal';
+  }
 }

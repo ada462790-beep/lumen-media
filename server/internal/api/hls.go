@@ -356,20 +356,12 @@ const umwandlungVollText = "der server wandelt gerade schon {n} filme um — meh
 	"versuch es gleich nochmal, oder schau auf einem gerät, das die datei direkt abspielen kann"
 
 // maxUmwandlungen ist die Grenze für gleichzeitige Umwandlungen. Ohne
-// Angabe: in Software 2 (auf Rechnern mit vielen Kernen etwas mehr), mit
-// Hardware 4 — der Videoteil schafft mehrere Filme nebeneinander, und
-// was ihn begrenzt, ist eher die Platte als die Rechenleistung.
+// Angabe richtet sie sich nach dem Rechner (umwandlungenVorgabe).
 func (s *Server) maxUmwandlungen() int {
 	if v, err := strconv.Atoi(os.Getenv("LUMEN_MAX_UMWANDLUNGEN")); err == nil && v > 0 {
 		return v
 	}
-	if s.ff != nil && s.ff.HW.Aktiv() != "" {
-		return 4
-	}
-	if n := runtime.NumCPU() / 4; n > 2 {
-		return n
-	}
-	return 2
+	return umwandlungenVorgabe(runtime.NumCPU(), s.ff != nil && s.ff.HW.Aktiv() != "")
 }
 
 // hlsStartMu schützt den Schritt „Grenzen prüfen, Wiedergabe anmelden".

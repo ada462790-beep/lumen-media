@@ -197,3 +197,29 @@ func (s *Server) adminUmwandlungPruefen(w http.ResponseWriter, r *http.Request) 
 	}()
 	w.WriteHeader(http.StatusAccepted)
 }
+
+// umwandlungenVorgabe: wie viele Umwandlungen gleichzeitig laufen dürfen,
+// wenn niemand LUMEN_MAX_UMWANDLUNGEN setzt.
+//
+// In Software schafft ein typisches NAS (Celeron mit zwei Kernen, ARM mit
+// vier schwachen) knapp eine 1080p-Umwandlung in Echtzeit; eine zweite
+// liesse beide stocken. Darum bei höchstens zwei Kernen eine, bis sieben
+// Kerne zwei, darüber ein Viertel der Kerne. Mit Hardware schafft der
+// Videoteil mehrere Filme nebeneinander, dort begrenzt eher die Platte —
+// vier, auf einem Zweikerner zwei (Ton und Verpacken rechnet weiter die
+// CPU).
+func umwandlungenVorgabe(kerne int, hardware bool) int {
+	if hardware {
+		if kerne <= 2 {
+			return 2
+		}
+		return 4
+	}
+	switch {
+	case kerne <= 2:
+		return 1
+	case kerne < 8:
+		return 2
+	}
+	return kerne / 4
+}

@@ -204,6 +204,7 @@ func (s *Server) untertitelVorab(f *store.MediaFile) {
 	if err != nil {
 		return
 	}
+	s.vorratPruefen(f)
 	for _, t := range spuren {
 		if t.Kind == "subtitle" && !t.Bitmap && !t.External {
 			if _, err := os.Stat(s.vorratPfad(f.ID, t.Index)); err == nil {
@@ -223,6 +224,7 @@ func (s *Server) untertitelVorab(f *store.MediaFile) {
 // nach warten nicht fertig, antwortet sie selbst (202 bzw. 503) und gibt
 // nil zurück.
 func (s *Server) eingebetteteUntertitel(w http.ResponseWriter, r *http.Request, f *store.MediaFile, idx int) []byte {
+	s.vorratPruefen(f)
 	if b, err := os.ReadFile(s.vorratPfad(f.ID, idx)); err == nil {
 		return b
 	}
