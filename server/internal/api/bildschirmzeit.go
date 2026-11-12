@@ -26,7 +26,7 @@ package api
 //     Pause, Puffer voll) gilt als durchgehend.
 //     Dazu zählt die ausgelieferte Filmzeit: Ein Kinderprofil mit
 //     Bildschirmzeit bekommt Direktstrom, Browser-Strom und HLS-Segmente
-//     höchstens etwa 1,25-fach schneller als Echtzeit (Kinderdrossel), und
+//     höchstens etwa doppelt so schnell wie Echtzeit (Kinderdrossel), und
 //     was schneller ankam als die Uhr lief, zählt nach Filmzeit. Ein
 //     eigenes Programm, das nur Segmente holt, kommt so nicht mehr mit
 //     null Minuten an einen ganzen Film.
@@ -116,8 +116,10 @@ type bzSitzung struct {
 // bzFilmVorsprung: so viel mehr Filmzeit als Uhrzeit darf ausgeliefert
 // sein, bevor sie zählt — ein Player lädt etwas vor, und nach einem
 // Sprung holt er neu. Was darüber hinausgeht, kam schneller als in
-// Echtzeit und zählt als geschaut.
-const bzFilmVorsprung = 30.0
+// Echtzeit und zählt als geschaut. So gross wie der grösste Anlauf der
+// Kinderdrossel, damit ein Kind den Anlauf nicht als Bildschirmzeit
+// bezahlt.
+const bzFilmVorsprung = 60.0
 
 // geliefertMelden: die Kinderdrossel hat sek Sekunden Film ausgeliefert.
 func (b *bzWaechter) geliefertMelden(kontoID string, sek float64) {
@@ -334,7 +336,7 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 	// längeren Stille (Pause) beginnt die Zählung neu bei der Meldung.
 	//
 	// Dazu die ausgelieferte Filmzeit: Holt ein Programm schneller als in
-	// Echtzeit (die Kinderdrossel lässt höchstens etwa 1,25-fach zu), zählt
+	// Echtzeit (die Kinderdrossel lässt höchstens etwa das Doppelte zu), zählt
 	// die Filmzeit statt der Uhrzeit. Gezählt wird je Strecke ohne Pause
 	// das Grössere von beidem (mit bzFilmVorsprung Spielraum fürs
 	// Vorladen) — nie doppelt.

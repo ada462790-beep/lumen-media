@@ -59,20 +59,21 @@ func TestKinderDrosselHaeltEchtzeit(t *testing.T) {
 	if _, d := k.holen(t, h.tok, 4_718_592); d > time.Second {
 		t.Fatalf("Besitzer gebremst: %v", d)
 	}
-	// Das Kind: 20 Sekunden Film gehen sofort, die übrigen gut 3,6
-	// Sekunden mit höchstens 1,25-facher Echtzeit.
-	n, d := k.holen(t, k.tok, 4_718_592)
-	if n != 4_718_592 {
+	// Das Kind: 20 Sekunden Film gehen sofort (ein Viertel der Laufzeit,
+	// mindestens 20 Sekunden), die übrigen gut 6 Sekunden mit höchstens
+	// doppelter Echtzeit.
+	n, d := k.holen(t, k.tok, 5<<20)
+	if n != 5<<20 {
 		t.Fatalf("nur %d Byte", n)
 	}
-	if d < 2*time.Second {
-		t.Fatalf("23,6 Sekunden Film in %v — schneller als ungefähr Echtzeit", d)
+	if d < 2500*time.Millisecond {
+		t.Fatalf("26,2 Sekunden Film in %v — schneller als doppelte Echtzeit", d)
 	}
 	// Was ausgeliefert wurde, ist für die Bildschirmzeit gemeldet.
 	h.api.bz.mu.Lock()
 	geliefert := h.api.bz.geliefert[k.id]
 	h.api.bz.mu.Unlock()
-	if geliefert < 23 {
+	if geliefert < 26 {
 		t.Fatalf("gemeldete Filmzeit: %.1f s", geliefert)
 	}
 }

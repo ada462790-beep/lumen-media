@@ -310,7 +310,7 @@ func (s *Server) drosselFuer(r *http.Request, lim store.Limits, f *store.MediaFi
 	acc := accountOf(r)
 	if _, gilt := s.bildschirmzeitLage(r.Context(), acc); gilt {
 		id := acc.ID
-		return stream.NeueKinderDrossel(bitrate, func(sek float64) { s.bz.geliefertMelden(id, sek) })
+		return stream.NeueKinderDrossel(bitrate, time.Duration(f.DurationMS)*time.Millisecond, func(sek float64) { s.bz.geliefertMelden(id, sek) })
 	}
 	if lim.AllowDownload {
 		return nil

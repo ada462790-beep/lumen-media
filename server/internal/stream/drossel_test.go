@@ -77,3 +77,77 @@ func TestGleicherNameIstNichtGleichesGeraet(t *testing.T) {
 		t.Fatalf("Grund: %q", l.Grund(b.ID))
 	}
 }
+
+// falscheUhr: eine Uhr, die nur beim Warten weiterläuft.
+func falscheUhr(t *testing.T) *time.Time {
+	t.Helper()
+	jetzt := time.Unix(1_000_000, 0)
+	altU, altW := uhr, warten
+	uhr = func() time.Time { return jetzt }
+	warten = func(_ context.Context, d time.Duration) error { jetzt = jetzt.Add(d); return nil }
+	t.Cleanup(func() { uhr, warten = altU, altW })
+	return &jetzt
+}
+
+// Ein Film mit wechselnder Bitrate (VBR) läuft für ein Kind ohne Stocken:
+// Er beginnt mit drei Minuten Action bei doppelter mittlerer Bitrate, dann
+// sechs ruhige Minuten bei der halben. Der Player holt sekundenweise und
+// höchstens zwei Minuten voraus. Mit 1,25-fach und 20 Sekunden Anlauf
+// stockte das schon nach einer halben Minute.
+func TestKinderDrosselVBROhneStocken(t *testing.T) {
+	jetzt := falscheUhr(t)
+	const mittel = 4_000_000 // Bit je Sekunde im Mittel
+	laufzeit := 9 * time.Minute
+	d := NeueKinderDrossel(mittel, laufzeit, nil)
+	bytesBei := func(sek int) int {
+		if sek < 180 {
+			return 2 * mittel / 8
+		}
+		return mittel / 8 / 2
+	}
+	var geholt, kopf float64 // Sekunden Film geholt / abgespielt
+	gestockt := 0.0
+	for geholt < laufzeit.Seconds() {
+		if geholt-kopf >= 120 { // Puffer voll: eine Sekunde zuschauen
+			*jetzt = jetzt.Add(time.Second)
+			kopf++
+			continue
+		}
+		vorher := *jetzt
+		if err := d.Nehmen(context.Background(), bytesBei(int(geholt))); err != nil {
+			t.Fatal(err)
+		}
+		gewartet := jetzt.Sub(vorher).Seconds()
+		if geholt > 0 { // abgespielt wird erst, wenn die erste Sekunde da ist
+			if kopf+gewartet > geholt {
+				gestockt += kopf + gewartet - geholt
+				kopf = geholt
+			} else {
+				kopf += gewartet
+			}
+		}
+		geholt++
+	}
+	if gestockt > 0 {
+		t.Fatalf("Wiedergabe stockte %.1f s", gestockt)
+	}
+}
+
+// Schneller als das Doppelte der mittleren Bitrate holt ein Kind den Film
+// trotzdem nicht: Ein Programm, das alles am Stück will, braucht für neun
+// Minuten Film mindestens gut vier Minuten.
+func TestKinderDrosselHortetNicht(t *testing.T) {
+	jetzt := falscheUhr(t)
+	start := *jetzt
+	d := NeueKinderDrossel(4_000_000, 9*time.Minute, nil)
+	_ = d.Nehmen(context.Background(), 540*4_000_000/8)
+	if dauer := jetzt.Sub(start); dauer < 4*time.Minute {
+		t.Fatalf("neun Minuten Film in %v", dauer)
+	}
+	if a := kinderAnlauf(0); a != kinderAnlaufMax {
+		t.Fatalf("Anlauf ohne Laufzeit: %v", a)
+	}
+	if a := kinderAnlauf(30 * time.Second); a != kinderAnlaufMin {
+		t.Fatalf("Anlauf kurzer Film: %v", a)
+	}
+}

@@ -62,17 +62,24 @@ const drosselMindestBits = 8_000_000
 // drosselAnlauf: so viele Sekunden Tempo liegen am Anfang bereit.
 const drosselAnlauf = 30 * time.Second
 
-// Für Kinderprofile mit Bildschirmzeit gilt eine engere Drossel: Sonst
+// Für Kinderprofile mit Bildschirmzeit gilt eine eigene Drossel: Sonst
 // holte ein eigenes Programm einen Film in Sekunden, und die Bildschirmzeit
-// sähe nur die Sekunden der Übertragung. Mit dem Faktor 1,25 läuft das
-// Abspielen ungestört (der Puffer wächst trotzdem), aber schneller als
-// ungefähr in Echtzeit kommt niemand an den Film.
+// sähe nur die Sekunden der Übertragung. Gerechnet wird mit der mittleren
+// Bitrate der Datei; Filme mit wechselnder Bitrate (VBR) haben in
+// Actionszenen aber Spitzen weit darüber. Mit dem Faktor 1,25 und 20
+// Sekunden Anlauf stockte dann das Abspielen. Darum das Doppelte der
+// mittleren Bitrate und ein grösserer Anlauf. Horten verhindert das nicht
+// allein — das tut die Bildschirmzeit, die nach ausgelieferter Filmzeit
+// zählt (api/bildschirmzeit.go).
 const (
-	// KinderFaktor: so viel schneller als Echtzeit.
-	KinderFaktor = 1.25
-	// kinderAnlauf: so viele Sekunden Film gehen sofort — genug für einen
-	// zügigen Start und ein Springen, nicht genug für einen Film.
-	kinderAnlauf = 20.0
+	// KinderFaktor: so viel schneller als Echtzeit (mittlere Bitrate).
+	KinderFaktor = 2.0
+	// kinderAnlaufMax: so viele Sekunden Film gehen höchstens sofort —
+	// ein Viertel der Laufzeit, aber nicht mehr als das.
+	kinderAnlaufMax = 60.0
+	// kinderAnlaufMin: so viele Sekunden gehen auch bei kurzen Filmen
+	// (oder unbekannter Laufzeit) sofort.
+	kinderAnlaufMin = 20.0
 	// kinderMindestBits: kleiner wird die Bitrate nicht angenommen; ohne
 	// Angabe gilt kinderOhneAngabe.
 	kinderMindestBits = 32_000
@@ -85,18 +92,29 @@ func NeueDrossel(bitrate int) *Drossel {
 	bps := float64(max(bitrate, drosselMindestBits)) / 8
 	rate := float64(DrosselFaktor)
 	return &Drossel{rate: rate, kap: rate * drosselAnlauf.Seconds(), vorrat: rate * drosselAnlauf.Seconds(),
-		bps: bps, zuletzt: time.Now()}
+		bps: bps, zuletzt: uhr()}
 }
 
-// NeueKinderDrossel: die enge Drossel für ein Kinderprofil mit
-// Bildschirmzeit. geliefert bekommt die ausgelieferten Sekunden Film.
-func NeueKinderDrossel(bitrate int, geliefert func(float64)) *Drossel {
+// kinderAnlauf: der Anlauf für einen Film dieser Laufzeit — ein Viertel
+// davon, zwischen kinderAnlaufMin und kinderAnlaufMax. 0 = unbekannt.
+func kinderAnlauf(laufzeit time.Duration) float64 {
+	if laufzeit <= 0 {
+		return kinderAnlaufMax
+	}
+	return min(kinderAnlaufMax, max(kinderAnlaufMin, laufzeit.Seconds()/4))
+}
+
+// NeueKinderDrossel: die Drossel für ein Kinderprofil mit Bildschirmzeit.
+// laufzeit: Länge des Films (0 = unbekannt). geliefert bekommt die
+// ausgelieferten Sekunden Film.
+func NeueKinderDrossel(bitrate int, laufzeit time.Duration, geliefert func(float64)) *Drossel {
 	if bitrate <= 0 {
 		bitrate = kinderOhneAngabe
 	}
 	bps := float64(max(bitrate, kinderMindestBits)) / 8
-	return &Drossel{rate: KinderFaktor, kap: kinderAnlauf, vorrat: kinderAnlauf, bps: bps,
-		zuletzt: time.Now(), geliefert: geliefert, kinder: true}
+	anlauf := kinderAnlauf(laufzeit)
+	return &Drossel{rate: KinderFaktor, kap: anlauf, vorrat: anlauf, bps: bps,
+		zuletzt: uhr(), geliefert: geliefert, kinder: true}
 }
 
 // Kinder: die Drossel eines Kinderprofils mit Bildschirmzeit.
@@ -121,7 +139,7 @@ func (d *Drossel) Sekunden(ctx context.Context, sek float64) error {
 		d.geliefert(sek)
 	}
 	d.mu.Lock()
-	jetzt := time.Now()
+	jetzt := uhr()
 	d.vorrat = min(d.kap, d.vorrat+jetzt.Sub(d.zuletzt).Seconds()*d.rate)
 	d.zuletzt = jetzt
 	d.vorrat -= sek
@@ -133,6 +151,17 @@ func (d *Drossel) Sekunden(ctx context.Context, sek float64) error {
 	if warte <= 0 {
 		return nil
 	}
+	return warten(ctx, warte)
+}
+
+// uhr und warten sind austauschbar, damit Tests eine Wiedergabe von
+// Minuten in Millisekunden durchspielen.
+var (
+	uhr    = time.Now
+	warten = echtWarten
+)
+
+func echtWarten(ctx context.Context, warte time.Duration) error {
 	t := time.NewTimer(warte)
 	defer t.Stop()
 	select {

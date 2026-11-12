@@ -547,11 +547,12 @@ Computer, nicht auf Handy und Tablet.
   Meldung zu Meldung der Geräte (eine Pause zählt nicht, nach dem Anhalten
   läuft nichts nach). Zwei Geräte gleichzeitig zählen einmal —
   Bildschirmzeit ist Uhrzeit, nicht die Summe der Geräte.
-- Schneller als ungefähr in Echtzeit gibt es für ein Kinderprofil mit
+- Viel schneller als in Echtzeit gibt es für ein Kinderprofil mit
   Bildschirmzeit keinen Film: Direktstrom, Browser-Strom und HLS-Segmente
-  kommen höchstens 1,25-fach so schnell, wie sie laufen (20 Sekunden
-  Anlauf). Holt ein Programm trotzdem schneller, als die Uhr läuft, zählt
-  die ausgelieferte Filmzeit statt der Uhrzeit.
+  kommen höchstens doppelt so schnell, wie sie im Mittel laufen (Anlauf:
+  ein Viertel der Laufzeit, 20 bis 60 Sekunden) — genug Luft für Szenen
+  mit hoher Bitrate. Holt ein Programm trotzdem schneller, als die Uhr
+  läuft, zählt die ausgelieferte Filmzeit statt der Uhrzeit.
 - Es gilt die Uhr des Servers (Zeitzone aus `TZ`); um Mitternacht beginnt
   ein neuer Tag, ausser mitten in einem Fenster über Mitternacht. Die Uhr
   eines Geräts zählt nie. Lässt sich die Regel nicht lesen, bleibt das
