@@ -9,6 +9,8 @@
 #   3. Unten bei „volumes" den Pfad zu deinen Filmen und bei PUID/PGID
 #      deinen Benutzer prüfen, dann „Fertig"
 #   4. Im Browser http://<adresse-des-nas>:8097 öffnen
+#   5. Optional, für Updates per Knopfdruck: die Datei .env mit dem Token
+#      anlegen — README.md, Abschnitt „Updates per Knopfdruck"
 #
 # Das Abbild ist öffentlich — keine Anmeldung bei ghcr.io, kein Token.
 #
@@ -48,9 +50,10 @@ services:
     #   dockerfile: server/Dockerfile
     container_name: lumen
     restart: unless-stopped
-    # Für Watchtower (siehe unten), damit es nur Lumen aktualisiert:
-    # labels:
-    #   - com.centurylinklabs.watchtower.enable=true
+    # Für den Aktualisierer (siehe unten): Er tauscht nur Container mit
+    # diesem Label — also nur Lumen, sonst nichts auf dem NAS.
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
     # Beim Herunterfahren Zeit lassen, damit die Datenbank sauber
     # geschlossen wird (Docker gibt sonst nur 10 Sekunden).
     stop_grace_period: 30s
@@ -134,6 +137,14 @@ services:
       # privaten Repository kommen (etwa einem eigenen privaten Fork).
       # - LUMEN_GITHUB_TOKEN=github_pat_…
 
+      # Updates per Knopfdruck (Verwaltung › Updates) über den
+      # Aktualisierer unten. Das Token steht in der Datei .env neben dieser
+      # docker-compose.yml (eine Zeile LUMEN_AKTUALISIERER_TOKEN=…; wie man
+      # sie anlegt, steht in der README.md, „Updates per Knopfdruck").
+      # Ist es leer, bleibt der Knopf weg, und sonst ändert sich nichts.
+      - LUMEN_AKTUALISIERER_URL=http://aktualisierer:8080
+      - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
+
       # Zusätzlich verschlüsselt (HTTPS) auf 8920 hören — oben den Port
       # einkommentieren. LUMEN_TLS_NAME ist der Name oder die Adresse, unter
       # der Geräte das NAS erreichen; er kommt ins eigene Zertifikat.
@@ -175,33 +186,50 @@ services:
     #   - LUMEN_HARDWARE=vaapi          # auto | aus | vaapi | qsv | nvenc
     #   - LUMEN_VAAPI_GERAET=/dev/dri/renderD128
 
-  # Updates von selbst: Im Container kann sich Lumen nicht selbst
-  # ersetzen. Das übernimmt Watchtower — es holt nachts das neue Abbild
-  # und startet nur Lumen neu (dank des Labels unten nichts anderes).
-  # Zum Einschalten diese Zeilen und bei „lumen" die zwei labels-Zeilen
-  # einkommentieren. Läuft gerade eine Wiedergabe, bricht sie ab — darum
-  # nachts um 4.
+  # Der Aktualisierer: Updates per Knopfdruck. Im Container kann sich Lumen
+  # nicht selbst ersetzen — das übernimmt dieser kleine Begleiter
+  # (Watchtower, gepflegte Fassung von nickfedor). Er allein bekommt
+  # Zugriff auf Docker; Lumen kann ihm nur sagen „jetzt bitte", über seine
+  # HTTP-Schnittstelle und mit dem geheimen Token aus der .env. Er hört nur
+  # im internen Netz dieses Projekts (kein Port nach aussen) und tauscht
+  # nur Container mit dem Label oben, also nur Lumen.
   #
-  # Das Abbild ist öffentlich, Watchtower braucht keine Zugangsdaten. Nur
-  # wer ein eigenes, privates Abbild nutzt, trägt unten REPO_USER und
-  # REPO_PASS (GitHub-Name und Token mit „read:packages") ein.
-  # watchtower:
-  #   image: containrrr/watchtower
-  #   container_name: lumen-watchtower
-  #   restart: unless-stopped
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   environment:
-  #     - TZ=Europe/Zurich
-  #     - WATCHTOWER_SCHEDULE=0 0 4 * * *
-  #     - WATCHTOWER_LABEL_ENABLE=true
-  #     - WATCHTOWER_CLEANUP=true
-  #     # Lumen bis zu 30 s Zeit lassen, die Datenbank sauber zu schliessen
-  #     # (der Standard von 10 s ist zu knapp).
-  #     - WATCHTOWER_TIMEOUT=30s
-  #     # Nur für ein privates Abbild:
-  #     # - REPO_USER=dein-github-name
-  #     # - REPO_PASS=ghp_…
+  # Von selbst tut er nichts: Updates gibt es, wenn du in der Verwaltung
+  # „Jetzt aktualisieren" drückst — oder nachts, wenn dort „Von selbst
+  # aktualisieren" eingeschaltet ist. Dann wartet Lumen, bis niemand
+  # schaut; ein Zeitplan hier im Aktualisierer wüsste das nicht.
+  #
+  # Das Abbild ist öffentlich, er braucht keine Zugangsdaten. Die Fassung
+  # ist fest; ab und zu hier eine neuere eintragen (Docker Hub
+  # nickfedor/watchtower).
+  aktualisierer:
+    image: nickfedor/watchtower:1.24.0
+    container_name: lumen-aktualisierer
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=Europe/Zurich
+      # Nur die Update-Schnittstelle (POST /v1/update), auf 8080 im
+      # Projektnetz. Damit sind seine eigenen Zeitpläne aus.
+      - WATCHTOWER_HTTP_API_ENDPOINTS=update
+      - WATCHTOWER_HTTP_API_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
+      # Nur Container mit dem Label (Lumen).
+      - WATCHTOWER_LABEL_ENABLE=true
+      # Das alte Abbild danach löschen, damit das NAS nicht vollläuft.
+      - WATCHTOWER_CLEANUP=true
+      # Lumen bis zu 30 s Zeit lassen, die Datenbank sauber zu schliessen
+      # (passt zu stop_grace_period oben).
+      - WATCHTOWER_TIMEOUT=30s
+      - WATCHTOWER_NO_STARTUP_MESSAGE=true
+      # Zusätzlich jede Nacht von sich aus nachsehen — ohne Rücksicht auf
+      # laufende Wiedergaben. Lieber Lumens eigenes Zeitfenster nehmen.
+      # - WATCHTOWER_HTTP_API_PERIODIC_POLLS=true
+      # - WATCHTOWER_SCHEDULE=0 0 4 * * *
+      # Nur für ein eigenes, privates Abbild (GitHub-Name und Token mit
+      # „read:packages"):
+      # - REPO_USER=dein-github-name
+      # - REPO_PASS=ghp_…
 
 # Nur für bestehende Installationen mit benanntem Volume (siehe oben):
 # volumes:
