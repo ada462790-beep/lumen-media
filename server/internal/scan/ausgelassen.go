@@ -29,6 +29,9 @@ const (
 	AuslassOrdner  = "beiwerk_ordner" // Extras-, Trailer-, Featurettes-Ordner
 	AuslassEndung  = "endung"         // ein Video, das Lumen nicht abspielt
 	AuslassFehler  = "unlesbar"       // Ordner oder Datei liess sich nicht lesen
+	// Ein Verweis auf einen Ordner, dem der Durchlauf nicht folgt: zurück
+	// in die Bibliothek (Schleife), in Lumens Datenordner, schon gelesen.
+	AuslassVerweis = "verweis"
 )
 
 // maxAuslassPfade: so viele Pfade je Grund werden gezeigt; gezählt wird

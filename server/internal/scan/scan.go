@@ -255,7 +255,31 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	// — nicht mehr abspielbar bis zum nächsten Durchlauf am nächsten Tag.
 	var fehlerPfade []string
 
-	walkErr := walkDir(lib.Path, func(path string, d fs.DirEntry, err error) error {
+	// Verweise auf Ordner (Symlinks) folgt der Durchlauf — jedem Ziel nur
+	// einmal, nie in Lumens Datenordner und nie zurück in die Bibliothek
+	// selbst (das wäre eine Schleife oder doppelt). WalkDir allein folgt
+	// keinem Verweis, und ein verlinkter Filmordner fehlte still.
+	wurzelEcht, _ := filepath.EvalSymlinks(lib.Path)
+	verfolgt := map[string]bool{}
+	var besuch fs.WalkDirFunc
+	besuch = func(path string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type()&fs.ModeSymlink != 0 {
+			if ziel, e := os.Stat(path); e == nil && ziel.IsDir() {
+				echt, e := filepath.EvalSymlinks(path)
+				switch {
+				case e != nil || InDatenordner(path) || verfolgt[echt] ||
+					unterOrdner(echt, wurzelEcht) || unterOrdner(wurzelEcht, echt):
+					aus.merken(AuslassVerweis, path)
+				case ordnerUeberspringen(d.Name(), lib.Kind):
+				default:
+					verfolgt[echt] = true
+					// „Verweis/" mit Schrägstrich: So liest WalkDir das Ziel,
+					// und die Pfade bleiben unter dem Verweis.
+					return walkDir(path+string(filepath.Separator), besuch)
+				}
+				return nil
+			}
+		}
 		if err != nil {
 			// Ein unlesbarer Ordner darf den ganzen Durchlauf nicht
 			// abbrechen. Welcher es war, steht unter „Aufräumen", nicht
@@ -344,7 +368,8 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			res.Unmatched++
 		}
 		return nil
-	})
+	}
+	walkErr := walkDir(lib.Path, besuch)
 	if walkErr != nil && ctx.Err() == nil {
 		return nil, walkErr
 	}
@@ -483,6 +508,15 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		lib.Name, res.Added, res.Updated, res.Renamed, res.Unmatched, res.Missing,
 		res.Took.Round(time.Millisecond)))
 	return res, nil
+}
+
+// unterOrdner: pfad ist ordner selbst oder liegt darin.
+func unterOrdner(pfad, ordner string) bool {
+	if pfad == "" || ordner == "" {
+		return false
+	}
+	rel, err := filepath.Rel(ordner, pfad)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // freigabeUnterbrochen: Ist der Stammordner jetzt nicht (mehr) lesbar,

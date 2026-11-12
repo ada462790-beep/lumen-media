@@ -4598,6 +4598,7 @@ function viewCleanup() {
     beiwerk_ordner: [tr('Extras-Ordner'), tr('Ordner wie „Extras“, „Trailers“, „Featurettes“ liest Lumen nicht als Filme ein.')],
     endung: [tr('Endung, die Lumen nicht abspielt'), tr('Etwa ISO-Abbilder, .strm oder .rmvb. In MKV oder MP4 umwandeln, dann kommen sie dazu.')],
     unlesbar: [tr('Nicht lesbar'), tr('Lumen hat keine Leserechte (NAS-Gruppe prüfen) oder die Platte meldet einen Fehler.')],
+    verweis: [tr('Verweis auf einen Ordner'), tr('Einem Verweis (Symlink) zurück in die Bibliothek, in Lumens Datenordner oder auf einen schon gelesenen Ordner folgt Lumen nicht.')],
     defekt_leer: [tr('Leere Datei'), tr('Die Datei hat 0 Byte – vielleicht wird sie noch kopiert. Ist sie fertig, liest Lumen sie beim nächsten Durchlauf ein.')],
     defekt_gesperrt: [tr('Keine Leserechte'), tr('Lumen darf die Datei nicht öffnen (Rechte auf dem NAS prüfen). Sie wird nicht angeboten, bis sie lesbar ist.')],
     defekt_kaputt: [tr('Defekte Datei'), tr('FFmpeg erkennt darin kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten.')],

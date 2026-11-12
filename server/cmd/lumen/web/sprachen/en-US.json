@@ -1283,6 +1283,8 @@
  "Möglich sind: IMDb-Kennung (tt…), TMDb-Nummer, TheTVDB-Nummer (tvdb:121361) oder ein Link von imdb.com, themoviedb.org oder thetvdb.com. Bei TheTVDB steht die Nummer auf der Seite der Serie unter „TheTVDB.com Series ID“.": "Accepted: an IMDb ID (tt…), a TMDb number, a TheTVDB number (tvdb:121361) or a link from imdb.com, themoviedb.org or thetvdb.com. On TheTVDB the number is on the series page under “TheTVDB.com Series ID”.",
  "Nicht lesbar": "Not readable",
  "Leere Datei": "Empty file",
+ "Verweis auf einen Ordner": "Link to a folder",
+ "Einem Verweis (Symlink) zurück in die Bibliothek, in Lumens Datenordner oder auf einen schon gelesenen Ordner folgt Lumen nicht.": "Lumen doesn’t follow a link (symlink) back into the library, into Lumen’s data folder or to a folder it has already read.",
  "Die Datei hat 0 Byte – vielleicht wird sie noch kopiert. Ist sie fertig, liest Lumen sie beim nächsten Durchlauf ein.": "The file has 0 bytes – it may still be copying. Once it’s complete, Lumen picks it up on the next scan.",
  "Keine Leserechte": "No read permission",
  "Lumen darf die Datei nicht öffnen (Rechte auf dem NAS prüfen). Sie wird nicht angeboten, bis sie lesbar ist.": "Lumen isn’t allowed to open the file (check the permissions on your NAS). It isn’t offered until it’s readable.",

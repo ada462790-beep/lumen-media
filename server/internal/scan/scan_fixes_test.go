@@ -495,3 +495,89 @@ func TestDefekteDateien(t *testing.T) {
 		t.Fatalf("nach dem Kopieren noch %d defekt", len(defekt))
 	}
 }
+
+// B9: Verlinkte Ordner wurden still übersprungen. Jetzt folgt der
+// Durchlauf ihnen — aber nicht in eine Schleife und nicht in Lumens
+// Datenordner.
+func TestVerlinkteOrdner(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	draussen := t.TempDir()
+	daten := t.TempDir()
+	dateiMitGroesse(t, wurzel, "Heat (1995)/Heat (1995).mkv", 10)
+	dateiMitGroesse(t, draussen, "Verlinkt (2015)/Verlinkt (2015).mkv", 10)
+	dateiMitGroesse(t, daten, "Geheim (2000)/Geheim (2000).mkv", 10)
+	for ziel, name := range map[string]string{
+		filepath.Join(draussen, "Verlinkt (2015)"): "Verlinkt (2015)",
+		wurzel:                                "Schleife",
+		filepath.Join(daten, "Geheim (2000)"): "Geheim (2000)",
+	} {
+		if err := os.Symlink(ziel, filepath.Join(wurzel, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	DatenordnerSchuetzen(daten)
+	t.Cleanup(func() { geschuetzt.Store(nil) })
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	sc := New(st, nil)
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Limit: 10})
+	if got := strings.Join(titles(alle), ","); got != "Heat,Verlinkt" {
+		t.Fatalf("Titel %q — erwartet Heat und Verlinkt", got)
+	}
+	verweise := 0
+	for _, a := range sc.Ausgelassen(lib.ID) {
+		if a.Grund == AuslassVerweis {
+			verweise = a.Anzahl
+		}
+	}
+	if verweise != 2 {
+		t.Errorf("%d Verweise als ausgelassen gelistet, erwartet 2 (Schleife, Datenordner)", verweise)
+	}
+}
+
+// B10: Die Zählung „neu / aktualisiert" stimmt — Fassungen eines eben
+// angelegten Films sind nicht „aktualisiert", wieder aufgetauchte Dateien
+// schon, und bei Serien zählen die Folgen.
+func TestZaehlungNeuUndAktualisiert(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	dateiMitGroesse(t, wurzel, "Avatar (2009)/Avatar (2009) - 1080p.mkv", 10)
+	dateiMitGroesse(t, wurzel, "Avatar (2009)/Avatar (2009) - 2160p.mkv", 20)
+	dateiMitGroesse(t, wurzel, "Up (2009)/Up (2009).mkv", 30)
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	sc := New(st, nil)
+	res, err := sc.Scan(ctx, *lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Added != 2 || res.Updated != 0 {
+		t.Errorf("erster Durchlauf: %d neu, %d aktualisiert — erwartet 2 und 0", res.Added, res.Updated)
+	}
+	up := filepath.Join(wurzel, "Up (2009)")
+	_ = os.Rename(up, up+".weg")
+	if res, _ = sc.Scan(ctx, *lib); res.Missing != 1 {
+		t.Fatalf("Up fehlt nicht: %+v", res)
+	}
+	_ = os.Rename(up+".weg", up)
+	if res, _ = sc.Scan(ctx, *lib); res.Updated != 1 || res.Added != 0 {
+		t.Errorf("wieder aufgetaucht: %+v — erwartet 1 aktualisiert", res)
+	}
+
+	serien := t.TempDir()
+	for e := 1; e <= 3; e++ {
+		dateiMitGroesse(t, serien, fmt.Sprintf("Dark (2017)/Staffel 1/Dark S01E0%d.mkv", e), 10)
+	}
+	slib, _ := st.CreateLibrary(ctx, "Serien", "series", serien, "de")
+	if res, _ = sc.Scan(ctx, *slib); res.Added != 3 {
+		t.Errorf("Serien: %d neu — erwartet 3 Folgen", res.Added)
+	}
+	dateiMitGroesse(t, serien, "Dark (2017)/Staffel 1/Dark S01E02.mkv", 99)
+	if res, _ = sc.Scan(ctx, *slib); res.Updated != 1 || res.Added != 0 {
+		t.Errorf("geänderte Folge: %+v — erwartet 1 aktualisiert", res)
+	}
+}
