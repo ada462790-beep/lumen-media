@@ -1,0 +1,41 @@
+# Quelltext der GPL- und LGPL-Pakete im Docker-Abbild (FFmpeg, BusyBox …)
+# als Datei an die Veröffentlichung hängen. Die GPL verlangt, dass dieser
+# Quelltext mit dem Abbild angeboten wird. Das Abbild selbst wird dadurch
+# nicht grösser — das Archiv liegt nur auf GitHub.
+name: GPL-Quellen
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Fassung, etwa v0.1.24 (Abbild und Veröffentlichung müssen existieren)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  quellen:
+    name: GPL-Quellen
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Datei an die Veröffentlichung hängen
+    env:
+      V: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+      - name: Fassung prüfen
+        run: echo "$V" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+      - name: Quellen sammeln
+        run: |
+          tools/gpl_quellen.sh "ghcr.io/${GITHUB_REPOSITORY}:${V}" "$V" "lumen-media-${V}-gpl-quellen.tar"
+      - name: An die Veröffentlichung hängen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$V" "lumen-media-${V}-gpl-quellen.tar" --clobber -R "$GITHUB_REPOSITORY"

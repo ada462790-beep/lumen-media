@@ -218,3 +218,13 @@ jobs:
             ghcr.io/${{ github.repository }}-relay:${{ needs.pruefen.outputs.mit }}
             ghcr.io/${{ github.repository }}-relay:${{ needs.pruefen.outputs.ohne }}
             ${{ needs.pruefen.outputs.latest == 'ja' && format('ghcr.io/{0}-relay:latest', github.repository) || '' }}
+
+  # Den Quelltext der GPL-Pakete im Abbild (FFmpeg, BusyBox …) an die
+  # Veröffentlichung hängen, wie es die GPL verlangt.
+  quellen:
+    needs: [pruefen, abbilder]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/quellen.yml
+    with:
+      version: ${{ needs.pruefen.outputs.mit }}
