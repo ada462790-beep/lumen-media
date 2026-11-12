@@ -1318,5 +1318,11 @@
  "Entfernen": "Remove",
  "Das Update liess sich nicht einsetzen: {grund}": "The update couldn’t be installed: {grund}",
  "Kapitel": "Chapters",
- "Kapitel {n}": "Chapter {n}"
+ "Kapitel {n}": "Chapter {n}",
+ "Bild im Bild": "Picture in Picture",
+ "Bild im Bild (P)": "Picture in Picture (P)",
+ "Bild im Bild ist hier nicht möglich.": "Picture in Picture isn’t available here.",
+ "Die Verbindung ist gerade langsam. Lumen lädt weiter …": "The connection is slow right now. Lumen keeps loading …",
+ "Im Bild-im-Bild-Fenster erscheinen die Untertitel nicht.": "Subtitles don’t appear in the Picture in Picture window.",
+ "{titel} – Wiedergabe": "{titel} – Playback"
 }

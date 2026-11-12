@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -577,6 +578,24 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 		return false
 	}
 	return true
+}
+
+// qSek liest eine Stelle im Film in Sekunden, auch mit Nachkommastellen
+// („104.54"). Früher nur ganze Sekunden: Ein Ton- oder Untertitelwechsel
+// setzte bis zu einer Sekunde zu früh wieder an.
+func qSek(r *http.Request, key string) float64 {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return 0
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+		return 0
+	}
+	if f > 1e7 {
+		f = 1e7
+	}
+	return math.Round(f*1000) / 1000
 }
 
 func qInt(r *http.Request, key string, def int) int {

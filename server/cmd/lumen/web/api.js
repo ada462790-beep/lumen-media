@@ -265,7 +265,7 @@ export const api = {
      Einstieg an Schlüsselbilder gebunden — danach richtet sich die Anzeige. */
   seekPoint(fileId, sec, untertitel = -1) {
     const p = new URLSearchParams(browserCaps());
-    p.set('t', Math.floor(sec));
+    p.set('t', sekunden(sec));
     // Ein eingebrannter Bild-Untertitel heisst: neu gerechnet, nicht nur
     // umgepackt — und damit ein anderer Einstieg. Der Server muss es wissen.
     p.set('untertitel', String(untertitel));
@@ -277,7 +277,7 @@ export const api = {
      beginnt. Wo er dann wirklich steht, sagt der Server in X-Lumen-Start. */
   streamURL(fileId, startSec = 0, spur = -1, { untertitel = -1, lauf = '' } = {}) {
     const p = new URLSearchParams(browserCaps());
-    if (startSec > 0) p.set('t', Math.floor(startSec));
+    if (startSec > 0) p.set('t', sekunden(startSec));
     // Die gewählte Tonspur — ohne Angabe nimmt der Server die erste.
     if (spur >= 0) p.set('spur', String(spur));
     // Bild-Untertitel (PGS, DVD) rechnet der Server ins Bild. Immer
@@ -551,3 +551,10 @@ function deviceName() {
 function read(k)   { try { return localStorage.getItem(k); } catch { return null; } }
 function write(k, v) { try { localStorage.setItem(k, v); } catch {} }
 function remove(k) { try { localStorage.removeItem(k); } catch {} }
+
+// Eine Stelle im Film für die Adresse: auf Millisekunden, ohne Exponent.
+// (Ganze Sekunden setzten einen Ton- oder Untertitelwechsel bis zu einer
+// Sekunde zu früh an.)
+function sekunden(s) {
+  return String(Math.max(0, Math.round((Number(s) || 0) * 1000) / 1000));
+}

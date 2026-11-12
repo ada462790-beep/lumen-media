@@ -144,6 +144,7 @@ const I = {
   vollbild: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   kapitel: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   vollbildAus: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
+  bildImBild: '<rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11.5" width="6.5" height="5" rx="1" fill="currentColor" stroke="none"/>',
   liste: '<path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4.6" cy="6" r=".9"/><circle cx="4.6" cy="12" r=".9"/><circle cx="4.6" cy="18" r=".9"/>',
   hoch: '<path d="M6 15l6-6 6 6"/>',
   runter: '<path d="M6 9l6 6 6-6"/>',
@@ -1798,10 +1799,22 @@ function viewDetail() {
 // Namen der Sprachen kommen aus Intl.DisplayNames – in der Sprache der
 // Oberfläche („Deutsch" / „German"), ohne eigene Liste.
 
+/* Sagt der Titel der Spur nur, was ohnehin dasteht — Sprache, „erzwungen",
+   „Standard" —, fällt er weg. Sonst hiess es „Deutsch (Deutsch (erzwungen),
+   erzwungen)". */
+function nurSpracheUndMerkmale(titel, name, code) {
+  let rest = ` ${String(titel).toLowerCase()} `;
+  for (const w of [name, code, sprachName(code || ''), 'forced', 'erzwungen', tr('erzwungen'), 'default', 'standard', 'sdh', 'cc', 'full', 'subtitles', 'subtitle', 'untertitel', 'stereo', 'surround']) {
+    if (!w) continue;
+    rest = rest.split(String(w).toLowerCase()).join(' ');
+  }
+  return !rest.replace(/[\s()\[\]\-–—_.,:;/|]+/g, '');
+}
+
 function spurName(t) {
   let name = t.language && t.language !== 'und' ? sprachName(t.language) : tr('Unbekannt');
   const z = [];
-  if (t.title && t.title.toLowerCase() !== name.toLowerCase()) z.push(t.title);
+  if (t.title && !nurSpracheUndMerkmale(t.title, name, t.language)) z.push(t.title);
   if (t.forced) z.push(tr('erzwungen'));
   if (t.hearingImpaired) z.push(tr('für Hörgeschädigte'));
   // Bild-Untertitel (PGS, DVD) rechnet der Server ins Bild — die Wahl
@@ -2104,23 +2117,51 @@ async function untertitelAnwenden() {
   if (!p || !v) return;
   if (!p.textspur) { p.textspur = v.addTextTrack('subtitles', tr('Untertitel'), sprache().slice(0, 2)); }
   const spur = p.textspur;
-  for (const c of [...(spur.cues || [])]) spur.removeCue(c);
+  // Jeder Aufruf bekommt eine Nummer; nur der jüngste darf Zeilen setzen.
+  // Zwei überlappende Aufrufe (Start und gleich danach ein Sprung, bevor
+  // die .vtt da war) legten sonst jede Zeile doppelt hin.
+  const nr = p.utLauf = (p.utLauf || 0) + 1;
+  const leeren = () => { for (const c of [...(spur.cues || [])]) spur.removeCue(c); };
   // Aus, oder ein Bild-Untertitel — der steckt schon im Bild des Stroms.
-  if (p.untertitel == null || einbrennenVon(p) >= 0) { spur.mode = 'disabled'; return; }
+  if (p.untertitel == null || einbrennenVon(p) >= 0) { leeren(); spur.mode = 'disabled'; return; }
   const gewuenscht = p.untertitel;
   if (p.cuesFuer !== gewuenscht) {
     const text = await untertitelHolen(p, gewuenscht);
-    if (S.playing !== p || p.untertitel !== gewuenscht) return;
+    if (S.playing !== p || p.untertitel !== gewuenscht || nr !== p.utLauf) return;
     if (text == null) return;
     p.cues = vttLesen(text); p.cuesFuer = gewuenscht;
   }
-  if (S.playing !== p || p.untertitel !== gewuenscht) return;
+  if (S.playing !== p || p.untertitel !== gewuenscht || nr !== p.utLauf) return;
+  // Erst jetzt, direkt vor dem Setzen, leeren — nach dem Warten.
+  leeren();
   for (const c of p.cues) {
     const von = c.von - p.offset, bis = c.bis - p.offset;
     if (bis <= 0) continue;
     spur.addCue(new VTTCue(Math.max(0, von), bis, c.text));
   }
   spur.mode = 'showing';
+  untertitelLage();
+}
+
+/* Untertitel über der Steuerleiste: Ist die Leiste zu sehen, rücken die
+   Zeilen über sie (wie bei Netflix und YouTube) — vorher standen sie
+   hinter den Zeiten bzw. am Handy zwischen den Knöpfen. */
+function untertitelLage() {
+  const p = S.playing, v = $('#v');
+  const spur = p?.textspur;
+  if (!p || !v || !spur || spur.mode !== 'showing' || !spur.cues) return;
+  let linie = 'auto';
+  if (p.ui) {
+    const bot = app.querySelector('.pl-bot')?.getBoundingClientRect();
+    const vr = v.getBoundingClientRect();
+    if (bot && vr.height) linie = Math.max(10, Math.min(92, Math.floor((bot.top - vr.top) / vr.height * 100) - 2));
+  }
+  if (p.utLinie === linie && p.utLinieZahl === spur.cues.length) return;
+  p.utLinie = linie; p.utLinieZahl = spur.cues.length;
+  for (const c of [...spur.cues]) {
+    if (linie === 'auto') { c.snapToLines = true; c.line = 'auto'; }
+    else { c.snapToLines = false; c.line = linie; c.lineAlign = 'end'; }
+  }
 }
 
 async function spurWaehlen(idx) {
@@ -2191,6 +2232,45 @@ const imVollbild = () => !!(document.fullscreenElement || document.webkitFullscr
 // Auf Geräten ohne Maus (iPhone, iPad) regelt die Hardware die Lautstärke;
 // iOS ignoriert volume ohnehin. Dort nur der Stumm-Knopf.
 const lautRegler = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+// Bild im Bild: Standard-API (Chrome, Edge, Safari 13.1+) oder die ältere
+// von Safari. Firefox hat keine, dort fehlt der Knopf.
+const bildImBildDa = () => !!(document.pictureInPictureEnabled || HTMLVideoElement.prototype.webkitSetPresentationMode);
+async function bildImBildUmschalten() {
+  const v = $('#v'), p = S.playing;
+  if (!v || !p) return;
+  try {
+    if (document.pictureInPictureElement) await document.exitPictureInPicture();
+    else if (v.webkitPresentationMode === 'picture-in-picture') v.webkitSetPresentationMode('inline');
+    else if (document.pictureInPictureEnabled && v.requestPictureInPicture) {
+      await v.requestPictureInPicture();
+      // Chrome zeigt Text-Untertitel im kleinen Fenster nicht.
+      if (p.textspur?.mode === 'showing') toast(tr('Im Bild-im-Bild-Fenster erscheinen die Untertitel nicht.'));
+    } else if (v.webkitSetPresentationMode) v.webkitSetPresentationMode('picture-in-picture');
+  } catch { toast(tr('Bild im Bild ist hier nicht möglich.')); }
+}
+function bildImBildVerlassen() {
+  if (document.pictureInPictureElement) document.exitPictureInPicture().catch(() => {});
+}
+
+/* Film in Teilen (cd1, cd2): Die Leiste zeigt den ganzen Film, nicht nur
+   den laufenden Teil — „Weiter bei 1:43" auf der Titelseite findet man so
+   im Player wieder. Intern bleibt alles je Teil (offset, duration). */
+const filmVor = p => (p.teile ? p.vorher || 0 : 0);
+const filmDauer = p => (p.teile && p.gesamt ? p.gesamt : p.duration || 0);
+const filmPos = p => filmVor(p) + p.offset + p.current;
+/* Ein Sprung auf der Leiste, in Sekunden des ganzen Films. Liegt das Ziel
+   in einem anderen Teil, startet dieser an der richtigen Stelle. */
+function filmSprung(sek) {
+  const p = S.playing;
+  if (!p) return;
+  if (!p.teile) return seekTo(sek);
+  const vor = filmVor(p);
+  if (sek >= vor && sek < vor + (p.duration || 0) - 1) return seekTo(sek - vor);
+  const v = $('#v');
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  S.playing = null;
+  startPlayer(p.itemId, Math.max(0, Math.min(sek, filmDauer(p) - 2)));
+}
 
 function zeitleisteText(pos, total) {
   return total ? tr('{pos} von {gesamt}', { pos: clock(pos), gesamt: clock(total) }) : clock(pos);
@@ -2201,15 +2281,16 @@ function viewPlayer() {
   if (!p) return viewHome();
   const hid = p.ui ? '' : ' pl-hide';
   const inert = p.ui ? '' : ' inert';
-  const pos = p.offset + p.current;
-  const total = p.duration || 0;
+  const pos = filmPos(p);
+  const total = filmDauer(p);
   const pct = total ? Math.min(100, pos / total * 100) : 0;
   const v = $('#v');
   const stumm = v ? v.muted : !!p.stumm;
   const laut = v ? v.volume : (p.lautstaerke ?? 1);
 
   const prefs = S.me?.prefs || {};
-  return `<div class="player${p.ui ? '' : ' pl-nocursor'} ut-${prefs.utGroesse || 'normal'}${prefs.utHintergrund === '0' ? ' ut-ohne' : ''}">
+  return `<div class="player${p.ui ? '' : ' pl-nocursor'} ut-${prefs.utGroesse || 'normal'}${prefs.utHintergrund === '0' ? ' ut-ohne' : ''}"
+    role="dialog" aria-modal="true" aria-label="${esc(tr('{titel} – Wiedergabe', { titel: p.title }))}">
     <video id="v" class="pl-video" playsinline autoplay
       style="position:absolute;inset:0;width:100%;height:100%;background:#000;object-fit:contain"></video>
     <div class="pl-surface" data-surface style="position:absolute;inset:0;z-index:2"></div>
@@ -2254,6 +2335,7 @@ function viewPlayer() {
           aria-label="${tr('Kapitel')}" aria-expanded="${p.spurenOffen === 'kapitel'}">${svg(I.kapitel, 21, 2)}</button>` : ''}
         <button class="btn btn-pill glass glass--clear pl-knopf pl-knopf--tempo${p.spurenOffen === 'tempo' ? ' pl-knopf--an' : ''}" data-spuren="tempo"
           aria-label="${esc(tr('Wiedergabetempo: {tempo}', { tempo: tempoText(p.tempo || 1) }))}" aria-expanded="${p.spurenOffen === 'tempo'}">${esc(tempoZahl(p.tempo || 1))}</button>
+        ${bildImBildDa() ? `<button class="btn btn-round sm glass glass--clear pl-knopf" data-pip aria-label="${tr('Bild im Bild')}" title="${tr('Bild im Bild (P)')}">${svg(I.bildImBild, 20, 2)}</button>` : ''}
         <button class="btn btn-round sm glass glass--clear pl-knopf" data-vollbild
           aria-label="${imVollbild() ? tr('Vollbild beenden') : tr('Vollbild')}">${svg(imVollbild() ? I.vollbildAus : I.vollbild, 20, 2)}</button>
       </div>
@@ -2262,8 +2344,8 @@ function viewPlayer() {
         aria-valuetext="${esc(zeitleisteText(pos, total))}">${kapitelMarken(p, total)}<i style="width:${pct}%"></i><b style="left:${pct}%"></b>
         <span class="pl-vorschau" aria-hidden="true" hidden><span class="pl-vorschau-bild"></span><span class="pl-vorschau-zeit tnum"></span></span></div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
-        <span class="t-caption tnum pl-zeit" aria-hidden="true">${clock(pos)}</span>
-        <span class="t-caption tnum c-2 pl-rest" aria-hidden="true">${total ? '−' + clock(total - pos) : ''}</span>
+        <span class="t-sub tnum pl-zeit" aria-hidden="true">${clock(pos)}</span>
+        <span class="t-sub tnum c-2 pl-rest" aria-hidden="true">${total ? '−' + clock(total - pos) : ''}</span>
       </div>
     </div>
   </div>`;
@@ -2368,6 +2450,9 @@ async function startPlayer(itemId, fromSec, fileId = null) {
         history.pushState({ ...(history.state || {}), tiefe: verlaufTiefe, spieler: true }, '');
       } catch {}
     }
+    // Wohin der Fokus nach dem Schliessen zurückkehrt: auf den Knopf, mit
+    // dem der Film gestartet wurde.
+    if (S.view !== 'player') S.fokusNachPlayer = fokusSchluessel();
     S.view = 'player';
     render();          // baut den Player auf, mountPlayer hängt sich ein
     // Kinderprofil: leise Bescheid geben, wenn die Zeit knapp wird.
@@ -2501,14 +2586,24 @@ function mountPlayer() {
   lautstaerkeAnwenden(v);
   v.defaultPlaybackRate = v.playbackRate = p.tempo || 1;
   v.onloadedmetadata = () => { p.loading = false; v.playbackRate = p.tempo || 1; patchChrome(); };
-  v.onplaying = () => { p.loading = false; p.paused = false; patchChrome(); showChrome(); };
+  v.onplaying = () => { p.loading = false; clearTimeout(p.wartenZeit); p.wartenZeit = null; p.paused = false; patchChrome(); showChrome(); };
   // Pause und Sprung sind gute Momente zum Sichern: Wer pausiert, steht
   // vielleicht gleich auf und schaut auf dem Handy weiter.
   v.onpause = () => { p.paused = true; showChrome(true); if (!v.ended) standSichern(); };
   v.onseeked = () => { standSichern(); };
   v.onvolumechange = () => { lautstaerkeMerken(v); patchLautstaerke(); };
-  v.onwaiting = () => { p.loading = true; patchChrome(); };
-  v.oncanplay = () => { p.loading = false; patchChrome(); };
+  // Hängt der Strom länger, sagt Lumen es — vorher drehte sich der Kringel
+  // nach einem Verbindungsabbruch wortlos weiter.
+  const wartenAus = () => { clearTimeout(p.wartenZeit); p.wartenZeit = null; };
+  v.onwaiting = () => {
+    p.loading = true; patchChrome();
+    if (p.wartenZeit) return;
+    p.wartenZeit = setTimeout(() => {
+      p.wartenZeit = null;
+      if (S.playing === p && p.loading && !p.paused) toast(tr('Die Verbindung ist gerade langsam. Lumen lädt weiter …'));
+    }, 10000);
+  };
+  v.oncanplay = () => { p.loading = false; wartenAus(); patchChrome(); };
   v.ontimeupdate = () => { p.current = v.currentTime; patchPlayer(); saveSoon(); };
   // Ein Strom ohne Länge endet auch, wenn der Server ihn beendet: nach
   // einer langen Pause (abgelaufen), auf Wunsch (Ich → Geräte) oder weil
@@ -2525,6 +2620,9 @@ function mountPlayer() {
     stromAbgerissen(p, !p.paused);
   };
   showChrome();
+  // Der Fokus geht in den Player (auf Abspielen/Pause): Tastatur und
+  // Bildschirmleser wissen so, dass er offen ist.
+  app.querySelector('[data-toggle]')?.focus({ preventScroll: true });
 }
 
 /* patchChrome bessert die Steuerung nach: ein-/ausblenden, Pause-Symbol,
@@ -2542,6 +2640,7 @@ function patchChrome() {
     if (sel !== '.pl-scrim') el.inert = !p.ui;
   }
   app.querySelector('.player')?.classList.toggle('pl-nocursor', !p.ui);
+  untertitelLage();
 
   const toggle = app.querySelector('[data-toggle]');
   if (toggle) {
@@ -2588,8 +2687,8 @@ function patchChrome() {
 function patchPlayer() {
   const p = S.playing;
   if (!p || S.view !== 'player') return;
-  const pos = p.offset + p.current;
-  const total = p.duration || 0;
+  const pos = filmPos(p);
+  const total = filmDauer(p);
   const pct = total ? Math.min(100, pos / total * 100) : 0;
   const bar = $('.pl-bar > i'), thumb = $('.pl-bar > b');
   // Während jemand zieht, zeigt die Leiste die Zielstelle, nicht den Film.
@@ -2607,15 +2706,21 @@ function patchPlayer() {
   const zeit = app.querySelector('.pl-zeit'), rest = app.querySelector('.pl-rest');
   if (zeit) zeit.textContent = clock(pos);
   if (rest) rest.textContent = total ? '−' + clock(total - pos) : '';
-  vorspannPruefen(p, pos);
-  abspannPruefen(p, pos, total);
+  // Vorspann und Abspann gehören zur Datei, die gerade läuft.
+  vorspannPruefen(p, p.offset + p.current);
+  abspannPruefen(p, p.offset + p.current, p.duration || 0);
 }
 
 /* „Vorspann überspringen": solange die Stelle im Vorspann liegt, steht
    der Knopf da; wer es in den Einstellungen so will, springt von selbst. */
 function vorspannPruefen(p, pos) {
   const i = p.intro;
-  const drin = i && !p.introUebersprungen && pos >= i.vonMs / 1000 + 0.5 && pos < i.bisMs / 1000 - 1;
+  // Wer übersprungen hat und dann in den Vorspann zurückspult, bekommt den
+  // Knopf wieder — nur das automatische Überspringen bleibt aus. (Kurz
+  // nach dem Sprung steht die alte Stelle noch da; die zählt nicht.)
+  const imVorspann = i && pos >= i.vonMs / 1000 + 0.5 && pos < i.bisMs / 1000 - 1;
+  const drin = imVorspann && (!p.introUebersprungen
+    || (pos < i.bisMs / 1000 - 3 && Date.now() - (p.introSprungUm || 0) > 3000));
   const pill = document.getElementById('vorspann');
   if (drin && !pill) {
     const b = document.createElement('button');
@@ -2623,7 +2728,7 @@ function vorspannPruefen(p, pos) {
     b.dataset.skipintro = '1';
     b.innerHTML = `${svg(I.fwd10, 18, 2)}<span class="t-body">${tr('Vorspann überspringen')}</span>`;
     document.querySelector('.player')?.appendChild(b);
-    if ((S.me?.prefs || {}).skipIntro === '1') vorspannUeberspringen();
+    if ((S.me?.prefs || {}).skipIntro === '1' && !p.introUebersprungen) vorspannUeberspringen();
   } else if (!drin && pill) {
     pill.remove();
   }
@@ -2633,6 +2738,7 @@ function vorspannUeberspringen() {
   const p = S.playing;
   if (!p?.intro) return;
   p.introUebersprungen = true;
+  p.introSprungUm = Date.now();
   document.getElementById('vorspann')?.remove();
   seekTo(p.intro.bisMs / 1000);
 }
@@ -2641,8 +2747,16 @@ function vorspannUeberspringen() {
    steht „Als Nächstes" schon da, mit dem, was kommt, und zählt bis zum
    Ende herunter. Nur bei Folgen und Listen; ein einzelner Film endet. */
 function abspannPruefen(p, pos, total) {
-  if (p.naechsterAngeboten || !total) return;
+  if (!total) return;
   const ab = p.creditsMs ? p.creditsMs / 1000 : total - 40;
+  // Aus dem Abspann zurückgespult: Die Karte geht weg und kommt beim
+  // nächsten Abspann wieder (vorher blieb sie über der Handlung stehen).
+  if (p.naechsterAngeboten && !p.abgelehnt && pos < ab - 1 && document.getElementById('naechster')) {
+    naechsterWeg();
+    p.naechsterAngeboten = false;
+    return;
+  }
+  if (p.naechsterAngeboten) return;
   if (pos < ab || pos > total - 2) return;
   if (p.kind !== 'episode' && !S.warteschlange) return;
   p.naechsterAngeboten = true;
@@ -2856,19 +2970,22 @@ function barSekunde(bar, clientX) {
   const p = S.playing;
   const r = bar.getBoundingClientRect();
   const anteil = Math.max(0, Math.min(1, (clientX - r.left) / (r.width || 1)));
-  return anteil * (p?.duration || 0);
+  return anteil * (p ? filmDauer(p) : 0);
 }
 
 function vorschauZeigen(bar, sek) {
   const p = S.playing;
   const box = bar.querySelector('.pl-vorschau');
-  if (!p || !box || !p.duration) return;
-  const anteil = sek / p.duration;
+  if (!p || !box || !filmDauer(p)) return;
+  const anteil = sek / filmDauer(p);
   p.vorschauBei = sek;
   box.hidden = false;
   box.querySelector('.pl-vorschau-zeit').textContent = clock(sek);
   const bild = box.querySelector('.pl-vorschau-bild');
-  const t = p.trick;
+  // Vorschaubilder gibt es je Datei — bei Filmen in Teilen nur für den laufenden.
+  const imTeil = sek - filmVor(p);
+  const t = imTeil >= 0 && imTeil < (p.duration || 0) ? p.trick : null;
+  sek = imTeil;
   if (t && t.blaetter?.length && t.intervall > 0) {
     const n = Math.min(Math.floor(sek / t.intervall), (t.bilder || 1) - 1);
     const jeBlatt = (t.spalten || 1) * (t.zeilen || 1);
@@ -2931,7 +3048,7 @@ app.addEventListener('pointerdown', e => {
   const zeigen = x => {
     const sek = barSekunde(bar, x);
     p.ziel = sek;
-    const pct = sek / p.duration * 100;
+    const pct = sek / filmDauer(p) * 100;
     const i = bar.querySelector('i'), b = bar.querySelector('b');
     if (i) i.style.width = pct + '%';
     if (b) b.style.left = pct + '%';
@@ -2945,7 +3062,7 @@ app.addEventListener('pointerdown', e => {
     bar.removeEventListener('pointercancel', ende);
     p.ziehen = false;
     vorschauWeg(bar);
-    if (ev.type === 'pointerup' && p.ziel != null) seekTo(p.ziel);
+    if (ev.type === 'pointerup' && p.ziel != null) filmSprung(p.ziel);
     p.ziel = null;
     showChrome();
   };
@@ -2969,12 +3086,12 @@ app.addEventListener('pointermove', e => {
 function zeitleisteTaste(e) {
   const p = S.playing, v = $('#v');
   if (!p || !v) return false;
-  const jetzt = p.offset + v.currentTime;
+  const jetzt = filmVor(p) + p.offset + v.currentTime;
   const ziel = { ArrowLeft: jetzt - 10, ArrowDown: jetzt - 10, ArrowRight: jetzt + 10, ArrowUp: jetzt + 10,
-    PageDown: jetzt - 60, PageUp: jetzt + 60, Home: 0, End: (p.duration || 0) - 2 }[e.key];
+    PageDown: jetzt - 60, PageUp: jetzt + 60, Home: 0, End: filmDauer(p) - 2 }[e.key];
   if (ziel == null) return false;
   e.preventDefault();
-  seekTo(Math.max(0, ziel));
+  filmSprung(Math.max(0, ziel));
   return true;
 }
 
@@ -3219,6 +3336,8 @@ async function spielerAnhalten() {
   const p = S.playing;
   if (!p) return null;
   naechsterWeg();
+  bildImBildVerlassen();
+  clearTimeout(p.wartenZeit);
   document.getElementById('nochda')?.remove();
   vollbildVerlassen();
   S.warteschlange = null;
@@ -5122,6 +5241,7 @@ app.addEventListener('click', async e => {
   if (hit('data-bar')) return;
   if (hit('data-stumm')) return stummUmschalten();
   if (hit('data-vollbild')) return vollbildUmschalten();
+  if (hit('data-pip')) return bildImBildUmschalten();
   if ((n = hit('data-tempo'))) { tempoSetzen(Number(n.dataset.tempo)); return; }
   if ((n = hit('data-kapitel'))) {
     const p = S.playing;
@@ -5792,6 +5912,9 @@ function playerTaste(e) {
       e.preventDefault(); return lautstaerkeAendern(-0.05);
     case 'f':
       e.preventDefault(); return vollbildUmschalten();
+    case 'p':
+      if (!bildImBildDa()) return;
+      e.preventDefault(); return bildImBildUmschalten();
     case 'm':
       e.preventDefault(); stummUmschalten(); return toast($('#v')?.muted ? tr('Stumm') : tr('Ton an'));
     case 'n':
@@ -5976,18 +6099,30 @@ function nachDemZeichnen(vorherFokus) {
   const jetzt = `${S.view}|${S.id ?? ''}`;
   const neu = jetzt !== letzteAnsicht;
   letzteAnsicht = jetzt;
+  const nachPlayer = S.view !== 'player' ? S.fokusNachPlayer : null;
+  if (nachPlayer) S.fokusNachPlayer = null;
+  const fokusAuf = sels => {
+    for (const sel of sels || []) {
+      let el = null;
+      try { el = app.querySelector(sel); } catch {}
+      if (el) { el.focus({ preventScroll: true }); return true; }
+    }
+    return false;
+  };
   const w = S.wiederherstellen;
   if (w && !S.error) {
     S.wiederherstellen = null;
     const seite = app.querySelector('.page');
     if (seite && w.scroll) seite.scrollTop = w.scroll;
     if (w.reihen) app.querySelectorAll('.rail').forEach((r, i) => { if (w.reihen[i]) r.scrollLeft = w.reihen[i]; });
+    if (nachPlayer && fokusAuf(nachPlayer)) return;
     const karte = w.fokusId && app.querySelector(`[data-go][data-id="${CSS.escape(w.fokusId)}"]`);
     if (karte && S.view !== 'search') { karte.focus({ preventScroll: true }); return; }
   }
   if (S.view === 'search') return; // dort gehört der Fokus ins Suchfeld (render)
   if (neu) {
     letzteKarte = null;
+    if (nachPlayer && fokusAuf(nachPlayer)) return;
     const auto = app.querySelector('[autofocus]');
     if (auto) { auto.focus(); return; }
     if (h1) { h1.setAttribute('tabindex', '-1'); h1.focus({ preventScroll: true }); }
