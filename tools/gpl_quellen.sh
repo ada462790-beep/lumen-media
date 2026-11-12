@@ -39,8 +39,9 @@ awk '
 echo "GPL/LGPL-Herkünfte:"; cat "$ARB/gpl-herkunft.txt"
 
 # 2. Die Baurezepte (APKBUILD und Patches) aus Alpines aports.
+# (Vom offiziellen Spiegel auf GitHub — Alpines GitLab weist GitHub-Runner ab.)
 git clone -q --depth 1 --filter=blob:none --sparse -b "$ALPINE_ZWEIG" \
-  https://gitlab.alpinelinux.org/alpine/aports.git "$ARB/aports"
+  https://github.com/alpinelinux/aports.git "$ARB/aports"
 pfade=$(awk '{print "main/" $1; print "community/" $1}' "$ARB/gpl-herkunft.txt" | sort -u)
 # shellcheck disable=SC2086
 git -C "$ARB/aports" sparse-checkout set --no-cone $pfade
