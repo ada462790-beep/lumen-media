@@ -60,11 +60,11 @@ while read -r herkunft fassung; do
     mkdir -p "$ziel"
     mkdir -p "$ziel/rezept"
     cp -R "$d/." "$ziel/rezept/"
-    ( cd "$d"
-      . ./APKBUILD
-      rezept="$pkgver-r$pkgrel"
-      [ "$rezept" = "$fassung" ] || echo "$herkunft: Abbild $fassung, Rezept $rezept" >> /arb/abweichungen.txt
-      SRCDEST="$ziel" abuild -F fetch && SRCDEST="$ziel" abuild -F verify ) \
+    # Die Rezepte erwarten Variablen, die erst abuild setzt — darum hier
+    # ohne -u einlesen, nur um die Fassung zu vergleichen.
+    rezept=$(cd "$d" && set +eu && . ./APKBUILD >/dev/null 2>&1; echo "$pkgver-r$pkgrel")
+    [ "$rezept" = "$fassung" ] || echo "$herkunft: Abbild $fassung, Rezept $rezept" >> /arb/abweichungen.txt
+    ( cd "$d" && SRCDEST="$ziel" abuild -F fetch && SRCDEST="$ziel" abuild -F verify ) \
       || echo "FEHLT: $herkunft" >> /arb/fehlt.txt
     break
   done
