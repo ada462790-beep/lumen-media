@@ -7,7 +7,6 @@
  "Gross": "Groß",
  "Grösse": "Größe",
  "Grösse der Untertitel": "Größe der Untertitel",
- "Im Container aktualisiert man das Abbild von aussen — darum ist das hier aus.": "Im Container aktualisiert man das Abbild von außen — darum ist das hier aus.",
  "Schliessen": "Schließen",
  "So heisst der Server in den Apps, wenn jemand mehrere gespeichert hat.": "So heißt der Server in den Apps, wenn jemand mehrere gespeichert hat.",
  "Verwaltet mit — alles ausser Gruppen, Rechten, Updates": "Verwaltet mit — alles außer Gruppen, Rechten, Updates",
@@ -19,5 +18,6 @@
  "Das Update liess sich nicht einsetzen: {grund}": "Das Update ließ sich nicht einsetzen: {grund}",
  "Gilt für diesen Browser. Die Schrift wächst auch mit der Textgrösse von Browser und System.": "Gilt für diesen Browser. Die Schrift wächst auch mit der Textgröße von Browser und System.",
  "Sehr gross": "Sehr groß",
- "Textgrösse": "Textgröße"
+ "Textgrösse": "Textgröße",
+ "angestossen": "angestoßen"
 }

@@ -4505,6 +4505,63 @@ function updateKurz(u, version) {
 
 const zeit = t => t ? datumZeit(t, { dateStyle: 'medium', timeStyle: 'short' }) : '–';
 
+/* Im Container übernimmt der Aktualisierer (Watchtower neben Lumen, siehe
+   README „Updates per Knopfdruck"). Lumen sagt ihm nur „jetzt"; danach
+   startet es neu. Diese Seite fragt solange /hello, bis eine andere
+   Fassung antwortet — oder der Aktualisierer einen Fehler gemeldet hat. */
+let aktWarten = null; // { von, seit, hinweis }
+
+function aktFehlerText(code) {
+  return ({
+    token_falsch: tr('Der Aktualisierer lehnt das Token ab. LUMEN_AKTUALISIERER_TOKEN und WATCHTOWER_HTTP_API_TOKEN müssen gleich sein.'),
+    nicht_erreichbar: tr('Der Aktualisierer ist nicht erreichbar. Läuft er im selben Projekt, und stimmt LUMEN_AKTUALISIERER_URL?'),
+    beschaeftigt: tr('Der Aktualisierer ist gerade mit einem anderen Update beschäftigt. Bitte in ein paar Minuten nochmal.'),
+    zeit_um: tr('Der Aktualisierer hat nicht rechtzeitig geantwortet.'),
+    nichts_neues: tr('Der Aktualisierer fand kein neueres Abbild — vielleicht wird es gerade noch gebaut. Später nochmal versuchen.'),
+    fehlgeschlagen: tr('Der Aktualisierer konnte das Abbild nicht tauschen. Näheres in seinem Protokoll im Container Manager.'),
+    antwort_falsch: tr('Der Aktualisierer antwortet unerwartet. Zeigt LUMEN_AKTUALISIERER_URL auf Watchtower?'),
+  })[code] || tr('Das hat nicht geklappt.');
+}
+
+function aktAnleitung(u) {
+  const repo = String(u.releaseSeite || '').replace(/\/releases$/, '');
+  return sprache().startsWith('en') ? repo + '/blob/main/README.en.md#one-click-updates' : repo + '#updates-per-knopfdruck';
+}
+
+function aktualisiererWarten(von) {
+  if (aktWarten) return;
+  aktWarten = { von, seit: Date.now(), hinweis: false };
+  const runde = async () => {
+    if (!aktWarten) return;
+    let h = null;
+    try { h = await api.hello(); } catch { /* startet gerade neu */ }
+    if (h?.version && h.version !== aktWarten.von) {
+      aktWarten = null;
+      toast(tr('Lumen läuft wieder — jetzt mit {version}', { version: h.version }));
+      if (S.view === 'adminUpdate') load();
+      return;
+    }
+    // Noch die alte Fassung, und erreichbar: Hat der Aktualisierer abgelehnt?
+    if (h) {
+      let u = null;
+      try { u = await api.adminUpdate(); } catch { /* nach dem Neustart gesperrt */ }
+      const code = u?.aktualisiererStand?.code;
+      if (u && !u.laeuft && code && code !== 'ok') {
+        aktWarten = null;
+        if (S.view === 'adminUpdate') { S.data = u; render(); }
+        toast(aktFehlerText(code));
+        return;
+      }
+    }
+    if (!aktWarten.hinweis && Date.now() - aktWarten.seit > 10 * 60 * 1000) {
+      aktWarten.hinweis = true;
+      if (S.view === 'adminUpdate') render();
+    }
+    setTimeout(runde, 3000);
+  };
+  setTimeout(runde, 2000);
+}
+
 function viewAdminUpdate() {
   const u = S.data || {};
   const e = u.einstellung || {};
@@ -4512,17 +4569,39 @@ function viewAdminUpdate() {
   const haken = svg('<path d="M4 12.5 9.5 18 20 6.5"/>', 20);
   const uhr = (name, wert) => `<input type="time" name="${name}" value="${esc(wert || '')}" style="width:auto">`;
 
+  // Im Container: mit Aktualisierer ein Knopf, ohne ihn ein Hinweis, wie
+  // er sich einrichten lässt.
+  const akt = u.container && u.aktualisierer;
+  const aktFehler = u.aktualisiererStand?.code && u.aktualisiererStand.code !== 'ok' && !u.laeuft
+    ? u.aktualisiererStand.code : '';
+  if (akt && u.laeuft && u.aktualisiererStand && !aktWarten) setTimeout(() => aktualisiererWarten(u.installiert), 0);
+  const ohneAkt = `<div class="t-caption c-2" style="margin-top:8px" data-aktanleitung>${
+    tr('Im Container tauscht man das Abbild als Ganzes. Mit dem Aktualisierer — einmal in der docker-compose.yml eingerichtet — gibt es hier den Knopf „Jetzt aktualisieren“: {anleitung}.',
+      { anleitung: `<a href="${esc(aktAnleitung(u))}" target="_blank" rel="noopener" class="link">${tr('so geht’s')}</a>` })}
+    ${u.aktualisiererHalb ? `<br><span style="color:#ff9f0a">${tr('LUMEN_AKTUALISIERER_URL (als http://…) und LUMEN_AKTUALISIERER_TOKEN müssen beide gesetzt sein.')}</span>` : ''}
+    <br>${tr('Ohne ihn: im Container Manager Projekt › Aktion › Erstellen (mit „pull_policy: always“), sonst docker compose pull && docker compose up -d.')}</div>`;
+
   let stand;
-  if (u.neuer) {
+  if (akt && (aktWarten || (u.laeuft && u.aktualisiererStand))) {
+    stand = `<div class="row" style="min-height:52px;align-items:flex-start;padding-top:12px;padding-bottom:12px" data-aktwarten>
+      <span class="spin spin--s" style="flex:none;margin-top:2px"></span>
+      <div style="flex:1;min-width:0">
+        <div class="t-body">${tr('Wird aktualisiert — Lumen startet gleich neu')}</div>
+        <div class="t-sub c-2">${tr('Der Aktualisierer holt das neue Abbild. Diese Seite meldet sich, sobald Lumen wieder da ist.')}</div>
+        ${aktWarten?.hinweis ? `<div class="t-caption" style="margin-top:8px;color:#ff9f0a" data-akthinweis>${
+          tr('Nach zehn Minuten läuft noch immer {version}. Ist der Aktualisierer erreichbar, und gibt es das neue Abbild schon? Näheres im Protokoll unten und im Container Manager.', { version: esc(u.installiert) })}</div>` : ''}
+      </div></div>`;
+  } else if (u.neuer) {
     stand = `<div class="row" style="min-height:52px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
       <span style="color:#ff9f0a;display:flex;flex:none">${warn}</span>
       <div style="flex:1;min-width:0">
         <div class="t-body">${tr('Lumen {version} ist da — du hast {installiert}', { version: esc(u.neueste.version), installiert: esc(u.installiert) })}</div>
         <div class="t-sub c-2">${tr('veröffentlicht {wann}', { wann: zeit(u.neueste.published) })} ·
           <a href="${esc(u.neueste.url)}" target="_blank" rel="noopener" class="link">${tr('Was sich geändert hat')}</a></div>
-        ${u.container ? `<div class="t-caption c-2" style="margin-top:8px">${esc(u.anleitung)}</div>` : ''}
+        ${u.container && !akt ? ohneAkt : ''}
+        ${aktFehler ? `<div class="t-caption" style="margin-top:8px;color:#ff6961" data-aktfehler>${aktFehlerText(aktFehler)}</div>` : ''}
       </div>
-      ${u.container ? '' : `<button class="btn btn-pill btn-pill--fill" data-updjetzt style="flex:none"${u.laeuft ? ' disabled' : ''}>
+      ${u.container && !akt ? '' : `<button class="btn btn-pill btn-pill--fill" ${akt ? 'data-updcontainer' : 'data-updjetzt'} style="flex:none"${u.laeuft ? ' disabled' : ''}>
         ${u.laeuft ? tr('Läuft …') : tr('Jetzt aktualisieren')}</button>`}
     </div>`;
   } else {
@@ -4541,7 +4620,7 @@ function viewAdminUpdate() {
       <span class="t-body" style="flex:1">${esc(p.von)} → ${esc(p.nach)}${p.auto ? ` <span class="t-caption c-2">${tr('von selbst')}</span>` : ''}</span>
       <span class="badge" style="border:0;flex:none;background:${p.ergebnis === 'ok' ? 'rgba(48,209,88,.16)' : p.ergebnis === 'fehler' ? 'rgba(255,69,58,.14)' : 'rgba(120,120,128,.24)'};
         color:${p.ergebnis === 'ok' ? '#30d158' : p.ergebnis === 'fehler' ? '#ff6961' : 'var(--label-2)'}" title="${esc(p.notiz || '')}">
-        ${p.ergebnis === 'ok' ? tr('eingesetzt') : p.ergebnis === 'fehler' ? tr('fehlgeschlagen') : tr('verschoben')}</span>
+        ${p.ergebnis === 'ok' ? tr('eingesetzt') : p.ergebnis === 'fehler' ? tr('fehlgeschlagen') : p.ergebnis === 'angestossen' ? tr('angestossen') : tr('verschoben')}</span>
     </div>${p.notiz ? `<div class="t-caption c-2" style="padding:0 16px 10px 146px">${esc(p.notiz)}</div>` : ''}`).join('')
     : `<p class="hint" style="padding:16px;margin:0">${tr('Noch keine Aktualisierung.')}</p>`;
 
@@ -4565,11 +4644,12 @@ function viewAdminUpdate() {
           ${uhr('pruefZeit', e.pruefZeit)}</label>
         <label class="row" style="min-height:52px;flex-wrap:wrap">
           <span class="t-body" style="flex:1">${tr('Von selbst aktualisieren')}</span>
-          <select name="auto" class="takt"${u.container ? ' disabled' : ''}><option value="aus"${e.auto !== 'fenster' ? ' selected' : ''}>${tr('aus')}</option>
+          <select name="auto" class="takt"${u.container && !akt ? ' disabled' : ''}><option value="aus"${e.auto !== 'fenster' ? ' selected' : ''}>${tr('aus')}</option>
             <option value="fenster"${e.auto === 'fenster' ? ' selected' : ''}>${tr('nur im Zeitfenster')}</option></select>
           <span class="t-sub c-2">${tr('von')}</span>${uhr('fensterVon', e.fensterVon)}<span class="t-sub c-2">${tr('bis')}</span>${uhr('fensterBis', e.fensterBis)}</label>
         <div class="row" style="min-height:40px"><span class="t-caption c-2">${tr('Läuft im Fenster eine Wiedergabe, wartet Lumen und versucht es später nochmal.')}
-          ${u.container ? ` ${tr('Im Container aktualisiert man das Abbild von aussen — darum ist das hier aus.')}` : ''}</span></div>
+          ${u.container ? ` ${akt ? tr('Im Container bittet Lumen dafür den Aktualisierer.')
+            : tr('Im Container geht das nur mit dem Aktualisierer — siehe oben.')}` : ''}</span></div>
       </div></section>
     <section style="margin-top:24px"><div class="section-h">${tr('Zugang')}</div>
       ${u.tokenUngueltig ? `<p class="t-body" style="color:#ff6961;margin:0 2px 10px">${tr('GitHub nimmt das Token nicht an — meist ist es abgelaufen. Trag hier ein neues ein, dann kommen die Updates wieder durch. Bist du nicht Besitzer des Repositorys, nimm ein {klassisches} Token mit dem Bereich „repo“ — feingranulare gelten nur für eigene Repositories.', { klassisches: `<b>${tr('klassisches')}</b>` })}</p>` : ''}
@@ -4593,7 +4673,7 @@ function viewAdminUpdate() {
     <div style="height:40px"></div></div>`);
 }
 
-function updateFrage(n) {
+function updateFrage(n, container) {
   const b = document.getElementById('updfrage');
   if (!b) return;
   b.innerHTML = `<div class="group group--inset" style="margin-top:16px;border:1px solid rgba(255,159,10,.5)">
@@ -4601,7 +4681,7 @@ function updateFrage(n) {
       <div style="flex:1;min-width:200px"><div class="t-body">${tr('{n} Wiedergaben laufen gerade', { n })}</div>
         <div class="t-caption c-2">${tr('Beim Neustart bricht sie ab. Trotzdem jetzt aktualisieren?')}</div></div>
       <button class="btn btn-pill" data-updnein>${tr('Lieber später')}</button>
-      <button class="btn btn-pill btn-pill--fill" data-updtrotzdem>${tr('Trotzdem')}</button></div></div>`;
+      <button class="btn btn-pill btn-pill--fill" data-updtrotzdem="${container ? 'container' : ''}">${tr('Trotzdem')}</button></div></div>`;
   b.scrollIntoView({ block: 'nearest' });
 }
 
@@ -5715,6 +5795,20 @@ app.addEventListener('click', async e => {
     toast(tr('Sieht bei GitHub nach …'));
     try { S.data = await api.adminUpdateCheck(); } catch (err) { return toast(err.message); }
     return render();
+  }
+  if (hit('data-updcontainer') || hit('data-updtrotzdem')?.dataset.updtrotzdem === 'container') {
+    const trotzdem = !!hit('data-updtrotzdem');
+    const von = S.data?.installiert;
+    try {
+      await api.adminUpdateContainer(trotzdem);
+    } catch (err) {
+      if (err.abgebrochen) return;
+      if (err.wiedergaben) return updateFrage(err.wiedergaben, true);
+      return toast(err.message);
+    }
+    aktualisiererWarten(von);
+    if (S.view === 'adminUpdate') { S.data = { ...S.data, laeuft: true }; render(); }
+    return;
   }
   if (hit('data-updjetzt') || hit('data-updtrotzdem')) {
     const trotzdem = !!hit('data-updtrotzdem');

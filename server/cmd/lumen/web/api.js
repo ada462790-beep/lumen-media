@@ -538,6 +538,10 @@ export const api = {
   adminUpdateRun(trotzdem) {
     return this.call('/admin/update/run' + (trotzdem ? '?trotzdem=1' : ''), { method: 'POST' });
   },
+  // Im Container über den Aktualisierer; verlangt den Code (bestaetigt).
+  adminUpdateContainer(trotzdem) {
+    return this.call('/admin/update/container' + (trotzdem ? '?trotzdem=1' : ''), { method: 'POST' });
+  },
 
   /* ---------------------------------------------------------- Filmreihen */
   collections()         { return this.call('/collections'); },
