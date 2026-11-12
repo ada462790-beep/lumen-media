@@ -428,6 +428,23 @@ Verwaltung gibt es in drei Stufen: *keine* (nur schauen), *verwaltet mit*
 *Vollzugriff* (alles wie der Besitzer, auch Gruppen, Rechte, Updates und
 Sicherungen). Wer was schaut, sieht auch mit Vollzugriff niemand.
 
+Die Verwaltung gibt es **nur am Computer** (Browser oder Mac-App), mit
+Absicht: Auf Handy und Tablet bleibt Lumen zum Schauen, und ein Tipp
+daneben ändert dort keine Rechte. Wer `#/verwaltung` auf dem Handy öffnet,
+bekommt einen Hinweis statt der Seiten. Einladungen lassen sich unter
+*Verwaltung › Konten* auch wieder zurückziehen, solange sie niemand
+eingelöst hat; der Code für den Fernseher hat 16 Zeichen in Vierergruppen
+(Bindestriche und Kleinbuchstaben sind egal, ebenso 0/O und 1/I).
+
+**Bedienung mit Tastatur und Fernbedienung.** Pfeiltasten bewegen den
+Fokus zwischen Karten und Knöpfen (auch mit dem Steuerkreuz eines
+Fernseher-Browsers), Enter öffnet, Backspace oder die Zurück-Taste führt
+eine Seite zurück, F6 springt zwischen Inhalt und Navigation, `/` in die
+Suche. Im Player: Leertaste/K, J/L oder ←/→, ↑/↓, F (Vollbild), P (Bild im
+Bild), M, N, S, C, Esc. Die Schrift folgt der Textgrösse von Browser und
+System; unter *Ich › Darstellung* gibt es zusätzlich „Gross" und „Sehr
+gross".
+
 **Apps** für iPhone, iPad, Mac, Apple TV, Android, Android TV und Fire TV
 — siehe [unten](#die-apps-bauen-ohne-mac-und-ohne-android-studio).
 
@@ -721,8 +738,29 @@ das Volume ist unberührt.
 ### PIN vergessen
 
 Hat ein Profil seinen PIN vergessen, setzt die Verwaltung ihn in der App
-zurück (*Verwaltung › Konten*). Hat der Besitzer seinen eigenen vergessen,
-geht es über SSH auf dem Server:
+zurück (*Verwaltung › Konten*). Hat der Besitzer seinen eigenen PIN oder
+den PIN der Verwaltungssperre vergessen, geht das **nur auf dem Server
+selbst** — mit Absicht, sonst könnte es jeder im Heimnetz. Auf einem
+Synology geht es auch **ohne SSH**, über den Aufgabenplaner (wie beim
+Herausfinden von PUID/PGID oben):
+
+1. *Systemsteuerung › Aufgabenplaner › Erstellen › Geplante Aufgabe ›
+   Benutzerdefiniertes Skript*, Benutzer **root**, Zeitplan egal.
+2. Unter *Aufgabeneinstellungen* dieses Skript (Name und neuen PIN
+   anpassen; die Zahl steht zweimal, weil Lumen sie zur Kontrolle noch
+   einmal verlangt):
+
+   ```sh
+   printf '2580\n2580\n' | /usr/local/bin/docker exec -i lumen lumen zuruecksetzen --konto Alex --verwaltung > /volume1/docker/lumen/zuruecksetzen.txt 2>&1
+   ```
+
+3. Die Aufgabe einmal *Ausführen*, in der File Station
+   `docker/lumen/zuruecksetzen.txt` öffnen (dort steht „Erledigt: …"),
+   dann **Aufgabe und Datei löschen** — im Skript steht der neue PIN.
+   Danach in Lumen gleich einen eigenen PIN wählen.
+
+Ohne `--verwaltung` bleibt die Verwaltungssperre, wie sie ist. Mit SSH
+geht dasselbe im Terminal:
 
 ```sh
 sudo docker exec -it lumen lumen zuruecksetzen                 # Profile auflisten

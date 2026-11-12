@@ -300,5 +300,6 @@
   "Zu dieser Kennung kennt TMDb keinen passenden Eintrag. Stimmt die Nummer, und ist es die richtige Art (Film oder Serie)?": "TMDb has no matching entry for this ID. Is the number right, and is it the right kind (movie or series)?",
   "Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.": "Only people who manage the library can import matches.",
   "dein eigenes Konto entfernst du hier nicht": "You can’t remove your own account here.",
-  "TMDb nimmt diesen Schlüssel nicht an. Es braucht den langen API Read Access Token (er fängt mit eyJ an), nicht die kurze API-Kennung.": "TMDb doesn’t accept this key. Lumen needs the long API Read Access Token (it starts with eyJ), not the short API key."
+  "TMDb nimmt diesen Schlüssel nicht an. Es braucht den langen API Read Access Token (er fängt mit eyJ an), nicht die kurze API-Kennung.": "TMDb doesn’t accept this key. Lumen needs the long API Read Access Token (it starts with eyJ), not the short API key.",
+  "diese einladung gibt es nicht (mehr)": "This invitation doesn’t exist (anymore)."
 }

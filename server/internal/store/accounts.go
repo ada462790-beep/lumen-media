@@ -707,15 +707,130 @@ func (s *Store) CreateInvite(ctx context.Context, ownerID string, ttl time.Durat
 	if err != nil {
 		return nil, err
 	}
-	inv := &Invite{Code: rand.Text(), ExpiresAt: time.Now().Add(ttl), Preset: preset}
+	// 16 Zeichen (80 Bit) statt 26: am Fernseher mit der Fernbedienung
+	// einzutippen, und gegen Raten sicher genug für eine Einladung, die
+	// nach Tagen abläuft und nur einmal gilt (das Einlösen ist gebremst).
+	inv := &Invite{Code: rand.Text()[:16], ExpiresAt: time.Now().Add(ttl), Preset: preset}
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO invite (code, created_by, expires_at, preset) VALUES (?,?,?,?)`,
 		inv.Code, ownerID, inv.ExpiresAt.Unix(), string(raw))
 	return inv, err
 }
 
+// EinladungsCode bringt einen getippten Code in die gespeicherte Form:
+// Grossbuchstaben, ohne Leerzeichen und Bindestriche, und mit den
+// Verwechslern 0→O, 1→I, 8→B (das Alphabet kennt nur A–Z und 2–7).
+func EinladungsCode(code string) string {
+	code = strings.TrimSpace(code)
+	// Ein alter Code mit Kleinbuchstaben? rand.Text liefert nur Grossbuchstaben.
+	var b strings.Builder
+	for _, r := range strings.ToUpper(code) {
+		switch r {
+		case ' ', '-', '\u00a0', '\u2009':
+			continue
+		case '0':
+			r = 'O'
+		case '1':
+			r = 'I'
+		case '8':
+			r = 'B'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// OffeneEinladung ist eine Einladung, die noch niemand eingelöst hat und
+// die noch gilt. Der Code selbst geht nicht mit hinaus — nur eine Kennung
+// zum Zurückziehen und seine letzten vier Zeichen zum Wiedererkennen.
+type OffeneEinladung struct {
+	Kennung      string    `json:"kennung"`
+	Ende         string    `json:"ende"`
+	ExpiresAt    time.Time `json:"expiresAt"`
+	Kinderprofil bool      `json:"kinderprofil"`
+	Bibliotheken int       `json:"bibliotheken"`
+	Von          string    `json:"von"`
+}
+
+func einladungsKennung(code string) string {
+	h := sha256.Sum256([]byte("einladung:" + code))
+	return hex.EncodeToString(h[:8])
+}
+
+// OffeneEinladungen listet die offenen Einladungen — alle oder nur die,
+// die accountID erzeugt hat.
+func (s *Store) OffeneEinladungen(ctx context.Context, accountID string, alle bool) ([]OffeneEinladung, error) {
+	q := `SELECT i.code, i.expires_at, i.preset, COALESCE(a.name, '') FROM invite i
+	      LEFT JOIN account a ON a.id = i.created_by
+	      WHERE i.used_at IS NULL AND i.expires_at >= ?`
+	args := []any{time.Now().Unix()}
+	if !alle {
+		q += ` AND i.created_by = ?`
+		args = append(args, accountID)
+	}
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY i.expires_at DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []OffeneEinladung{}
+	for rows.Next() {
+		var code, presetRaw, von string
+		var ablauf int64
+		if err := rows.Scan(&code, &ablauf, &presetRaw, &von); err != nil {
+			return nil, err
+		}
+		var preset struct {
+			Libraries    []string `json:"libraries"`
+			Kinderprofil bool     `json:"kinderprofil"`
+		}
+		_ = json.Unmarshal([]byte(presetRaw), &preset)
+		ende := code
+		if len(ende) > 4 {
+			ende = ende[len(ende)-4:]
+		}
+		out = append(out, OffeneEinladung{Kennung: einladungsKennung(code), Ende: ende,
+			ExpiresAt: time.Unix(ablauf, 0), Kinderprofil: preset.Kinderprofil,
+			Bibliotheken: len(preset.Libraries), Von: von})
+	}
+	return out, rows.Err()
+}
+
+// EinladungZurueckziehen löscht eine offene Einladung. Ohne alle nur eine,
+// die accountID selbst erzeugt hat.
+func (s *Store) EinladungZurueckziehen(ctx context.Context, kennung, accountID string, alle bool) error {
+	offen, err := s.OffeneEinladungen(ctx, accountID, alle)
+	if err != nil {
+		return err
+	}
+	for _, e := range offen {
+		if e.Kennung != kennung {
+			continue
+		}
+		rows, err := s.db.QueryContext(ctx, `SELECT code FROM invite WHERE used_at IS NULL`)
+		if err != nil {
+			return err
+		}
+		var code string
+		for rows.Next() {
+			var c string
+			if rows.Scan(&c) == nil && einladungsKennung(c) == kennung {
+				code = c
+			}
+		}
+		rows.Close()
+		if code == "" {
+			return ErrNotFound
+		}
+		_, err = s.db.ExecContext(ctx, `DELETE FROM invite WHERE code = ? AND used_at IS NULL`, code)
+		return err
+	}
+	return ErrNotFound
+}
+
 // RedeemInvite löst eine Einladung ein. Jede Einladung gilt genau einmal.
 func (s *Store) RedeemInvite(ctx context.Context, code, name, lockKind, secret string) (*Account, error) {
+	code = EinladungsCode(code)
 	// Erst prüfen, ob es sie gibt (für eine verständliche Meldung) …
 	var presetRaw string
 	var expires int64

@@ -36,6 +36,24 @@ const app = document.getElementById('app');
 const voll = () => !!(S.me?.account?.isOwner || S.me?.account?.vollzugriff);
 const $ = sel => app.querySelector(sel);
 
+/* Was genau gemeint ist: Mit Verwaltungssperre zählt nur deren PIN,
+   Passwort oder Code — das Passwort des Profils nicht mehr. Vorher stand
+   „PIN, Passwort oder Code" da, und wer beides hatte, riet. */
+function bestaetigenText() {
+  switch (S.me?.account?.adminLock) {
+    case 'pin': return tr('Zur Sicherheit noch einmal die PIN der Verwaltungssperre – nicht die deines Profils.');
+    case 'password': return tr('Zur Sicherheit noch einmal das Passwort der Verwaltungssperre – nicht das deines Profils.');
+    case 'totp': return tr('Zur Sicherheit noch einmal den Code aus deiner Authenticator-App.');
+    default: return S.me?.account?.lockKind === 'password'
+      ? tr('Zur Sicherheit noch einmal das Passwort deines Profils.')
+      : tr('Zur Sicherheit noch einmal die PIN deines Profils.');
+  }
+}
+function bestaetigenFeld() {
+  return { pin: tr('PIN der Verwaltungssperre'), password: tr('Passwort der Verwaltungssperre'), totp: tr('Code aus der Authenticator-App') }[S.me?.account?.adminLock]
+    || (S.me?.account?.lockKind === 'password' ? tr('Passwort') : 'PIN');
+}
+
 /* Rechte ändern verlangt den Code noch einmal. api.js fragt
    hier nach, wenn der Server „bestaetigen" antwortet. Ein echtes <dialog>:
    Esc bricht ab, der Fokus bleibt im Feld. */
@@ -53,9 +71,10 @@ api.bestaetigen = (hinweis = '') => new Promise(fertig => {
     'border:0;border-radius:22px;padding:22px;width:min(360px,calc(100vw - 32px));' +
     'box-sizing:border-box;overflow:hidden;color:var(--label)';
   d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-    <div id="bestaetigen-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${tr('Rechte ändern')}</div>
-    <div class="t-caption c-2">${hinweis ? hinweis.replace(/[<&]/g, '') : tr('Zur Sicherheit noch einmal deine PIN, dein Passwort oder den Code aus der Authenticator-App.')}</div>
-    <input type="password" name="code" autocomplete="current-password" required aria-label="${tr('PIN, Passwort oder Code')}"
+    <div id="bestaetigen-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${tr('Änderung bestätigen')}</div>
+    <div class="t-caption c-2" id="bestaetigen-x">${hinweis ? hinweis.replace(/[<&]/g, '') : bestaetigenText()}</div>
+    <input type="password" name="code" autocomplete="current-password" required aria-label="${esc(bestaetigenFeld())}" aria-describedby="bestaetigen-x"
+      ${['pin', 'totp'].includes(S.me?.account?.adminLock) ? 'inputmode="numeric"' : ''}
       style="width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:1rem">
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button type="button" class="btn btn-pill" value="ab">${tr('Abbrechen')}</button>
@@ -880,7 +899,7 @@ async function fetchFor(view) {
     case 'logs':      return { lines: await api.adminLog(S.logFilter) };
     case 'cleanup':   return { ...await api.adminCleanup(),
                                  reihen: await api.adminCollections().catch(() => []) };
-    case 'accounts':  { const [accounts, libraries] = await Promise.all([api.adminAccounts(), api.adminLibraries().catch(() => [])]); return { accounts, libraries }; }
+    case 'accounts':  { const [accounts, libraries, einladungen] = await Promise.all([api.adminAccounts(), api.adminLibraries().catch(() => []), api.adminInvites().catch(() => [])]); return { accounts, libraries, einladungen }; }
     case 'metadata':  return api.adminMetadata();
     default:          return null;
   }
@@ -3935,7 +3954,7 @@ function viewAdmin() {
   const load = d.load || {};
   // Die Seitenleiste führt schon zur Startseite; ein eigener Knopf dafür
   // war doppelt. Breite wie unter „Ich", Kacheln ohne Löcher.
-  return shell(`<div class="wrap wrap--flat" style="max-width:1100px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Verwaltung'), `Lumen ${esc(d.version)} · ${laufzeitText(d.uptimeMs)} · ${tr('nur für dich sichtbar')}`, null)}
     <div class="kacheln" style="margin-top:28px">
       ${stat(tr('Gerade aktiv'), tr('{n} Wiedergaben', { n: load.total || 0 }),
@@ -4158,7 +4177,7 @@ function bibWaehler() {
 function viewAdminLibraries() {
   const libs = S.data?.libraries || [];
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:860px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Bibliotheken'), tr('Wo deine Filme und Serien liegen'))}
     <section style="margin-top:28px"><div class="group group--inset" id="biblist">
       ${bibListe(libs)}</div></section>
@@ -4290,7 +4309,7 @@ function viewAdminWishes() {
       <div class="group group--inset">${teil.map(zeile).join('')}</div></section>`;
   };
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Wünsche'), tr('Was sich der Haushalt wünscht'))}
     ${alle.length ? '' : `<section style="margin-top:28px"><div class="group group--inset">
       <p class="hint" style="padding:18px 16px;margin:0">${tr('Noch hat sich niemand etwas gewünscht.')}</p></div></section>`}
@@ -4355,7 +4374,7 @@ function viewAdminUpdate() {
     </div>${p.notiz ? `<div class="t-caption c-2" style="padding:0 16px 10px 146px">${esc(p.notiz)}</div>` : ''}`).join('')
     : `<p class="hint" style="padding:16px;margin:0">${tr('Noch keine Aktualisierung.')}</p>`;
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Updates'), tr('Neue Fassungen von Lumen — nachsehen, einsetzen, planen'))}
     <section style="margin-top:28px"><div class="section-h">${tr('Stand')}</div>
       <div class="group group--inset">${stand}
@@ -4444,7 +4463,7 @@ function viewAdminLock() {
   const art = d.sperre || 'none';
   const wahl = [['none', tr('Keine'), tr('Die Verwaltung geht direkt auf')], ['pin', 'PIN', tr('Mindestens vier Ziffern')],
     ['password', tr('Passwort'), tr('Mindestens acht Zeichen')], ['totp', tr('Authenticator-App'), tr('Sechs Ziffern, alle 30 Sekunden neu')]];
-  return shell(`<div class="wrap wrap--flat" style="max-width:720px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Verwaltungssperre'), tr('Ein zweiter Riegel vor der Verwaltung — nur für dich'))}
     <p class="t-sub c-2" style="margin:20px 0 0">${tr('Jede Person mit Zugang zur Verwaltung setzt sich ihre eigene Sperre. Deine ist zurzeit:')} <b>${sperreName(art)}</b>.</p>
     <form id="lockform" style="margin-top:24px">
@@ -4534,7 +4553,7 @@ function viewAdminGroups() {
         ${g ? `<button class="btn btn-pill" type="button" data-grpneu>${tr('Abbrechen')}</button>` : ''}
         <button class="btn btn-pill btn-pill--fill" type="submit">${g ? tr('Speichern') : tr('Anlegen')}</button></div>
     </form>`;
-  return shell(`<div class="wrap wrap--flat" style="max-width:860px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Gruppen'), tr('Rechte bündeln und Konten zuordnen'))}
     <p class="t-sub c-2" style="margin:20px 0 0;display:flex;align-items:flex-start;gap:8px">${svg(I.lock, 14, 2.2)}
       <span>${tr('Wer in einer Gruppe ist, bekommt deren Bibliotheken und Grenzen; die eigenen Einträge am Konto ruhen solange. Was jemand schaut, sieht keine Gruppe — auch keine mit Verwaltung.')}</span></p>
@@ -4549,24 +4568,66 @@ function viewAdminGroups() {
 function platzText(mb) {
   return mb >= 1024 ? `${zahl(mb / 1024, { maximumFractionDigits: mb >= 102400 ? 0 : 1 })} GB` : `${zahl(mb)} MB`;
 }
+// Heute in der Zeitzone des Geräts (toISOString rechnete in UTC — zwischen
+// Mitternacht und 1 Uhr stand dann „gestern" da).
+const heuteTag = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 function tagText(tag) {
-  const heute = new Date().toISOString().slice(0, 10);
+  const heute = heuteTag();
   if (tag === heute) return tr('heute');
   // Mittag statt Mitternacht: so kippt das Datum in keiner Zeitzone.
   return datum(tag + 'T12:00:00', { day: 'numeric', month: 'numeric', year: 'numeric' });
 }
+
+/* Wann eine Sicherung entstand: „heute, 22:07" oder „3.11.2026, 04:31".
+   Zwei Sicherungen vom selben Abend hiessen vorher beide „heute". */
+function sicherungWann(b) {
+  if (!b?.zeit) return tagText(b?.tag);
+  const uhr = uhrzeitText(b.zeit, { hour: '2-digit', minute: '2-digit' });
+  return b.tag === heuteTag() ? tr('heute, {uhr}', { uhr }) : `${tagText(b.tag)}, ${uhr}`;
+}
+function sicherungGroesse(b) {
+  const bytes = b.bytes ?? (b.mb || 0) * 1048576;
+  return bytes >= 1048576 ? `${zahl(bytes / 1048576, { maximumFractionDigits: 1 })} MB` : `${zahl(Math.max(1, Math.round(bytes / 1024)))} KB`;
+}
+/* Nach dem Wiederherstellen: ein Hinweis über der Seite, bis der Server
+   wieder antwortet — dann neu laden und sagen, dass es geklappt hat. */
+function neustartAbwarten(text, danach) {
+  const el = document.createElement('div');
+  el.className = 'neustart-hinweis';
+  el.setAttribute('role', 'status');
+  el.innerHTML = `<div class="neustart-karte"><span class="spin"></span><p class="t-body" style="margin:0">${esc(text)}</p></div>`;
+  document.body.appendChild(el);
+  try { sessionStorage.setItem('lumen.nachNeustart', danach); } catch {}
+  const start = Date.now();
+  let warWeg = false;
+  const fragen = async () => {
+    let da = false;
+    try { const r = await fetch('/api/v1/hello', { cache: 'no-store' }); da = r.ok; } catch {}
+    if (!da) warWeg = true;
+    // Erst wenn er einmal weg war (oder nach 20 s), gilt er als neu gestartet.
+    if (da && (warWeg || Date.now() - start > 20000)) return location.reload();
+    if (Date.now() - start > 120000) { el.remove(); return toast(tr('Lumen antwortet noch nicht. Lade die Seite gleich selbst neu.')); }
+    setTimeout(fragen, 1000);
+  };
+  setTimeout(fragen, 1500);
+}
+try {
+  const nachNeustart = sessionStorage.getItem('lumen.nachNeustart');
+  if (nachNeustart) { sessionStorage.removeItem('lumen.nachNeustart'); setTimeout(() => toast(nachNeustart), 800); }
+} catch {}
 
 function viewAdminBackups() {
   const d = S.data || {};
   const rows = (d.sicherungen || []).map(b => `
     <div class="row" style="min-height:56px;gap:12px">
       <span style="flex:1"><span class="t-body">${b.nr === 1 ? tr('Neueste') : tr('Davor')}</span>
-        <span class="t-caption c-2" style="display:block">${esc(tagText(b.tag))} · ${b.mb ? zahl(b.mb) + ' MB' : tr('unter 1 MB')}</span></span>
-      <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-wiederherstellen="${Number(b.nr)}">${tr('Wiederherstellen')}</button>
+        <span class="t-caption c-2" style="display:block">${esc(sicherungWann(b))} · ${esc(sicherungGroesse(b))}</span></span>
+      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-wiederherstellen="${Number(b.nr)}"
+        aria-label="${tr('Stand von {wann} wiederherstellen', { wann: esc(sicherungWann(b)) })}">${tr('Wiederherstellen')}</button>
     </div>`).join('');
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Sicherung'), tr('Einmal am Tag, nach 4:30 Uhr'))}
-    ${d.fehler ? `<p class="t-body" style="color:#ff6961;margin-top:18px">${tr('Die letzte Sicherung ist gescheitert: {fehler}', { fehler: esc(d.fehler) })}</p>` : ''}
+    ${d.fehler ? `<p class="t-body" style="color:var(--text-rot);margin-top:18px">${tr('Die letzte Sicherung ist gescheitert: {fehler}', { fehler: esc(d.fehler) })}</p>` : ''}
     <section style="margin-top:24px"><div class="group group--inset">
       ${rows || `<p class="hint" style="padding:18px 16px">${tr('Noch keine Sicherung.')}</p>`}
       <button class="btn row" style="width:100%;justify-content:flex-start;min-height:48px" data-sichern>
@@ -4597,7 +4658,7 @@ function viewAdminUmwandlung() {
     keins: tr('Dieses FFmpeg kann HDR nicht umrechnen.') }[d.tonemapping] || '';
   const vorrat = d.vorrat || {};
   const erkennung = d.vorspannErkennung || {};
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Umwandeln'), tr('Hardware-Beschleunigung und Vorbereitung'))}
     <form id="umwandlungform">
       <section style="margin-top:24px"><div class="group group--inset">
@@ -4656,7 +4717,7 @@ function viewSessions() {
         data-kill="${esc(s.id)}">${tr('Beenden')}</button>
     </div>`).join('');
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:1000px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Aktive Wiedergaben'), tr('{n} laufen · Last {last} — beenden, wenn der Server zu viel rechnet', { n: (d.sessions || []).length, last: ({ gering: tr('gering'), mittel: tr('mittel'), hoch: tr('hoch') })[d.load?.last] || tr('gering') }))}
     <section style="margin-top:28px"><div class="group group--inset">
       ${rows || `<p class="hint" style="padding:18px 16px">${tr('Gerade läuft nichts.')}</p>`}</div></section>
@@ -4700,9 +4761,14 @@ function viewCleanup() {
   // (a/b/c, CD1/CD2) lässt sich zu einer Datei zusammenführen.
   // Nur Filme in Teilen: Fassungen (dieselbe Datei in zwei Qualitäten)
   // sind kein Aufräumfall — man wählt sie beim Film unter „Ansehen".
-  const nurTeile = (d.duplicates || []).filter(x => x.files.length > 1 && x.files.every((f, i) => f.partNo === i + 1));
-  const dup = nurTeile.map(x => {
-    const teile = true;
+  const istTeile = x => x.files.every((f, i) => f.partNo === i + 1);
+  const nurTeile = (d.duplicates || []).filter(x => x.files.length > 1 && istTeile(x));
+  // Fassungen (derselbe Film mehrfach, auch gemischt mit Teilen) zeigt die
+  // Seite ebenfalls — sonst meldete die Übersicht „1 Doppel", und hier
+  // stand nichts dazu.
+  const fassungen = (d.duplicates || []).filter(x => x.files.length > 1 && !istTeile(x));
+  const doppelZeile = x => {
+    const teile = istTeile(x);
     return `
     <div class="orow" style="height:auto;padding:14px 16px;display:block">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -4715,13 +4781,15 @@ function viewCleanup() {
         <span class="t-caption c-2 tnum">${[teile ? tr('Teil {nr}', { nr: f.partNo }) : '', f.height ? f.height + 'p' : '', f.container ? f.container.toUpperCase() : '',
           groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
         ${teile ? '' : f.preferred
-          ? `<span class="badge" style="border:0;background:rgba(48,209,88,.16);color:#30d158">${tr('gewählt')}</span>`
+          ? `<span class="badge badge--gruen">${tr('gewählt')}</span>`
           : `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassung="${esc(x.itemId)}:${esc(f.id)}">${tr('Diese nehmen')}</button>`}
         ${teile ? '' : `<button class="btn btn-pill" style="height:28px;font-size:.75rem;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
           title="${tr('Ist ein anderer Film — als eigenen Titel führen')}">${tr('Abtrennen')}</button>`}
       </div>`).join('')}
     </div>`;
-  }).join('');
+  };
+  const dup = nurTeile.map(doppelZeile).join('');
+  const dupFassungen = fassungen.map(doppelZeile).join('');
 
   const missing = (d.missing || []).map(f => `
     <div class="orow">
@@ -4782,11 +4850,14 @@ function viewCleanup() {
       <div class="mono c-2" style="font-size:.7188rem;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
     </details>`).join('')).join('');
 
-  return shell(`<div class="wrap wrap--flat" style="max-width:900px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Aufräumen'), tr('Filme in Teilen, fehlende Dateien, nicht erkannte Titel'))}
     ${dup ? `<section style="margin-top:26px"><div class="section-h">${tr('Filme in Teilen · {n}', { n: nurTeile.length })}</div>
       <div class="group group--inset">${dup}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Im Browser laufen die Teile nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.')}</p></section>` : ''}
+    ${dupFassungen ? `<section style="margin-top:22px"><div class="section-h">${tr('Mehrere Fassungen · {n}', { n: fassungen.length })}</div>
+      <div class="group group--inset">${dupFassungen}</div>
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: Beim Film wählt man unter „Ansehen“, welche läuft. Gehört eine Datei zu einem anderen Film, trenne sie ab.')}</p></section>` : ''}
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: d.missing.length })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben stehen — eine abgehängte Platte soll die Mediathek nicht leeren.')}</p></section>` : ''}
@@ -4841,7 +4912,7 @@ function viewAccounts() {
         : `<span class="t-caption c-2">${{ schauen: tr('Nur schauen'), verwalten: tr('Verwaltet mit'), voll: tr('Vollzugriff') }[rolle(a)]}</span>`}
       </div>
     </div>`).join('');
-  return shell(`<div class="wrap wrap--flat" style="max-width:820px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Konten und Rechte'), tr('Wer dazugehört und was er sehen darf'))}
     <p class="t-sub c-2" style="margin:22px 0 0;display:flex;align-items:center;gap:8px">
       ${svg(I.lock, 14, 2.2)}${tr('Du legst fest, was jemand sehen darf. Was er davon schaut, siehst du nicht.')}</p>
@@ -4853,7 +4924,26 @@ function viewAccounts() {
         ${einladungsFormular(S.data?.libraries || [], S.einladungKind)}
         <p class="t-caption c-2" style="margin-top:12px">${tr('Gilt sieben Tage und nur einmal.')}</p>
         <div id="invitebox"></div></div></section>
+    ${offeneEinladungen(S.data?.einladungen || [])}
     <div style="height:40px"></div></div>`);
+}
+
+/* Offene Einladungen: wann sie ablaufen, für wen ungefähr (Kind oder
+   Erwachsen, wie viele Bibliotheken) — und Zurückziehen, etwa für einen
+   Link, der im falschen Chat gelandet ist. */
+function offeneEinladungen(liste) {
+  if (!liste.length) return '';
+  return `<section id="offene-einladungen" style="margin-top:22px"><h2 class="section-h" style="margin:0">${tr('Offene Einladungen')}</h2>
+    <div class="group group--inset">${liste.map(e => `
+      <div class="row" style="min-height:56px;gap:12px;flex-wrap:wrap">
+        <span style="flex:1;min-width:200px"><span class="t-body">${e.kinderprofil ? esc(T.kinderprofil) : tr('Erwachsenes Profil')}
+          <span class="mono c-2" style="font-size:.8125rem">…${esc(e.ende)}</span></span>
+          <span class="t-caption c-2" style="display:block">${tr('gilt bis {wann}', { wann: esc(datumZeit(e.expiresAt, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) })}
+            · ${tr('{n} Bibliotheken', { n: e.bibliotheken })}${e.von ? ` · ${tr('von {name}', { name: esc(e.von) })}` : ''}</span></span>
+        <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;flex:none" data-einladung-weg="${esc(e.kennung)}"
+          aria-label="${tr('Einladung …{ende} zurückziehen', { ende: esc(e.ende) })}">${tr('Zurückziehen')}</button>
+      </div>`).join('')}</div>
+    <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Eine zurückgezogene Einladung lässt sich nicht mehr einlösen.')}</p></section>`;
 }
 
 // „CH" → „Schweiz" / „Switzerland".
@@ -4861,7 +4951,7 @@ const regionName = r => { try { return new Intl.DisplayNames([sprache()], { type
 
 function viewMetadata() {
   const d = S.data || {};
-  return shell(`<div class="wrap wrap--flat" style="max-width:720px">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Poster und Beschreibungen'), tr('Woher Lumen sie holt — und wo die Schlüssel dafür hingehören'))}
     <p class="t-sub c-2" style="margin:20px 0 0">
       ${tr('Du richtest das einmal ein, dann gilt es für alle. Niemand im Haushalt braucht ein eigenes Konto.')}</p>
@@ -5544,22 +5634,40 @@ app.addEventListener('click', async e => {
     setTimeout(load, 6000);
     return;
   }
+  if ((n = hit('data-einladung-weg'))) {
+    if (!(await rueckfrage({ titel: tr('Einladung zurückziehen?'), text: tr('Wer den Link oder den Code hat, kann damit kein Profil mehr anlegen.'), ja: tr('Zurückziehen'), gefaehrlich: true }))) return;
+    try { await api.adminInviteZurueckziehen(n.dataset.einladungWeg); toast(tr('Einladung zurückgezogen')); }
+    catch (err) { toast(err.message); }
+    return load();
+  }
   if (hit('data-sichern')) {
+    // Es gibt nur zwei Sicherungen. „Jetzt sichern" schiebt die ältere
+    // hinaus — das soll niemand aus Versehen tun, etwa direkt nach einem
+    // Fehler, wenn gerade die ältere die gute ist.
+    const alle = S.data?.sicherungen || [];
+    if (alle.length >= 2) {
+      const davor = alle.find(b => b.nr === 2), neueste = alle.find(b => b.nr === 1);
+      const ok = await rueckfrage({ titel: tr('Jetzt sichern?'),
+        text: tr('Lumen behält nur zwei Sicherungen. Die Sicherung von {davor} wird dabei gelöscht; die von {neueste} wird zur älteren. Willst du zu einem früheren Stand zurück, stelle ihn zuerst wieder her.',
+          { davor: sicherungWann(davor), neueste: sicherungWann(neueste) }),
+        ja: tr('Sichern') });
+      if (!ok) return;
+    }
     try { await api.adminBackupNow(); toast(tr('Gesichert')); } catch (err) { toast(err.message); }
     return load();
   }
   if ((n = hit('data-wiederherstellen'))) {
-    // Zweimal tippen: Wiederherstellen ersetzt den heutigen Stand.
-    if (n.dataset.sicher !== '1') {
-      n.dataset.sicher = '1';
-      n.textContent = tr('Wirklich? Nochmal tippen');
-      return;
-    }
+    const b = (S.data?.sicherungen || []).find(x => String(x.nr) === n.dataset.wiederherstellen);
+    const wann = sicherungWann(b);
+    const ok = await rueckfrage({ titel: tr('Stand von {wann} wiederherstellen?', { wann }),
+      text: tr('Alles, was seither geändert wurde – neue Profile, Einladungen, Einstellungen, Bewertungen und wer wo im Film stand –, geht verloren. Lumen startet dafür neu; laufende Wiedergaben brechen ab.'),
+      ja: tr('Wiederherstellen'), gefaehrlich: true });
+    if (!ok) return;
     try {
       await api.adminRestore(n.dataset.wiederherstellen);
-      toast(tr('Lumen startet neu …'));
-      setTimeout(() => location.reload(), 6000);
-    } catch (err) { toast(err.message); }
+    } catch (err) { return toast(err.message); }
+    neustartAbwarten(tr('Lumen startet neu und nimmt die Sicherung von {wann}.', { wann }),
+      tr('Die Sicherung von {wann} ist wiederhergestellt.', { wann }));
     return;
   }
   if ((n = hit('data-logf'))) { S.logFilter = n.dataset.logf; return load(); }
@@ -5648,6 +5756,14 @@ async function formularAbschicken(e) {
       const url = `${location.origin}/?einladung=${encodeURIComponent(inv.code)}`;
       const box = document.getElementById('invitebox');
       if (box) box.innerHTML = einladungsBox(url, inv.code);
+      // Die Liste der offenen Einladungen nachführen, ohne das Formular neu zu zeichnen.
+      api.adminInvites().then(liste => {
+        if (S.view !== 'accounts' || !S.data) return;
+        S.data.einladungen = liste;
+        const alt = document.getElementById('offene-einladungen');
+        const html = offeneEinladungen(liste);
+        if (alt) alt.outerHTML = html; else box?.closest('section')?.insertAdjacentHTML('afterend', html);
+      }).catch(() => {});
       return toast(kind ? tr('Einladung für ein Kinderprofil erzeugt') : tr('Einladung erzeugt'));
     } catch (err) { return toast(err.message); }
   }

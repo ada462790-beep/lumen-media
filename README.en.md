@@ -89,6 +89,17 @@ for new versions and install signed updates — no GitHub token required.
 password, `--verwaltung` also clears the admin PIN). The owner keeps all
 history; resetting someone else's profile this way deletes their history,
 watchlist and ratings, just like in the app.
+On a Synology this also works **without SSH**: create a user-defined
+script task as **root** in *Control Panel › Task Scheduler* with
+`printf '2580\n2580\n' | /usr/local/bin/docker exec -i lumen lumen zuruecksetzen --konto NAME --verwaltung > /volume1/docker/lumen/zuruecksetzen.txt 2>&1`
+(the new PIN twice), run it once, check the text file, then delete the
+task and the file — the script contains the new PIN.
+
+The admin pages are **desktop only** by design (browser or Mac app); on
+phones and tablets Lumen is for watching. Open invitations can be listed
+and revoked under *Admin › Accounts*. Arrow keys and a TV remote's D-pad
+move focus between cards and buttons, Backspace/Back goes back, F6 jumps
+between content and navigation; text follows the browser/system text size.
 
 ## Contributing
 

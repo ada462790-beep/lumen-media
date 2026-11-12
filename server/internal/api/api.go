@@ -360,6 +360,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/cleanup", admin(s.adminCleanup))
 	mux.Handle("GET /api/v1/admin/accounts", admin(s.adminAccounts))
 	mux.Handle("POST /api/v1/admin/invites", admin(s.adminCreateInvite))
+	// Offene Einladungen sehen und zurückziehen (ein Link, der versehentlich
+	// im Familienchat gelandet ist).
+	mux.Handle("GET /api/v1/admin/invites", admin(s.adminInvites))
+	mux.Handle("DELETE /api/v1/admin/invites/{kennung}", admin(s.adminInviteZurueckziehen))
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/limits", admin(s.bestaetigt(s.adminSetLimits)))
 	// Bildschirmzeit eines Kinderprofils; das Geschenk („heute 30 Min.
 	// mehr") ohne erneuten Code, es gilt nur heute (bildschirmzeit.go).

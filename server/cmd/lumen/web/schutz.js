@@ -209,19 +209,24 @@ export function einladungsFormular(bibliotheken, kind) {
   </form>`;
 }
 
+// „2IH44II3V7DNNZNY" → „2IH4-4II3-V7DN-NZNY": in Vierergruppen liest
+// und tippt man ihn am Fernseher leichter. Der Server nimmt ihn mit und
+// ohne Bindestriche.
+const codeGruppen = code => String(code).match(/.{1,4}/g)?.join('-') || code;
+
 export function einladungsBox(url, code) {
   return `
     <div class="field" style="margin-top:14px">
-      <label>${tr('Diesen Link weitergeben')}</label>
+      <label for="einladungslink">${tr('Diesen Link weitergeben')}</label>
       <div style="display:flex;gap:8px">
-        <input class="mono" readonly style="flex:1;min-width:0" value="${esc(url)}" data-auswahl>
+        <input id="einladungslink" class="mono" readonly style="flex:1;min-width:0" value="${esc(url)}" data-auswahl>
         <button class="btn btn-pill btn-pill--fill" style="flex:none" data-kopieren="${esc(url)}">${tr('Kopieren')}</button>
       </div>
     </div>
     <div class="field" style="margin-top:10px">
       <label>${tr('Oder nur der Code')}</label>
       <div style="display:flex;gap:8px;align-items:center">
-        <span class="mono t-title3" style="flex:1;letter-spacing:.08em">${esc(code)}</span>
+        <span class="mono t-title3" style="flex:1;letter-spacing:.08em">${esc(codeGruppen(code))}</span>
         <button class="btn btn-pill btn-pill--fill" style="flex:none" data-kopieren="${esc(code)}">${tr('Kopieren')}</button>
       </div>
       <span class="hint">${tr('In der App auf dem Fernseher ist der Code einfacher als der Link.')}</span>

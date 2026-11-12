@@ -1830,6 +1830,33 @@ func (s *Server) adminCreateInvite(w http.ResponseWriter, r *http.Request) {
 	ok(w, inv)
 }
 
+// adminInvites: die offenen Einladungen. Besitzer und Vollzugriff sehen
+// alle, Mitverwalter nur die eigenen.
+func (s *Server) adminInvites(w http.ResponseWriter, r *http.Request) {
+	ich := accountOf(r)
+	liste, err := s.st.OffeneEinladungen(r.Context(), ich.ID, ich.IsOwner || ich.Vollzugriff)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	ok(w, liste)
+}
+
+func (s *Server) adminInviteZurueckziehen(w http.ResponseWriter, r *http.Request) {
+	ich := accountOf(r)
+	err := s.st.EinladungZurueckziehen(r.Context(), r.PathValue("kennung"), ich.ID, ich.IsOwner || ich.Vollzugriff)
+	if errors.Is(err, store.ErrNotFound) {
+		fail(w, http.StatusNotFound, "diese einladung gibt es nicht (mehr)")
+		return
+	}
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	s.st.Log(r.Context(), "info", "verwaltung", "Einladung zurückgezogen")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) adminSetWishState(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		State string `json:"state"`

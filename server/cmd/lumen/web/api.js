@@ -456,6 +456,9 @@ export const api = {
   adminInvite(libraries, limits, days = 7, zusatz = {}) {
     return this.call('/admin/invites', { method: 'POST', body: { libraries, limits, days, ...zusatz } });
   },
+  /* Offene Einladungen (ohne Code) und Zurückziehen. */
+  adminInvites() { return this.call('/admin/invites'); },
+  adminInviteZurueckziehen(kennung) { return this.call('/admin/invites/' + encodeURIComponent(kennung), { method: 'DELETE' }); },
   /* PIN oder Passwort eines Haushaltsprofils neu setzen (mit Bestätigung). */
   adminKontoSperre(id, art, neu) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}/sperre`, { method: 'PUT', body: { art, neu } });
