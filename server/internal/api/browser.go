@@ -10,6 +10,7 @@ package api
 import (
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -125,7 +126,7 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 
 	job := stream.RemuxJob{
 		SourcePath: f.Path, StartSec: start, Plan: bp.plan,
-		AudioIndex: bp.wahl.tonIndex, WebM: bp.webm,
+		AudioIndex: bp.wahl.tonIndex, WebM: bp.webm, TonKopieren: bp.tonKopieren,
 		Details: bp.details, Tonemap: bp.tonemap, Einbrennen: -1,
 	}
 	if bp.wahl.einbrennen != nil {
@@ -249,20 +250,39 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 // es mit einem Umpacken (Einstieg am Schlüsselbild) rechnete, während der
 // Strom neu gerechnet wurde (Einstieg genau an der Sekunde).
 type browserWahl struct {
-	plan    stream.Plan
-	webm    bool
-	mode    string
-	reason  string
-	wahl    spurWahl
-	details *stream.BildDetails
-	tonemap bool
+	plan stream.Plan
+	webm bool
+	// tonKopieren: Opus oder Vorbis in eine WebM — bleibt, wie er ist.
+	tonKopieren bool
+	mode        string
+	reason      string
+	wahl        spurWahl
+	details     *stream.BildDetails
+	tonemap     bool
 }
 
 func (s *Server) browserPlan(r *http.Request, f *store.MediaFile, caps stream.Device) browserWahl {
 	b := browserWahl{webm: stream.WebM(caps)}
 	b.wahl = s.spurWahlFuer(r.Context(), f, r, true)
-	b.plan = stream.Decide(s.dateiInfoFuer(f, b.wahl), caps, bitrateLimit(r, s))
+	info := s.dateiInfoFuer(f, b.wahl)
+	b.plan = stream.Decide(info, caps, bitrateLimit(r, s))
 	b.details, _ = s.ff.Feinmessung(r.Context(), f.Path)
+	achtBit := b.details == nil || b.details.PixFmt == "" ||
+		b.details.PixFmt == "yuv420p" || b.details.PixFmt == "yuvj420p"
+
+	// VP9, VP8 oder AV1, und der Browser kann es (in WebM): nur umpacken.
+	// Früher wurde jede solche Quelle voll neu gerechnet — in Browsern ohne
+	// H.264 sogar VP9 zu VP9, und bei Browsern mit H.264 zu H.264, obwohl
+	// sie VP9 genauso abspielen. Auf einem NAS schafft VP9 in Echtzeit
+	// kaum jemand.
+	freiesBild := f.VideoCodec == "vp9" || f.VideoCodec == "vp8" || f.VideoCodec == "av1"
+	webmKopie := freiesBild && achtBit && slices.Contains(caps.Containers, "webm") &&
+		(b.plan.Direct || b.plan.VideoCodec == "copy")
+	if webmKopie {
+		b.webm = true
+		ton := stream.TonName(info.AudioCodec)
+		b.tonKopieren = ton == "opus" || ton == "vorbis"
+	}
 
 	// Ein reines Umpacken ist keine Umwandlung: Bild und Ton bleiben, wie
 	// sie sind. Das soll der Besitzer in der Auslastung auch so sehen.
@@ -270,13 +290,12 @@ func (s *Server) browserPlan(r *http.Request, f *store.MediaFile, caps stream.De
 	// und nur, wenn auch Höhe, Bitrate (unterwegs!) und HDR passen; das
 	// sagt Decide mit „copy".
 	repack := !b.webm && f.VideoCodec == "h264" && (b.plan.Direct || b.plan.VideoCodec == "copy")
-	if repack && b.details != nil && b.details.PixFmt != "" &&
-		b.details.PixFmt != "yuv420p" && b.details.PixFmt != "yuvj420p" {
+	if repack && !achtBit {
 		repack = false // 10 Bit oder 4:2:2 kann kaum ein Browser
 	}
 	b.mode, b.reason = "transcode", b.plan.Reason
 	switch {
-	case repack:
+	case repack || webmKopie:
 		b.mode, b.reason = "direct", "nur umgepackt für den Browser"
 		b.plan.VideoCodec = "copy"
 	case b.webm:

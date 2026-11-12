@@ -43,6 +43,8 @@ type RemuxJob struct {
 	Plan       Plan
 	AudioIndex int
 	WebM       bool // VP9 und Opus statt H.264 und AAC
+	// TonKopieren: Der Ton (Opus, Vorbis) passt schon in die WebM.
+	TonKopieren bool
 
 	// Wie bei HLS: genaue Angaben zum Bild, Tonemapping, Einbrennen und
 	// die Stufe der Hardware (siehe bildkette.go).
@@ -112,6 +114,8 @@ func (f *FFmpeg) Remux(ctx context.Context, j RemuxJob) (io.ReadCloser, func(), 
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin"}
 	var bild BildBefehl
 	neuRechnen := !j.WebM && j.Plan.VideoCodec != "copy"
+	// Eine WebM mit VP9/VP8/AV1, die der Browser kann: nur umpacken.
+	webmKopie := j.WebM && j.Plan.VideoCodec == "copy"
 	if neuRechnen {
 		auftrag := BildAuftrag{Quelle: j.Details, ZielHoehe: j.Plan.Height, Bitrate: j.Plan.Bitrate,
 			Tonemap: j.Tonemap, Einbrennen: -1, Stufe: j.Stufe}
@@ -127,7 +131,7 @@ func (f *FFmpeg) Remux(ctx context.Context, j RemuxJob) (io.ReadCloser, func(), 
 	if j.StartSec > 0 {
 		// Vor -i springt FFmpeg ohne Decodieren an die Stelle.
 		ss := j.StartSec
-		if !neuRechnen && !j.WebM {
+		if (!neuRechnen && !j.WebM) || webmKopie {
 			ss += seekEpsilon
 		}
 		args = append(args, "-ss", strconv.FormatFloat(ss, 'f', 3, 64))
@@ -148,6 +152,8 @@ func (f *FFmpeg) Remux(ctx context.Context, j RemuxJob) (io.ReadCloser, func(), 
 	}
 
 	switch {
+	case webmKopie:
+		args = append(args, "-c:v", "copy")
 	case j.WebM:
 		// VP9 braucht spürbar mehr Rechenzeit als H.264. „realtime" mit
 		// niedriger Stufe hält den Server trotzdem bei der Sache — lieber
@@ -181,9 +187,12 @@ func (f *FFmpeg) Remux(ctx context.Context, j RemuxJob) (io.ReadCloser, func(), 
 
 	// AC3 und DTS kann kein Browser; den Ton neu zu codieren kostet fast
 	// nichts und erspart stumme Filme.
-	if j.WebM {
+	switch {
+	case j.WebM && j.TonKopieren:
+		args = append(args, "-c:a", "copy")
+	case j.WebM:
 		args = append(args, "-c:a", "libopus", "-b:a", "160k", "-ac", "2")
-	} else {
+	default:
 		args = append(args, "-c:a", "aac", "-b:a", "192k", "-ac", "2")
 	}
 

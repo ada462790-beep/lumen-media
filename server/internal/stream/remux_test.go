@@ -208,3 +208,47 @@ func TestSeekLandsExactlyWhereAnnounced(t *testing.T) {
 			"um %.2f s daneben", start, istStart, diff)
 	}
 }
+
+// VP9 mit Opus für einen Browser, der WebM kann: nur umgepackt, nichts
+// neu gerechnet — vorher lief libvpx-vp9 (VP9 zu VP9).
+func TestRemuxWebMKopiert(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ohne FFmpeg nicht prüfbar")
+	}
+	src := filepath.Join(t.TempDir(), "vp9.mkv")
+	if out, err := exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc=size=320x180:rate=25:duration=6",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+		"-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "300k", "-g", "50",
+		"-c:a", "libopus", "-b:a", "64k", "-y", src).CombinedOutput(); err != nil {
+		t.Skipf("VP9-Testdatei nicht erzeugbar: %v %s", err, out)
+	}
+	ff := NewFFmpeg("", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	body, stop, err := ff.Remux(ctx, RemuxJob{SourcePath: src, Plan: Plan{VideoCodec: "copy"},
+		AudioIndex: -1, WebM: true, TonKopieren: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	out := filepath.Join(t.TempDir(), "strom.webm")
+	f, _ := os.Create(out)
+	start := time.Now()
+	_, _ = io.Copy(f, body)
+	f.Close()
+	probe, err := exec.Command("ffprobe", "-v", "error", "-show_entries",
+		"stream=codec_name:format=format_name", "-of", "csv=p=0", out).Output()
+	if err != nil {
+		t.Fatalf("nicht abspielbar: %v", err)
+	}
+	got := string(probe)
+	if !strings.Contains(got, "vp9") || !strings.Contains(got, "opus") || !strings.Contains(got, "webm") {
+		t.Fatalf("Spuren: %q", got)
+	}
+	// 6 s Film umpacken dauert einen Bruchteil davon; neu gerechnet wären
+	// es Sekunden.
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("Umpacken dauerte %v — wurde neu gerechnet?", d)
+	}
+}
