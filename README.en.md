@@ -89,7 +89,11 @@ for new versions and install signed updates — no GitHub token required.
 password, `--verwaltung` also clears the admin PIN). The owner keeps all
 history; resetting someone else's profile this way deletes their history,
 watchlist and ratings, just like in the app, and the new PIN only works as
-a one-time code: at the next sign-in that person sets their own PIN.
+a one-time code: at the next sign-in that person sets their own PIN (or
+password, if the profile uses one), entering it twice. A one-time code is
+valid for 72 hours; after that an admin has to issue a new one. App versions
+older than this release cannot finish this step — use the web app or update
+the app first.
 On a Synology this also works **without SSH**: create a user-defined
 script task as **root** in *Control Panel › Task Scheduler* with
 `printf '2580\n2580\n' | /usr/local/bin/docker exec -i lumen lumen zuruecksetzen --konto NAME --verwaltung > /volume1/docker/lumen/zuruecksetzen.txt 2>&1`

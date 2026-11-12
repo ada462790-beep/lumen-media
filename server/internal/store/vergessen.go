@@ -43,7 +43,21 @@ const PrefPinZurueckgesetzt = "hinweis.pinZurueckgesetzt"
 // dabei nur einen Einmal-Code vergeben. Wer sich damit anmeldet, muss
 // zuerst eine eigene PIN (oder ein Passwort) festlegen — erst dann gibt
 // es eine Anmeldung. So kennt die Verwaltung den Schutz danach nicht.
+// Wert: bis wann der Einmal-Code gilt (Unix-Sekunden, auf die volle
+// Stunde aufgerundet — wann genau die Verwaltung handelte, steht so
+// nirgends). „1" stammt aus älteren Versionen und läuft nicht ab.
 const PrefNeueSperreNoetig = "pflicht.neueSperre"
+
+// EinmalCodeGueltig: so lange gilt ein Einmal-Code nach dem Zurücksetzen.
+// Danach muss die Verwaltung einen neuen vergeben — ein Code, der Wochen
+// auf einem Zettel liegt, soll nicht mehr in das Profil führen.
+const EinmalCodeGueltig = 72 * time.Hour
+
+// einmalCodeBis: Ablauf eines jetzt vergebenen Einmal-Codes, auf die
+// volle Stunde aufgerundet. Austauschbar für Tests.
+var einmalCodeBis = func() int64 {
+	return time.Now().Add(EinmalCodeGueltig).Truncate(time.Hour).Add(time.Hour).Unix()
+}
 
 // Prefs, die beim Zurücksetzen bleiben dürfen: Einstellungen, die nichts
 // darüber sagen, was jemand geschaut hat (Sprache, Untertitel-Aussehen,
@@ -90,9 +104,9 @@ func (s *Store) PinZuruecksetzen(ctx context.Context, accountID, kind, secret st
 			return nil
 		}
 		_, err := t.ExecContext(ctx,
-			`INSERT INTO prefs (account_id, key, value) VALUES (?,?,'1')
+			`INSERT INTO prefs (account_id, key, value) VALUES (?,?,?)
 			 ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value`,
-			accountID, PrefNeueSperreNoetig)
+			accountID, PrefNeueSperreNoetig, strconv.FormatInt(einmalCodeBis(), 10))
 		return err
 	})
 }
@@ -104,6 +118,21 @@ func (s *Store) NeueSperreNoetig(ctx context.Context, accountID string) bool {
 	_ = s.db.QueryRowContext(ctx,
 		`SELECT count(*) FROM prefs WHERE account_id = ? AND key = ?`, accountID, PrefNeueSperreNoetig).Scan(&n)
 	return n > 0
+}
+
+// EinmalCodeAbgelaufen: true, wenn das Profil noch einen eigenen Schutz
+// festlegen müsste, der Einmal-Code dafür aber nicht mehr gilt.
+func (s *Store) EinmalCodeAbgelaufen(ctx context.Context, accountID string) bool {
+	var v string
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT value FROM prefs WHERE account_id = ? AND key = ?`, accountID, PrefNeueSperreNoetig).Scan(&v); err != nil {
+		return false
+	}
+	bis, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || bis < 1_000_000_000 {
+		return false // ältere Version: ohne Ablauf
+	}
+	return time.Now().Unix() >= bis
 }
 
 // EigeneSperreNachZuruecksetzen setzt den Schutz, den die Person selbst

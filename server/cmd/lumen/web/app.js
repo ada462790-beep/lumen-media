@@ -194,10 +194,11 @@ const ADMIN_VIEWS = ['admin', 'adminBackups', 'adminUmwandlung', 'adminLibraries
    es erst eine Anmeldung, wenn die Person ihre eigene PIN festlegt
    (Server-Code „neue_pin_noetig"). anmelden(neu) schickt die Anmeldung
    mit dem neuen Schutz noch einmal. */
-async function eigenePinFestlegen(text, anmelden) {
+async function eigenePinFestlegen(text, anmelden, art = 'pin') {
   const ok = await schutzDialog({
-    titel: tr('Eigene PIN festlegen'),
+    titel: art === 'password' ? tr('Eigenes Passwort festlegen') : tr('Eigene PIN festlegen'),
     hinweis: text,
+    altArt: art,
     ohneErlaubt: false,
     senden: ({ art, neu }) => anmelden({ neu, neuArt: art }),
   });
@@ -5394,7 +5395,7 @@ app.addEventListener('click', async e => {
     try {
       const r = await api.adminKontoSperre(a.id, 'pin');
       await mitteilung(tr('Einmal-Code für {name}', { name: a.name }),
-        tr('{code} – gib diesen Code {name} weiter. Er gilt für eine einzige Anmeldung; dabei legt {name} eine eigene PIN fest. Lumen zeigt ihn nur jetzt.', { code: r?.einmalCode || '', name: a.name }));
+        tr('{code} – gib diesen Code {name} weiter. Er gilt für eine einzige Anmeldung innerhalb von 72 Stunden; dabei legt {name} eine eigene PIN fest. Lumen zeigt ihn nur jetzt.', { code: r?.einmalCode || '', name: a.name }));
       return load();
     } catch (err) { if (!err?.abgebrochen) toast(err.message); return; }
   }
@@ -6088,7 +6089,7 @@ async function formularAbschicken(e) {
       go('home');
       return anmeldeHinweis();
     } catch (err) {
-      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlockName(name, geheim, neu));
+      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlockName(name, geheim, neu), err.art);
       S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
     }
   }
@@ -6100,7 +6101,7 @@ async function formularAbschicken(e) {
       go('home');
       return anmeldeHinweis();
     } catch (err) {
-      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlock(id, geheim, neu));
+      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlock(id, geheim, neu), err.art);
       S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
     }
   }

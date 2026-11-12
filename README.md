@@ -785,9 +785,12 @@ das Volume ist unberührt.
 Hat ein Profil seinen PIN vergessen, setzt die Verwaltung ihn in der App
 zurück (*Verwaltung › Konten*). Lumen zeigt dann einmal einen Einmal-Code
 mit sechs Ziffern. Mit ihm meldet sich die Person an und legt dabei ihre
-eigene PIN fest — die Verwaltung kennt sie danach nicht. Erst dann sagt
-Lumen der Person, dass ihre PIN zurückgesetzt und ihr Verlauf gelöscht
-wurde.
+eigene PIN fest (zweimal, gegen Tippfehler) — die Verwaltung kennt sie
+danach nicht. Erst dann sagt Lumen der Person, dass ihre PIN zurückgesetzt
+und ihr Verlauf gelöscht wurde. Der Einmal-Code gilt 72 Stunden; danach
+vergibt die Verwaltung einen neuen. App-Versionen vor dieser Version können
+das Festlegen nicht abschliessen — dann in der Web-App anmelden oder die
+App zuerst aktualisieren.
 Hat der Besitzer seinen eigenen PIN oder
 den PIN der Verwaltungssperre vergessen, geht das **nur auf dem Server
 selbst** — mit Absicht, sonst könnte es jeder im Heimnetz. Auf einem
@@ -824,7 +827,8 @@ zusätzlich den Verwaltungs-PIN auf. Ohne Docker:
 Beim Besitzer bleibt alles erhalten; alle seine Geräte werden abgemeldet.
 Setzt man so das Profil von jemand anderem zurück, werden dessen Verlauf,
 Merkliste und Bewertungen gelöscht — genau wie in der App —, und der
-gesetzte PIN gilt nur als Einmal-Code.
+gesetzte PIN gilt nur als Einmal-Code (72 Stunden). Mit `--art password`
+legt die Person danach ein eigenes Passwort statt einer PIN fest.
 
 ---
 

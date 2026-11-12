@@ -161,6 +161,8 @@ export const api = {
       if (body && typeof body.wiedergaben === 'number') err.wiedergaben = body.wiedergaben;
       if (res.status === 423 && body && body.sperre) err.sperre = body.sperre;
       if (body && body.code) err.code = body.code;
+      // Nach einem Zurücksetzen: womit das Profil geschützt wird (pin/password).
+      if (body && typeof body.art === 'string' && !err.art) err.art = body.art;
       throw err;
     }
     if (raw) return res;

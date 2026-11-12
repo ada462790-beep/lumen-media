@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -599,5 +600,75 @@ func TestBremseUnterwegsGetrenntVonZuHause(t *testing.T) {
 	}
 	if c := versuch("203.0.113.10:1", map[string]string{"X-Real-Ip": "192.168.1.20"}, "1234"); c != 429 {
 		t.Fatalf("Kopf holt die Anfrage in den Zähler von zu Hause: %d", c)
+	}
+}
+
+// Nach einem Zurücksetzen mit Passwort (lumen zuruecksetzen --art password)
+// nennt die Antwort die Art; ohne neuArt gilt sie, und eine zu kurze
+// Eingabe kommt mit eigener Meldung zurück, statt als PIN zu gelten.
+func TestEinmalCodeNenntArt(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	lea, _ := h.st.CreateAccount(ctx, store.NewAccount{Name: "Lea", LockKind: "password", Secret: "geheimgeheim"})
+	if err := h.st.PinZuruecksetzen(ctx, lea.ID, "password", "einmalpasswort"); err != nil {
+		t.Fatal(err)
+	}
+	anmelden := func(neu string) (int, map[string]string) {
+		body := fmt.Sprintf(`{"profileId":%q,"secret":"einmalpasswort"`, lea.ID)
+		if neu != "" {
+			body += fmt.Sprintf(`,"neu":%q`, neu)
+		}
+		resp, raw := h.do("POST", "/api/v1/unlock", body+"}", "")
+		var out map[string]string
+		_ = json.Unmarshal(raw, &out)
+		return resp.StatusCode, out
+	}
+	if c, out := anmelden(""); c != 409 || out["code"] != "neue_pin_noetig" || out["art"] != "password" {
+		t.Fatalf("ohne neues Passwort: %d %v", c, out)
+	}
+	if c, out := anmelden("1234"); c != 400 || out["code"] != "neue_pin_ungueltig" || out["art"] != "password" || out["error"] == "" {
+		t.Fatalf("zu kurzes Passwort: %d %v", c, out)
+	}
+	if c, out := anmelden("meinneuespasswort"); c != 200 {
+		t.Fatalf("neues Passwort: %d %v", c, out)
+	}
+	if acc, _ := h.st.Account(ctx, lea.ID); acc.LockKind != "password" {
+		t.Fatalf("Art: %q", acc.LockKind)
+	}
+}
+
+// Ein Einmal-Code gilt 72 Stunden; danach sagt Lumen (nur wer den Code
+// kennt), dass die Verwaltung einen neuen vergeben muss.
+func TestEinmalCodeLaeuftAb(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	lea, _ := h.st.CreateAccount(ctx, store.NewAccount{Name: "Lea", LockKind: "pin", Secret: "1234"})
+	resp, raw := h.do("PUT", "/api/v1/admin/accounts/"+lea.ID+"/sperre", `{}`, h.tok)
+	var zurueck struct{ EinmalCode string }
+	if resp.StatusCode != 200 || json.Unmarshal(raw, &zurueck) != nil || zurueck.EinmalCode == "" {
+		t.Fatalf("zurücksetzen: %d %s", resp.StatusCode, raw)
+	}
+	// Frisch: gilt, und der Ablauf liegt gut 72 Stunden voraus.
+	prefs, _ := h.st.Prefs(ctx, lea.ID)
+	bis, _ := strconv.ParseInt(prefs[store.PrefNeueSperreNoetig], 10, 64)
+	if d := time.Until(time.Unix(bis, 0)); d < 72*time.Hour || d > 73*time.Hour {
+		t.Fatalf("Ablauf in %v", d)
+	}
+	// Drei Tage später.
+	_ = h.st.SetPref(ctx, lea.ID, store.PrefNeueSperreNoetig, strconv.FormatInt(time.Now().Add(-time.Minute).Unix(), 10))
+	resp, raw = h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":%q,"neu":"9753"}`, lea.ID, zurueck.EinmalCode), "")
+	if resp.StatusCode != 401 || !strings.Contains(string(raw), "einmalcode_abgelaufen") || strings.Contains(string(raw), "token") {
+		t.Fatalf("abgelaufener Code: %d %s", resp.StatusCode, raw)
+	}
+	// Ein falscher Code verrät den Ablauf nicht.
+	_, raw = h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":"000000"}`, lea.ID), "")
+	if strings.Contains(string(raw), "abgelaufen") {
+		t.Fatalf("Ablauf verraten: %s", raw)
+	}
+	// Ein neuer Code der Verwaltung gilt wieder.
+	resp, raw = h.do("PUT", "/api/v1/admin/accounts/"+lea.ID+"/sperre", `{}`, h.tok)
+	_ = json.Unmarshal(raw, &zurueck)
+	if resp, raw := h.do("POST", "/api/v1/unlock", fmt.Sprintf(`{"profileId":%q,"secret":%q,"neu":"9753"}`, lea.ID, zurueck.EinmalCode), ""); resp.StatusCode != 200 {
+		t.Fatalf("neuer Code: %d %s", resp.StatusCode, raw)
 	}
 }

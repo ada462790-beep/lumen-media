@@ -233,22 +233,50 @@ func (s *Server) unlock(w http.ResponseWriter, r *http.Request) {
 	// gibt es erst eine Anmeldung, wenn die Person ihren eigenen Schutz
 	// festlegt. Die Verwaltung kennt ihn danach nicht — und kann sich
 	// nicht mehr als diese Person anmelden.
+	//
+	// Die Antwort nennt die Art des Schutzes („art": pin oder password),
+	// damit die App nach dem Richtigen fragt — zweimal, gegen Tippfehler.
 	if s.st.NeueSperreNoetig(r.Context(), id) {
+		art := "pin"
+		if acc, e := s.st.Account(r.Context(), id); e == nil && acc.LockKind == "password" {
+			art = "password"
+		}
+		// Der Code gilt nur EinmalCodeGueltig lang. Gesagt wird das erst
+		// nach dem richtigen Code — Fremde erfahren nichts.
+		if s.st.EinmalCodeAbgelaufen(r.Context(), id) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "einmalcode_abgelaufen", "art": art,
+				"error": tr(w, "Dieser Einmal-Code ist abgelaufen – er gilt 72 Stunden. Bitte die Verwaltung um einen neuen.")})
+			return
+		}
 		if in.Neu == "" {
-			failCode(w, http.StatusConflict, "neue_pin_noetig",
-				"Deine PIN wurde zurückgesetzt. Lege jetzt deine eigene PIN fest – nur du kennst sie.")
+			text := tr(w, "Deine PIN wurde zurückgesetzt. Lege jetzt deine eigene PIN fest – nur du kennst sie.")
+			if art == "password" {
+				text = tr(w, "Dein Passwort wurde zurückgesetzt. Lege jetzt dein eigenes Passwort fest – nur du kennst es.")
+			}
+			writeJSON(w, http.StatusConflict, map[string]string{"code": "neue_pin_noetig", "art": art, "error": text})
 			return
 		}
 		if in.Neu == in.Secret {
-			failCode(w, http.StatusConflict, "neue_pin_noetig",
-				"Wähle eine andere PIN als den Einmal-Code.")
+			text := tr(w, "Wähle eine andere PIN als den Einmal-Code.")
+			if art == "password" {
+				text = tr(w, "Wähle ein anderes Passwort als den Einmal-Code.")
+			}
+			writeJSON(w, http.StatusConflict, map[string]string{"code": "neue_pin_noetig", "art": art, "error": text})
 			return
 		}
-		art := in.NeuArt
-		if art == "" {
-			art = "pin"
+		neuArt := in.NeuArt
+		if neuArt == "" {
+			neuArt = art
 		}
-		if err := s.st.EigeneSperreNachZuruecksetzen(r.Context(), id, art, in.Neu); err != nil {
+		if err := s.st.EigeneSperreNachZuruecksetzen(r.Context(), id, neuArt, in.Neu); err != nil {
+			// Die Prüfung des neuen Schutzes (zu kurz, keine Ziffern …):
+			// Code und Art dazu, damit die App die Meldung zeigt und neu
+			// fragt, statt eine allgemeine Störung zu melden.
+			if !errors.Is(err, store.ErrNotFound) {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"code": "neue_pin_ungueltig", "art": art,
+					"error": satzAnfang(tr(w, stream.Bereinigt(err.Error())))})
+				return
+			}
 			failErr(w, err)
 			return
 		}

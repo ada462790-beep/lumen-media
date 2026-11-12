@@ -1433,7 +1433,7 @@
  "Zuordnen": "Assign",
  "Zurückgenommen – heute gilt wieder die Regel.": "Undone – today the usual rule applies again.",
  "Zurücksetzen": "Reset",
- "{code} – gib diesen Code {name} weiter. Er gilt für eine einzige Anmeldung; dabei legt {name} eine eigene PIN fest. Lumen zeigt ihn nur jetzt.": "{code} – give this code to {name}. It works for a single sign-in, during which {name} sets their own PIN. Lumen shows it only now.",
+ "{code} – gib diesen Code {name} weiter. Er gilt für eine einzige Anmeldung innerhalb von 72 Stunden; dabei legt {name} eine eigene PIN fest. Lumen zeigt ihn nur jetzt.": "{code} – give this code to {name}. It works for a single sign-in within 72 hours, during which {name} sets their own PIN. Lumen shows it only now.",
  "{name} darf heute bis {bis} schauen.": "{name} can watch until {bis} today.",
  "{name} hat heute {n} Minuten mehr.": "{name} has {n} more minutes today.",
  "„{gruppe}“ sieht keine Bibliothek – wer darin ist, sieht danach nichts mehr. Trotzdem zuordnen?": "“{gruppe}” can’t see any library – anyone in it won’t see anything afterwards. Assign anyway?",
@@ -1447,5 +1447,6 @@
  "Vorschläge von TMDb": "Suggestions from TMDb",
  "Wähl einen Treffer oder wünsch nur den Namen. Der Besitzer sieht den Wunsch und sonst nichts.": "Pick a match or wish for the name only. The owner sees the wish and nothing else.",
  "auch: {namen}": "also: {namen}",
- "{n} Vorschläge – mit den Pfeiltasten auswählen": "{n} suggestions – use the arrow keys to choose"
+ "{n} Vorschläge – mit den Pfeiltasten auswählen": "{n} suggestions – use the arrow keys to choose",
+ "Eigenes Passwort festlegen": "Set your own password"
 }

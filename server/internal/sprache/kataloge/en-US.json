@@ -315,5 +315,8 @@
   "Dieses Extra gibt es nicht.": "This extra doesn't exist.",
   "diese einladung gibt es nicht (mehr)": "This invitation doesn’t exist (anymore).",
   "Dieser Titel ist für dein Profil nicht freigegeben.": "This title isn’t allowed for your profile.",
-  "Zu viele Anfragen – bitte einen Moment warten.": "Too many requests – please wait a moment."
+  "Zu viele Anfragen – bitte einen Moment warten.": "Too many requests – please wait a moment.",
+  "Dieser Einmal-Code ist abgelaufen – er gilt 72 Stunden. Bitte die Verwaltung um einen neuen.": "This one-time code has expired – it is valid for 72 hours. Please ask an admin for a new one.",
+  "Dein Passwort wurde zurückgesetzt. Lege jetzt dein eigenes Passwort fest – nur du kennst es.": "Your password was reset. Set your own password now – only you will know it.",
+  "Wähle ein anderes Passwort als den Einmal-Code.": "Choose a password other than the one-time code."
 }

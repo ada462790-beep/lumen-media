@@ -163,7 +163,7 @@ func zuruecksetzenBefehl(args []string, ein io.Reader, aus io.Writer) error {
 		if err := store.SicherungenVergessen(ctx, filepath.Join(*dataDir, "sicherungen"), ziel.ID); err != nil {
 			fmt.Fprintln(aus, "Achtung: Eine Sicherung liess sich nicht bereinigen:", err)
 		}
-		defer fmt.Fprintln(aus, "Der neue Code gilt nur für eine Anmeldung: Dabei legt die Person ihre eigene PIN fest.")
+		defer fmt.Fprintln(aus, "Der neue Code gilt nur für eine Anmeldung innerhalb von 72 Stunden: Dabei legt die Person ihren eigenen Schutz fest.")
 	}
 	if *verwaltung {
 		if err := st.VerwaltungsSperreSetzen(ctx, ziel.ID, "none", ""); err != nil {

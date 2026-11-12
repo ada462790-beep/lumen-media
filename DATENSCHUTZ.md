@@ -65,7 +65,10 @@ Statistik.
   Geteilte Listen bleiben, die sieht der Haushalt ohnehin. Wenn du deine
   eigene PIN festlegst, sagt Lumen dir, dass das passiert ist. Hat jemand
   den Einmal-Code vor dir benutzt, funktioniert er bei dir nicht mehr —
-  dann weisst du es.
+  dann weisst du es. Der Code gilt 72 Stunden, danach braucht es einen
+  neuen von der Verwaltung. App-Versionen vor dieser Version können das
+  Festlegen der eigenen PIN nicht abschliessen; nimm dann die Web-App oder
+  aktualisiere die App.
 - **Geteilte Bewertungen und Listen:** sieht nur der Haushalt, mit Namen.
   Wer eine Einladung von unterwegs einlöst, ist Gast und sieht sie nicht
   (die Verwaltung kann das am Konto ändern). Schaltest du „Bewertungen im
