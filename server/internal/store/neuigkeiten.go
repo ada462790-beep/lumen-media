@@ -197,40 +197,29 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 		}
 	}
 
-	// Eigene Wünsche, die sich erfüllt haben — mit dem Titel, wenn das
-	// Profil ihn sehen darf.
-	wrows, err := s.db.QueryContext(ctx,
-		`SELECT title, COALESCE(year, 0), updated_at FROM wish
-		  WHERE account_id = ? AND state = 'done' AND updated_at > ?`, accountID, grenze.Unix())
+	// Eigene Wünsche (und solche, denen sich das Profil angeschlossen hat),
+	// die sich erfüllt haben — mit dem Titel, wenn das Profil ihn sehen
+	// darf. Kennt der Wunsch seinen Titel (wunsch_kennung.go), gilt der;
+	// sonst wird nach Titel und Jahr gesucht.
+	erfuellte, err := s.erfuellteWuensche(ctx, accountID, grenze)
 	if err != nil {
 		return nil, err
 	}
-	type erfuellt struct {
-		titel string
-		jahr  int
-		at    int64
-	}
-	var erfuellte []erfuellt
-	for wrows.Next() {
-		var e erfuellt
-		if err := wrows.Scan(&e.titel, &e.jahr, &e.at); err != nil {
-			wrows.Close()
-			return nil, err
-		}
-		erfuellte = append(erfuellte, e)
-	}
-	wrows.Close()
 	for _, e := range erfuellte {
 		wq := q
-		wq.Text, wq.Limit = e.titel, 5
+		if e.ItemID != "" {
+			wq.IDs, wq.Limit = []string{e.ItemID}, 1
+		} else {
+			wq.Text, wq.Limit = e.Titel, 5
+		}
 		treffer, err := s.Query(ctx, wq)
 		if err != nil {
 			return nil, err
 		}
 		for _, it := range treffer {
-			if strings.EqualFold(it.Title, strings.TrimSpace(e.titel)) && (e.jahr == 0 || it.Year == e.jahr) {
+			if e.ItemID != "" || strings.EqualFold(it.Title, strings.TrimSpace(e.Titel)) && (e.Jahr == 0 || it.Year == e.Jahr) {
 				out = append(out, Neuigkeit{Art: "wunsch", ItemID: it.ID, Titel: it.Title,
-					Text: "Dein Wunsch ist da", At: time.Unix(e.at, 0),
+					Text: "Dein Wunsch ist da", At: e.At,
 					Vorlage: Vorlage{Text: "Dein Wunsch ist da"}})
 				break
 			}

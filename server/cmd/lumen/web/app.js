@@ -28,6 +28,7 @@ import { grenzenBearbeiten } from './konto.js';
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss, bzBand, bzTagText } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
 import { tastaturEinrichten } from './tastatur.js';
+import { wunschFeld, wunschFeldEinrichten, wunschBild, wunschZusatz, wunschVerweise } from './wuensche.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -3837,12 +3838,17 @@ function viewWishes() {
   const NAME = { open: tr('offen'), working: tr('in Arbeit'), done: tr('erfüllt'), declined: tr('abgelehnt') };
 
   const rows = list.map(w => `
-    <div class="orow" style="height:auto;padding:14px 16px">
-      <div style="flex:1;min-width:0">
-        <div class="t-body">${esc(w.title)}${w.year ? ` (${w.year})` : ''}</div>
-        <div class="t-sub c-2">${tr('von {name}', { name: esc(w.by) })}${w.mine ? ' ' + tr('(du)') : ''}</div>
+    <div class="orow wunsch-zeile" style="height:auto;padding:12px 16px;flex-wrap:wrap">
+      ${wunschBild(w)}
+      <div style="flex:1;min-width:140px">
+        <div class="t-body wunsch-titel">${esc(w.title)}</div>
+        ${wunschZusatz(w) ? `<div class="t-caption c-2">${wunschZusatz(w)}</div>` : ''}
+        <div class="t-caption c-2">${w.dabei ? tr('Du hast dich angeschlossen') : tr('von {name}', { name: esc(w.by) }) + (w.mine ? ' ' + tr('(du)') : '')}</div>
       </div>
+      <div class="wunsch-rechts">
       <span class="badge" style="border:0;background:${COL[w.state][0]};color:${COL[w.state][1]};flex:none">${NAME[w.state]}</span>
+      ${wunschVerweise(w, { extern: false })}
+      </div>
       ${owner && w.state !== 'done' ? `<div style="display:flex;gap:8px;flex:none">
           <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
           <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
@@ -3853,10 +3859,9 @@ function viewWishes() {
     <h1 class="t-large">${tr('Wünsche')}</h1>
     <div class="t-sub c-2" style="margin:4px 0 24px">
       ${owner ? tr('Was sich der Haushalt wünscht') : tr('Was du dir gewünscht hast, und wie es steht')}</div>
-    <form id="wishform" class="sfield" style="max-width:560px">
-      ${svg(I.plus, 18, 2)}<input name="title" placeholder="${tr('Titel wünschen …')}" aria-label="${tr('Titel wünschen')}">
-      <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem">${tr('Wünschen')}</button></form>
+    ${wunschFeld({ id: 'wishform', symbol: svg(I.plus, 18, 2) })}
     <p class="t-caption c-2" style="margin:8px 2px 0">
+      ${tr('Tipp einen Namen und wähl einen Treffer — oder wünsch nur den Namen.')}
       ${tr('Der Besitzer sieht den Titel und wer ihn gewünscht hat — sonst nichts.')}</p>
     <section style="margin-top:24px">${rows ? `<div class="group group--inset">${rows}</div>`
       : leer({ symbol: I.wish, titel: tr('Noch keine Wünsche'), text: tr('Fehlt dir ein Film oder eine Serie? Wünsch sie dir oben.') })}</section>
@@ -4443,12 +4448,17 @@ function viewAdminWishes() {
       data-wishstate="${esc(id)}:${zu}">${text}</button>`;
 
   const zeile = w => `
-    <div class="orow" style="height:auto;padding:14px 16px;gap:12px;flex-wrap:wrap">
-      ${avatar({ avatar: w.avatar, name: w.by }, 34, 'flex:none')}
+    <div class="orow wunsch-zeile" style="height:auto;padding:12px 16px;gap:12px;flex-wrap:wrap">
+      ${wunschBild(w)}
       <div style="flex:1;min-width:140px">
-        <div class="t-body">${esc(w.title)}${w.year ? ` (${w.year})` : ''}</div>
-        <div class="t-caption c-2">${tr('von {name}', { name: esc(w.by) })}${w.mine ? ' ' + tr('(du)') : ''}
+        <div class="t-body wunsch-titel">${esc(w.title)}</div>
+        ${wunschZusatz(w) ? `<div class="t-caption c-2">${wunschZusatz(w)}</div>` : ''}
+        <div class="t-caption c-2" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${avatar({ avatar: w.avatar, name: w.by }, 18, 'flex:none')}
+          ${tr('von {name}', { name: esc(w.by) })}${w.mine ? ' ' + tr('(du)') : ''}
+          ${w.auch?.length ? ' · ' + tr('auch: {namen}', { namen: esc(w.auch.join(', ')) }) : ''}
           · ${datum(w.createdAt)}</div>
+        ${wunschVerweise(w)}
         ${w.note ? `<div class="t-caption c-2" style="margin-top:3px">${tr('Notiz: {note}', { note: esc(w.note) })}</div>` : ''}
       </div>
       <span class="badge" style="border:0;flex:none;background:${COL[w.state][0]};color:${COL[w.state][1]}">
@@ -5558,10 +5568,12 @@ app.addEventListener('click', async e => {
   if (hit('data-back')) return history.length > 1 ? history.back() : go('home');
   if (hit('data-clear')) { S.query = ''; return load(); }
   if ((n = hit('data-wish'))) {
-    if (n.disabled) return;
-    n.disabled = true;
-    try { await api.wish(n.dataset.wish, 0); toast(tr('Wunsch an den Besitzer geschickt')); }
-    catch (err) { toast(err.message); n.disabled = false; }
+    // Statt gleich zu wünschen: das Wunschfeld mit dem Suchwort und den
+    // Treffern von TMDb darunter (wuensche.js).
+    const ort = n.closest('.leer-aktion') || n.parentElement;
+    ort.innerHTML = `<div class="wunsch-aus-suche">${wunschFeld({ id: 'wunsch-suche', wert: n.dataset.wish, symbol: svg(I.plus, 18, 2) })}
+      <p class="hint" style="margin:10px 0 0">${tr('Wähl einen Treffer oder wünsch nur den Namen. Der Besitzer sieht den Wunsch und sonst nichts.')}</p></div>`;
+    wunschVerhalten.nachZeichnen();
     return;
   }
   if ((n = hit('data-wishstate'))) {
@@ -5926,6 +5938,17 @@ function seekTo(sec) {
 
 /* ---------------------------------------------------------------- Formulare */
 
+// Das Wunschfeld mit Vorschlägen von TMDb (wuensche.js) hat seine eigenen
+// Ereignisse — vor denen hier, damit Enter in der Liste wählt statt abschickt.
+const wunschVerhalten = wunschFeldEinrichten(app, {
+  async gewuenscht(w, dabei) {
+    toast(dabei ? tr('Schon gewünscht – du bist jetzt mit dabei') : tr('Wunsch an den Besitzer geschickt'));
+    if (S.view === 'wishes') await load();
+  },
+  ansehen: id => go('detail', { id }),
+  fehler: text => toast(text),
+});
+
 // Jedes Formular ist gesperrt, solange seine Anfrage läuft: ein
 // Doppelklick auf „Wünschen" oder „Anlegen" schickte sonst alles zweimal.
 app.addEventListener('submit', e => {
@@ -6083,13 +6106,6 @@ async function formularAbschicken(e) {
   }
 
   if (f.id === 'searchform') { $('#q')?.blur(); S.suchTastaturZu = true; return load(); }
-
-  if (f.id === 'wishform') {
-    const t = f.title.value.trim();
-    if (!t) return;
-    try { await api.wish(t, 0); f.title.value = ''; toast(tr('Wunsch geschickt')); return load(); }
-    catch (err) { return toast(err.message); }
-  }
 
   if (f.id === 'libform') {
     try {

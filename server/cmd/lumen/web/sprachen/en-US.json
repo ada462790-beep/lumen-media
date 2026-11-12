@@ -801,7 +801,6 @@
  "Womit": "Method",
  "Wonach suchst du?": "What are you looking for?",
  "Wunsch an den Besitzer geschickt": "Request sent to the owner",
- "Wunsch geschickt": "Request sent",
  "Wähle Sprache und Region. Sie gilt für den ganzen Server; jedes Profil kann später seine eigene wählen.": "Choose your language and region. It applies to the whole server; each profile can choose its own later.",
  "Wünsche": "Requests",
  "Wünschen": "Request",
@@ -1437,5 +1436,16 @@
  "{code} – gib diesen Code {name} weiter. Er gilt für eine einzige Anmeldung; dabei legt {name} eine eigene PIN fest. Lumen zeigt ihn nur jetzt.": "{code} – give this code to {name}. It works for a single sign-in, during which {name} sets their own PIN. Lumen shows it only now.",
  "{name} darf heute bis {bis} schauen.": "{name} can watch until {bis} today.",
  "{name} hat heute {n} Minuten mehr.": "{name} has {n} more minutes today.",
- "„{gruppe}“ sieht keine Bibliothek – wer darin ist, sieht danach nichts mehr. Trotzdem zuordnen?": "“{gruppe}” can’t see any library – anyone in it won’t see anything afterwards. Assign anyway?"
+ "„{gruppe}“ sieht keine Bibliothek – wer darin ist, sieht danach nichts mehr. Trotzdem zuordnen?": "“{gruppe}” can’t see any library – anyone in it won’t see anything afterwards. Assign anyway?",
+ "Du hast dich angeschlossen": "You joined this wish",
+ "Keine Vorschläge – Enter wünscht den Namen": "No suggestions – press Enter to wish for the name",
+ "Nur den Namen wünschen": "Wish for the name only",
+ "Schon da — ansehen": "Already here — watch",
+ "Schon gewünscht": "Already wished for",
+ "Schon gewünscht – du bist jetzt mit dabei": "Already wished for – you’ve been added",
+ "Tipp einen Namen und wähl einen Treffer — oder wünsch nur den Namen.": "Type a name and pick a match — or wish for the name only.",
+ "Vorschläge von TMDb": "Suggestions from TMDb",
+ "Wähl einen Treffer oder wünsch nur den Namen. Der Besitzer sieht den Wunsch und sonst nichts.": "Pick a match or wish for the name only. The owner sees the wish and nothing else.",
+ "auch: {namen}": "also: {namen}",
+ "{n} Vorschläge – mit den Pfeiltasten auswählen": "{n} suggestions – use the arrow keys to choose"
 }

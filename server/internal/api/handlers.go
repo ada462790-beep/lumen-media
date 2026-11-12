@@ -1446,24 +1446,13 @@ func (s *Server) wishes(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	s.wuenscheAufbereiten(r, list)
 	ok(w, list)
 }
 
-func (s *Server) createWish(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Title string `json:"title"`
-		Year  int    `json:"year"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	wish, err := s.st.CreateWish(r.Context(), accountOf(r).ID, in.Title, in.Year)
-	if err != nil {
-		failErr(w, err)
-		return
-	}
-	ok(w, wish)
-}
+// createWish: mit dem Namen allein oder mit einem Vorschlag von TMDb
+// (wuensche_vorschlaege.go).
+func (s *Server) createWish(w http.ResponseWriter, r *http.Request) { s.wunschAnlegen(w, r) }
 
 // ---------------------------------------------------------------- Verwaltung
 
@@ -2129,6 +2118,10 @@ func (s *Server) adminSetWishState(w http.ResponseWriter, r *http.Request) {
 	if err := s.st.SetWishState(r.Context(), r.PathValue("id"), in.State, in.Note); err != nil {
 		failErr(w, err)
 		return
+	}
+	// Von Hand erfüllt: den Titel dazu suchen, damit „Ansehen" erscheint.
+	if in.State == "done" {
+		_ = s.st.WuenscheVerknuepfen(r.Context())
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

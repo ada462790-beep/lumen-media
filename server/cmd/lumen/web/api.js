@@ -359,7 +359,9 @@ export const api = {
   /* ---------------------------------------------------------- Wünsche */
 
   wishes()           { return this.call('/wishes'); },
-  wish(title, year)  { return this.call('/wishes', { method: 'POST', body: { title, year } }); },
+  // mehr: art, tmdbId, imdbId, originaltitel aus einem Vorschlag (wuensche.js).
+  wish(title, year, mehr = {}) { return this.call('/wishes', { method: 'POST', body: { title, year, ...mehr } }); },
+  wishSuggestions(q) { return this.call('/wishes/vorschlaege?q=' + encodeURIComponent(q)); },
 
   /* ---------------------------------------------------------- Wiedergabe */
 

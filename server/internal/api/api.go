@@ -70,6 +70,8 @@ type Server struct {
 	jetzt func() time.Time
 	// begleiter: Goroutinen, auf die das Herunterfahren wartet (begleitet.go).
 	begleiter begleitZaehler
+	// Zwischenspeicher und Bremse der Wunsch-Vorschläge (wuensche_vorschlaege.go).
+	wuensche wunschSpeicher
 }
 
 // SetzeGrund gibt den Kontext, der beim Herunterfahren endet.
@@ -256,6 +258,9 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /api/v1/wishes", auth(s.wishes))
 	mux.Handle("POST /api/v1/wishes", auth(s.createWish))
+	// Vorschläge von TMDb beim Wünschen, samt kleinen Postern (wuensche_vorschlaege.go).
+	mux.Handle("GET /api/v1/wishes/vorschlaege", auth(s.wunschVorschlaege))
+	mux.Handle("GET /api/v1/wishes/poster/{groesse}/{datei}", auth(s.wunschPoster))
 
 	mux.Handle("GET /api/v1/stream/{fileId}", auth(s.streamFile))
 	mux.Handle("GET /api/v1/stream/{fileId}/plan", auth(s.streamPlan))

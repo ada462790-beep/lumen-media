@@ -29,6 +29,21 @@ type Wish struct {
 	// AccountID: wer sich das gewünscht hat — nur für die Prüfung der
 	// Rechte, nie in der Antwort.
 	AccountID string `json:"-"`
+
+	// Mit einem Vorschlag von TMDb gewünscht (wunsch_kennung.go) — sonst leer.
+	Art           string `json:"art,omitempty"` // movie | series
+	TMDbID        string `json:"tmdbId,omitempty"`
+	IMDbID        string `json:"imdbId,omitempty"`
+	Originaltitel string `json:"originaltitel,omitempty"`
+	PosterPfad    string `json:"-"`
+	Poster        string `json:"poster,omitempty"` // Adresse bei Lumen, setzt die API
+	// ItemID: der Titel, der den Wunsch erfüllt hat (nur wenn sichtbar).
+	ItemID string `json:"itemId,omitempty"`
+	// Dabei: jemand anders hatte den Wunsch schon, dieses Profil hat sich
+	// angeschlossen. Von wem er ist, steht dann nicht da.
+	Dabei bool `json:"dabei,omitempty"`
+	// Auch: wer sich angeschlossen hat — nur in der Liste des Besitzers.
+	Auch []string `json:"auch,omitempty"`
 }
 
 func (s *Store) CreateWish(ctx context.Context, accountID, title string, year int) (*Wish, error) {
@@ -102,7 +117,10 @@ func (s *Store) Wishes(ctx context.Context, accountID string, all bool) ([]Wish,
 		w.CreatedAt, w.Mine, w.AccountID = time.Unix(created, 0).UTC(), owner == accountID, owner
 		out = append(out, w)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return s.wunschErgaenzen(ctx, out, accountID, all)
 }
 
 // WunschVon: wer sich diesen Wunsch gewünscht hat (für die Rechte).
@@ -132,6 +150,11 @@ func (s *Store) SetWishState(ctx context.Context, id, state, note string) error 
 // Kleinschreibung), und das Jahr, wenn der Wunsch eines nennt. Die Notiz
 // sagt der Person, dass es da ist. Zurück kommt, wie viele es waren.
 func (s *Store) WuenscheErfuellen(ctx context.Context) (int, error) {
+	// Zuerst über TMDb-/IMDb-Kennung (wunsch_kennung.go).
+	nk, err := s.wuenscheNachKennungErfuellen(ctx)
+	if err != nil {
+		return 0, err
+	}
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE wish SET state = 'done', note = 'Ist jetzt in der Bibliothek', updated_at = ?
 		  WHERE state IN ('open', 'working')
@@ -139,10 +162,13 @@ func (s *Store) WuenscheErfuellen(ctx context.Context) (int, error) {
 		                 WHERE i.kind IN ('movie', 'series')
 		                   AND lower(i.title) = lower(trim(wish.title))
 		                   AND (COALESCE(wish.year, 0) = 0 OR i.year = wish.year))`,
-		time.Now().Unix())
+		heute())
 	if err != nil {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
-	return int(n), nil
+	if err := s.WuenscheVerknuepfen(ctx); err != nil {
+		return int(n) + nk, err
+	}
+	return int(n) + nk, nil
 }
