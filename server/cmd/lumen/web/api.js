@@ -266,9 +266,13 @@ export const api = {
 
   /* ---------------------------------------------------------- mein Stand */
 
-  saveProgress(id, positionMs, durationMs) {
-    return this.call(`/items/${encodeURIComponent(id)}/progress`, { method: 'POST',
+  /* Direkt gemeldet und angekommen: Was für diesen Titel noch im Ausgang
+     lag, ist damit überholt. */
+  async saveProgress(id, positionMs, durationMs) {
+    const r = await this.call(`/items/${encodeURIComponent(id)}/progress`, { method: 'POST',
       body: { positionMs: Math.round(positionMs), durationMs: Math.round(durationMs) } });
+    this.ausgangVergessen(id);
+    return r;
   },
 
   /* Den Stand melden, ohne dass er verlorengeht.
@@ -331,8 +335,25 @@ export const api = {
   },
   /* Gesehen: bei einer Serie alle Folgen; { staffel: N } nur eine Staffel;
      bei einer Folge { vorherige: true } auch alle davor. */
-  markFinished(id, wo = {})  { return this.call(`/items/${encodeURIComponent(id)}/finished${gesehenFrage(wo)}`, { method: 'POST' }); },
-  clearFinished(id, wo = {}) { return this.call(`/items/${encodeURIComponent(id)}/finished${gesehenFrage(wo)}`, { method: 'DELETE' }); },
+  /* Haken von Hand: Ein Stand im Ausgang für denselben Titel ist danach
+     veraltet und fiele sonst später über die Entscheidung her. */
+  async markFinished(id, wo = {})  {
+    const r = await this.call(`/items/${encodeURIComponent(id)}/finished${gesehenFrage(wo)}`, { method: 'POST' });
+    this.ausgangVergessen(id);
+    return r;
+  },
+  async clearFinished(id, wo = {}) {
+    const r = await this.call(`/items/${encodeURIComponent(id)}/finished${gesehenFrage(wo)}`, { method: 'DELETE' });
+    this.ausgangVergessen(id);
+    return r;
+  },
+  /* Ausgang leeren: für einen Titel (id) oder ganz (ohne). */
+  ausgangVergessen(id) {
+    if (!this.token) return;
+    if (id === undefined) { ausgangSchreiben(this.token, {}); return; }
+    ausgangEntfernen(this.token, id);
+    bekannteStaende.delete(kurz(this.token) + ':' + id);
+  },
   /* Welche Folge „Weiterschauen" auf einer Serienseite startet. */
   weiterInSerie(id) { return this.call(`/items/${encodeURIComponent(id)}/weiterschauen`); },
   /* Vorschaubilder für die Zeitleiste. Antwortet mit dem Aufbau, mit
@@ -343,7 +364,15 @@ export const api = {
   },
   addToList(id)      { return this.call('/watchlist/' + encodeURIComponent(id), { method: 'PUT' }); },
   removeFromList(id) { return this.call('/watchlist/' + encodeURIComponent(id), { method: 'DELETE' }); },
-  clearHistory()     { return this.call('/me/progress', { method: 'DELETE' }); },
+  /* Verlauf löschen: auch was noch im Ausgang wartet — sonst käme es
+     nachgereicht gleich wieder. */
+  async clearHistory() {
+    this.ausgangVergessen();
+    const r = await this.call('/me/progress', { method: 'DELETE' });
+    this.ausgangVergessen();
+    bekannteStaende.clear();
+    return r;
+  },
   updateMe(patch)    { return this.call('/me', { method: 'PATCH', body: patch }); },
   /* Eigenes Profilbild hochladen — roh, der Server verkleinert. */
   async uploadAvatar(file) {
@@ -711,10 +740,24 @@ function frist(ms) {
 
 /* ---------------------------------------------------------- Stand-Ausgang
 
-   { <kurz(token)>: { <itemId>: { p, d, f, at } } } — je Profil getrennt
+   { <kurz(token)>: { <itemId>: { p, d, f, at, b } } } — je Profil getrennt
    (ein Profil schickt nie die Stände eines anderen). Nur der letzte Stand
-   je Titel; was älter als drei Tage ist, verfällt. */
-const AUSGANG_HOECHSTENS = 3 * 24 * 3600 * 1000;
+   je Titel; was älter als sechs Stunden ist, verfällt — ein Stand von vor
+   Tagen überschriebe sonst, was inzwischen auf einem anderen Gerät
+   geschaut wurde.
+
+   b: der Marker des Servers für diesen Titel, wie dieses Gerät ihn zuletzt
+   bekam (Kopf X-Lumen-Stand, store/fortschritt_stand.go). Wird ein Stand
+   später nachgereicht, geht b als „basis" mit: Hat seither ein anderes
+   Gerät weitergeschaut oder jemand den Verlauf gelöscht, passt der Marker
+   nicht mehr, und der Server verwirft den alten Stand. at ist nur die Uhr
+   dieses Browsers; der Server bekommt und speichert keine Uhrzeit. */
+const AUSGANG_HOECHSTENS = 6 * 3600 * 1000;
+// Ein Stand, der so jung ist, geht als gewöhnliche Meldung (ohne basis):
+// Er ist der neueste, den es gibt.
+const AUSGANG_FRISCH = 30 * 1000;
+// Die zuletzt bekannten Marker je Profil und Titel, solange die Seite offen ist.
+const bekannteStaende = new Map();
 let ausgangLaeuft = false;
 let ausgangNochmal = false;
 let ausgangOffen = true; // beim Start einmal nachsehen
@@ -744,13 +787,15 @@ function ausgangSchreiben(token, meins) {
 }
 function ausgangSetzen(token, id, e) {
   const meins = ausgangLesen(token);
+  const b = bekannteStaende.get(kurz(token) + ':' + id) ?? meins[id]?.b;
+  if (b !== undefined) e.b = b;
   meins[id] = e;
   ausgangSchreiben(token, meins);
   ausgangOffen = true;
 }
 function ausgangEntfernen(token, id, at) {
   const meins = ausgangLesen(token);
-  if (meins[id] && meins[id].at === at) { delete meins[id]; ausgangSchreiben(token, meins); }
+  if (meins[id] && (at === undefined || meins[id].at === at)) { delete meins[id]; ausgangSchreiben(token, meins); }
 }
 function ausgangSpaeter(f) {
   clearTimeout(ausgangUhr);
@@ -764,16 +809,27 @@ function ausgangAbgeben(token) {
   for (const [id, e] of Object.entries(meins)) standSenden(token, id, e, true);
   ausgangSchreiben(token, {});
 }
-/* 'ok' | 'weg' (endgültig abgelehnt, etwa Titel gelöscht) | 'nochmal'. */
+/* 'ok' | 'weg' (endgültig abgelehnt, etwa Titel gelöscht) | 'nochmal'.
+   Ein Stand, der nicht mehr frisch ist, geht mit seiner basis — passt sie
+   beim Server nicht mehr, verwirft er ihn (X-Lumen-Veraltet), und er gilt
+   hier als erledigt. */
 async function standSenden(token, id, e, keepalive) {
+  const spaet = e.b !== undefined && Date.now() - e.at > AUSGANG_FRISCH;
+  const basis = spaet ? (e.f ? `?basis=${encodeURIComponent(e.b)}` : '') : '';
+  const rumpf = { positionMs: e.p, durationMs: e.d };
+  if (spaet) rumpf.basis = e.b;
   try {
-    const res = await fetch(`/api/v1/items/${encodeURIComponent(id)}/${e.f ? 'finished' : 'progress'}`, {
+    const res = await fetch(`/api/v1/items/${encodeURIComponent(id)}/${e.f ? 'finished' + basis : 'progress'}`, {
       method: 'POST', keepalive,
-      body: e.f ? undefined : JSON.stringify({ positionMs: e.p, durationMs: e.d }),
+      body: e.f ? undefined : JSON.stringify(rumpf),
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       signal: keepalive ? undefined : frist(FRIST_SCHREIBEN),
     });
-    if (res.ok) return 'ok';
+    if (res.ok) {
+      const stand = res.headers.get('X-Lumen-Stand');
+      if (stand !== null) bekannteStaende.set(kurz(token) + ':' + id, stand);
+      return 'ok';
+    }
     // Server überlastet oder kurz weg (Proxy): später nochmal.
     if (res.status >= 500 || res.status === 408 || res.status === 429) return 'nochmal';
     return 'weg';

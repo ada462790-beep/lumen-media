@@ -1200,6 +1200,10 @@ func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		PositionMS int64 `json:"positionMs"`
 		DurationMS int64 `json:"durationMs"`
+		// Basis: nur beim Nachreichen — der Marker, den das Gerät zuletzt
+		// für diesen Titel bekam (store/fortschritt_stand.go). Passt er
+		// nicht mehr, ist der Stand veraltet und fällt still weg.
+		Basis *string `json:"basis"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -1208,9 +1212,16 @@ func (s *Server) saveProgress(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	if err := s.st.SaveProgress(r.Context(), accountOf(r).ID, r.PathValue("id"),
-		in.PositionMS, in.DurationMS); err != nil {
+	stand, galt, err := s.st.SaveProgressStand(r.Context(), accountOf(r).ID, r.PathValue("id"),
+		in.PositionMS, in.DurationMS, in.Basis)
+	if err != nil {
 		failErr(w, err)
+		return
+	}
+	w.Header().Set("X-Lumen-Stand", stand)
+	if !galt {
+		w.Header().Set("X-Lumen-Veraltet", "1")
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	// Bewegt sich die Stelle, läuft gerade etwas (Bildschirmzeit).
@@ -1239,6 +1250,17 @@ func (s *Server) markFinished(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	acc := accountOf(r).ID
+	// Nachgereicht (?basis=…, nur für einen einzelnen Titel): gilt nur,
+	// wenn seither niemand an diesem Titel etwas geändert hat (wie
+	// saveProgress).
+	if basis, da := r.URL.Query()["basis"]; da && folgen == nil {
+		if stand := s.st.FortschrittStand(r.Context(), acc, it.ID); len(basis) == 0 || stand != basis[0] {
+			w.Header().Set("X-Lumen-Stand", stand)
+			w.Header().Set("X-Lumen-Veraltet", "1")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
 	if folgen == nil {
 		err = s.st.MarkFinished(r.Context(), acc, it.ID, it.RuntimeMS)
 	} else {
@@ -1253,6 +1275,9 @@ func (s *Server) markFinished(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		failErr(w, err)
 		return
+	}
+	if folgen == nil {
+		w.Header().Set("X-Lumen-Stand", s.st.FortschrittStand(r.Context(), acc, it.ID))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
