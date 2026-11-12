@@ -15,11 +15,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"lumen/internal/store"
+	"lumen/internal/stream"
 )
 
 // Standbilder: ein Bild aus dem Film selbst, wenn es kein Poster gibt.
@@ -29,21 +31,59 @@ import (
 // Bild aus dem Film ist nicht so schön wie ein Poster, aber es zeigt,
 // was das ist, und man erkennt seine Filme wieder.
 //
-// Erzeugt wird es beim ersten Abruf und dann aufbewahrt. Gleichzeitig
-// laufen höchstens zwei FFmpeg dafür: eine Startseite fragt zwanzig
-// Bilder auf einmal an, und der Rechner soll dabei noch abspielen können.
+// Erzeugt wird es beim ersten Abruf und dann aufbewahrt. Ein ganzes Raster
+// ohne Poster sind aber Tausende Bilder — früher wartete jede Anfrage, bis
+// ihr FFmpeg fertig war, mit normaler Priorität. Die Anfragen belegten die
+// sechs Verbindungen des Browsers, und das Nachladen der Liste stand
+// sekundenlang dahinter; die Wiedergabe musste sich die CPU teilen. Jetzt:
+//
+//   - Die Bilder entstehen in einer Warteschlange, mit niedrigster
+//     Priorität (wie alles im Hintergrund), höchstens eins (auf zwei
+//     Kernen) oder zwei gleichzeitig.
+//   - Zuerst kommt dran, was zuletzt gewollt wurde — die Karten, die
+//     gerade auf dem Bildschirm sind. Was seit einer Minute niemand mehr
+//     wollte (weggescrollt, Seite zu), fällt heraus, bevor es anfängt.
+//   - Eine Anfrage wartet höchstens kurz (standbildWarten). Ist das Bild
+//     bis dahin nicht fertig, kommt 503 mit Retry-After: Die Verbindung
+//     ist frei, die Karte zeigt so lange den Titel, und die Web-App fragt
+//     später noch einmal.
 
 var (
-	standbildPlaetze = make(chan struct{}, 2)
+	standbildPlaetze = make(chan struct{}, standbildParallel(runtime.NumCPU()))
 	standbildMu      sync.Mutex
-	standbildLaeuft  = map[string]*sync.WaitGroup{}
 	// Wo es nicht ging, wird es eine Weile nicht wieder versucht. Sonst
 	// liefe FFmpeg bei jeder Startseite erneut über dieselbe kaputte
-	// Datei, und die zwei Plätze wären für alle anderen besetzt.
+	// Datei, und die Plätze wären für alle anderen besetzt.
 	standbildFehlschlag = map[string]time.Time{}
+	// Die Warteschlange: je Titel ein Auftrag.
+	standbildAuftraege = map[string]*standbildAuftrag{}
+	standbildArbeiter  int
 )
 
-const standbildPause = 6 * time.Hour
+const (
+	standbildPause = 6 * time.Hour
+	// So lange wartet eine Anfrage auf ihr Bild.
+	standbildWarten = 2 * time.Second
+	// Was so lange niemand mehr wollte, wird nicht mehr angefangen.
+	standbildVergessen = 60 * time.Second
+)
+
+// standbildParallel: wie viele Standbilder gleichzeitig entstehen dürfen.
+func standbildParallel(kerne int) int {
+	if kerne <= 2 {
+		return 1
+	}
+	return 2
+}
+
+type standbildAuftrag struct {
+	it      store.Item
+	gewollt time.Time
+	laeuft  bool
+	fertig  chan struct{}
+	pfad    string
+	err     error
+}
 
 // standbildOrdner liegt neben den Daten, nicht bei den Postern: Poster
 // gehören zu den Metadaten und werden mit ihnen neu geholt, Standbilder
@@ -93,54 +133,143 @@ func standbildStelle(dauerMS int64) float64 {
 	return sek
 }
 
-func (s *Server) standbild(ctx context.Context, it *store.Item) (string, error) {
-	if s.ff == nil || !s.ff.Available() {
-		return "", errors.New("kein ffmpeg")
-	}
+// standbildZiel: wo das Bild eines Titels liegt.
+func (s *Server) standbildZiel(it *store.Item) (string, error) {
 	if strings.ContainsAny(it.ID, `/\.`) {
 		return "", errors.New("ungültige kennung")
 	}
-	ziel := filepath.Join(s.standbildOrdner(), it.ID+".jpg")
-	quelle := ziel + ".quelle" // aus welcher Datei das Bild stammt
-	if _, err := os.Stat(ziel); err == nil {
-		// Gehört die Datei inzwischen zu einem anderen Titel (ein neuer
-		// Durchlauf hat sie umgehängt), ist das Bild das der alten Folge.
-		// Ohne Vermerk (ältere Fassung) oder ohne Datei bleibt es stehen.
-		vermerk, verr := os.ReadFile(quelle)
-		jetzt, derr := s.standbildDatei(ctx, it)
-		if verr != nil || derr != nil || string(vermerk) == jetzt.ID {
-			return ziel, nil
-		}
-		_ = os.Remove(ziel)
-	}
-	standbildMu.Lock()
-	if wann, ok := standbildFehlschlag[it.ID]; ok && time.Since(wann) < standbildPause {
-		standbildMu.Unlock()
-		return "", errors.New("kein standbild")
-	}
-	standbildMu.Unlock()
+	return filepath.Join(s.standbildOrdner(), it.ID+".jpg"), nil
+}
 
-	// Fragen zwei gleichzeitig nach demselben Bild, rechnet nur einer.
-	standbildMu.Lock()
-	if wg, laeuft := standbildLaeuft[it.ID]; laeuft {
-		standbildMu.Unlock()
-		wg.Wait()
-		if _, err := os.Stat(ziel); err == nil {
-			return ziel, nil
-		}
-		return "", errors.New("kein standbild")
+// standbildDa: Liegt schon ein passendes Bild da? Neben dem Bild steht,
+// aus welcher Fassung welcher Datei es stammt (dateiKennung). Hat ein
+// neuer Durchlauf die Datei umgehängt oder wurde sie am selben Pfad
+// ersetzt, ist es das Bild von etwas anderem. Ältere Fassungen von Lumen
+// vermerkten nur die Kennung der Datei; das gilt weiter. Ohne Vermerk oder
+// ohne Datei bleibt das Bild stehen.
+func (s *Server) standbildDa(ctx context.Context, it *store.Item) (string, bool) {
+	ziel, err := s.standbildZiel(it)
+	if err != nil {
+		return "", false
 	}
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	standbildLaeuft[it.ID] = wg
-	standbildMu.Unlock()
-	defer func() {
+	if _, err := os.Stat(ziel); err != nil {
+		return "", false
+	}
+	vermerk, verr := os.ReadFile(ziel + ".quelle")
+	jetzt, derr := s.standbildDatei(ctx, it)
+	if verr != nil || derr != nil || string(vermerk) == dateiKennung(jetzt) || string(vermerk) == jetzt.ID {
+		return ziel, true
+	}
+	_ = os.Remove(ziel)
+	return "", false
+}
+
+// standbildAnfordern stellt den Titel in die Warteschlange (oder sagt
+// einem wartenden Auftrag, dass er noch gewollt ist).
+func (s *Server) standbildAnfordern(it *store.Item) *standbildAuftrag {
+	standbildMu.Lock()
+	defer standbildMu.Unlock()
+	a, ok := standbildAuftraege[it.ID]
+	if !ok {
+		a = &standbildAuftrag{it: *it, fertig: make(chan struct{})}
+		standbildAuftraege[it.ID] = a
+	}
+	a.gewollt = time.Now()
+	if standbildArbeiter < cap(standbildPlaetze) {
+		standbildArbeiter++
+		go s.standbildArbeiten()
+	}
+	return a
+}
+
+// standbildArbeiten nimmt Aufträge, bis keiner mehr da ist — zuletzt
+// gewollte zuerst.
+func (s *Server) standbildArbeiten() {
+	for {
 		standbildMu.Lock()
-		delete(standbildLaeuft, it.ID)
+		var a *standbildAuftrag
+		for id, x := range standbildAuftraege {
+			if x.laeuft {
+				continue
+			}
+			if time.Since(x.gewollt) > standbildVergessen {
+				// Niemand wartet mehr darauf.
+				x.err = errors.New("kein standbild")
+				close(x.fertig)
+				delete(standbildAuftraege, id)
+				continue
+			}
+			if a == nil || x.gewollt.After(a.gewollt) {
+				a = x
+			}
+		}
+		if a == nil {
+			standbildArbeiter--
+			standbildMu.Unlock()
+			return
+		}
+		a.laeuft = true
 		standbildMu.Unlock()
-		wg.Done()
-	}()
 
+		standbildPlaetze <- struct{}{}
+		a.pfad, a.err = s.standbildMachen(&a.it)
+		<-standbildPlaetze
+
+		standbildMu.Lock()
+		delete(standbildAuftraege, a.it.ID)
+		close(a.fertig)
+		standbildMu.Unlock()
+	}
+}
+
+// standbild gibt das Bild eines Titels, wenn es bis zur Frist da ist.
+// warte: ob es (noch) entsteht — dann später noch einmal fragen.
+func (s *Server) standbild(ctx context.Context, it *store.Item) (pfad string, warte bool, err error) {
+	if s.ff == nil || !s.ff.Available() {
+		return "", false, errors.New("kein ffmpeg")
+	}
+	if _, err := s.standbildZiel(it); err != nil {
+		return "", false, err
+	}
+	if p, ok := s.standbildDa(ctx, it); ok {
+		return p, false, nil
+	}
+	standbildMu.Lock()
+	wann, gescheitert := standbildFehlschlag[it.ID]
+	standbildMu.Unlock()
+	if gescheitert && time.Since(wann) < standbildPause {
+		return "", false, errors.New("kein standbild")
+	}
+	a := s.standbildAnfordern(it)
+	frist := time.NewTimer(standbildWarten)
+	defer frist.Stop()
+	select {
+	case <-a.fertig:
+		if a.err != nil {
+			standbildMu.Lock()
+			_, dauerhaft := standbildFehlschlag[it.ID]
+			standbildMu.Unlock()
+			return "", !dauerhaft, a.err
+		}
+		return a.pfad, false, nil
+	case <-frist.C:
+		return "", true, errors.New("kein standbild")
+	case <-ctx.Done():
+		return "", false, ctx.Err()
+	}
+}
+
+// standbildMachen rechnet das Bild (in der Warteschlange).
+func (s *Server) standbildMachen(it *store.Item) (string, error) {
+	ctx := context.Background()
+	ziel, err := s.standbildZiel(it)
+	if err != nil {
+		return "", err
+	}
+	// Inzwischen da (eine zweite Anfrage war schneller)?
+	if p, ok := s.standbildDa(ctx, it); ok {
+		return p, nil
+	}
 	// Scheitert etwas Dauerhaftes — keine Datei, FFmpeg findet kein Bild —,
 	// wird es vermerkt.
 	fehlschlag := func(err error) (string, error) {
@@ -154,23 +283,16 @@ func (s *Server) standbild(ctx context.Context, it *store.Item) (string, error) 
 	if err != nil {
 		return fehlschlag(err)
 	}
-
-	select {
-	case standbildPlaetze <- struct{}{}:
-		defer func() { <-standbildPlaetze }()
-	case <-ctx.Done():
-		return "", ctx.Err()
-	}
-
 	if err := os.MkdirAll(s.standbildOrdner(), 0o755); err != nil {
 		return "", err
 	}
 	tmp := ziel + ".tmp.jpg"
-	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	// Nur Schlüsselbilder dekodieren, ohne Ton und Untertitel: Auf einem NAS
-	// mit Festplatten ist das um ein Vielfaches schneller. Und keine
-	// niedrige Priorität — hier wartet jemand auf die Seite.
+	// mit Festplatten ist das um ein Vielfaches schneller. Niedrige
+	// Priorität: Abspielen geht vor, das Bild darf warten (die Karte zeigt
+	// so lange den Titel).
 	machen := func(stelle string, nurSchluessel bool) error {
 		args := []string{"-nostdin", "-loglevel", "error"}
 		if nurSchluessel {
@@ -179,7 +301,7 @@ func (s *Server) standbild(ctx context.Context, it *store.Item) (string, error) 
 		args = append(args, "-ss", stelle, "-i", datei.Path, "-an", "-sn", "-dn",
 			"-frames:v", "1", "-vf", "scale='min(1280,iw)':-2", "-q:v", "4", "-y", tmp)
 		cmd := exec.CommandContext(cctx, s.ff.FFmpegPath, args...)
-		if out, err := cmd.CombinedOutput(); err != nil {
+		if out, err := stream.Niedrig(cmd, true); err != nil {
 			_ = os.Remove(tmp)
 			return fmt.Errorf("ffmpeg: %v: %s", err, strings.TrimSpace(string(out)))
 		}
@@ -212,15 +334,22 @@ func (s *Server) standbild(ctx context.Context, it *store.Item) (string, error) 
 	if err := os.Rename(tmp, ziel); err != nil {
 		return "", err
 	}
-	_ = os.WriteFile(quelle, []byte(datei.ID), 0o644)
+	_ = os.WriteFile(ziel+".quelle", []byte(dateiKennung(datei)), 0o644)
 	return ziel, nil
 }
 
-// standbildSenden liefert das Bild aus — oder 404, dann bleibt in der
-// App der Titel stehen, wie bisher.
+// standbildSenden liefert das Bild aus — 503, solange es noch entsteht
+// (die Web-App fragt dann später noch einmal), oder 404, dann bleibt in
+// der App der Titel stehen, wie bisher.
 func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *store.Item) {
-	pfad, err := s.standbild(r.Context(), it)
+	pfad, warte, err := s.standbild(r.Context(), it)
 	if err != nil {
+		if warte {
+			w.Header().Set("Retry-After", "3")
+			w.Header().Set("Cache-Control", "no-store")
+			fail(w, http.StatusServiceUnavailable, "kein bild")
+			return
+		}
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
@@ -235,7 +364,8 @@ func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *sto
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	vermerk, _ := os.ReadFile(pfad + ".quelle")
+	bildAufbewahren(w, it.ID+":"+string(vermerk), info)
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeContent(w, r, "standbild.jpg", info.ModTime(), f)
 }

@@ -227,10 +227,12 @@ function artOf(it, kind = 'poster') {
   return titel + standbild(it, true);
 }
 // Der Titel steht in der Karte ohnehin darunter; auf dem Bild selbst
-// stünde er doppelt.
+// stünde er doppelt. data-nochmal: Entsteht das Bild noch (der Server
+// antwortet dann gleich mit 503, statt die Verbindung zu belegen), wird
+// es später noch einmal geladen.
 function standbild(it, hoch) {
   return `<img class="art-img art-frame${hoch ? ' art-frame--poster' : ''}"
-      src="${esc(it.frame)}${tokenSuffix(it.frame)}" alt="" loading="lazy" data-weg>`;
+      src="${esc(it.frame)}${tokenSuffix(it.frame)}" alt="" loading="lazy" data-weg data-nochmal="0">`;
 }
 // Das Jahr eines Titels — bei Serien der Zeitraum: „2014–2020" für eine
 // abgeschlossene, „seit 2014" für eine, die noch läuft.
@@ -6392,10 +6394,19 @@ setInterval(() => { if (api.signedIn) api.medienSchluessel().catch(() => {}); },
 // Bilder und Videos, die nicht laden, verschwinden; ein Profilbild, das
 // fehlt, wird zum Anfangsbuchstaben. „error" steigt nicht auf, darum in der
 // Einfangphase.
+// Standbilder (data-nochmal) bekommen vorher noch vier Versuche, mit
+// wachsendem Abstand: Sie entstehen erst, wenn jemand sie sehen will.
 document.addEventListener('error', e => {
   const el = e.target;
   if (!(el instanceof Element)) return;
   if (el.hasAttribute('data-ersatz')) { el.parentNode.textContent = el.getAttribute('data-ersatz'); return; }
+  const n = Number(el.getAttribute('data-nochmal'));
+  if (el.hasAttribute('data-nochmal') && n < 4) {
+    el.setAttribute('data-nochmal', String(n + 1));
+    const src = el.getAttribute('src');
+    setTimeout(() => { if (el.isConnected) el.setAttribute('src', src); }, 3000 * 2 ** n);
+    return;
+  }
   if (el.hasAttribute('data-weg')) el.remove();
 }, true);
 document.addEventListener('click', e => {
