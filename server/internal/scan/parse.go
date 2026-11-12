@@ -150,6 +150,8 @@ var (
 	// „1", „01", „Teil 2", „Part 3", „Folge 4", „Episode 5", „Ep. 6"
 	reNurNummer = regexp.MustCompile(`(?i)^(?:(?:teil|part|folge|episode|ep\.?)[\s._-]*)?(\d{1,3})$`)
 	reYearLoose = regexp.MustCompile(`(?:^|[\s._-])(19\d{2}|20\d{2})(?:[\s._-]|$)`)
+	// reCDOrdner: ein Ordner, der nur einen Teil eines Films enthält.
+	reCDOrdner = regexp.MustCompile(`(?i)^(?:cd|disc|disk|dvd|part)[\s._-]*(\d)$`)
 	// CD1, Disc 2: immer ein Dateiteil.
 	rePart = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:cd|disc|disk)[\s._-]*(\d)\b`)
 	// „Teil 2", „Part 2", „pt2": mal Dateiteil, mal Teil des Titels
@@ -226,6 +228,17 @@ func ParseFuer(path string, dirs []string, art string) Guess {
 		}
 		dirs = dirs[:k]
 		name = "movie"
+	}
+
+	// Teile in eigenen Ordnern: „Doktor Schiwago (1965)/CD1/Doktor
+	// Schiwago.avi" und „…/CD2/…" sind ein Film in zwei Teilen — nicht zwei
+	// Fassungen eines Films ohne Jahr. Titel und Jahr kommen aus dem Ordner
+	// darüber (wie bei VIDEO_TS und BDMV).
+	if n := len(dirs); n > 1 && art != "series" {
+		if m := reCDOrdner.FindStringSubmatch(strings.TrimSpace(dirs[n-1])); m != nil {
+			g.PartNo, _ = strconv.Atoi(m[1])
+			dirs = dirs[:n-1]
+		}
 	}
 
 	// Technische Angaben zuerst einsammeln, solange der Name noch vollständig ist.

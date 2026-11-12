@@ -242,3 +242,25 @@ func TestZerlegteUmlauteWerdenZusammengesetzt(t *testing.T) {
 		}
 	}
 }
+
+// B8: „CD1/"- und „CD2/"-Ordner wurden zwei Fassungen eines Films ohne
+// Jahr — gemeint ist ein Film in zwei Teilen.
+func TestTeileInCDOrdnern(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	dateiMitGroesse(t, wurzel, "Doktor Schiwago (1965)/CD1/Doktor Schiwago.avi", 10)
+	dateiMitGroesse(t, wurzel, "Doktor Schiwago (1965)/CD2/Doktor Schiwago.avi", 11)
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	if _, err := New(st, nil).Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Limit: 10})
+	if len(alle) != 1 || alle[0].Title != "Doktor Schiwago" || alle[0].Year != 1965 {
+		t.Fatalf("Titel %v, Jahr %d — erwartet ein Film „Doktor Schiwago“ (1965)", titles(alle), alle[0].Year)
+	}
+	d, _ := st.FilesFor(ctx, alle[0].ID)
+	if len(d) != 2 || d[0].PartNo != 1 || d[1].PartNo != 2 {
+		t.Fatalf("Teile: %+v", d)
+	}
+}
