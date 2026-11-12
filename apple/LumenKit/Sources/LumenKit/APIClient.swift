@@ -435,14 +435,20 @@ public actor APIClient {
         return result
     }
 
+    /// `neu`: Nach einem Zurücksetzen durch die Verwaltung antwortet der
+    /// Server auf den Einmal-Code mit 409 („neue_pin_noetig"). Dann geht
+    /// die Anmeldung noch einmal: der Einmal-Code als `secret`, die eigene
+    /// neue PIN als `neu`.
     public func unlock(profileId: String, secret: String,
-                       deviceName: String) async throws -> SignIn {
+                       deviceName: String, neu: String? = nil) async throws -> SignIn {
         struct Body: Encodable {
             let profileId: String, secret: String, deviceName: String, deviceKind: String
+            let neu: String?, neuArt: String?
         }
         let result: SignIn = try await send("POST", "/unlock", body: Body(
             profileId: profileId, secret: secret, deviceName: deviceName,
-            deviceKind: DeviceProfile.current.kind))
+            deviceKind: DeviceProfile.current.kind,
+            neu: neu, neuArt: neu == nil ? nil : "pin"))
         setToken(result.token)
         return result
     }
@@ -452,14 +458,16 @@ public actor APIClient {
     /// Passwort an. Ein Profil ohne PIN öffnet sich von aussen nicht — die
     /// Meldung des Servers sagt das, und die App zeigt sie unverändert.
     public func unlock(name: String, secret: String,
-                       deviceName: String) async throws -> SignIn {
+                       deviceName: String, neu: String? = nil) async throws -> SignIn {
         struct Body: Encodable {
             let name: String, secret: String, deviceName: String, deviceKind: String
+            let neu: String?, neuArt: String?
         }
         let result: SignIn = try await send("POST", "/unlock", body: Body(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             secret: secret, deviceName: deviceName,
-            deviceKind: DeviceProfile.current.kind))
+            deviceKind: DeviceProfile.current.kind,
+            neu: neu, neuArt: neu == nil ? nil : "pin"))
         setToken(result.token)
         return result
     }

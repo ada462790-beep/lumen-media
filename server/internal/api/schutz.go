@@ -29,10 +29,13 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	mrand "math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"lumen/internal/store"
@@ -142,17 +145,91 @@ func (s *Server) adminKontoSperre(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusForbidden, err.Error())
 		return
 	}
+	// Die Verwaltung wählt keine PIN mehr: Lumen vergibt einen Einmal-Code,
+	// mit dem sich die Person einmal anmeldet und dabei ihre eigene PIN
+	// festlegen muss (unlock, „neue_pin_noetig"). Ältere Apps schicken
+	// noch eine selbst gewählte PIN — sie gilt dann genauso nur einmal.
+	art, code := in.Art, in.Neu
+	if art == "" {
+		art = "pin"
+	}
+	if art != "none" && code == "" {
+		art, code = "pin", einmalCode()
+	}
+	if art == "none" {
+		code = ""
+	}
 	// Neuer Riegel, Verlauf weg, alle Anmeldungen weg — in einem Schritt.
-	if err := s.st.PinZuruecksetzen(r.Context(), id, in.Art, in.Neu); err != nil {
+	if err := s.st.PinZuruecksetzen(r.Context(), id, art, code); err != nil {
 		sperreFehler(w, err)
 		return
 	}
+	// Auch aus der WAL-Datei und den Sicherungen: Gelöscht heisst gelöscht.
+	s.privatesAusschreiben(id)
 	// Was gerade läuft, endet auch: Die Anmeldung dazu gibt es nicht mehr.
-	s.live.EndeKonto(id)
+	// Aber nicht sofort und nicht auf einen Schlag sichtbar: Fiele die Zahl
+	// der Wiedergaben im selben Augenblick, wüsste die Verwaltung, dass
+	// genau diese Person gerade schaute (siehe spaeterBeenden).
+	s.spaeterBeenden(id)
 	// Kein Name im Protokoll: wessen PIN neu ist, geht nur die Verwaltung
 	// im Moment des Setzens etwas an.
 	s.st.Log(r.Context(), "info", "verwaltung", "Der Schutz eines Profils wurde neu gesetzt")
-	w.WriteHeader(http.StatusNoContent)
+	ok(w, map[string]any{"einmalCode": code, "art": art})
+}
+
+// ausschreibenWG: Tests warten damit auf privatesAusschreiben.
+var ausschreibenWG sync.WaitGroup
+
+// beendenVerzug: so lange wartet spaeterBeenden — zufällig zwischen 20 und
+// 90 Sekunden. Tests setzen es auf null.
+var beendenVerzug = func() time.Duration {
+	return 20*time.Second + time.Duration(mrand.Int64N(int64(70*time.Second)))
+}
+
+// spaeterBeenden beendet die Wiedergaben eines Kontos nach einer
+// zufälligen Weile. Die Anmeldungen sind schon weg, das Gerät bekommt
+// also keine neuen Daten mehr; nur die Zählung „Aktive Wiedergaben" fällt
+// nicht im selben Augenblick, in dem die Verwaltung den Schutz
+// zurücksetzt. Sonst wäre das ein Weg zu prüfen, ob jemand gerade schaut.
+func (s *Server) spaeterBeenden(kontoID string) {
+	v := beendenVerzug()
+	if v <= 0 {
+		s.live.EndeKonto(kontoID)
+		return
+	}
+	time.AfterFunc(v, func() { s.live.EndeKonto(kontoID) })
+}
+
+// einmalCode: sechs zufällige Ziffern.
+func einmalCode() string {
+	var b [6]byte
+	_, _ = rand.Read(b[:])
+	out := make([]byte, 6)
+	for i, x := range b {
+		out[i] = '0' + x%10
+	}
+	return string(out)
+}
+
+// privatesAusschreiben: nach dem Löschen von Privatem die WAL-Datei
+// zurückschreiben und die Sicherungen ebenso bereinigen. Im Hintergrund —
+// die Sicherungen neu zu schreiben dauert bei einer grossen Datenbank.
+func (s *Server) privatesAusschreiben(kontoID string) {
+	ausschreibenWG.Add(1)
+	go func() {
+		defer ausschreibenWG.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		if err := s.st.Ausschreiben(ctx); err != nil && s.log != nil {
+			s.log.Warn("WAL-Datei liess sich nicht zurückschreiben", "err", err)
+		}
+		if kontoID == "" {
+			return
+		}
+		if err := store.SicherungenVergessen(ctx, s.sicherungsOrdner(), kontoID); err != nil {
+			s.st.Log(ctx, "error", "sicherung", "Eine Sicherung liess sich nicht bereinigen: "+err.Error())
+		}
+	}()
 }
 
 // pinHinweisText: was die Person nach einem Zurücksetzen durch die

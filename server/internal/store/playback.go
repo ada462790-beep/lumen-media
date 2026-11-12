@@ -169,13 +169,24 @@ func (s *Store) ClearProgress(ctx context.Context, accountID, itemID string) err
 	return err
 }
 
-// ClearAllProgress ist der Knopf „Verlauf löschen" in den Einstellungen.
+// ClearAllProgress ist der Knopf „Verlauf löschen" in den Einstellungen:
+// Fortschritte und Haken, die Reihenfolge von „Weiterschauen", die je
+// Serie gemerkten Spuren (verraten, welche Serien man schaut) und wann die
+// Neuigkeiten zuletzt offen waren. Merkliste, Favoriten und Bewertungen
+// sind kein Verlauf, sondern eigene Entscheidungen — sie bleiben.
 func (s *Store) ClearAllProgress(ctx context.Context, accountID string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM progress WHERE account_id = ?`, accountID)
-	if err == nil {
-		_, err = s.db.ExecContext(ctx, `DELETE FROM progress_reihe WHERE account_id = ?`, accountID)
-	}
-	return err
+	return s.tx(ctx, func(t *sql.Tx) error {
+		for _, q := range []string{
+			`DELETE FROM progress WHERE account_id = ?`,
+			`DELETE FROM progress_reihe WHERE account_id = ?`,
+			`DELETE FROM prefs WHERE account_id = ? AND (key LIKE 'spuren:%' OR key = 'newsSeen')`,
+		} {
+			if _, err := t.ExecContext(ctx, q, accountID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Store) Progress(ctx context.Context, accountID, itemID string) (*Progress, error) {

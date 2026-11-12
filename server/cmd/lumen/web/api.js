@@ -137,9 +137,12 @@ export const api = {
     return r.account;
   },
 
-  async unlock(profileId, secret) {
+  /* neu: { neu, neuArt } – nach einem Zurücksetzen durch die Verwaltung
+     legt die Person hier gleich ihren eigenen Schutz fest (Fehlercode
+     „neue_pin_noetig" ohne). */
+  async unlock(profileId, secret, neu = {}) {
     const r = await this.call('/unlock', { method: 'POST',
-      body: { profileId, secret, deviceName: deviceName(), deviceKind: 'browser' } });
+      body: { profileId, secret, ...neu, deviceName: deviceName(), deviceKind: 'browser' } });
     // Einmaliger Hinweis des Servers (etwa: die Verwaltung hat den PIN
     // zurückgesetzt). app.js zeigt ihn nach dem Anmelden an.
     this.anmeldeHinweis = r.hinweis || null;
@@ -149,9 +152,9 @@ export const api = {
   },
 
   // Von unterwegs gibt es keine Profilauswahl: Name und PIN oder Passwort.
-  async unlockName(name, secret) {
+  async unlockName(name, secret, neu = {}) {
     const r = await this.call('/unlock', { method: 'POST',
-      body: { name, secret, deviceName: deviceName(), deviceKind: 'browser' } });
+      body: { name, secret, ...neu, deviceName: deviceName(), deviceKind: 'browser' } });
     // Einmaliger Hinweis des Servers (etwa: die Verwaltung hat den PIN
     // zurückgesetzt). app.js zeigt ihn nach dem Anmelden an.
     this.anmeldeHinweis = r.hinweis || null;
@@ -456,8 +459,9 @@ export const api = {
   adminInvite(libraries, limits, days = 7, zusatz = {}) {
     return this.call('/admin/invites', { method: 'POST', body: { libraries, limits, days, ...zusatz } });
   },
-  /* PIN oder Passwort eines Haushaltsprofils neu setzen (mit Bestätigung). */
-  adminKontoSperre(id, art, neu) {
+  /* Schutz eines Haushaltsprofils zurücksetzen (mit Bestätigung). Ohne
+     „neu" vergibt der Server einen Einmal-Code → { einmalCode, art }. */
+  adminKontoSperre(id, art, neu = '') {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}/sperre`, { method: 'PUT', body: { art, neu } });
   },
   /* Das eigene Profil schützen: mit dem bisherigen Code. */

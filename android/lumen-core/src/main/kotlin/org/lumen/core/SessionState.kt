@@ -347,13 +347,30 @@ class SessionController(
         lastError = null
         if (name.isBlank()) { lastError = Texte.t(Tx.WIE_HEISST_PROFIL); return }
         if (secret.isEmpty()) { lastError = Texte.t(Tx.UNTERWEGS_NUR_MIT_GEHEIMNIS); return }
+        val einmal = einmalCode?.takeIf { it.first == "name:" + name.trim().lowercase() }?.second
         try {
-            client.unlockByName(name, secret, deviceName)
+            if (einmal != null) client.unlockByName(name, einmal, deviceName, neu = secret)
+            else client.unlockByName(name, secret, deviceName)
+            einmalCode = null
             store.token = client.token
             angemeldet(client.me())
         } catch (e: LumenException) {
+            neuePinNoetig(e, "name:" + name.trim().lowercase(), einmal ?: secret)
             lastError = e.message
         }
+    }
+
+    /**
+     * Nach einem Zurücksetzen durch die Verwaltung: der Einmal-Code, mit dem
+     * die nächste Eingabe als eigene neue PIN mitgeht. Der Server sagt das
+     * mit 409 „neue_pin_noetig"; sein Text bittet um die eigene PIN, und das
+     * PIN-Feld bleibt dasselbe — ohne eigenen Bildschirm.
+     */
+    private var einmalCode: Pair<String, String>? = null
+
+    private fun neuePinNoetig(e: LumenException, wer: String, code: String) {
+        einmalCode = if (e is LumenException.Server && e.code == "neue_pin_noetig") wer to code
+                     else einmalCode?.takeIf { it.first == wer && e is LumenException.Server && e.status == 400 }
     }
 
     fun chooseProfile(card: ProfileCard) {
@@ -362,11 +379,15 @@ class SessionController(
 
     fun unlock(card: ProfileCard, secret: String, deviceName: String = DeviceProfile.current.name) {
         lastError = null
+        val einmal = einmalCode?.takeIf { it.first == card.id }?.second
         try {
-            client.unlock(card.id, secret, deviceName)
+            if (einmal != null) client.unlock(card.id, einmal, deviceName, neu = secret)
+            else client.unlock(card.id, secret, deviceName)
+            einmalCode = null
             store.token = client.token
             angemeldet(client.me())
         } catch (e: LumenException) {
+            neuePinNoetig(e, card.id, einmal ?: secret)
             lastError = e.message
         }
     }

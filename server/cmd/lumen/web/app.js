@@ -164,6 +164,23 @@ const ADMIN_VIEWS = ['admin', 'adminBackups', 'adminUmwandlung', 'adminLibraries
 /* Was der Server beim Anmelden einmal sagen will (api.anmeldeHinweis) –
    bisher nur, dass die Verwaltung den PIN zurückgesetzt und dabei den
    Verlauf gelöscht hat. Der Text kommt übersetzt vom Server. */
+/* Nach einem Zurücksetzen durch die Verwaltung: Mit dem Einmal-Code gibt
+   es erst eine Anmeldung, wenn die Person ihre eigene PIN festlegt
+   (Server-Code „neue_pin_noetig"). anmelden(neu) schickt die Anmeldung
+   mit dem neuen Schutz noch einmal. */
+async function eigenePinFestlegen(text, anmelden) {
+  const ok = await schutzDialog({
+    titel: tr('Eigene PIN festlegen'),
+    hinweis: text,
+    ohneErlaubt: false,
+    senden: ({ art, neu }) => anmelden({ neu, neuArt: art }),
+  });
+  if (!ok) { S.error = ''; return render(); }
+  S.me = await api.me();
+  go('home');
+  return anmeldeHinweis();
+}
+
 function anmeldeHinweis() {
   const h = api.anmeldeHinweis;
   api.anmeldeHinweis = null;
@@ -4644,7 +4661,9 @@ function viewAccounts() {
   const ich = S.me?.account?.id;
   // PIN zurücksetzen: nie beim Besitzer, nicht beim eigenen Profil (das
   // geht unter „Ich"), und ein Mitverwalter nur bei Konten ohne Verwaltung.
-  const darfPin = a => !a.isOwner && a.id !== ich && (voll() || !a.isAdmin);
+  // verwaltbar: Mitverwaltende mit nur einem Teil der Bibliotheken
+  // ändern nur Konten ganz innerhalb ihres Bereichs (der Server prüft es).
+  const darfPin = a => !a.isOwner && a.id !== ich && (voll() || !a.isAdmin) && a.verwaltbar !== false;
   const rows = (S.data?.accounts || []).map(a => `
     <div class="orow" style="height:auto;padding:14px 16px;gap:12px;flex-wrap:wrap">
       ${avatar(a, 34, 'flex:none')}
@@ -4654,13 +4673,16 @@ function viewAccounts() {
           · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
-      ${!a.isOwner && !a.isAdmin && a.id !== ich ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
-      ${a.bildschirmzeit ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
+      ${!a.isOwner && !a.isAdmin && a.id !== ich && a.verwaltbar !== false ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
+      ${a.bildschirmzeit && a.verwaltbar !== false ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
       ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
       ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:13px;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
       ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
         <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
-          ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]].map(([k, n]) =>
+          ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]]
+            // Ein Kinderprofil bekommt keine Verwaltung (der Server lehnt
+            // es ab) – dann gar nicht erst anbieten.
+            .filter(([k]) => !a.isKid || k === 'schauen' || rolle(a) === k).map(([k, n]) =>
             `<option value="${k}"${rolle(a) === k ? ' selected' : ''}>${n}</option>`).join('')}</select>`
         : `<span class="t-caption c-2">${{ schauen: tr('Nur schauen'), verwalten: tr('Verwaltet mit'), voll: tr('Vollzugriff') }[rolle(a)]}</span>`}
       </div>
@@ -4909,17 +4931,22 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-pinreset'))) {
     const a = (S.data?.accounts || []).find(x => x.id === n.dataset.pinreset);
     if (!a) return;
-    const ok = await schutzDialog({
-      titel: tr('Schutz für {name}', { name: a.name }),
-      hinweis: tr('Die neue PIN gibst du der Person weiter. Sie kann sie danach unter „Ich“ selbst ändern.'),
-      // Der Server löscht beim Zurücksetzen den privaten Stand des
-      // Profils (store/vergessen.go) – das muss vorher dastehen.
-      warnung: tr('Der Verlauf, die Merkliste und die Bewertungen dieses Profils werden gelöscht – sonst könnte die Verwaltung sie einsehen.'),
-      ohneErlaubt: !a.isAdmin,
-      senden: ({ art, neu }) => api.adminKontoSperre(a.id, art, neu),
+    // Die Verwaltung wählt die PIN nicht mehr selbst: Lumen vergibt einen
+    // Einmal-Code, und beim Anmelden legt die Person ihre eigene PIN fest.
+    // Der Server löscht beim Zurücksetzen den privaten Stand des Profils
+    // (store/vergessen.go) – das muss vorher dastehen.
+    const ok = await rueckfrage({
+      titel: tr('PIN von {name} zurücksetzen?', { name: a.name }),
+      text: tr('Lumen zeigt dir gleich einen Einmal-Code für {name}. Damit meldet sich {name} an und legt dabei eine eigene PIN fest – du kennst sie danach nicht. Verlauf, Merkliste und Bewertungen dieses Profils werden gelöscht, sonst könnte die Verwaltung sie einsehen.', { name: a.name }),
+      ja: tr('Zurücksetzen'), gefaehrlich: true,
     });
-    if (ok) { toast(tr('Gespeichert')); return load(); }
-    return;
+    if (!ok) return;
+    try {
+      const r = await api.adminKontoSperre(a.id, 'pin');
+      await mitteilung(tr('Einmal-Code für {name}', { name: a.name }),
+        tr('{code} – gib diesen Code {name} weiter. Er gilt für eine einzige Anmeldung; dabei legt {name} eine eigene PIN fest. Lumen zeigt ihn nur jetzt.', { code: r?.einmalCode || '', name: a.name }));
+      return load();
+    } catch (err) { if (!err?.abgebrochen) toast(err.message); return; }
   }
   if ((n = hit('data-einladungsart'))) {
     // Nur das Feld ein- oder ausblenden: Neu zeichnen verlöre die gewählte
@@ -5178,7 +5205,7 @@ app.addEventListener('click', async e => {
     api.signOut(); S.me = null; abgemeldet(); return go('profiles');
   }
   if (hit('data-clearhistory')) {
-    if (!(await rueckfrage({ titel: tr('Verlauf löschen?'), text: tr('Alle Fortschritte und Haken in deinem Profil verschwinden. Die Dateien bleiben.'), ja: tr('Löschen'), gefaehrlich: true }))) return;
+    if (!(await rueckfrage({ titel: tr('Verlauf löschen?'), text: tr('Alle Fortschritte und Haken, „Weiterschauen“ und die gemerkten Spuren je Serie verschwinden. Merkliste, Favoriten und Bewertungen bleiben, die Dateien auch.'), ja: tr('Löschen'), gefaehrlich: true }))) return;
     try { await api.clearHistory(); toast(tr('Verlauf gelöscht')); }
     catch (err) { toast(err.message); }
     return;
@@ -5536,20 +5563,28 @@ async function formularAbschicken(e) {
   }
 
   if (f.id === 'unterwegsform') {
+    const name = f.uname.value.trim(), geheim = f.usecret.value;
     try {
-      await api.unlockName(f.uname.value.trim(), f.usecret.value);
+      await api.unlockName(name, geheim);
       S.me = await api.me();
       go('home');
       return anmeldeHinweis();
-    } catch (err) { S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render(); }
+    } catch (err) {
+      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlockName(name, geheim, neu));
+      S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
+    }
   }
   if (f.id === 'unlockform') {
+    const id = S.id, geheim = f.secret.value;
     try {
-      await api.unlock(S.id, f.secret.value);
+      await api.unlock(id, geheim);
       S.me = await api.me();
       go('home');
       return anmeldeHinweis();
-    } catch (err) { S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render(); }
+    } catch (err) {
+      if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlock(id, geheim, neu));
+      S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
+    }
   }
 
   if (f.id === 'searchform') return load();

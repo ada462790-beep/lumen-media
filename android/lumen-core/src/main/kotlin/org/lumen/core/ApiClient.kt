@@ -577,10 +577,18 @@ class ApiClient(
         return Account.from(j.required("account"))
     }
 
-    fun unlock(profileId: String, secret: String, deviceName: String): Account {
-        val body = JsonWriter.obj(
+    /**
+     * [neu]: Nach einem Zurücksetzen durch die Verwaltung antwortet der
+     * Server auf den Einmal-Code mit 409 „neue_pin_noetig". Dann geht die
+     * Anmeldung noch einmal, mit dem Einmal-Code als [secret] und der
+     * eigenen neuen PIN als [neu].
+     */
+    fun unlock(profileId: String, secret: String, deviceName: String, neu: String? = null): Account {
+        val felder = mutableListOf<Pair<String, Any?>>(
             "profileId" to profileId, "secret" to secret,
             "deviceName" to deviceName, "deviceKind" to DeviceProfile.current.kind)
+        if (neu != null) { felder += "neu" to neu; felder += "neuArt" to "pin" }
+        val body = JsonWriter.obj(*felder.toTypedArray())
         val j = parseOrThrow(send("POST", "/unlock", body = body), "/unlock")
         token = j.requiredText("token")
         return Account.from(j.required("account"))
@@ -593,10 +601,12 @@ class ApiClient(
      * oder Passwort lassen sich so öffnen; nach zu vielen Fehlversuchen
      * antwortet der Server 429 mit einer Meldung, die gezeigt werden soll.
      */
-    fun unlockByName(name: String, secret: String, deviceName: String): Account {
-        val body = JsonWriter.obj(
+    fun unlockByName(name: String, secret: String, deviceName: String, neu: String? = null): Account {
+        val felder = mutableListOf<Pair<String, Any?>>(
             "name" to name.trim(), "secret" to secret,
             "deviceName" to deviceName, "deviceKind" to DeviceProfile.current.kind)
+        if (neu != null) { felder += "neu" to neu; felder += "neuArt" to "pin" }
+        val body = JsonWriter.obj(*felder.toTypedArray())
         val j = parseOrThrow(send("POST", "/unlock", body = body), "/unlock")
         token = j.requiredText("token")
         return Account.from(j.required("account"))

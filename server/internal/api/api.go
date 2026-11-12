@@ -326,7 +326,7 @@ func (s *Server) Handler() http.Handler {
 	// Sicherung: sehen, jetzt sichern, wiederherstellen — nur der Besitzer.
 	mux.Handle("GET /api/v1/admin/backups", owner(s.adminSicherungen))
 	mux.Handle("POST /api/v1/admin/backups", owner(s.adminSichernJetzt))
-	mux.Handle("POST /api/v1/admin/backups/{nr}/restore", owner(s.adminWiederherstellen))
+	mux.Handle("POST /api/v1/admin/backups/{nr}/restore", owner(s.bestaetigt(s.adminWiederherstellen)))
 	mux.Handle("GET /api/v1/admin/update", owner(s.adminUpdate))
 	mux.Handle("POST /api/v1/admin/update/check", owner(s.adminUpdatePruefen))
 	mux.Handle("POST /api/v1/admin/update/settings", owner(s.adminUpdateEinstellen))
