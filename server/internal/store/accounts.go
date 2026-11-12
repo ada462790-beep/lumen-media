@@ -161,7 +161,8 @@ func (s *Store) CreateAccount(ctx context.Context, in NewAccount) (*Account, err
 			return nil, err
 		}
 	}
-	if in.Avatar == "" {
+	ohneBild := in.Avatar == ""
+	if ohneBild {
 		in.Avatar = "av-a"
 	}
 
@@ -189,6 +190,15 @@ func (s *Store) CreateAccount(ctx context.Context, in NewAccount) (*Account, err
 			return err
 		} else if vergeben {
 			return ErrNameVergeben
+		}
+		// Ohne gewähltes Bild: die Farbe, die im Haushalt am seltensten
+		// vorkommt — sonst waren auf „Wer schaut?" alle Kreise gleich blau.
+		if ohneBild {
+			f, err := seltensteFarbe(ctx, t)
+			if err != nil {
+				return err
+			}
+			acc.Avatar = f
 		}
 		_, err := t.ExecContext(ctx,
 			`INSERT INTO account (id, name, avatar, is_owner, is_kid, lock_kind,
@@ -783,4 +793,37 @@ func (s *Store) AlteGeraeteAbmelden(ctx context.Context, dauer time.Duration) er
 	_, err := s.db.ExecContext(ctx, `DELETE FROM token WHERE last_seen_at < ?`,
 		time.Now().Add(-dauer).Unix())
 	return err
+}
+
+// ProfilFarben sind die Farben, die ein neues Profil ohne eigenes Bild
+// bekommt, in dieser Reihenfolge.
+var ProfilFarben = []string{"av-a", "av-b", "av-c", "av-d", "av-k"}
+
+// seltensteFarbe wählt aus ProfilFarben die, die bisher am wenigsten
+// vergeben ist (bei Gleichstand die vordere).
+func seltensteFarbe(ctx context.Context, t *sql.Tx) (string, error) {
+	zahl := map[string]int{}
+	rows, err := t.QueryContext(ctx, `SELECT avatar, COUNT(*) FROM account GROUP BY avatar`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a string
+		var n int
+		if err := rows.Scan(&a, &n); err != nil {
+			return "", err
+		}
+		zahl[a] = n
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	best := ProfilFarben[0]
+	for _, f := range ProfilFarben[1:] {
+		if zahl[f] < zahl[best] {
+			best = f
+		}
+	}
+	return best, nil
 }
