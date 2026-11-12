@@ -4584,7 +4584,7 @@ function viewAdminUpdate() {
   let stand;
   if (akt && (aktWarten || (u.laeuft && u.aktualisiererStand))) {
     stand = `<div class="row" style="min-height:52px;align-items:flex-start;padding-top:12px;padding-bottom:12px" data-aktwarten>
-      <span class="spin spin--s" style="flex:none;margin-top:2px"></span>
+      <span class="spin spin--s" style="flex:none;margin-top:4px;border-color:rgba(120,120,128,.28);border-top-color:var(--label-2)"></span>
       <div style="flex:1;min-width:0">
         <div class="t-body">${tr('Wird aktualisiert — Lumen startet gleich neu')}</div>
         <div class="t-sub c-2">${tr('Der Aktualisierer holt das neue Abbild. Diese Seite meldet sich, sobald Lumen wieder da ist.')}</div>
@@ -5807,7 +5807,10 @@ app.addEventListener('click', async e => {
       return toast(err.message);
     }
     aktualisiererWarten(von);
-    if (S.view === 'adminUpdate') { S.data = { ...S.data, laeuft: true }; render(); }
+    // Neu laden, damit das Protokoll den Auftrag schon zeigt.
+    let u = null;
+    try { u = await api.adminUpdate(); } catch { /* startet womöglich schon neu */ }
+    if (S.view === 'adminUpdate') { S.data = u || { ...S.data, laeuft: true }; render(); }
     return;
   }
   if (hit('data-updjetzt') || hit('data-updtrotzdem')) {
