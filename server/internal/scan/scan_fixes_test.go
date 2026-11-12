@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"lumen/internal/store"
 )
@@ -579,5 +580,59 @@ func TestZaehlungNeuUndAktualisiert(t *testing.T) {
 	dateiMitGroesse(t, serien, "Dark (2017)/Staffel 1/Dark S01E02.mkv", 99)
 	if res, _ = sc.Scan(ctx, *slib); res.Updated != 1 || res.Added != 0 {
 		t.Errorf("geänderte Folge: %+v — erwartet 1 aktualisiert", res)
+	}
+}
+
+// gleichzeitigProbe zählt, wie viele Messungen gleichzeitig laufen.
+type gleichzeitigProbe struct {
+	mu          sync.Mutex
+	jetzt, max  int
+	reihenfolge []string
+}
+
+func (g *gleichzeitigProbe) Probe(ctx context.Context, path string) (*Probe, error) {
+	g.mu.Lock()
+	g.jetzt++
+	g.max = max(g.max, g.jetzt)
+	g.mu.Unlock()
+	time.Sleep(20 * time.Millisecond)
+	g.mu.Lock()
+	g.jetzt--
+	g.mu.Unlock()
+	return &Probe{DurationMS: 60_000, Width: 1280, Height: 720, VideoCodec: "h264"}, nil
+}
+
+// Leistungsbericht 6: Beim ersten Durchlauf lief FFprobe streng
+// nacheinander. Jetzt messen mehrere Helfer — eingetragen wird trotzdem
+// alles, und in der Reihenfolge der Ordner.
+func TestErsterDurchlaufMisstMitHelfern(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	for i := 0; i < 12; i++ {
+		dateiMitGroesse(t, wurzel, fmt.Sprintf("Film %02d (2001)/Film %02d (2001).mkv", i, i), 10)
+	}
+	for e := 1; e <= 8; e++ {
+		dateiMitGroesse(t, wurzel, fmt.Sprintf("Dark (2017)/Staffel 1/Dark S01E%02d.mkv", e), 10)
+	}
+	lib, _ := st.CreateLibrary(ctx, "Gemischt", "movie", wurzel, "de")
+	p := &gleichzeitigProbe{}
+	start := time.Now()
+	res, err := New(st, p).Scan(ctx, *lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.max < 2 {
+		t.Errorf("höchstens %d Messung(en) gleichzeitig — erwartet mindestens 2", p.max)
+	}
+	if res.Added != 20 {
+		t.Errorf("%d neu, erwartet 20 (12 Filme, 8 Folgen)", res.Added)
+	}
+	t.Logf("20 Dateien à 20 ms in %v, bis zu %d gleichzeitig", time.Since(start).Round(time.Millisecond), p.max)
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Kinds: []string{"movie"}, Limit: 50})
+	for _, it := range alle {
+		if d, _ := st.FilesFor(ctx, it.ID); len(d) != 1 || d[0].DurationMS != 60_000 {
+			t.Errorf("%s: Messung fehlt: %+v", it.Title, d)
+		}
 	}
 }

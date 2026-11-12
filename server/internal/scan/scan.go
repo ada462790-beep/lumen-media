@@ -254,6 +254,7 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	// sich geändert haben, liess sonst Hunderte Filme als „fehlt" stehen
 	// — nicht mehr abspielbar bis zum nächsten Durchlauf am nächsten Tag.
 	var fehlerPfade []string
+	var filme []filmAuftrag
 
 	// Verweise auf Ordner (Symlinks) folgt der Durchlauf — jedem Ziel nur
 	// einmal, nie in Lumens Datenordner und nie zurück in die Bibliothek
@@ -318,13 +319,6 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			fehlerPfade = append(fehlerPfade, path)
 			return nil
 		}
-		if s.Bremse != nil && s.Bremse() {
-			select {
-			case <-time.After(400 * time.Millisecond):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
 		seen[path] = true
 		s.melden(lib.ID, func(f *Fortschritt) {
 			f.Gefunden++
@@ -350,23 +344,11 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			return nil
 		}
 
-		gleich := s.unveraendert(ctx, path, info.Size(), info.ModTime().Unix())
-		eigen := discOrdner(dirs) >= 0 || lauf.eigenerOrdner(path, dirs, g.Title)
-		added, itemID, err := s.upsertMovie(ctx, lib, g, path, info.Size(), info.ModTime().Unix(), eigen)
-		if err != nil {
-			// Ohne Dateinamen: Das Protokoll verrät keine Titel (DATENSCHUTZ.md).
-			s.st.Log(ctx, "error", "scan", "eine Datei liess sich nicht eintragen: "+ohnePfad(err))
-			return nil
-		}
-		zaehlen(ctx, res, itemID, added, gleich)
-		lauf.film(ctx, path, dirs, g)
-		if eigen {
-			s.ordnerZusammenlegen(ctx, lib, filepath.Dir(path))
-		}
-		s.melden(lib.ID, func(f *Fortschritt) { f.Fertig++ })
-		if !g.Confident {
-			res.Unmatched++
-		}
+		// Filme werden erst gesammelt und nach dem Durchgehen der Ordner
+		// eingetragen — gemessen wird dabei mit ein paar Helfern voraus
+		// (vorausMessen), geschrieben der Reihe nach.
+		filme = append(filme, filmAuftrag{g: g, path: path, dirs: dirs,
+			size: info.Size(), mtime: info.ModTime().Unix()})
 		return nil
 	}
 	walkErr := walkDir(lib.Path, besuch)
@@ -378,6 +360,37 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	// Übrige als verschwunden zu vermerken.
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("%s: durchlauf abgebrochen: %w", lib.Name, err)
+	}
+
+	// Die Filme: FFprobe läuft mit einigen Helfern voraus (niedrige
+	// Priorität), eingetragen wird der Reihe nach — die Datenbank sieht
+	// nur einen Schreiber.
+	skelette := make([]*store.MediaFile, len(filme))
+	for i, a := range filme {
+		skelette[i] = dateiSkelett(a.g, a.path, a.size, a.mtime)
+	}
+	gemessen := s.vorausMessen(ctx, skelette)
+	for i, a := range filme {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("%s: durchlauf abgebrochen: %w", lib.Name, err)
+		}
+		gleich := s.unveraendert(ctx, a.path, a.size, a.mtime)
+		eigen := discOrdner(a.dirs) >= 0 || lauf.eigenerOrdner(a.path, a.dirs, a.g.Title)
+		added, itemID, err := s.upsertMovieGemessen(ctx, lib, a.g, a.path, a.size, a.mtime, eigen, gemessen(i))
+		s.melden(lib.ID, func(f *Fortschritt) { f.Fertig++; f.Datei = filepath.Base(a.path) })
+		if err != nil {
+			// Ohne Dateinamen: Das Protokoll verrät keine Titel (DATENSCHUTZ.md).
+			s.st.Log(ctx, "error", "scan", "eine Datei liess sich nicht eintragen: "+ohnePfad(err))
+			continue
+		}
+		zaehlen(ctx, res, itemID, added, gleich)
+		lauf.film(ctx, a.path, a.dirs, a.g)
+		if eigen {
+			s.ordnerZusammenlegen(ctx, lib, filepath.Dir(a.path))
+		}
+		if !a.g.Confident {
+			res.Unmatched++
+		}
 	}
 
 	// Folgen ohne Jahr oder Land gehören zur gleichnamigen Serie mit, wenn
@@ -418,8 +431,8 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			}
 		})
 		added, unmatched, err := s.upsertSeries(ctx, lib, hits, lauf)
-		folgen := len(hits)
-		s.melden(lib.ID, func(f *Fortschritt) { f.Fertig += folgen })
+		// Fertig zählt upsertSeries je gemessene Folge hoch — bei einer
+		// Serie mit 1 000 Folgen stand der Balken sonst minutenlang still.
 		if err != nil {
 			s.st.Log(ctx, "error", "scan", err.Error())
 			continue
@@ -657,6 +670,13 @@ type episodeHit struct {
 
 func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 	path string, size, mtime int64, ordnerEigen bool) (added bool, itemID string, err error) {
+	return s.upsertMovieGemessen(ctx, lib, g, path, size, mtime, ordnerEigen, nil)
+}
+
+// upsertMovieGemessen ist upsertMovie mit einer schon gemachten Messung
+// (vorausMessen); nil = hier messen.
+func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g Guess,
+	path string, size, mtime int64, ordnerEigen bool, gemessen *store.MediaFile) (added bool, itemID string, err error) {
 
 	// „pulp fiction" aus einem kleingeschriebenen Dateinamen wird „Pulp
 	// Fiction" — bis die Metadaten den richtigen Namen bringen.
@@ -697,7 +717,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 				PartNo: g.PartNo, Edition: g.Edition, HDR: g.HDR,
 				Container: strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), "."),
 			}
-			s.fillFromProbe(ctx, f)
+			s.messungNehmen(ctx, f, gemessen)
 			return false, alt.ID, s.dateiSchreiben(ctx, s.st, f)
 		}
 	}
@@ -748,7 +768,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 		PartNo: g.PartNo, Edition: g.Edition, HDR: g.HDR,
 		Container: strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), "."),
 	}
-	s.fillFromProbe(ctx, f)
+	s.messungNehmen(ctx, f, gemessen)
 	return added, item.ID, s.dateiSchreiben(ctx, s.st, f)
 }
 
@@ -935,13 +955,17 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 		// nicht mehr (store/sperren.go).
 		gesperrt[i] = s.st.GesperrteFolgeZuPfad(ctx, h.path, series.ID)
 		gleich[i] = s.unveraendert(ctx, h.path, h.size, h.mtime)
-		f := &store.MediaFile{
-			Path: h.path, SizeBytes: h.size, MTime: h.mtime,
-			PartNo: g.PartNo, Edition: g.Edition, HDR: g.HDR,
-			Container: strings.TrimPrefix(strings.ToLower(filepath.Ext(h.path)), "."),
-		}
-		s.fillFromProbe(ctx, f)
-		dateien[i] = f
+		dateien[i] = dateiSkelett(g, h.path, h.size, h.mtime)
+	}
+	// Mit einigen Helfern messen (vorausMessen) — geschrieben wird danach
+	// in Stapeln, der Reihe nach.
+	gemessen := s.vorausMessen(ctx, dateien)
+	for i := range dateien {
+		gemessen(i)
+		s.melden(lib.ID, func(f *Fortschritt) { f.Fertig++ })
+	}
+	if err := ctx.Err(); err != nil {
+		return added, unmatched, err
 	}
 
 	for start := 0; start < len(hits); {
@@ -1242,6 +1266,16 @@ func (s *Scanner) fillFromProbe(ctx context.Context, f *store.MediaFile) {
 		f.Spuren = SpurenFuerStore(daneben)
 		f.Kapitel = []store.Chapter{}
 		return
+	}
+	// Wird gerade umgewandelt, hat die Wiedergabe Vorrang: vor jeder
+	// Messung eine kurze Pause (nur vor echten Messungen — eine
+	// unveränderte Datei kostet nichts).
+	if s.Bremse != nil && s.Bremse() {
+		select {
+		case <-time.After(400 * time.Millisecond):
+		case <-ctx.Done():
+			return
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
