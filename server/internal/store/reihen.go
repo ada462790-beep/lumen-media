@@ -112,6 +112,10 @@ func (s *Store) ReihenNeuBilden(ctx context.Context) (int, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT i.id, i.title, COALESCE(i.year, 0) FROM item i
 		  WHERE i.kind = 'movie'
+		    -- Ein Film ohne abspielbare Datei (gelöscht, umbenannt) bildet
+		    -- keine Reihe — sonst wurde aus „Alien" und seinem umbenannten
+		    -- Doppel die Reihe „Alien · 2 Filme".
+		    AND i.fehlt_seit IS NULL
 		    AND NOT EXISTS (SELECT 1 FROM collection_item ci
 		                      JOIN collection c ON c.id = ci.collection_id
 		                     WHERE ci.item_id = i.id AND c.source = 'tmdb')

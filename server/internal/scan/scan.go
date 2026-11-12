@@ -63,13 +63,16 @@ type Chapter struct {
 // Result ist, was ein Durchlauf gebracht hat — das, was danach im Protokoll
 // und in der Verwaltung steht.
 type Result struct {
-	Library   string        `json:"library"`
-	Added     int           `json:"added"`
-	Updated   int           `json:"updated"`
-	Unmatched int           `json:"unmatched"`
-	Missing   int           `json:"missing"`
-	Took      time.Duration `json:"-"`
-	TookMS    int64         `json:"tookMs"`
+	Library   string `json:"library"`
+	Added     int    `json:"added"`
+	Updated   int    `json:"updated"`
+	Unmatched int    `json:"unmatched"`
+	Missing   int    `json:"missing"`
+	// Renamed: Dateien, die umbenannt oder verschoben wurden und ihren
+	// Titel behalten haben (umbenannt.go).
+	Renamed int           `json:"renamed"`
+	Took    time.Duration `json:"-"`
+	TookMS  int64         `json:"tookMs"`
 }
 
 // Fortschritt ist, wie weit ein laufender Durchlauf ist.
@@ -325,17 +328,13 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 
 		gleich := s.unveraendert(ctx, path, info.Size(), info.ModTime().Unix())
 		eigen := discOrdner(dirs) >= 0 || lauf.eigenerOrdner(path, dirs, g.Title)
-		added, err := s.upsertMovie(ctx, lib, g, path, info.Size(), info.ModTime().Unix(), eigen)
+		added, itemID, err := s.upsertMovie(ctx, lib, g, path, info.Size(), info.ModTime().Unix(), eigen)
 		if err != nil {
 			// Ohne Dateinamen: Das Protokoll verrät keine Titel (DATENSCHUTZ.md).
 			s.st.Log(ctx, "error", "scan", "eine Datei liess sich nicht eintragen: "+ohnePfad(err))
 			return nil
 		}
-		if added {
-			res.Added++
-		} else if !gleich {
-			res.Updated++
-		}
+		zaehlen(ctx, res, itemID, added, gleich)
 		lauf.film(ctx, path, dirs, g)
 		if eigen {
 			s.ordnerZusammenlegen(ctx, lib, filepath.Dir(path))
@@ -379,12 +378,8 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 					g.PartNo = 1
 				}
 				gleich := s.unveraendert(ctx, h.path, h.size, h.mtime)
-				if added, err := s.upsertMovie(ctx, lib, g, h.path, h.size, h.mtime, false); err == nil {
-					if added {
-						res.Added++
-					} else if !gleich {
-						res.Updated++
-					}
+				if added, itemID, err := s.upsertMovie(ctx, lib, g, h.path, h.size, h.mtime, false); err == nil {
+					zaehlen(ctx, res, itemID, added, gleich)
 					lauf.film(ctx, h.path, h.dirs, g)
 				}
 				s.melden(lib.ID, func(f *Fortschritt) { f.Fertig++ })
@@ -437,6 +432,26 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	} else if gone, n, err := s.st.FehlendVermerken(ctx, lib.ID, seen, unterFehlerPfad(fehlerPfade)); err == nil {
 		res.Missing = len(gone)
 		verschont = n
+		// Umbenannt oder verschoben: dieselbe Datei unter neuem Namen
+		// behält ihren Titel samt Stand und Merkliste (umbenannt.go).
+		umgezogen, titelWeg := s.umbenennungenErkennen(ctx, lib, gone)
+		res.Missing -= umgezogen
+		res.Added -= titelWeg
+		res.Renamed = umgezogen
+	}
+	// Welche Titel keine abspielbare Datei mehr haben (fehlt_seit): Nach
+	// der Frist blendet die Mediathek sie aus.
+	if err := s.st.VerfuegbarkeitNachfuehren(ctx, lib.ID); err != nil {
+		s.st.Log(ctx, "warn", "scan", "Verfügbarkeit liess sich nicht nachführen: "+ohnePfad(err))
+	}
+	if m := merkerVon(ctx); m != nil {
+		m.mu.Lock()
+		defekt := m.neuDefekt
+		m.mu.Unlock()
+		if defekt > 0 {
+			s.st.Log(ctx, "warn", "scan", fmt.Sprintf(
+				"%s: %d Dateien liessen sich nicht ausmessen (Liste unter Aufräumen)", lib.Name, defekt))
+		}
 	}
 	// Was früher aus einem Papierkorb oder Schnappschuss des NAS
 	// eingelesen wurde („#recycle", „@eaDir"), fliegt ganz heraus — als
@@ -453,15 +468,19 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			"%s: %d Ordner oder Dateien liessen sich nicht lesen — %d bekannte Dateien darin "+
 				"bleiben, wie sie waren (Liste unter Aufräumen)", lib.Name, unlesbar, verschont))
 	}
+	// „Aktualisiert": Titel, deren Datei sich geändert hat, die wieder da
+	// ist, die eine weitere Fassung bekommen haben oder deren NFO neu ist
+	// — ohne die, die dieser Durchlauf erst angelegt hat.
+	res.Updated = aktualisiertZahl(ctx, lauf)
 	res.Took = time.Since(start)
 	res.TookMS = res.Took.Milliseconds()
 	s.ergebnisSetzen(ctx, lib, store.ScanErgebnis{
-		At: time.Now(), Added: res.Added, Updated: res.Updated, Missing: res.Missing,
+		At: time.Now(), Added: res.Added, Updated: res.Updated, Missing: res.Missing, Renamed: res.Renamed,
 		Unmatched: res.Unmatched, TookMS: res.TookMS, Auto: ctx.Value(vonSelbstKey{}) == true,
 	})
 	s.st.Log(ctx, "info", "scan", fmt.Sprintf(
-		"%s geprüft · %d neu, %d aktualisiert, %d nicht erkannt, %d fehlen · %s",
-		lib.Name, res.Added, res.Updated, res.Unmatched, res.Missing,
+		"%s geprüft · %d neu, %d aktualisiert, %d umbenannt, %d nicht erkannt, %d fehlen · %s",
+		lib.Name, res.Added, res.Updated, res.Renamed, res.Unmatched, res.Missing,
 		res.Took.Round(time.Millisecond)))
 	return res, nil
 }
@@ -521,11 +540,59 @@ func (s *Scanner) ergebnisSetzen(ctx context.Context, lib store.Library, e store
 }
 
 // unveraendert: Diese Datei kennt Lumen schon, mit derselben Grösse und
-// demselben Änderungsdatum. Sie zählt dann nicht als „geändert" — vorher
-// meldete jedes „Prüfen" alle Filme als geändert, auch wenn nichts war.
+// demselben Änderungsdatum, und sie fehlte nicht. Sie zählt dann nicht als
+// „geändert" — vorher meldete jedes „Prüfen" alle Filme als geändert, auch
+// wenn nichts war. Eine wieder aufgetauchte Datei zählt als geändert.
 func (s *Scanner) unveraendert(ctx context.Context, path string, size, mtime int64) bool {
 	alt := s.gemessen(ctx, path)
-	return alt != nil && alt.Datei.SizeBytes == size && alt.Datei.MTime == mtime
+	return alt != nil && !alt.Datei.Missing && alt.Datei.SizeBytes == size && alt.Datei.MTime == mtime
+}
+
+// zaehlen merkt sich für das Ergebnis, was mit dem Titel einer Datei
+// geschah: neu angelegt oder (Datei geändert, wieder da, weitere Fassung)
+// aktualisiert.
+func zaehlen(ctx context.Context, res *Result, itemID string, added, gleich bool) {
+	m := merkerVon(ctx)
+	if m == nil {
+		if added {
+			res.Added++
+		} else if !gleich {
+			res.Updated++
+		}
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	switch {
+	case added:
+		res.Added++
+		m.neueTitel[itemID] = true
+	case !gleich && itemID != "":
+		m.aktualisiert[itemID] = true
+	}
+}
+
+// aktualisiertZahl: die Titel, die dieser Durchlauf aktualisiert hat,
+// ohne die, die er neu angelegt hat — samt geänderter NFO-Dateien.
+func aktualisiertZahl(ctx context.Context, lauf *lokalLauf) int {
+	m := merkerVon(ctx)
+	if m == nil {
+		return 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if lauf != nil {
+		for id := range lauf.nfoGeaendert {
+			m.aktualisiert[id] = true
+		}
+	}
+	n := 0
+	for id := range m.aktualisiert {
+		if !m.neueTitel[id] {
+			n++
+		}
+	}
+	return n
 }
 
 // ordnerUeberspringen: Beiwerk-Ordner und versteckte Ordner liest der
@@ -555,7 +622,7 @@ type episodeHit struct {
 // ---------------------------------------------------------------- Filme
 
 func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
-	path string, size, mtime int64, ordnerEigen bool) (added bool, err error) {
+	path string, size, mtime int64, ordnerEigen bool) (added bool, itemID string, err error) {
 
 	// „pulp fiction" aus einem kleingeschriebenen Dateinamen wird „Pulp
 	// Fiction" — bis die Metadaten den richtigen Namen bringen.
@@ -588,7 +655,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 				// finden, unter dem richtigen vielleicht schon.
 				alt.MatchState = "pending"
 				if err := s.st.UpsertItem(ctx, alt); err != nil {
-					return false, err
+					return false, "", err
 				}
 			}
 			f := &store.MediaFile{
@@ -597,7 +664,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 				Container: strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), "."),
 			}
 			s.fillFromProbe(ctx, f)
-			return false, s.dateiSchreiben(ctx, s.st, f)
+			return false, alt.ID, s.dateiSchreiben(ctx, s.st, f)
 		}
 	}
 
@@ -620,7 +687,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 	// so entstehen die Doppel, die das Aufräumen später zeigt.
 	existing, err := s.st.TitelGleich(ctx, lib.ID, "movie", title, false)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	for i := 0; item == nil && i < len(existing); i++ {
 		if strings.EqualFold(existing[i].Title, title) &&
@@ -637,7 +704,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 			MatchState: matchState(g),
 		}
 		if err := s.st.UpsertItem(ctx, item); err != nil {
-			return false, err
+			return false, "", err
 		}
 		added = true
 	}
@@ -648,7 +715,7 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 		Container: strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), "."),
 	}
 	s.fillFromProbe(ctx, f)
-	return added, s.dateiSchreiben(ctx, s.st, f)
+	return added, item.ID, s.dateiSchreiben(ctx, s.st, f)
 }
 
 // ordnerZusammenlegen heilt, was ältere Fassungen in einem Ordner, der
@@ -722,7 +789,8 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 		if err := s.st.UpsertItem(ctx, series); err != nil {
 			return 0, 0, err
 		}
-		added++
+		// Gezählt werden die Folgen, nicht Serie und Staffeln dazu —
+		// „2443 neu" für 2400 neue Folgen war verwirrend.
 	} else if erkannt := s.festerTitel(ctx, series); !erkannt &&
 		((jahr > 0 && series.Year != jahr) || series.Title != title) {
 		// Eine nie erkannte Serie, die eine ältere Fassung ohne Jahr
@@ -821,6 +889,7 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 	// drei je Folge, und keine, die offen bleibt, während FFprobe läuft.
 	dateien := make([]*store.MediaFile, len(hits))
 	gesperrt := make([]string, len(hits))
+	gleich := make([]bool, len(hits))
 	staffelGelesen := map[int]bool{}
 	for i, h := range hits {
 		if err := ctx.Err(); err != nil {
@@ -831,6 +900,7 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 		// die Datei bei dieser Folge — die Nummer im Dateinamen gilt dann
 		// nicht mehr (store/sperren.go).
 		gesperrt[i] = s.st.GesperrteFolgeZuPfad(ctx, h.path, series.ID)
+		gleich[i] = s.unveraendert(ctx, h.path, h.size, h.mtime)
 		f := &store.MediaFile{
 			Path: h.path, SizeBytes: h.size, MTime: h.mtime,
 			PartNo: g.PartNo, Edition: g.Edition, HDR: g.HDR,
@@ -855,6 +925,7 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 					if err := s.dateiSchreiben(ctx, st, dateien[i]); err != nil {
 						return err
 					}
+					zaehlen(ctx, &Result{}, gesperrt[i], false, gleich[i])
 					continue
 				}
 				season, ok := seasons[g.SeasonNo]
@@ -900,6 +971,9 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 					}
 					folgen[season.ID] = append(folgen[season.ID], *ep)
 					added++
+					zaehlen(ctx, &Result{}, ep.ID, true, false)
+				} else {
+					zaehlen(ctx, &Result{}, ep.ID, false, gleich[i])
 				}
 				if !g.Confident {
 					unmatched++
@@ -1116,6 +1190,15 @@ func (s *Scanner) fillFromProbe(ctx context.Context, f *store.MediaFile) {
 		altBehalten(f, &alt.Datei)
 		return
 	}
+	// Schon als defekt bekannt und unverändert: nicht bei jedem Durchlauf
+	// neu messen (und neu ins Protokoll schreiben) — erst, wenn sich die
+	// Datei ändert (fertig kopiert, ersetzt) oder die Rechte stimmen.
+	if alt != nil && alt.Datei.Defekt != "" && alt.Datei.SizeBytes == f.SizeBytes &&
+		alt.Datei.MTime == f.MTime && (alt.Datei.Defekt != DefektGesperrt || !lesbar(f.Path)) {
+		altBehalten(f, &alt.Datei)
+		f.Defekt = alt.Datei.Defekt
+		return
+	}
 
 	if s.probe == nil {
 		// Ohne FFmpeg bleiben wenigstens die Untertitel daneben nicht liegen.
@@ -1131,9 +1214,29 @@ func (s *Scanner) fillFromProbe(ctx context.Context, f *store.MediaFile) {
 
 	p, err := s.probe.Probe(ctx, f.Path)
 	if err != nil {
-		// Nur der Grund, nicht der Dateiname: Das Protokoll beschreibt den
-		// Server, nicht die Sammlung.
-		s.st.Log(ctx, "warn", "scan", "eine Datei liess sich nicht ausmessen: "+grund(err))
+		if ctx.Err() != nil {
+			// Abgebrochen (Lumen fährt herunter, Zeit um): kein Urteil
+			// über die Datei.
+			if alt != nil {
+				altBehalten(f, &alt.Datei)
+				f.Defekt = alt.Datei.Defekt
+			}
+			return
+		}
+		// Die Datei kommt unter Aufräumen (mit Pfad, nur für Verwalter)
+		// und wird nicht als abspielbar angeboten. Ins Protokoll kommt
+		// am Ende des Durchlaufs nur die Zahl (keine Titel, DATENSCHUTZ.md).
+		f.Defekt = defektGrund(f)
+		if m := merkerVon(ctx); m != nil {
+			m.mu.Lock()
+			m.neuDefekt++
+			m.mu.Unlock()
+		} else {
+			s.st.Log(ctx, "warn", "scan", "eine Datei liess sich nicht ausmessen: "+grund(err))
+		}
+		// Hatte sie früher eine gültige Messung (etwa nur kurz nicht
+		// lesbar), bleibt die stehen — abspielen lässt sie sich erst, wenn
+		// eine neue Messung gelingt.
 		if alt != nil {
 			altBehalten(f, &alt.Datei)
 		}
@@ -1148,6 +1251,36 @@ func (s *Scanner) fillFromProbe(ctx context.Context, f *store.MediaFile) {
 	if p.Container != "" {
 		f.Container = p.Container
 	}
+}
+
+// Gründe, warum eine Datei defekt ist (store.MediaFile.Defekt).
+const (
+	DefektLeer     = "leer"     // 0 Byte (oder noch beim Kopieren)
+	DefektGesperrt = "gesperrt" // keine Leserechte
+	DefektKaputt   = "kaputt"   // FFmpeg erkennt nichts darin
+)
+
+// defektGrund: warum sich eine Datei nicht ausmessen liess.
+func defektGrund(f *store.MediaFile) string {
+	switch {
+	case f.SizeBytes == 0:
+		return DefektLeer
+	case !lesbar(f.Path):
+		return DefektGesperrt
+	}
+	return DefektKaputt
+}
+
+// lesbar: Lumen darf die Datei öffnen. (Ein lstat beim Durchlaufen gelingt
+// auch ohne Leserecht — darum zählte eine Datei mit chmod 000 früher
+// nicht als unlesbar.)
+func lesbar(pfad string) bool {
+	h, err := os.Open(pfad)
+	if err != nil {
+		return false
+	}
+	h.Close()
+	return true
 }
 
 // altBehalten übernimmt die Messwerte der letzten Messung. Spuren und

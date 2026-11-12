@@ -334,11 +334,11 @@ func (s *Store) GemessenZuPfad(ctx context.Context, path string) *Gemessen {
 		`SELECT id, item_id, path, size_bytes, mtime, part_no, COALESCE(edition,''),
 		        COALESCE(container,''), COALESCE(duration_ms,0), COALESCE(bitrate,0),
 		        COALESCE(width,0), COALESCE(height,0), COALESCE(video_codec,''),
-		        COALESCE(hdr,''), spuren_gelesen, missing_since IS NOT NULL
+		        COALESCE(hdr,''), spuren_gelesen, missing_since IS NOT NULL, COALESCE(defekt,'')
 		   FROM media_file WHERE path = ?`, path).
 		Scan(&f.ID, &f.ItemID, &f.Path, &f.SizeBytes, &f.MTime, &f.PartNo, &f.Edition,
 			&f.Container, &f.DurationMS, &f.Bitrate, &f.Width, &f.Height, &f.VideoCodec,
-			&f.HDR, &gelesen, &f.Missing)
+			&f.HDR, &gelesen, &f.Missing, &f.Defekt)
 	if err != nil {
 		return nil
 	}

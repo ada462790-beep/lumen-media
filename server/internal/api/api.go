@@ -359,6 +359,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/admin/sessions/{id}", admin(s.adminStopSession))
 	mux.Handle("GET /api/v1/admin/log", admin(s.adminLog))
 	mux.Handle("GET /api/v1/admin/cleanup", admin(s.adminCleanup))
+	mux.Handle("POST /api/v1/admin/cleanup/fehlende-entfernen", admin(s.adminFehlendeEntfernen))
 	mux.Handle("GET /api/v1/admin/accounts", admin(s.adminAccounts))
 	mux.Handle("POST /api/v1/admin/invites", admin(s.adminCreateInvite))
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/limits", admin(s.bestaetigt(s.adminSetLimits)))

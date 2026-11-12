@@ -137,7 +137,11 @@ func Open(path string) (*Store, error) {
 // (vorspannErkennungTabellen): Lesefehler gelten nicht mehr für immer.
 // Alte Fehler-Zeilen haben kein wieder_ab und kommen einmal neu dran.
 // Dazu die Tabelle abspann (spuren.go): Abspann von Hand oder „keiner".
-const SchemaStand = 13
+//
+// Stand 14 (Scan): media_file.defekt und item.fehlt_seit
+// (scanVerfuegbarkeitNachruesten in scan_aufraeumen.go) — zwei neue
+// Spalten, gefüllt beim nächsten Durchlauf; nichts umzurechnen.
+const SchemaStand = 14
 
 // umbauOffenEndung: die Marke neben der Datenbank, solange ein Umbau
 // nicht ganz durch ist (vorDemNachruesten).
@@ -677,6 +681,10 @@ func nachruesten(db *sql.DB) error {
 	}
 	// Bildschirmzeit (bildschirmzeit.go, Stand 12).
 	if err := bildschirmzeitNachruesten(db); err != nil {
+		return err
+	}
+	// Defekte Dateien, fehlende Titel (scan_aufraeumen.go, Stand 14).
+	if err := scanVerfuegbarkeitNachruesten(db); err != nil {
 		return err
 	}
 	// Handbearbeitung, eigene Sammlungen, Untertitel (funktionen_schema.go).

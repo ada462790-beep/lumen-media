@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -71,5 +72,53 @@ func TestNachDemZusammenfuehrenLaeuftDerDurchlauf(t *testing.T) {
 	d, _ := h.st.FilesFor(t.Context(), it.ID)
 	if len(d) != 1 || d[0].DurationMS < 3000 {
 		t.Fatalf("die zusammengeführte Datei hat keine Laufzeit: %+v", d)
+	}
+}
+
+// B5: Eine defekte Datei abzuspielen gibt einen klaren Fehler (422,
+// datei_defekt) statt endlos „Wird umgewandelt" und HTTP 500; unter
+// Aufräumen steht sie mit Grund.
+func TestDefekteDateiGibtKlarenFehler(t *testing.T) {
+	h := newHarness(t)
+	_, fileID := h.film("Kaputt", 1)
+	f, _ := h.st.File(t.Context(), fileID)
+	f.Defekt = "kaputt"
+	if err := h.st.UpsertFile(t.Context(), f); err != nil {
+		t.Fatal(err)
+	}
+	for _, pfad := range []string{"/plan", "/browser.mp4", "/hls/master.m3u8", ""} {
+		resp, raw := h.do("GET", "/api/v1/stream/"+fileID+pfad, "", h.tok)
+		if resp.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "datei_defekt") {
+			t.Errorf("%s: %d %s", pfad, resp.StatusCode, raw)
+		}
+	}
+	_, raw := h.do("GET", "/api/v1/admin/cleanup", "", h.tok)
+	if !strings.Contains(string(raw), `"grund":"defekt_kaputt"`) {
+		t.Errorf("Aufräumen nennt die defekte Datei nicht: %s", raw)
+	}
+}
+
+// B4: Fehlende Dateien lassen sich unter Aufräumen endgültig entfernen;
+// der Titel ohne Datei verschwindet mit.
+func TestFehlendeEndgueltigEntfernen(t *testing.T) {
+	h := newHarness(t)
+	itemID, fileID := h.film("Up", 1)
+	h.film("Bleibt", 1)
+	if _, err := h.st.DB().Exec(`UPDATE media_file SET missing_since = 1 WHERE id = ?`, fileID); err != nil {
+		t.Fatal(err)
+	}
+	_, raw := h.do("GET", "/api/v1/admin/cleanup", "", h.tok)
+	if !strings.Contains(string(raw), `"missing":1`) {
+		t.Errorf("Aufräumen zählt die fehlende Datei nicht: %s", raw)
+	}
+	resp, raw := h.do("POST", "/api/v1/admin/cleanup/fehlende-entfernen", `{"fileIds":["`+fileID+`"]}`, h.tok)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"entfernt":1`) {
+		t.Fatalf("entfernen: %d %s", resp.StatusCode, raw)
+	}
+	if _, err := h.st.Item(t.Context(), itemID); err == nil {
+		t.Fatal("der Titel ohne Datei steht noch da")
+	}
+	if n, _ := h.st.Count(t.Context(), store.Query{Libraries: []string{h.lib.ID}}); n != 1 {
+		t.Fatalf("%d Titel übrig, erwartet 1", n)
 	}
 }

@@ -48,10 +48,20 @@ type durchlaufMerker struct {
 	ordner       string
 	ordnerInhalt []os.DirEntry
 	ordnerFehler error
+	// neuDefekt: Dateien, die sich in diesem Durchlauf nicht ausmessen
+	// liessen — am Ende eine Zeile im Protokoll statt einer je Datei.
+	neuDefekt int
+	// neuePfade: Dateien, die Lumen vor diesem Durchlauf nicht kannte —
+	// Kandidaten für umbenannte Dateien (umbenannt.go).
+	neuePfade []string
+	// neueTitel und aktualisiert: für das Ergebnis (scan.go, zaehlen).
+	neueTitel    map[string]bool
+	aktualisiert map[string]bool
 }
 
 func mitDurchlauf(ctx context.Context) context.Context {
-	return context.WithValue(ctx, durchlaufKey{}, &durchlaufMerker{gemessen: map[string]*store.Gemessen{}})
+	return context.WithValue(ctx, durchlaufKey{}, &durchlaufMerker{gemessen: map[string]*store.Gemessen{},
+		neueTitel: map[string]bool{}, aktualisiert: map[string]bool{}})
 }
 
 func merkerVon(ctx context.Context) *durchlaufMerker {
@@ -119,9 +129,10 @@ func untertitelDaneben(ctx context.Context, videoPath string) []Track {
 // Stapels (store.Stapel).
 func (s *Scanner) dateiSchreiben(ctx context.Context, st *store.Store, f *store.MediaFile) error {
 	var alt *store.Gemessen
+	gemerkt := false
 	if m := merkerVon(ctx); m != nil {
 		m.mu.Lock()
-		alt = m.gemessen[f.Path]
+		alt, gemerkt = m.gemessen[f.Path]
 		// Ab hier gilt, was gleich in der Datenbank steht — nicht mehr
 		// die gemerkte Messung.
 		delete(m.gemessen, f.Path)
@@ -130,6 +141,14 @@ func (s *Scanner) dateiSchreiben(ctx context.Context, st *store.Store, f *store.
 	if alt != nil && f.Spuren == nil && f.Kapitel == nil && gleicheDatei(&alt.Datei, f) {
 		f.ID = alt.Datei.ID
 		return nil
+	}
+	if m := merkerVon(ctx); m != nil {
+		m.mu.Lock()
+		switch {
+		case alt == nil && gemerkt:
+			m.neuePfade = append(m.neuePfade, f.Path)
+		}
+		m.mu.Unlock()
 	}
 	return st.UpsertFile(ctx, f)
 }
@@ -142,7 +161,7 @@ func gleicheDatei(alt, neu *store.MediaFile) bool {
 	if teil == 0 {
 		teil = 1
 	}
-	return !alt.Missing &&
+	return !alt.Missing && alt.Defekt == neu.Defekt &&
 		alt.ItemID == neu.ItemID && alt.SizeBytes == neu.SizeBytes && alt.MTime == neu.MTime &&
 		alt.PartNo == teil && alt.Edition == neu.Edition && alt.Container == neu.Container &&
 		alt.DurationMS == neu.DurationMS && alt.Bitrate == neu.Bitrate &&
