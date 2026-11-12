@@ -807,11 +807,9 @@ type Duplicate struct {
 	Files  []MediaFile `json:"files"`
 }
 
-// doppelVon findet Filme in Teilen: mehr als eine vorhandene Datei, und
-// die Dateien sind Teil 1, 2, … n (cd1/cd2, a/b/c). Mehrere Fassungen
-// eines Films (MKV und AVI, 1080p und 4K) sind kein Fall fürs Aufräumen —
-// sie bleiben ein Film, und man wählt beim Abspielen. Vorher zählte die
-// Übersicht sie als „Doppel" mit, die Seite Aufräumen zeigte sie nicht.
+// doppelVon findet Filme mit mehr als einer vorhandenen Datei — Fassungen
+// (MKV und AVI, 1080p und 4K) und Teile (cd1/cd2, a/b/c). Die Seite
+// Aufräumen zeigt beides getrennt.
 //
 // Erst die Kandidaten über den Index file_by_item allein (mehr als eine
 // Datei, ob vorhanden oder nicht) — das liest keine einzige Tabellenzeile.
@@ -820,16 +818,28 @@ const doppelVon = `
 	   FROM (SELECT item_id FROM media_file GROUP BY item_id HAVING count(*) > 1) d
 	   JOIN item i ON i.id = d.item_id
 	  WHERE i.kind = 'movie'
+	    AND (SELECT count(*) FROM media_file f
+	          WHERE f.item_id = d.item_id AND f.missing_since IS NULL) > 1`
+
+// teileVon: nur die Filme in Teilen — die vorhandenen Dateien sind Teil
+// 1, 2, … n. Mehrere Fassungen eines Films sind kein Fall fürs Aufräumen;
+// sie bleiben ein Film, und man wählt beim Abspielen. Vorher zählte die
+// Übersicht sie als „Doppel" mit.
+const teileVon = `
+	   FROM (SELECT item_id FROM media_file GROUP BY item_id HAVING count(*) > 1) d
+	   JOIN item i ON i.id = d.item_id
+	  WHERE i.kind = 'movie'
 	    AND (SELECT count(*) > 1 AND count(DISTINCT part_no) = count(*)
 	                AND min(part_no) = 1 AND max(part_no) = count(*)
 	           FROM media_file f
 	          WHERE f.item_id = d.item_id AND f.missing_since IS NULL)`
 
-// DoppelZahl zählt, was Duplicates liefern würde — für die Übersicht, die
-// nur die Zahl zeigt.
+// DoppelZahl zählt die Filme in Teilen unter dem, was Duplicates liefert
+// — für die Übersicht, die nur die Zahl zeigt („in Teilen", wie der
+// Abschnitt auf der Seite Aufräumen).
 func (s *Store) DoppelZahl(ctx context.Context) (int, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) `+doppelVon).Scan(&n)
+	err := s.db.QueryRowContext(ctx, `SELECT count(*) `+teileVon).Scan(&n)
 	return n, err
 }
 
