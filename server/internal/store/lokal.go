@@ -259,3 +259,37 @@ func IstErkannt(state string) bool {
 	}
 	return false
 }
+
+// FreigabenNachrechnen rechnet die Altersgrenze für Titel neu, die ein
+// Kennzeichen haben, aber keine Zahl dazu — etwa „DE-18" aus einer
+// Emby-NFO, das ältere Fassungen nicht lesen konnten. alter ist
+// meta.AgeYears. Gibt zurück, wie viele Titel jetzt eine Grenze haben.
+func (s *Store) FreigabenNachrechnen(ctx context.Context, alter func(string) *int) (int, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, age_rating FROM item WHERE age_years IS NULL AND COALESCE(age_rating, '') != ''`)
+	if err != nil {
+		return 0, err
+	}
+	neu := map[string]int{}
+	for rows.Next() {
+		var id, kz string
+		if err := rows.Scan(&id, &kz); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		if j := alter(kz); j != nil {
+			neu[id] = *j
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for id, j := range neu {
+		if _, err := s.db.ExecContext(ctx,
+			`UPDATE item SET age_years = ? WHERE id = ? AND age_years IS NULL`, j, id); err != nil {
+			return 0, err
+		}
+	}
+	return len(neu), nil
+}

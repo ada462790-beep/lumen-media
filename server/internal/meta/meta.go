@@ -20,6 +20,7 @@ package meta
 import (
 	"context"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -330,23 +331,134 @@ func abs(i int) int {
 
 // AgeYears übersetzt die Kennzeichen der Länder in eine Zahl, mit der sich
 // rechnen lässt. Ohne das liesse sich keine Grenze „höchstens ab 12" setzen.
+//
+// Die Kennzeichen kommen in vielen Schreibweisen: von TMDb („16"), aus
+// Emby- und Jellyfin-NFOs („DE-16", „CH-16", „AT-14", „GB-15",
+// „US-PG-13"), von Kodi („de:FSK 16"), von tinyMediaManager („US:R / DE:16")
+// und von Hand („FSK16", „ab 12 Jahren", „16+"). Was Lumen nicht sicher
+// lesen kann, ergibt nil — „ungeprüft", nie „ab 0": Ein unbekanntes
+// Kennzeichen darf einen Film nicht für Kinder freigeben.
 func AgeYears(rating string) *int {
 	r := strings.ToUpper(strings.TrimSpace(rating))
-	r = strings.TrimPrefix(r, "FSK ")
-	r = strings.TrimPrefix(r, "FSK-")
-
-	table := map[string]int{
-		// Deutschland, Österreich, Schweiz
-		"0": 0, "6": 6, "12": 12, "16": 16, "18": 18,
-		"AB 0": 0, "AB 6": 6, "AB 12": 12, "AB 16": 16, "AB 18": 18,
-		// USA
-		"G": 0, "TV-Y": 0, "TV-G": 0, "TV-Y7": 7, "PG": 6, "TV-PG": 6,
-		"PG-13": 12, "TV-14": 14, "R": 16, "TV-MA": 18, "NC-17": 18,
-		// Grossbritannien
-		"U": 0, "12A": 12, "15": 15,
+	if r == "" {
+		return nil
 	}
-	if v, ok := table[r]; ok {
+	// Mehrere Länder: das deutschsprachige zuerst, sonst das erste, das
+	// sich lesen lässt.
+	teile := freigabeTeile(r)
+	if len(teile) > 1 {
+		for _, t := range teile {
+			if land, rest := landAbtrennen(t); land == "DE" || land == "CH" || land == "AT" {
+				if v := alterAus(rest); v != nil {
+					return v
+				}
+			}
+		}
+		for _, t := range teile {
+			if v := alterAus(t); v != nil {
+				return v
+			}
+		}
+		return nil
+	}
+	if len(teile) == 1 {
+		r = teile[0]
+	}
+	return alterAus(r)
+}
+
+// freigabeTeile trennt „US:R / DE:16" in seine Länder. „DE/16" (so legt
+// Emby es mitunter ab) ist dagegen ein Land mit seinem Kennzeichen.
+func freigabeTeile(r string) []string {
+	if !strings.Contains(r, "/") {
+		return []string{r}
+	}
+	teile := strings.Split(r, "/")
+	if len(teile) == 2 {
+		if _, ok := laender[strings.TrimSpace(teile[0])]; ok {
+			return []string{strings.TrimSpace(teile[0]) + "-" + strings.TrimSpace(teile[1])}
+		}
+	}
+	out := make([]string, 0, len(teile))
+	for _, t := range teile {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// laender sind die Vorsätze, die vor einem Kennzeichen stehen können —
+// das Land und, was Emby für Deutschland schreibt, „FSK".
+var laender = map[string]string{
+	"DE": "DE", "DEU": "DE", "GER": "DE", "GERMANY": "DE", "DEUTSCHLAND": "DE",
+	"CH": "CH", "CHE": "CH", "SWITZERLAND": "CH", "SCHWEIZ": "CH",
+	"AT": "AT", "AUT": "AT", "AUSTRIA": "AT", "ÖSTERREICH": "AT",
+	"GB": "GB", "UK": "GB", "US": "US", "USA": "US",
+	"FR": "FR", "NL": "NL", "IT": "IT", "ES": "ES", "CA": "CA", "AU": "AU",
+}
+
+var reLandVorsatz = regexp.MustCompile(`^([A-ZÄÖÜ]{2,11})\s*[-:_ ]\s*(.+)$`)
+
+// landAbtrennen: „DE-16" → „DE", „16"; „US-PG-13" → „US", „PG-13".
+func landAbtrennen(r string) (land, rest string) {
+	r = strings.TrimSpace(r)
+	if m := reLandVorsatz.FindStringSubmatch(r); m != nil {
+		if l, ok := laender[m[1]]; ok {
+			return l, strings.TrimSpace(m[2])
+		}
+	}
+	return "", r
+}
+
+var (
+	// „FSK 16", „FSK-16", „FSK16", „FSK: 16", „FSK ab 16"
+	reFSK = regexp.MustCompile(`^(?:FSK|FSF|JMK|SPIO/JK)\s*[-: ]?\s*(?:AB\s*)?(\d{1,2})\b`)
+	// „ab 12", „ab 12 Jahren", „freigegeben ab 12 Jahren", „12 Jahre"
+	reAbJahren = regexp.MustCompile(`^(?:FREIGEGEBEN\s+)?(?:AB\s*)?(\d{1,2})\s*(?:\+|J\.?|JAHREN?)?$`)
+)
+
+// alterTabelle: Kennzeichen ohne Zahl (oder mit einer Zahl, die nicht das
+// Alter ist). Zahlen allein liest alterAus selbst.
+var alterTabelle = map[string]int{
+	// USA (Kino und Fernsehen)
+	"G": 0, "PG": 6, "PG-13": 12, "PG13": 12, "R": 16, "NC-17": 18, "NC17": 18, "X": 18,
+	"TV-Y": 0, "TV-G": 0, "TV-Y7": 7, "TV-Y7-FV": 7, "TV-PG": 6, "TV-14": 14, "TV-MA": 18,
+	// Grossbritannien
+	"U": 0, "UC": 0, "12A": 12, "R18": 18,
+	// Deutschland: „ohne Altersbeschränkung", „keine Jugendfreigabe"
+	"O.AL.": 0, "OHNE ALTERSBESCHRÄNKUNG": 0, "KJ": 18, "KEINE JUGENDFREIGABE": 18,
+	"JUGENDFREI": 0, "ALL": 0,
+	// Frankreich, Niederlande
+	"TP": 0, "AL": 0,
+}
+
+// alterAus liest ein einzelnes Kennzeichen, mit oder ohne Land davor.
+func alterAus(r string) *int {
+	r = strings.TrimSpace(r)
+	r = strings.TrimSpace(strings.TrimPrefix(r, "RATED "))
+	// Land vorne weg, auch zweimal („DE-FSK 16").
+	for i := 0; i < 2; i++ {
+		if l, rest := landAbtrennen(r); l != "" {
+			r = rest
+		}
+	}
+	r = strings.TrimSpace(strings.TrimPrefix(r, "RATED "))
+	if v, ok := alterTabelle[r]; ok {
 		return &v
+	}
+	zahl := func(s string) *int {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 0 || n > 21 {
+			return nil
+		}
+		return &n
+	}
+	if m := reFSK.FindStringSubmatch(r); m != nil {
+		return zahl(m[1])
+	}
+	if m := reAbJahren.FindStringSubmatch(r); m != nil {
+		return zahl(m[1])
 	}
 	return nil
 }

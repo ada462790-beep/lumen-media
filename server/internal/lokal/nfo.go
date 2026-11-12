@@ -295,22 +295,30 @@ func linkNFO(s string) *NFO {
 }
 
 // freigabe macht aus „Rated R", „de:FSK 16", „DE:16" ein Kennzeichen, das
-// meta.AgeYears versteht („R", „FSK 16", „16").
+// meta.AgeYears versteht („R", „FSK 16", „16"). Emby-Formen wie „DE-16"
+// oder „de/16" bleiben stehen, wie sie sind — die liest AgeYears selbst.
 func freigabe(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return ""
 	}
 	// tinyMediaManager schreibt mehrere Länder: „US:R / DE:16". Das
-	// deutschsprachige gilt zuerst.
+	// deutschsprachige gilt zuerst. „de/16" ist dagegen nur ein Land.
 	teile := strings.Split(s, "/")
 	wahl := strings.TrimSpace(teile[0])
-	for _, t := range teile {
-		t = strings.TrimSpace(t)
-		l := strings.ToLower(t)
-		if strings.HasPrefix(l, "de:") || strings.HasPrefix(l, "ch:") || strings.HasPrefix(l, "at:") || strings.HasPrefix(l, "germany:") {
-			wahl = t
-			break
+	if len(teile) == 2 && reLandKurz.MatchString(strings.TrimSpace(teile[0])) {
+		wahl = strings.TrimSpace(teile[0]) + "-" + strings.TrimSpace(teile[1])
+	} else {
+	suche:
+		for _, t := range teile {
+			t = strings.TrimSpace(t)
+			l := strings.ToLower(t)
+			for _, v := range []string{"de:", "ch:", "at:", "germany:", "de-", "ch-", "at-"} {
+				if strings.HasPrefix(l, v) {
+					wahl = t
+					break suche
+				}
+			}
 		}
 	}
 	if i := strings.Index(wahl, ":"); i >= 0 && i <= 8 {
@@ -319,6 +327,8 @@ func freigabe(s string) string {
 	wahl = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(wahl, "Rated "), "rated "))
 	return wahl
 }
+
+var reLandKurz = regexp.MustCompile(`^[A-Za-z]{2,3}$`)
 
 func imdb(s string) string {
 	if m := reIMDb.FindStringSubmatch(s); m != nil {

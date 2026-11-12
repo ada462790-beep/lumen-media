@@ -48,6 +48,11 @@ type lokalLauf struct {
 }
 
 func (s *Scanner) lokalLauf(ctx context.Context, lib store.Library) *lokalLauf {
+	// Kennzeichen, die eine ältere Fassung nicht lesen konnte („DE-18"),
+	// bekommen jetzt ihre Grenze — ohne dass die NFO sich ändern muss.
+	if n, err := s.st.FreigabenNachrechnen(ctx, meta.AgeYears); err == nil && n > 0 {
+		s.st.Log(ctx, "info", "scan", fmt.Sprintf("Altersfreigabe bei %d Titeln nachgetragen", n))
+	}
 	return &lokalLauf{s: s, lib: lib, bevorzugen: meta.NFOBevorzugt(ctx, s.st),
 		ordner: map[string]*lokal.Ordner{}, eigen: map[string]bool{}}
 }
