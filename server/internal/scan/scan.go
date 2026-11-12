@@ -454,6 +454,11 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 	// wurde, kein Abbild der Sammlung. Dann wird gar nichts als fehlend
 	// vermerkt, und der Durchlauf gilt nicht als erledigt: Der Hausmeister
 	// versucht es nach einer Viertelstunde wieder.
+	if m := merkerVon(ctx); m != nil {
+		m.mu.Lock()
+		unlesbar += m.lesefehler
+		m.mu.Unlock()
+	}
 	if unterbrochen := freigabeUnterbrochen(lib.Path, unlesbar, len(seen)); unterbrochen {
 		s.auslassenSetzen(lib.ID, aus)
 		s.st.Log(ctx, "warn", "scan", fmt.Sprintf(
@@ -1288,6 +1293,21 @@ func (s *Scanner) fillFromProbe(ctx context.Context, f *store.MediaFile) {
 			if alt != nil {
 				altBehalten(f, &alt.Datei)
 				f.Defekt = alt.Datei.Defekt
+			}
+			return
+		}
+		// Ist die Datei gerade gar nicht da (die Freigabe setzt aus,
+		// gelöscht zwischen Finden und Messen), ist sie nicht defekt: alte
+		// Werte behalten, als Lesefehler zählen (freigabeUnterbrochen).
+		if _, e := os.Stat(f.Path); e != nil {
+			if alt != nil {
+				altBehalten(f, &alt.Datei)
+				f.Defekt = alt.Datei.Defekt
+			}
+			if m := merkerVon(ctx); m != nil {
+				m.mu.Lock()
+				m.lesefehler++
+				m.mu.Unlock()
 			}
 			return
 		}

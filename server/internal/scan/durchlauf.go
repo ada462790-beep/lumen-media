@@ -51,6 +51,9 @@ type durchlaufMerker struct {
 	// neuDefekt: Dateien, die sich in diesem Durchlauf nicht ausmessen
 	// liessen — am Ende eine Zeile im Protokoll statt einer je Datei.
 	neuDefekt int
+	// lesefehler: Dateien, die beim Messen auf einmal nicht mehr da waren
+	// (Freigabe setzt aus) — zählen wie Lesefehler beim Durchgehen.
+	lesefehler int
 	// neuePfade: Dateien, die Lumen vor diesem Durchlauf nicht kannte —
 	// Kandidaten für umbenannte Dateien (umbenannt.go).
 	neuePfade []string

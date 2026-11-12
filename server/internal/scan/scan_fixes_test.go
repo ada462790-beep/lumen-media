@@ -636,3 +636,56 @@ func TestErsterDurchlaufMisstMitHelfern(t *testing.T) {
 		}
 	}
 }
+
+// verschwindeProbe: Ab der n-ten Messung ist die Freigabe weg.
+type verschwindeProbe struct {
+	mu     sync.Mutex
+	n, ab  int
+	wurzel string
+}
+
+func (v *verschwindeProbe) Probe(ctx context.Context, path string) (*Probe, error) {
+	v.mu.Lock()
+	v.n++
+	if v.n == v.ab {
+		_ = os.Rename(v.wurzel, v.wurzel+"-weg")
+	}
+	v.mu.Unlock()
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	return &Probe{DurationMS: 60_000, Width: 1280, Height: 720, VideoCodec: "h264"}, nil
+}
+
+// Setzt die Freigabe erst beim Messen aus, werden die Dateien nicht als
+// defekt („gesperrt") vermerkt — und nichts als fehlend.
+func TestAussetzerBeimMessenMachtNichtsDefekt(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	for i := 0; i < 30; i++ {
+		dateiMitGroesse(t, wurzel, fmt.Sprintf("Film %02d (2001)/Film %02d (2001).mkv", i, i), 10+i)
+	}
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	p := &verschwindeProbe{ab: 1 << 30, wurzel: wurzel}
+	if _, err := New(st, p).Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	// Alles neu messen lassen (andere Änderungszeit), dann setzt die
+	// Freigabe nach fünf Messungen aus.
+	for i := 0; i < 30; i++ {
+		f := filepath.Join(wurzel, fmt.Sprintf("Film %02d (2001)/Film %02d (2001).mkv", i, i))
+		_ = os.Chtimes(f, time.Now(), time.Now().Add(time.Hour))
+	}
+	p.n, p.ab = 0, 5
+	t.Cleanup(func() { _ = os.Rename(wurzel+"-weg", wurzel) })
+	if _, err := New(st, p).Scan(ctx, *lib); err == nil {
+		t.Error("ein Durchlauf, bei dem die Freigabe wegfiel, soll als unvollständig gelten")
+	}
+	if d, _ := st.DefekteDateien(ctx, 100); len(d) != 0 {
+		t.Fatalf("%d Dateien als defekt vermerkt", len(d))
+	}
+	if n, _ := st.FehlendZahl(ctx); n != 0 {
+		t.Fatalf("%d Dateien als fehlend vermerkt", n)
+	}
+}
