@@ -307,6 +307,9 @@ func (s *Store) UpsertItem(ctx context.Context, it *Item) error {
 	if it.MatchState == "" {
 		it.MatchState = "pending"
 	}
+	// Zerlegte Umlaute (NFD, von macOS) zusammensetzen — sonst findet die
+	// Suche „Schöne" nicht und gleiche Titel gelten als verschieden (nfc.go).
+	it.Title, it.OriginalTitle, it.SortEigen = NFC(it.Title), NFC(it.OriginalTitle), NFC(it.SortEigen)
 	now := time.Now().Unix()
 
 	return s.tx(ctx, func(t *sql.Tx) error {
@@ -621,7 +624,7 @@ func (s *Store) TitelGleich(ctx context.Context, libraryID, kind, title string, 
 }
 
 // titelKlein ist die Form, unter der TitelGleich sucht.
-func titelKlein(t string) string { return strings.ToLower(strings.TrimSpace(t)) }
+func titelKlein(t string) string { return strings.ToLower(strings.TrimSpace(NFC(t))) }
 
 // Children liefert Staffeln einer Serie oder Folgen einer Staffel — in
 // derselben Reihenfolge wie FolgenVon (folgenOrdnung).
@@ -909,7 +912,7 @@ func fold(s string) string {
 		"ù", "u", "ú", "u", "û", "u",
 		"ç", "c", "ñ", "n", "ý", "y",
 	)
-	return r.Replace(s)
+	return r.Replace(NFC(s))
 }
 
 // SuchFalten macht einen Namen vergleichbar wie die Titelsuche: klein, ohne
@@ -921,7 +924,7 @@ func SuchFalten(s string) string {
 // ohnePunkte: „ärger" → „arger". Wer ohne Umlaut-Taste sucht, tippt das
 // so; fold macht daraus „aerger". Im Suchtext stehen darum beide Formen.
 func ohnePunkte(s string) string {
-	return strings.NewReplacer("ä", "a", "ö", "o", "ü", "u").Replace(s)
+	return strings.NewReplacer("ä", "a", "ö", "o", "ü", "u").Replace(NFC(s))
 }
 
 func nullStr(s string) any {

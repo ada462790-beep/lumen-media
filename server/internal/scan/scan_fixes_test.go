@@ -214,3 +214,31 @@ func TestAussetzerDerFreigabeVermerktNichtsAlsFehlend(t *testing.T) {
 		t.Fatalf("%d Dateien als fehlend vermerkt, obwohl die Freigabe weg war", n)
 	}
 }
+
+// B7: Umlaute aus macOS-Dateinamen (NFD) — der Titel liess sich nicht
+// suchen, und eine NFC- und eine NFD-Kopie desselben Films wurden zwei.
+func TestZerlegteUmlauteWerdenZusammengesetzt(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	nfd := "Die Schöne und das Biest (1991)"
+	nfc := "Die Schöne und das Biest (1991)"
+	dateiMitGroesse(t, wurzel, filepath.Join(nfd, nfd+".mkv"), 10)
+	dateiMitGroesse(t, wurzel, filepath.Join(nfc, nfc+" - 720p.avi"), 20)
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	for i := 0; i < 2; i++ {
+		if _, err := New(st, nil).Scan(ctx, *lib); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Limit: 10})
+	if len(alle) != 1 || alle[0].Title != "Die Schöne und das Biest" {
+		t.Fatalf("Titel: %v — erwartet ein Film in NFC", titles(alle))
+	}
+	for _, q := range []string{"Schöne", "Schöne", "schoene"} {
+		treffer, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Text: q, Limit: 10})
+		if len(treffer) != 1 {
+			t.Errorf("Suche %q findet %d Titel", q, len(treffer))
+		}
+	}
+}

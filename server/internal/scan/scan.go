@@ -305,6 +305,9 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		})
 
 		g := teileKlaeren(ParseFuer(path, dirs, lib.Kind), path, dirs, lib.Kind, teile)
+		// Umlaute aus macOS-Dateinamen (NFD) zusammensetzen: Der Titel muss
+		// beim nächsten Durchlauf gleich heissen wie der gespeicherte.
+		g.Title, g.EpisodeTitle = store.NFC(g.Title), store.NFC(g.EpisodeTitle)
 
 		// Eine Folge bleibt eine Folge, auch wenn bei der Bibliothek
 		// „Filme" steht. Vorher entschied die Art der Bibliothek darüber,
@@ -1226,7 +1229,7 @@ func sidecarAus(videoPath string, entries []os.DirEntry) []Track {
 // dateiTitel: der Titel, den eine Datei nach ihrem Namen hätte — samt
 // der Regel für „Film - Teil 1"/„Film - Teil 2" im selben Ordner.
 func (s *Scanner) dateiTitel(path string, dirs []string, art string) string {
-	return teileKlaeren(ParseFuer(path, dirs, art), path, dirs, art, nil).Title
+	return store.NFC(teileKlaeren(ParseFuer(path, dirs, art), path, dirs, art, nil).Title)
 }
 
 func splitDirs(rel string) []string {
