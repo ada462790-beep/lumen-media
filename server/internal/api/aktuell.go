@@ -45,7 +45,7 @@ func (s *Server) adminLibrarySetzen(w http.ResponseWriter, r *http.Request) {
 // „ausstehend" und holt sie neu. Von Hand zugewiesene bleiben.
 func (s *Server) adminMetadatenNeu(w http.ResponseWriter, r *http.Request) {
 	if s.meta == nil || !s.meta.Ready() {
-		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		s.ohneSchluessel(w, r)
 		return
 	}
 	lib := r.URL.Query().Get("library")
@@ -67,7 +67,7 @@ func (s *Server) adminMetadatenNeu(w http.ResponseWriter, r *http.Request) {
 // adminTitelNeu holt die Metadaten eines Titels noch einmal.
 func (s *Server) adminTitelNeu(w http.ResponseWriter, r *http.Request) {
 	if s.meta == nil || !s.meta.Ready() {
-		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		s.ohneSchluessel(w, r)
 		return
 	}
 	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
@@ -88,7 +88,7 @@ func (s *Server) adminTitelNeu(w http.ResponseWriter, r *http.Request) {
 // adminTitelSuchen nennt, was die Quelle zu einem Suchwort findet.
 func (s *Server) adminTitelSuchen(w http.ResponseWriter, r *http.Request) {
 	if s.meta == nil || !s.meta.Ready() {
-		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		s.ohneSchluessel(w, r)
 		return
 	}
 	it, err := s.visibleItem(r, r.PathValue("id")) // nur in Mediatheken, die man verwalten darf
@@ -126,7 +126,7 @@ func (s *Server) adminTitelSuchen(w http.ResponseWriter, r *http.Request) {
 // adminTitelZuweisen hängt einen Titel an den gewählten Eintrag.
 func (s *Server) adminTitelZuweisen(w http.ResponseWriter, r *http.Request) {
 	if s.meta == nil || !s.meta.Ready() {
-		fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
+		s.ohneSchluessel(w, r)
 		return
 	}
 	var in struct {
@@ -173,6 +173,9 @@ func kennungFehler(w http.ResponseWriter, err error) bool {
 		failCode(w, http.StatusBadRequest, "falsche_art", "Das ist ein Film-Link – hier wird eine Serie gesucht.")
 	case errors.Is(err, meta.ErrSerienLinkBeiFilm):
 		failCode(w, http.StatusBadRequest, "falsche_art", "Das ist ein Serien-Link – hier wird ein Film gesucht.")
+	case errors.Is(err, meta.ErrTMDbSchluessel):
+		failCode(w, http.StatusPreconditionFailed, "schluessel_abgelehnt",
+			"TMDb lehnt den hinterlegten Schlüssel ab. Unter Verwaltung › Poster und Beschreibungen einen gültigen eintragen.")
 	case errors.Is(err, meta.ErrKennungUnbekannt):
 		failCode(w, http.StatusNotFound, "kennung_unbekannt",
 			"Zu dieser Kennung kennt TMDb keinen passenden Eintrag. Stimmt die Nummer, und ist es die richtige Art (Film oder Serie)?")

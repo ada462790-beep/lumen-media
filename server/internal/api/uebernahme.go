@@ -470,14 +470,12 @@ func (s *Server) uebernahmeAnwenden(w http.ResponseWriter, r *http.Request) {
 	l.Phase = "anwenden"
 	l.mu.Unlock()
 	mitZuordnungen := in.Zuordnungen != nil && *in.Zuordnungen && len(zPlan) > 0
-	if mitZuordnungen && (!acc.IsAdmin || s.meta == nil || !s.meta.Ready()) {
+	// Ohne (gültigen) TMDb-Schlüssel werden die Kennungen vorgemerkt
+	// (zuordnungUebernehmen) — das geht auch so.
+	if mitZuordnungen && !acc.IsAdmin {
 		l.setzen(func(l *uebernahmeLauf) { l.Phase = "bereit" })
-		if !acc.IsAdmin {
-			failCode(w, http.StatusForbidden, "nur_verwaltung",
-				"Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.")
-		} else {
-			fail(w, http.StatusPreconditionFailed, "richte zuerst eine metadaten-quelle ein")
-		}
+		failCode(w, http.StatusForbidden, "nur_verwaltung",
+			"Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.")
 		return
 	}
 

@@ -429,6 +429,12 @@ type view struct {
 	ResumeMS int64  `json:"resumeMs,omitempty"`
 	Poster   string `json:"poster,omitempty"`
 	Backdrop string `json:"backdrop,omitempty"`
+	// Logo (Schriftzug, freigestellt) und Querformat (16:9 mit Titel) —
+	// aus der Sammlung („logo.png", „landscape.jpg") oder später von TMDb.
+	Logo      string `json:"logo,omitempty"`
+	Landscape string `json:"landscape,omitempty"`
+	// EpisodeNoEnd: das Ende einer Doppelfolge („S01E01-E02" → 2).
+	EpisodeNoEnd int `json:"episodeNoEnd,omitempty"`
 	// Frame ist ein Bild aus dem Film selbst. Nur gesetzt, wenn Poster
 	// oder Hintergrund fehlen — als Ersatz, nicht als Wahl.
 	Frame string `json:"frame,omitempty"`
@@ -502,6 +508,7 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 		}
 	}
 	zuSerie, _ := s.st.SerienZuFolgen(r.Context(), folgen)
+	bisFolge := s.st.BisFolgen(r.Context(), folgen)
 	staende, err := s.st.SerienStaende(r.Context(), acc.ID, serien)
 	if err != nil {
 		return nil, err
@@ -543,7 +550,14 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 			if a["backdrop"] != "" {
 				v.Backdrop = "/api/v1/art/" + it.ID + "/backdrop"
 			}
+			if a["logo"] != "" {
+				v.Logo = "/api/v1/art/" + it.ID + "/logo"
+			}
+			if a["landscape"] != "" {
+				v.Landscape = "/api/v1/art/" + it.ID + "/landscape"
+			}
 		}
+		v.EpisodeNoEnd = bisFolge[it.ID]
 		// Ein Bild aus der Datei nur, wo das passende fehlt. Bei Folgen ist
 		// das „Poster" das Standbild von TMDb (oder das eigene -thumb.jpg) —
 		// es ist schon breit; einen Hintergrund haben Folgen nie. Vorher
@@ -794,6 +808,8 @@ func (s *Server) item(w http.ResponseWriter, r *http.Request) {
 		}
 		body["cast"] = cast
 	}
+	s.nfoZusatz(r.Context(), it, body)
+	s.extrasZusatz(r, it, body)
 	if it.Kind == "series" {
 		seasons, _ := s.st.Children(r.Context(), it.ID)
 		s.standardTitelSetzen(r, seasons)
@@ -1678,7 +1694,10 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		// beschränkten Mitverwalter zählen nur die eigenen.
 		"offen": map[string]int{"unmatched": zahlOder(darf, nUnmatched, len(unmatched)),
 			"pending": zahlOder(darf, nPending, len(ausstehend))},
-		"pending": s.st.PendingCount(r.Context())})
+		"pending": s.st.PendingCount(r.Context()),
+		// Ohne gültigen TMDb-Schlüssel sagt die Seite, warum Titel warten.
+		"schluessel": meta.SchluesselStand(r.Context(), s.st),
+		"vorgemerkt": meta.VorgemerktZahl(r.Context(), s.st)})
 }
 
 // zahlOder: die Gesamtzahl für den, der alles sieht, sonst die Länge der

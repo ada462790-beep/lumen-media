@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"lumen/internal/lokal"
 	"lumen/internal/meta"
 	"lumen/internal/store"
 	"lumen/internal/uebernahme"
@@ -48,9 +49,12 @@ type zuordnungsVorschau struct {
 	NichtGefunden int      `json:"nichtGefunden"`
 	OhneKennung   int      `json:"ohneKennung"`
 	Fehlend       []string `json:"fehlend"`
-	// OhneQuelle: In Lumen ist kein TMDb-Schlüssel eingerichtet — dann
-	// lässt sich nichts übernehmen.
-	OhneQuelle bool `json:"ohneQuelle,omitempty"`
+	// OhneQuelle: In Lumen ist kein (gültiger) TMDb-Schlüssel — dann merkt
+	// sich Lumen die Kennungen nur vor; Poster und Beschreibungen kommen,
+	// sobald ein Schlüssel da ist. Schluessel sagt, warum (fehlt,
+	// abgelehnt).
+	OhneQuelle bool   `json:"ohneQuelle,omitempty"`
+	Schluessel string `json:"schluessel,omitempty"`
 }
 
 // zuordnungsStand: wie weit das Übernehmen ist, und was es gebracht hat.
@@ -62,6 +66,10 @@ type zuordnungsStand struct {
 	SchonRichtig int  `json:"schonRichtig"`
 	Gesperrt     int  `json:"gesperrt"`
 	Fehler       int  `json:"fehler"`
+	// Vorgemerkt: ohne gültigen TMDb-Schlüssel gespeichert, wartet auf ihn.
+	Vorgemerkt int `json:"vorgemerkt"`
+	// Grund, warum nur vorgemerkt wurde: „fehlt" oder „abgelehnt".
+	Grund string `json:"grund,omitempty"`
 }
 
 // zuordnungLaeuft: höchstens ein Übernehmen gleichzeitig auf dem Server.
@@ -108,7 +116,10 @@ func (s *Server) zuordnungenPlanen(ctx context.Context, emby []uebernahme.Eintra
 		return nil, nil, err
 	}
 	v := &zuordnungsVorschau{NichtGefunden: plan.NichtGefunden, OhneKennung: plan.OhneKennung,
-		Fehlend: plan.Fehlend, OhneQuelle: s.meta == nil || !s.meta.Ready()}
+		Fehlend: plan.Fehlend, OhneQuelle: !s.tmdbBereit(ctx)}
+	if v.OhneQuelle {
+		v.Schluessel = meta.SchluesselStand(ctx, s.st)
+	}
 	if v.Fehlend == nil {
 		v.Fehlend = []string{}
 	}
@@ -126,10 +137,19 @@ func (s *Server) zuordnungenPlanen(ctx context.Context, emby []uebernahme.Eintra
 	return v, plan.Zuordnungen, nil
 }
 
+// tmdbBereit: Es gibt eine Quelle mit einem Schlüssel, den TMDb (soweit
+// bekannt) annimmt.
+func (s *Server) tmdbBereit(ctx context.Context) bool {
+	return s.meta != nil && s.meta.Ready() && meta.SchluesselStand(ctx, s.st) != "abgelehnt"
+}
+
 // schonRichtig: Der Titel ist in Lumen schon genau diesem Eintrag
-// zugeordnet.
+// zugeordnet — erkannt, von Hand zugewiesen oder (aus der NFO, ohne
+// Schlüssel) mit genau dieser Kennung gespeichert.
 func schonRichtig(t store.KatalogTitel, zustand string, z uebernahme.Zuordnung) bool {
-	if zustand != "matched" && zustand != "manual" {
+	switch zustand {
+	case "matched", "manual", "lokal", "pending":
+	default:
 		return false
 	}
 	switch {
@@ -175,6 +195,11 @@ func (s *Server) zuordnungenAnwenden(ctx context.Context, lauf *uebernahmeLauf, 
 				st.SchonRichtig++
 			case "gesperrt":
 				st.Gesperrt++
+			case "vorgemerkt":
+				st.Vorgemerkt++
+				if st.Grund == "" {
+					st.Grund = meta.SchluesselStand(ctx, s.st)
+				}
 			default:
 				st.Fehler++
 			}
@@ -182,6 +207,10 @@ func (s *Server) zuordnungenAnwenden(ctx context.Context, lauf *uebernahmeLauf, 
 	}
 	var erg zuordnungsStand
 	melden(func(z *zuordnungsStand) { z.Laeuft = false; erg = *z })
+	if erg.Vorgemerkt > 0 {
+		s.st.Log(ctx, "info", "metadaten", fmt.Sprintf(
+			"Zuordnungen aus Emby/Jellyfin: %d Kennungen ohne gültigen TMDb-Schlüssel vorgemerkt", erg.Vorgemerkt))
+	}
 	if erg.Uebernommen > 0 {
 		s.st.Log(ctx, "info", "metadaten", fmt.Sprintf(
 			"Zuordnungen aus Emby/Jellyfin: %d übernommen, %d schon richtig, %d von Hand belassen, %d Fehler",
@@ -193,7 +222,7 @@ func (s *Server) zuordnungenAnwenden(ctx context.Context, lauf *uebernahmeLauf, 
 }
 
 // zuordnungUebernehmen weist einen Titel zu. Ergebnis: uebernommen |
-// schon | gesperrt | fehler.
+// schon | gesperrt | vorgemerkt | fehler.
 func (s *Server) zuordnungUebernehmen(ctx context.Context, z uebernahme.Zuordnung, ueberschreiben bool, darf map[string]bool) string {
 	it, err := s.st.Item(ctx, z.ItemID)
 	if err != nil || (darf != nil && !darf[it.LibraryID]) || it.Kind != z.Kind {
@@ -208,6 +237,15 @@ func (s *Server) zuordnungUebernehmen(ctx context.Context, z uebernahme.Zuordnun
 	if it.MatchState == "manual" && !ueberschreiben {
 		return "gesperrt"
 	}
+	vormerken := func() string {
+		if meta.KennungenVormerken(ctx, s.st, it.ID, lokal.Kennungen{TMDb: z.TMDb, IMDb: z.IMDb, TVDb: z.TVDb}) != nil {
+			return "fehler"
+		}
+		return "vorgemerkt"
+	}
+	if !s.tmdbBereit(ctx) {
+		return vormerken()
+	}
 	// Die TMDb-Kennung: direkt, sonst über IMDb oder TVDb (TMDb /find).
 	var kandidaten []meta.Eingabe
 	if z.TMDb != "" {
@@ -221,6 +259,10 @@ func (s *Server) zuordnungUebernehmen(ctx context.Context, z uebernahme.Zuordnun
 	}
 	for _, e := range kandidaten {
 		id, err := s.meta.TMDbKennungZu(ctx, it.Kind, e)
+		if errors.Is(err, meta.ErrTMDbSchluessel) {
+			meta.SchluesselAbgelehntMerken(ctx, s.st)
+			return vormerken()
+		}
 		if err != nil {
 			continue
 		}
@@ -230,6 +272,10 @@ func (s *Server) zuordnungUebernehmen(ctx context.Context, z uebernahme.Zuordnun
 		})
 		if zerr == nil {
 			return "uebernommen"
+		}
+		if errors.Is(zerr, meta.ErrTMDbSchluessel) {
+			meta.SchluesselAbgelehntMerken(ctx, s.st)
+			return vormerken()
 		}
 		if errors.Is(zerr, context.Canceled) {
 			break

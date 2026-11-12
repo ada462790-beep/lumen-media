@@ -145,6 +145,8 @@ var (
 	// „Apocalypse Now 1979a" — Jahr und dahinter ein Buchstabe als Teil.
 	reJahrTeil        = regexp.MustCompile(`^(.*?)[\s._-]*((?:19|20)\d{2})([a-h])$`)
 	reJahrKlammerTeil = regexp.MustCompile(`^(.*[\(\[](?:19|20)\d{2}[\)\]])[\s._-]*([a-hA-H])$`)
+	// „Die Schweizermacher a" — ein kleiner Buchstabe allein am Ende.
+	reBuchstabeTeil = regexp.MustCompile(`^(.*\S)[\s._-]+([a-h])$`)
 	// „beforemidnight2013" — das Jahr klebt am Namen.
 	reJahrAngeklebt = regexp.MustCompile(`^(.*[A-Za-zäöüÄÖÜ])((?:19|20)\d{2})$`)
 	// „1", „01", „Teil 2", „Part 3", „Folge 4", „Episode 5", „Ep. 6"
@@ -508,6 +510,13 @@ func ParseFuer(path string, dirs []string, art string) Guess {
 			// „Apocalypse Now (1979) a.avi" — dasselbe mit Klammern.
 			name = m[1]
 			g.PartNo = int(strings.ToLower(m[2])[0]-'a') + 1
+		} else if m := reBuchstabeTeil.FindStringSubmatch(name); m != nil && !reYearLoose.MatchString(name) {
+			// „Die Schweizermacher a.avi", „… b.avi" ohne Jahr im Namen:
+			// allein kann „a" zum Titel gehören („Plan b"). Ob es Teile
+			// sind, entscheidet teileKlaeren an den Geschwistern im Ordner.
+			if t := clean(m[1]); t != "" {
+				g.TeilKandidat, g.TitelOhneTeil = int(m[2][0]-'a')+1, t
+			}
 		}
 		// „beforemidnight2013" → „beforemidnight", 2013.
 		if m := reJahrAngeklebt.FindStringSubmatch(name); m != nil && reYearLoose.FindString(name) == "" &&
@@ -1220,14 +1229,16 @@ func IsJunkFile(path string) bool {
 // „scene" nur so — „The Big Short" ist ein Film.
 var beiwerkEndungen = []string{
 	"trailer", "sample", "featurette", "behindthescenes", "deleted", "deletedscene",
-	"deletedscenes", "interview", "scene", "short", "extra", "other",
+	"deletedscenes", "interview", "scene", "short", "extra", "other", "clip",
 }
 
 // IstBeiwerkName prüft einen Dateinamen ohne Endung.
 func IstBeiwerkName(stem string) bool {
 	stem = strings.ToLower(strings.TrimSpace(stem))
 	switch stem {
-	case "sample", "trailer", "rarbg", "readme":
+	case "sample", "trailer", "rarbg", "readme",
+		// „theme.mkv" im Filmordner: das Themenvideo von Emby.
+		"theme":
 		return true
 	}
 	for _, e := range beiwerkEndungen {
@@ -1256,7 +1267,10 @@ func IsExtrasDir(name string) bool {
 	case "extras", "extra", "featurettes", "featurette", "behind the scenes",
 		"deleted scenes", "deleted scene", "interviews", "interview", "scenes", "scene",
 		"shorts", "short", "trailers", "trailer", "samples", "sample", "other", "others",
-		"specials", "bonus":
+		"specials", "bonus",
+		// Emby und Jellyfin: „clips/" (Ausschnitte), „backdrops/" und
+		// „theme-music/" (Themenvideos und -musik, die beim Stöbern laufen).
+		"clips", "clip", "backdrops", "theme-music", "theme-videos", "themes":
 		return true
 	}
 	return false

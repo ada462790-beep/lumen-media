@@ -150,7 +150,6 @@ var fehlerCodes = map[string]string{
 	"datei nicht lesbar":                                "datei_nicht_lesbar",
 	"dieser server ist schon eingerichtet":              "schon_eingerichtet",
 	"einrichten geht nur zu hause, nicht von unterwegs": "nur_zu_hause",
-	"richte zuerst eine metadaten-quelle ein":           "metadaten_fehlen",
 	"Unbekannte Sprache.":                               "unbekannte_sprache",
 	"herunterladen ist für dein profil aus":             "herunterladen_aus",
 	"umwandeln ist für dein profil aus":                 "umwandeln_aus",

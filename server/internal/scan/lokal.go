@@ -47,7 +47,7 @@ type lokalLauf struct {
 	// quelleBereit: Ist eine Metadaten-Quelle (TMDb) eingerichtet? Ohne
 	// gelten vollständige NFOs mit Kennung als erkannt.
 	quelleBereit bool
-	ordner     map[string]*lokal.Ordner
+	ordner       map[string]*lokal.Ordner
 	// eigen: Gehört der Ordner einem Film allein? (je Ordner einmal)
 	eigen map[string]bool
 }
@@ -67,7 +67,7 @@ func (s *Scanner) lokalLauf(ctx context.Context, lib store.Library) *lokalLauf {
 	}
 	return &lokalLauf{s: s, lib: lib, bevorzugen: meta.NFOBevorzugt(ctx, s.st),
 		quelleBereit: bereit,
-		ordner: map[string]*lokal.Ordner{}, eigen: map[string]bool{}}
+		ordner:       map[string]*lokal.Ordner{}, eigen: map[string]bool{}}
 }
 
 func (l *lokalLauf) dir(p string) *lokal.Ordner {
@@ -123,6 +123,26 @@ func (l *lokalLauf) film(ctx context.Context, video string, dirs []string, g Gue
 	}
 	l.nfo(ctx, id, o.NFOFuerFilm(stamm, eigen))
 	l.bilder(ctx, id, o.BilderFuerFilm(stamm, eigen))
+	l.kennungenAusNamen(ctx, id, lokal.KennungenFilm(video, dirs))
+}
+
+// kennungenAusNamen speichert Kennungen aus dem Datei- oder Ordnernamen
+// („Matrix (1999) {imdb-tt0133093}") gleich beim Durchlauf — auch ohne
+// TMDb-Schlüssel: für die Links auf der Titelseite und den Abgleich beim
+// Umzug. Nur, wo noch keine steht; was TMDb oder eine NFO sagt, bleibt.
+func (l *lokalLauf) kennungenAusNamen(ctx context.Context, id string, k lokal.Kennungen) {
+	if k.Leer() {
+		return
+	}
+	st := l.s.st
+	for _, x := range []struct{ quelle, wert string }{{"tmdb", k.TMDb}, {"imdb", k.IMDb}, {"tvdb", k.TVDb}} {
+		if x.wert == "" {
+			continue
+		}
+		if alt, err := st.SourceID(ctx, id, x.quelle); err == nil && alt == "" {
+			_ = st.SetSourceID(ctx, id, x.quelle, x.wert)
+		}
+	}
 }
 
 // serie liest tvshow.nfo und die Bilder im Serienordner.
@@ -133,6 +153,9 @@ func (l *lokalLauf) serie(ctx context.Context, id, ordner string) {
 	o := l.dir(ordner)
 	l.nfo(ctx, id, o.Finde("tvshow.nfo"))
 	l.bilder(ctx, id, o.BilderFuerSerie())
+	if rel, err := filepath.Rel(l.lib.Path, ordner); err == nil && !strings.HasPrefix(rel, "..") && rel != "." {
+		l.kennungenAusNamen(ctx, id, lokal.KennungenSerie(strings.Split(filepath.ToSlash(rel), "/")))
+	}
 }
 
 // staffel liest season.nfo und das Poster einer Staffel.

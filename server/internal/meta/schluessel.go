@@ -232,10 +232,15 @@ func (r *Resolver) schluesselPruefen(ctx context.Context) error {
 }
 
 // schluesselFehlt: TMDb hat den Schlüssel abgelehnt.
-func (r *Resolver) schluesselFehlt(ctx context.Context) {
-	if schluesselAbgelehnt(ctx, r.st) {
-		r.st.Log(ctx, "warn", "metadaten",
+func (r *Resolver) schluesselFehlt(ctx context.Context) { SchluesselAbgelehntMerken(ctx, r.st) }
+
+// SchluesselAbgelehntMerken: Eine Anfrage ausserhalb eines Durchgangs
+// (Umzug, Zuweisen) bekam ein 401. Einmal ins Protokoll, Titel mit
+// vollständiger NFO gelten als erkannt.
+func SchluesselAbgelehntMerken(ctx context.Context, st *store.Store) {
+	if schluesselAbgelehnt(ctx, st) {
+		st.Log(ctx, "warn", "metadaten",
 			"TMDb lehnt den Schlüssel ab — bitte unter „Poster und Beschreibungen“ den langen API Read Access Token eintragen")
 	}
-	OhneQuelleAbschliessen(ctx, r.st)
+	OhneQuelleAbschliessen(ctx, st)
 }

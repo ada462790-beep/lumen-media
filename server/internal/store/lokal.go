@@ -397,3 +397,10 @@ func (s *Store) BisFolgen(ctx context.Context, ids []string) map[string]int {
 	}
 	return out
 }
+
+// BibliothekPfad nennt den Ordner einer Bibliothek ("" wenn es sie nicht gibt).
+func (s *Store) BibliothekPfad(ctx context.Context, libraryID string) string {
+	var p string
+	_ = s.db.QueryRowContext(ctx, `SELECT path FROM library WHERE id = ?`, libraryID).Scan(&p)
+	return p
+}

@@ -231,7 +231,6 @@
   "passwort braucht mindestens acht zeichen": "A password needs at least eight characters.",
   "pin braucht mindestens vier ziffern": "A PIN needs at least four digits.",
   "pruefen: aus oder taeglich": "Check: off or daily.",
-  "richte zuerst eine metadaten-quelle ein": "Set up a metadata source first.",
   "schon freigegeben": "Already approved.",
   "segment nicht lesbar": "Can’t read segment.",
   "sperre: none, pin, password oder totp": "Lock: none, pin, password or totp.",
@@ -300,5 +299,9 @@
   "Zu dieser Kennung kennt TMDb keinen passenden Eintrag. Stimmt die Nummer, und ist es die richtige Art (Film oder Serie)?": "TMDb has no matching entry for this ID. Is the number right, and is it the right kind (movie or series)?",
   "Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.": "Only people who manage the library can import matches.",
   "dein eigenes Konto entfernst du hier nicht": "You can’t remove your own account here.",
-  "TMDb nimmt diesen Schlüssel nicht an. Es braucht den langen API Read Access Token (er fängt mit eyJ an), nicht die kurze API-Kennung.": "TMDb doesn’t accept this key. Lumen needs the long API Read Access Token (it starts with eyJ), not the short API key."
+  "TMDb nimmt diesen Schlüssel nicht an. Es braucht den langen API Read Access Token (er fängt mit eyJ an), nicht die kurze API-Kennung.": "TMDb doesn’t accept this key. Lumen needs the long API Read Access Token (it starts with eyJ), not the short API key.",
+  "Dafür braucht es einen TMDb-Schlüssel (Verwaltung › Poster und Beschreibungen). Eine Kennung lässt sich auch ohne ihn speichern.": "This needs a TMDb key (Admin › Posters and Descriptions). An ID can be saved without one.",
+  "Das sieht nicht nach einer Kennung aus. Möglich sind etwa tt0133093, eine TMDb-Nummer, tvdb:121361 oder ein Link.": "That doesn't look like an ID. Try tt0133093, a TMDb number, tvdb:121361 or a link.",
+  "TMDb lehnt den hinterlegten Schlüssel ab. Unter Verwaltung › Poster und Beschreibungen einen gültigen eintragen.": "TMDb rejects the saved key. Enter a valid one under Admin › Posters and Descriptions.",
+  "Dieses Extra gibt es nicht.": "This extra doesn't exist."
 }

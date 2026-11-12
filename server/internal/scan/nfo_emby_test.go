@@ -182,3 +182,35 @@ func TestEmbyFolgenbildUndDoppelfolge(t *testing.T) {
 		t.Fatal("Folge 1 fehlt")
 	}
 }
+
+// Kennungen im Namen („[imdbid=tt…]", „{tmdb-…}") stehen nach dem
+// Durchlauf am Titel — auch ohne TMDb-Schlüssel.
+func TestKennungenImNamenOhneSchluessel(t *testing.T) {
+	ctx := t.Context()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	dateienAnlegen(t, wurzel,
+		"Se7en (1995) [imdbid=tt0114369]/Se7en (1995).mkv",
+		"Alien (1979) {tmdb-348}.mkv",
+		"Breaking Bad (2008) [tvdbid-81189]/Season 01/Breaking Bad S01E01.mkv")
+	lib, _ := st.CreateLibrary(ctx, "Gemischt", "movie", wurzel, "de")
+	sc := New(st, nil)
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Kinds: []string{"movie", "series"}, Limit: 20})
+	gefunden := map[string]string{}
+	for _, it := range alle {
+		for _, q := range []string{"imdb", "tmdb", "tvdb"} {
+			if v, _ := st.SourceID(ctx, it.ID, q); v != "" {
+				gefunden[it.Title] += q + ":" + v + " "
+			}
+		}
+	}
+	want := map[string]string{"Se7en": "imdb:tt0114369 ", "Alien": "tmdb:348 ", "Breaking Bad": "tvdb:81189 "}
+	for k, v := range want {
+		if gefunden[k] != v {
+			t.Errorf("%s: %q, erwartet %q (alle %v)", k, gefunden[k], v, gefunden)
+		}
+	}
+}

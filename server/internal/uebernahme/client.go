@@ -371,14 +371,7 @@ func (r rohTitel) eintrag() Eintrag {
 			e.Groesse = m.Size
 		}
 	}
-	// Emby bewertet von 0 bis 10, Lumen mit 1 bis 5 Sternen. Ein
-	// „Daumen hoch" ohne Note gilt als vier Sterne.
-	switch {
-	case r.UserData.Rating != nil && *r.UserData.Rating > 0:
-		e.Sterne = min(5, max(1, int(*r.UserData.Rating/2+0.5)))
-	case r.UserData.Likes != nil && *r.UserData.Likes:
-		e.Sterne = 4
-	}
+	e.Sterne = sterne(r.UserData.Likes, r.UserData.Rating)
 	if t, err := time.Parse(time.RFC3339Nano, r.UserData.LastPlayedDate); err == nil {
 		e.Zuletzt = t
 	}
@@ -533,4 +526,20 @@ func (s *Server) FilmeUndSerien(ctx context.Context, fertig func(int)) ([]Eintra
 		return nil, ErrAnmeldung
 	}
 	return s.titelHolen(ctx, "Movie,Series", "", fertig)
+}
+
+// sterne rechnet die Bewertung um. Emby bewertet von 0 bis 10, Lumen mit
+// 1 bis 5 Sternen. Ein „Daumen hoch" ohne eigene Note gilt als vier
+// Sterne. Jellyfin schreibt beim „Gefällt mir" aber zugleich Rating 10 —
+// das ist kein „volle Punktzahl", sondern derselbe Daumen. Ein „Gefällt
+// mir nicht" (Likes false, Rating 0) bleibt ohne Sterne.
+func sterne(likes *bool, rating *float64) int {
+	gefaellt := likes != nil && *likes
+	switch {
+	case gefaellt && (rating == nil || *rating == 10 || *rating <= 0):
+		return 4
+	case rating != nil && *rating > 0:
+		return min(5, max(1, int(*rating/2+0.5)))
+	}
+	return 0
 }

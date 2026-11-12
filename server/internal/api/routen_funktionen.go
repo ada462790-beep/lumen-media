@@ -16,6 +16,11 @@ import "net/http"
 func (s *Server) routenFunktionen(mux *http.ServeMux) {
 	auth, admin := s.requireAuth, s.requireAdmin
 
+	// Extras eines Films (extras.go): Trailer, Featurettes … zum Abspielen.
+	mux.Handle("GET /api/v1/stream/{item}/extra/{nr}", auth(s.extraAbspielen))
+	// Kennung ohne TMDb-Schlüssel speichern (kennung_vormerken.go).
+	mux.Handle("POST /api/v1/admin/items/{id}/metadata/kennung", admin(s.adminKennungVormerken))
+
 	// Metadaten von Hand (bearbeiten.go). Mitverwalter dürfen das.
 	mux.Handle("GET /api/v1/admin/items/{id}/metadata", admin(s.adminBearbeitenLesen))
 	mux.Handle("PATCH /api/v1/admin/items/{id}/metadata", admin(s.adminBearbeitenSpeichern))

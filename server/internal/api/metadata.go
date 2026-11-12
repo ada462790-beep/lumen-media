@@ -36,6 +36,7 @@ const (
 
 func (s *Server) adminMetaSources(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	titel, mitPoster := s.st.PosterStand(ctx)
 	// Die Schlüssel selbst gehen nie wieder heraus — nur, ob einer da ist.
 	ok(w, map[string]any{
 		"tmdb": map[string]any{
@@ -55,7 +56,15 @@ func (s *Server) adminMetaSources(w http.ResponseWriter, r *http.Request) {
 		"language":      s.st.Setting(ctx, keyLanguage, "de-DE"),
 		"region":        s.st.Setting(ctx, keyRegion, "CH"),
 		"ready":         s.meta != nil && s.meta.Ready(),
-		"note":          tr(w, "Gilt für alle Profile. Niemand braucht dafür ein eigenes Konto."),
+		// Wie es um den Schlüssel steht (fehlt, abgelehnt, ok), wie viele
+		// Titel trotzdem ein Poster haben (aus der Sammlung) und wie viele
+		// Kennungen auf einen Schlüssel warten — damit die Verwaltung den
+		// echten Stand sagt statt „Poster fehlen".
+		"schluessel": meta.SchluesselStand(ctx, s.st),
+		"titel":      titel,
+		"mitPoster":  mitPoster,
+		"vorgemerkt": meta.VorgemerktZahl(ctx, s.st),
+		"note":       tr(w, "Gilt für alle Profile. Niemand braucht dafür ein eigenes Konto."),
 	})
 }
 
@@ -96,6 +105,11 @@ func (s *Server) adminSetMetaSources(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	set(keyTMDb, in.TMDbKey)
+	if in.TMDbKey != nil {
+		// Ein neuer Schlüssel: Was TMDb über den alten gesagt hat, gilt
+		// nicht mehr.
+		meta.SchluesselAngenommen(ctx, s.st)
+	}
 	set(keyOMDb, in.OMDbKey)
 	set(keyLanguage, in.Language)
 	set(keyRegion, in.Region)
@@ -143,8 +157,7 @@ func (s *Server) metaConfig(r *http.Request) meta.Config {
 
 func (s *Server) adminResolve(w http.ResponseWriter, r *http.Request) {
 	if s.meta == nil || !s.meta.Ready() {
-		fail(w, http.StatusPreconditionFailed,
-			"richte zuerst eine metadaten-quelle ein")
+		s.ohneSchluessel(w, r)
 		return
 	}
 	lib := r.URL.Query().Get("library")

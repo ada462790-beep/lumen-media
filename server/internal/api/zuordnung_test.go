@@ -252,3 +252,49 @@ func TestZuweisenKennungMeldungen(t *testing.T) {
 		t.Errorf("zuweisen: %d %s", resp.StatusCode, raw)
 	}
 }
+
+// Ohne TMDb-Schlüssel: Die Kennungen aus Emby werden vorgemerkt statt
+// „nicht möglich"; was die NFO schon mit derselben Kennung hat, ist
+// „schon richtig".
+func TestUmzugZuordnungenOhneSchluessel(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	matrix, _ := h.film("Matrix (1999)", 1)
+	alien, _ := h.film("Alien", 1)
+	for id, z := range map[string]string{matrix: "pending", alien: "lokal"} {
+		it, _ := h.st.Item(ctx, id)
+		it.MatchState = z
+		_ = h.st.UpsertItem(ctx, it)
+	}
+	_ = h.st.SetSourceID(ctx, alien, "tmdb", "348") // aus der NFO
+	n := nachbau.Neu("Jellyfin")
+	defer n.Close()
+	n.Alle = []nachbau.Titel{
+		nachbau.Film("e1", "The Matrix", 1999, "/media/filme/Matrix (1999).mkv", 1024*1024,
+			map[string]string{"Tmdb": "603", "Imdb": "tt0133093"}, map[string]any{}),
+		nachbau.Film("e2", "Alien", 1979, "/media/filme/Alien.mkv", 1024*1024,
+			map[string]string{"Tmdb": "348"}, map[string]any{}),
+	}
+	resp, raw := h.do("POST", "/api/v1/me/uebernahme", `{"adresse":"`+n.Adresse()+`","benutzer":"alex","passwort":"geheim","zuordnungen":true}`, h.tok)
+	if resp.StatusCode != 202 {
+		t.Fatalf("starten: %d %s", resp.StatusCode, raw)
+	}
+	st := h.warteAufUebernahme(h.tok)
+	z, _ := st["zuordnungen"].(map[string]any)
+	if z == nil || z["neu"].(float64) != 1 || z["schonRichtig"].(float64) != 1 || z["ohneQuelle"] != true || z["schluessel"] != "fehlt" {
+		t.Fatalf("Vorschau: %v", st["zuordnungen"])
+	}
+	resp, raw = h.do("POST", "/api/v1/me/uebernahme/anwenden", `{"gesehen":false,"angefangen":false,"favoriten":false,"bewertungen":false,"zuordnungen":true}`, h.tok)
+	if resp.StatusCode != 200 {
+		t.Fatalf("anwenden: %d %s", resp.StatusCode, raw)
+	}
+	stand := warteAufZuordnungen(t, h)
+	if stand["vorgemerkt"].(float64) != 1 || stand["schonRichtig"].(float64) != 1 || stand["fehler"].(float64) != 0 || stand["grund"] != "fehlt" {
+		t.Fatalf("Ergebnis: %v", stand)
+	}
+	it, _ := h.st.Item(ctx, matrix)
+	src, _ := h.st.SourceID(ctx, matrix, "tmdb")
+	if src != "603" || it.IMDbID != "tt0133093" || it.MatchState != "lokal" {
+		t.Errorf("Matrix: tmdb %q imdb %q Zustand %q", src, it.IMDbID, it.MatchState)
+	}
+}

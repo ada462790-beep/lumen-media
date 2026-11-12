@@ -18,7 +18,7 @@ import (
 // „DE-18" sehen — und ein unbekanntes Kennzeichen ist „ungeprüft", nie 0.
 func TestAgeYearsSchreibweisen(t *testing.T) {
 	faelle := []struct {
-		ein  string
+		ein   string
 		jahre int // -1: ungeprüft (nil)
 	}{
 		// Emby/Jellyfin
