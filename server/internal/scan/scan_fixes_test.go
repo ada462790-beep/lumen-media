@@ -689,3 +689,71 @@ func TestAussetzerBeimMessenMachtNichtsDefekt(t *testing.T) {
 		t.Fatalf("%d Dateien als fehlend vermerkt", n)
 	}
 }
+
+// Wer einen Film mit einer Kennung im Namen oder einem anderen Jahr bewusst
+// einem anderen Titel zuordnet, bekommt einen neuen Titel — die Datei
+// wandert nicht zurück an den alten Eintrag samt dessen Gesehen-Haken.
+// Eine Kennung, die zum alten Eintrag passt, ist weiter nur ein neuer Name.
+func TestUmbenennenMitKennungOrdnetNeuZu(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	wurzel := t.TempDir()
+	dateiMitGroesse(t, wurzel, "Alien (1979)/Alien (1979).mkv", 117)
+	dateiMitGroesse(t, wurzel, "Matrix (1999)/Matrix (1999).mkv", 136)
+	dateiMitGroesse(t, wurzel, "Up (2009)/Up (2009).mkv", 96)
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", wurzel, "de")
+	sc := New(st, &groessenProbe{})
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]string{}
+	alle, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Limit: 10})
+	for _, it := range alle {
+		ids[it.Title] = it.ID
+	}
+	acc, _ := st.CreateAccount(ctx, store.NewAccount{Name: "Mia"})
+	_ = st.MarkFinished(ctx, acc.ID, ids["Alien"], 1000)
+	_ = st.SetSourceID(ctx, ids["Alien"], "tmdb", "348")
+	_ = st.SetSourceID(ctx, ids["Up"], "tmdb", "14160")
+
+	umbenennen := func(altOrdner, altDatei, neu string) {
+		t.Helper()
+		if err := os.Rename(filepath.Join(wurzel, altOrdner), filepath.Join(wurzel, neu)); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(filepath.Join(wurzel, neu, altDatei), filepath.Join(wurzel, neu, neu+".mkv")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Alien → bewusst „Aliens" mit eigener Kennung (gleiches Jahr).
+	umbenennen("Alien (1979)", "Alien (1979).mkv", "Aliens (1979) {tmdb-679}")
+	// Matrix → anderes Jahr.
+	umbenennen("Matrix (1999)", "Matrix (1999).mkv", "Matrix Resurrections (2021)")
+	// Up → dieselbe Kennung wie bisher: nur ein neuer Name.
+	umbenennen("Up (2009)", "Up (2009).mkv", "Oben (2009) {tmdb-14160}")
+
+	res, err := sc.Scan(ctx, *lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Renamed != 1 {
+		t.Errorf("Ergebnis %+v — erwartet nur Up umbenannt", res)
+	}
+	if d, _ := st.FilesFor(ctx, ids["Alien"]); len(d) != 1 || !d[0].Missing {
+		t.Fatalf("Alien: die Datei wanderte an den alten Eintrag zurück: %+v", d)
+	}
+	if d, _ := st.FilesFor(ctx, ids["Matrix"]); len(d) != 1 || !d[0].Missing {
+		t.Fatalf("Matrix: die Datei wanderte trotz anderem Jahr zurück: %+v", d)
+	}
+	if d, _ := st.FilesFor(ctx, ids["Up"]); len(d) != 1 || d[0].Missing {
+		t.Fatalf("Up: mit passender Kennung nicht umgezogen: %+v", d)
+	}
+	alle, _ = st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Limit: 10})
+	for _, it := range alle {
+		if it.Title == "Aliens" {
+			if p, _ := st.Progress(ctx, acc.ID, it.ID); p != nil && p.Finished {
+				t.Error("der neue Titel erbte den Gesehen-Haken des alten")
+			}
+		}
+	}
+}

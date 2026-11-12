@@ -18,11 +18,20 @@ package scan
 // Laufzeit (oder im selben Ordner), sind dieselbe — so halten es auch Emby
 // und Jellyfin. Gezählt wird nur, was eindeutig ist: Passen zwei neue
 // Dateien zu einer verschwundenen, bleibt alles, wie es ist.
+//
+// Nicht jedes Umbenennen ist nur ein neuer Name: Wer einen falsch
+// erkannten Film mit „{tmdb-…}", „{imdb-…}" oder „{tvdb-…}" im Namen oder
+// einem anderen Jahr bewusst einem anderen Titel zuordnet, will genau
+// nicht, dass Lumen die Datei wieder an den alten Eintrag hängt. Dann
+// bleibt der neue Titel ein neuer — ohne den Gesehen-Stand des alten, der
+// zu einem anderen Film gehörte.
 
 import (
 	"context"
 	"path/filepath"
+	"strings"
 
+	"lumen/internal/lokal"
 	"lumen/internal/store"
 )
 
@@ -82,6 +91,9 @@ func (s *Scanner) umbenennungenErkennen(ctx context.Context, lib store.Library, 
 		if err != nil || neuItem.LibraryID != lib.ID || altItem.LibraryID != lib.ID {
 			continue
 		}
+		if neuItem.ID != altItem.ID && s.bewusstUmgeordnet(ctx, lib, altItem, neuItem, n.Path) {
+			continue
+		}
 		ok, err := s.st.DateiUmziehen(ctx, alt.ID, n.ID)
 		if err != nil || !ok {
 			continue
@@ -104,4 +116,42 @@ func (s *Scanner) umbenennungenErkennen(ctx context.Context, lib store.Library, 
 		}
 	}
 	return umgezogen, titelWeg
+}
+
+// bewusstUmgeordnet: Sagt der neue Name ausdrücklich etwas anderes als der
+// alte Eintrag — ein anderes Jahr oder eine Kennung des Anbieters, die der
+// alte Eintrag nicht hat? Dann ist das keine Umbenennung, sondern eine neue
+// Zuordnung. Nur für Filme; Folgen hängen an ihrer Serie.
+func (s *Scanner) bewusstUmgeordnet(ctx context.Context, lib store.Library, alt, neu *store.Item, pfad string) bool {
+	if alt.Kind != "movie" || neu.Kind != "movie" {
+		return false
+	}
+	if alt.Year > 0 && neu.Year > 0 && alt.Year != neu.Year {
+		return true
+	}
+	var dirs []string
+	if rel, err := filepath.Rel(lib.Path, filepath.Dir(pfad)); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+		dirs = strings.Split(filepath.ToSlash(rel), "/")
+	}
+	k := lokal.KennungenFilm(pfad, dirs)
+	if k.Leer() {
+		return false
+	}
+	bestaetigt := false
+	for _, x := range []struct{ quelle, wert string }{{"tmdb", k.TMDb}, {"imdb", k.IMDb}, {"tvdb", k.TVDb}} {
+		if x.wert == "" {
+			continue
+		}
+		bisher, _ := s.st.SourceID(ctx, alt.ID, x.quelle)
+		if bisher == "" {
+			continue
+		}
+		if !strings.EqualFold(bisher, x.wert) {
+			return true // eine andere Kennung: ein anderer Film
+		}
+		bestaetigt = true
+	}
+	// Eine Kennung, die der alte Eintrag nicht bestätigt: lieber ein neuer
+	// Titel als ein fremder Gesehen-Haken.
+	return !bestaetigt
 }
