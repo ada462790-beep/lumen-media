@@ -518,7 +518,9 @@ func TestLokaleSerienMetadaten(t *testing.T) {
 		t.Fatalf("Serien: %v", titles(serien))
 	}
 	se := serien[0]
-	if se.Title != "Heimat – Eine deutsche Chronik" || se.MatchState != "pending" {
+	// Ohne TMDb-Schlüssel genügt die vollständige NFO: „lokal", nicht
+	// „wartet auf die Zuordnung" (mit Schlüssel siehe TestNFOMitKennungOhneSchluessel).
+	if se.Title != "Heimat – Eine deutsche Chronik" || se.MatchState != "lokal" {
 		t.Errorf("Serie: %q %s", se.Title, se.MatchState)
 	}
 	if id, _ := st.SourceID(ctx, se.ID, "tvdb"); id != "78999" {

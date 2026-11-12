@@ -3292,7 +3292,7 @@ function viewCollection() {
   const gesehen = r.items.filter(x => x.finished).length;
   const unter = [tr('{n} Filme', { n: r.anzahl }),
     gesehen ? tr('{n} gesehen', { n: gesehen }) : '',
-    r.source === 'tmdb' ? tr('zusammengestellt nach TMDb') : tr('von Lumen am Titel erkannt'),
+    r.source === 'tmdb' ? tr('zusammengestellt nach TMDb') : r.source === 'nfo' ? tr('aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)') : tr('von Lumen am Titel erkannt'),
     r.hidden ? tr('aufgelöst') : ''].filter(Boolean).join(' · ');
 
   const titel = S.bearbeiten === 'reihe' && besitzer

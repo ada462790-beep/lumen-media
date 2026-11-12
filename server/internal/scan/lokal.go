@@ -25,6 +25,8 @@ package scan
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,6 +44,9 @@ type lokalLauf struct {
 	s          *Scanner
 	lib        store.Library
 	bevorzugen bool
+	// quelleBereit: Ist eine Metadaten-Quelle (TMDb) eingerichtet? Ohne
+	// gelten vollständige NFOs mit Kennung als erkannt.
+	quelleBereit bool
 	ordner     map[string]*lokal.Ordner
 	// eigen: Gehört der Ordner einem Film allein? (je Ordner einmal)
 	eigen map[string]bool
@@ -53,7 +58,15 @@ func (s *Scanner) lokalLauf(ctx context.Context, lib store.Library) *lokalLauf {
 	if n, err := s.st.FreigabenNachrechnen(ctx, meta.AgeYears); err == nil && n > 0 {
 		s.st.Log(ctx, "info", "scan", fmt.Sprintf("Altersfreigabe bei %d Titeln nachgetragen", n))
 	}
+	bereit := meta.QuelleBereit(ctx, s.st)
+	if !bereit {
+		// Titel aus einem früheren Durchlauf, die noch auf TMDb warten,
+		// obwohl ihre NFO genügt (die NFO selbst liest der Durchlauf nur
+		// neu, wenn sie sich ändert).
+		meta.OhneQuelleAbschliessen(ctx, s.st)
+	}
 	return &lokalLauf{s: s, lib: lib, bevorzugen: meta.NFOBevorzugt(ctx, s.st),
+		quelleBereit: bereit,
 		ordner: map[string]*lokal.Ordner{}, eigen: map[string]bool{}}
 }
 
@@ -143,8 +156,20 @@ func (l *lokalLauf) folge(ctx context.Context, id, video string) {
 	o := l.dir(filepath.Dir(video))
 	stamm := strings.TrimSuffix(filepath.Base(video), filepath.Ext(video))
 	l.nfo(ctx, id, o.Finde(stamm+".nfo"))
-	if p := o.VorschauFuerFolge(stamm); p != "" {
+	// Emby legt Folgenbilder auch in „metadata/<Folge>.jpg" ab.
+	if p := lokal.VorschauFuerFolgeIn(o, l.dir(filepath.Join(filepath.Dir(video), "metadata")), stamm); p != "" {
 		l.bilder(ctx, id, map[string]string{"poster": p})
+	}
+	// Doppelfolge laut NFO (<episodenumberend>): Der Durchlauf setzt das
+	// Ende sonst jedes Mal aus dem Dateinamen zurück.
+	if roh, ok := l.s.st.LokaleNFOZu(ctx, id); ok {
+		var n lokal.NFO
+		if json.Unmarshal([]byte(roh.Daten), &n) == nil && n.BisFolge > 0 {
+			if z := l.s.st.ZusatzZu(ctx, id); n.BisFolge > z.BisFolge {
+				z.BisFolge = n.BisFolge
+				_ = l.s.st.ZusatzSetzen(ctx, id, z)
+			}
+		}
 	}
 }
 
@@ -189,13 +214,27 @@ func (l *lokalLauf) nfo(ctx context.Context, id, pfad string) {
 	if n.TVDb != "" && it.Kind == "series" {
 		_ = st.SetSourceID(ctx, id, "tvdb", n.TVDb)
 	}
+	angewendet := false
+	anwenden := func() { n.Anwenden(it, meta.AgeYears); angewendet = true }
 	switch {
 	case it.Kind == "episode" || it.Kind == "season":
 		// Folgen und Staffeln hängen an der Serie; ihr Zustand bleibt.
 		// Die Werte gelten, wenn der Besitzer es so will — oder solange
 		// noch nichts Besseres da ist.
 		if l.bevorzugen || !store.IstErkannt(it.MatchState) {
-			n.Anwenden(it, meta.AgeYears)
+			anwenden()
+		}
+	case n.HatKennung() && n.Vollstaendig() && !l.quelleBereit:
+		// Ohne TMDb-Schlüssel gibt es niemanden, der den Eintrag holen
+		// könnte: Eine vollständige NFO genügt dann für sich. Die Kennung
+		// bleibt gespeichert; kommt später ein Schlüssel dazu, holt die
+		// Zuordnung diese Titel nach (meta.LokaleMitKennungNachholen).
+		if l.bevorzugen || it.MatchState != "matched" {
+			anwenden()
+		}
+		if it.MatchState != "matched" {
+			it.MatchState = "lokal"
+			meta.OhneSchluesselErkannt(ctx, st)
 		}
 	case n.HatKennung():
 		// TMDb holt den genauen Eintrag; „nicht erkannt" stimmt nicht mehr.
@@ -203,11 +242,11 @@ func (l *lokalLauf) nfo(ctx context.Context, id, pfad string) {
 			it.MatchState = "pending"
 		}
 		if l.bevorzugen || it.MatchState == "pending" {
-			n.Anwenden(it, meta.AgeYears)
+			anwenden()
 		}
 	case n.Vollstaendig():
 		if l.bevorzugen || it.MatchState != "matched" {
-			n.Anwenden(it, meta.AgeYears)
+			anwenden()
 		}
 		if it.MatchState != "matched" {
 			it.MatchState = "lokal"
@@ -216,10 +255,120 @@ func (l *lokalLauf) nfo(ctx context.Context, id, pfad string) {
 		// Halbe NFO ohne Kennung: Titel und Jahr helfen wenigstens der
 		// Suche; die Zuordnung legt die übrigen Werte später darüber.
 		if l.bevorzugen || it.MatchState != "matched" {
-			n.Anwenden(it, meta.AgeYears)
+			anwenden()
 		}
 	}
 	_ = st.UpsertItem(ctx, it)
+	if it.Kind == "movie" || it.Kind == "series" {
+		l.besetzung(ctx, it.ID, n, filepath.Dir(pfad), angewendet)
+	}
+	if it.Kind == "movie" {
+		// <set>: die Sammlung aus Emby. Sie geht vor der selbst erkannten
+		// Reihe; ohne <set> fällt der Film aus einer früheren NFO-Reihe.
+		if n.Reihe != "" {
+			_ = st.NFOReiheZuordnen(ctx, n.Reihe, n.ReiheTMDb, it.ID, it.Year)
+		} else {
+			_ = st.NFOReiheLoesen(ctx, it.ID)
+		}
+	}
+}
+
+// besetzung übernimmt <actor> aus der NFO — wenn die NFO-Werte gelten oder
+// noch niemand anderes eine Besetzung eingetragen hat. Bilder kommen aus
+// der Sammlung selbst: „.actors/Vorname_Nachname.jpg" (Kodi, Emby) oder ein
+// <thumb>, der auf eine Datei neben der NFO zeigt. Adressen im Netz lädt
+// der Scanner nicht; dafür steht der Name mit Initialen da.
+func (l *lokalLauf) besetzung(ctx context.Context, id string, n *lokal.NFO, nfoOrdner string, angewendet bool) {
+	if len(n.Besetzung) == 0 {
+		return
+	}
+	st := l.s.st
+	if !angewendet {
+		if alt, err := st.Besetzung(ctx, id); err != nil || len(alt) > 0 {
+			return
+		}
+	}
+	actors := l.dir(filepath.Join(nfoOrdner, ".actors"))
+	leute := make([]store.Person, 0, len(n.Besetzung))
+	for i, p := range n.Besetzung {
+		if i >= 30 {
+			break
+		}
+		person := store.Person{Name: p.Name, Rolle: p.Rolle}
+		if quelle := l.personenBild(actors, nfoOrdner, p); quelle != "" && l.s.BilderOrdner != "" {
+			if info, err := os.Stat(quelle); err == nil {
+				sum := sha1.Sum([]byte(fmt.Sprintf("%s|%d|%d", quelle, info.ModTime().Unix(), info.Size())))
+				name := fmt.Sprintf("%s-cast-%s%s", id, hex.EncodeToString(sum[:5]), strings.ToLower(filepath.Ext(quelle)))
+				ziel := filepath.Join(l.s.BilderOrdner, name)
+				if _, err := os.Stat(ziel); err == nil || kopieren(quelle, ziel) == nil {
+					person.Bild = name
+				}
+			}
+		}
+		leute = append(leute, person)
+	}
+	_ = st.BesetzungSetzen(ctx, id, leute)
+	l.alteCastBilderWeg(ctx, id)
+}
+
+// personenBild sucht das Bild einer Person in der Sammlung. Nur
+// gewöhnliche Dateien in der Bibliothek zählen — ein <thumb> mit
+// „/etc/passwd" oder ein Verweis aus der Bibliothek hinaus nicht.
+func (l *lokalLauf) personenBild(actors *lokal.Ordner, nfoOrdner string, p lokal.NFOPerson) string {
+	name := strings.TrimSpace(p.Name)
+	if name != "" {
+		if b := actors.FindeBild(strings.ReplaceAll(name, " ", "_"), name); b != "" {
+			return b
+		}
+	}
+	t := strings.TrimSpace(p.Bild)
+	if t == "" || strings.Contains(t, "://") {
+		return ""
+	}
+	if !filepath.IsAbs(t) {
+		t = filepath.Join(nfoOrdner, t)
+	}
+	t = filepath.Clean(t)
+	rel, err := filepath.Rel(filepath.Clean(l.lib.Path), t)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	if !istBild(t) || InDatenordner(t) {
+		return ""
+	}
+	if info, err := os.Lstat(t); err != nil || !info.Mode().IsRegular() || info.Size() > 20<<20 {
+		return ""
+	}
+	return t
+}
+
+func istBild(p string) bool {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".jpg", ".jpeg", ".png", ".webp":
+		return true
+	}
+	return false
+}
+
+// alteCastBilderWeg: Bilder der Besetzung, auf die keine Zeile mehr zeigt.
+func (l *lokalLauf) alteCastBilderWeg(ctx context.Context, id string) {
+	if l.s.BilderOrdner == "" {
+		return
+	}
+	leute, err := l.s.st.Besetzung(ctx, id)
+	if err != nil {
+		return
+	}
+	behalten := map[string]bool{}
+	for _, p := range leute {
+		behalten[p.Bild] = true
+	}
+	alle, _ := filepath.Glob(filepath.Join(l.s.BilderOrdner, id+"-cast*"))
+	for _, pfad := range alle {
+		if n := filepath.Base(pfad); !behalten[n] && !strings.Contains(n, ".teil") {
+			_ = os.Remove(pfad)
+		}
+	}
 }
 
 // bilder übernimmt Bilder in den Bilderordner, wenn sie neu sind oder

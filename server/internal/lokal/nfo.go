@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -49,6 +50,31 @@ type NFO struct {
 	TMDb         string   `json:"tmdb,omitempty"`
 	IMDb         string   `json:"imdb,omitempty"`
 	TVDb         string   `json:"tvdb,omitempty"`
+
+	// Was Emby, Jellyfin und Kodi ausserdem schreiben. Lumen zeigt es auf
+	// der Titelseite wie die Angaben von TMDb.
+	Besetzung []NFOPerson `json:"besetzung,omitempty"`
+	Regie     []string    `json:"regie,omitempty"`
+	Drehbuch  []string    `json:"drehbuch,omitempty"`
+	Studios   []string    `json:"studios,omitempty"`
+	Tags      []string    `json:"tags,omitempty"`
+	Tagline   string      `json:"tagline,omitempty"`
+	Laender   []string    `json:"laender,omitempty"`
+	// Reihe: <set> — die Sammlung, zu der der Film in Emby gehört
+	// („Matrix Collection"), samt TMDb-Kennung der Sammlung, wenn bekannt.
+	Reihe     string `json:"reihe,omitempty"`
+	ReiheTMDb string `json:"reiheTmdb,omitempty"`
+	// BisFolge: <episodenumberend> einer Doppelfolge.
+	BisFolge int `json:"bisFolge,omitempty"`
+}
+
+// NFOPerson ist ein <actor>: Name, Rolle, Bild (Adresse oder Pfad, wie
+// es in der NFO steht) und die Reihenfolge.
+type NFOPerson struct {
+	Name  string `json:"name"`
+	Rolle string `json:"rolle,omitempty"`
+	Bild  string `json:"bild,omitempty"`
+	Ord   int    `json:"ord,omitempty"`
 }
 
 // HatKennung: Mit einer Kennung lässt sich der Titel ohne Suche zuordnen.
@@ -147,6 +173,31 @@ type roh struct {
 		Type  string `xml:"type,attr"`
 		Value string `xml:",chardata"`
 	} `xml:"uniqueid"`
+
+	Actor []struct {
+		Name  string `xml:"name"`
+		Role  string `xml:"role"`
+		Thumb string `xml:"thumb"`
+		Order string `xml:"order"`
+		Type  string `xml:"type"`
+	} `xml:"actor"`
+	Director []string `xml:"director"`
+	Credits  []string `xml:"credits"`
+	Writer   []string `xml:"writer"`
+	Studio   []string `xml:"studio"`
+	Tag      []string `xml:"tag"`
+	Tagline  string   `xml:"tagline"`
+	Country  []string `xml:"country"`
+	// <set tmdbcolid="2344">Matrix Collection</set> (Emby, Jellyfin) oder
+	// <set><name>Matrix Collection</name></set> (Kodi).
+	Set struct {
+		Text  string `xml:",chardata"`
+		Name  string `xml:"name"`
+		ColID string `xml:"tmdbcolid,attr"`
+	} `xml:"set"`
+	Collection string `xml:"collection"`
+	TMDbColID  string `xml:"tmdbcolid"`
+	EpEnd      string `xml:"episodenumberend"`
 }
 
 var (
@@ -235,8 +286,25 @@ func NFOAus(daten []byte) (*NFO, error) {
 	if n.Bewertung < 0 || n.Bewertung > 10 {
 		n.Bewertung, n.Stimmen = 0, 0
 	}
+	if n.Bewertung == 0 {
+		// Keine IMDb-Note und keine Vorgabe: die erste, die es gibt
+		// (Emby schreibt oft nur „themoviedb").
+		for _, b := range r.Ratings.Rating {
+			if v := zahl(b.Value); v > 0 {
+				n.Bewertung, n.Stimmen = v, ganz(b.Votes)
+				break
+			}
+		}
+	}
+	if n.Bewertung < 0 || n.Bewertung > 10 {
+		n.Bewertung, n.Stimmen = 0, 0
+	}
 	n.LaufzeitMin = ganz(r.Runtime)
 	n.Staffel, n.Folge = ganz(r.Season), ganz(r.Episode)
+	if e := ganz(r.EpEnd); e > n.Folge && n.Folge > 0 {
+		n.BisFolge = e
+	}
+	n.zusatzLesen(&r)
 
 	for _, u := range r.UniqueID {
 		v := strings.TrimSpace(u.Value)
@@ -274,6 +342,87 @@ func NFOAus(daten []byte) (*NFO, error) {
 		}
 	}
 	return n, nil
+}
+
+// zusatzLesen übernimmt Besetzung, Regie, Studio, Tags und Sammlung.
+func (n *NFO) zusatzLesen(r *roh) {
+	gesehen := map[string]bool{}
+	for i, a := range r.Actor {
+		name := strings.TrimSpace(a.Name)
+		// Emby führt Regie und Drehbuch mitunter auch als <actor> mit
+		// <type>Director</type>.
+		switch strings.ToLower(strings.TrimSpace(a.Type)) {
+		case "director":
+			n.Regie = append(n.Regie, name)
+			continue
+		case "writer":
+			n.Drehbuch = append(n.Drehbuch, name)
+			continue
+		case "", "actor", "gueststar":
+		default:
+			// Produktion, Musik: gehören nicht in die Besetzung.
+			continue
+		}
+		if name == "" || gesehen[strings.ToLower(name)] || len(n.Besetzung) >= 50 {
+			continue
+		}
+		gesehen[strings.ToLower(name)] = true
+		ord := i
+		if o := strings.TrimSpace(a.Order); o != "" {
+			if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+				ord = v
+			}
+		}
+		n.Besetzung = append(n.Besetzung, NFOPerson{Name: name, Rolle: strings.TrimSpace(a.Role),
+			Bild: strings.TrimSpace(a.Thumb), Ord: ord})
+	}
+	sort.SliceStable(n.Besetzung, func(i, j int) bool { return n.Besetzung[i].Ord < n.Besetzung[j].Ord })
+	n.Regie = liste(n.Regie, r.Director)
+	n.Drehbuch = liste(n.Drehbuch, r.Credits, r.Writer)
+	n.Studios = liste(nil, r.Studio)
+	n.Tags = liste(nil, r.Tag)
+	n.Laender = liste(nil, r.Country)
+	n.Tagline = strings.TrimSpace(r.Tagline)
+	n.Reihe = strings.TrimSpace(r.Set.Name)
+	if n.Reihe == "" {
+		n.Reihe = strings.TrimSpace(r.Set.Text)
+	}
+	if n.Reihe == "" {
+		n.Reihe = strings.TrimSpace(r.Collection)
+	}
+	n.ReiheTMDb = nurZahl(r.Set.ColID)
+	if n.ReiheTMDb == "" {
+		n.ReiheTMDb = nurZahl(r.TMDbColID)
+	}
+	if n.Reihe == "" {
+		n.ReiheTMDb = ""
+	}
+}
+
+// liste fügt Werte ohne Doppelte zusammen; „A / B" in einem Feld zählt
+// als zwei.
+func liste(vorher []string, quellen ...[]string) []string {
+	var out []string
+	gesehen := map[string]bool{}
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" || gesehen[strings.ToLower(v)] || len(out) >= 30 {
+			return
+		}
+		gesehen[strings.ToLower(v)] = true
+		out = append(out, v)
+	}
+	for _, v := range vorher {
+		add(v)
+	}
+	for _, q := range quellen {
+		for _, v := range q {
+			for _, t := range strings.Split(v, " / ") {
+				add(t)
+			}
+		}
+	}
+	return out
 }
 
 // linkNFO liest eine NFO, in der nur eine Adresse steht.

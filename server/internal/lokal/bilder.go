@@ -109,7 +109,8 @@ func (o *Ordner) BilderFuerFilm(stamm string, eigenerOrdner bool) map[string]str
 		}
 	}
 	setze("poster", []string{"-poster", ""}, []string{"poster", "folder", "cover", "movie"})
-	setze("backdrop", []string{"-fanart", "-backdrop", "-background"}, []string{"fanart", "backdrop", "background"})
+	setze("backdrop", []string{"-fanart", "-backdrop", "-background", "-fanart1", "-backdrop1"},
+		[]string{"fanart", "backdrop", "background", "fanart1", "backdrop1", "fanart-1"})
 	setze("landscape", []string{"-landscape", "-thumb"}, []string{"landscape", "thumb"})
 	setze("logo", []string{"-logo", "-clearlogo"}, []string{"logo", "clearlogo"})
 	return out
@@ -120,7 +121,7 @@ func (o *Ordner) BilderFuerSerie() map[string]string {
 	out := map[string]string{}
 	for art, staemme := range map[string][]string{
 		"poster":    {"poster", "folder", "cover", "show"},
-		"backdrop":  {"fanart", "backdrop", "background"},
+		"backdrop":  {"fanart", "backdrop", "background", "fanart1", "backdrop1", "fanart-1"},
 		"landscape": {"landscape", "thumb"},
 		"logo":      {"logo", "clearlogo"},
 	} {
@@ -151,4 +152,13 @@ func PosterFuerStaffel(serie, staffel *Ordner, nr int) string {
 // VorschauFuerFolge: „<Folgendatei>-thumb.jpg" (Kodi), „<Folgendatei>.jpg".
 func (o *Ordner) VorschauFuerFolge(stamm string) string {
 	return o.FindeBild(stamm+"-thumb", stamm)
+}
+
+// VorschauFuerFolgeIn sucht zuerst neben der Folge, dann in „metadata/"
+// darunter — dort legt Emby seine Folgenbilder ab („metadata/<Folge>.jpg").
+func VorschauFuerFolgeIn(o, metadata *Ordner, stamm string) string {
+	if p := o.VorschauFuerFolge(stamm); p != "" {
+		return p
+	}
+	return metadata.FindeBild(stamm, stamm+"-thumb")
 }

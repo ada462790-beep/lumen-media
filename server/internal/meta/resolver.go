@@ -128,6 +128,10 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 	if !r.Ready() {
 		return nil, fmt.Errorf("es ist keine Metadaten-Quelle eingerichtet")
 	}
+	// Ein abgelehnter Schlüssel: einmal sagen, nicht je Titel.
+	if err := r.schluesselPruefen(ctx); err != nil {
+		return &Result{}, err
+	}
 	r.einmalNeuVersuchen(ctx)
 	pending, err := r.st.PendingItems(ctx, libraryID, limit)
 	if err != nil {
@@ -159,7 +163,16 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 		r.stand.Fertig, r.stand.Titel = i, pending[i].Title
 		r.standMu.Unlock()
 		res.Checked++
-		switch err := r.resolveOne(ctx, &pending[i]); {
+		err := r.resolveOne(ctx, &pending[i])
+		if errors.Is(err, ErrTMDbSchluessel) {
+			// Mitten im Durchgang abgelehnt (Schlüssel widerrufen): Jeder
+			// weitere Titel bekäme dieselbe Antwort.
+			grundMerken(pending[i].ID, Grund{Art: "schluessel"})
+			r.schluesselFehlt(ctx)
+			res.Failed++
+			return res, err
+		}
+		switch {
 		case err == errUnmatched:
 			res.Unmatched++
 		case err != nil:
@@ -277,6 +290,10 @@ func (r *Resolver) resolveMovie(ctx context.Context, it *store.Item) error {
 		full, quelle = r.dateiTreffer(ctx, it, "movie")
 	}
 	if full == nil {
+		// Ohne Schlüssel eingegeben oder aus Emby übernommen.
+		full, quelle = r.vorgemerkteKennung(ctx, it, "movie")
+	}
+	if full == nil {
 		m, gesucht, _, err := r.finden(ctx, "movie", it.Title, it.Year, "")
 		if err != nil {
 			// Kein Netz, TMDb bremst: bleibt „ausstehend" und kommt beim
@@ -313,6 +330,7 @@ func (r *Resolver) resolveMovie(ctx context.Context, it *store.Item) error {
 		return err
 	}
 	grundVergessen(it.ID)
+	r.vormerkungErledigt(ctx, it.ID)
 	if tomaten > -2 {
 		_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 	}
@@ -330,6 +348,10 @@ func (r *Resolver) resolveSeries(ctx context.Context, it *store.Item) error {
 	full, quelle := r.lokalerTreffer(ctx, it, "series")
 	if full == nil {
 		full, quelle = r.dateiTreffer(ctx, it, "series")
+	}
+	if full == nil {
+		// Ohne Schlüssel eingegeben oder aus Emby übernommen.
+		full, quelle = r.vorgemerkteKennung(ctx, it, "series")
 	}
 	if full == nil {
 		// „The Office (US)": nur die Kandidaten aus diesem Land.
@@ -358,6 +380,7 @@ func (r *Resolver) resolveSeries(ctx context.Context, it *store.Item) error {
 		return err
 	}
 	grundVergessen(it.ID)
+	r.vormerkungErledigt(ctx, it.ID)
 	if tomaten > -2 {
 		_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 	}
@@ -532,6 +555,11 @@ func (r *Resolver) ReihenBilderHolen(ctx context.Context) {
 // es die Datei gab — nach dem Zuweisen eines anderen Films trug die neue
 // Hauptrolle dann das Gesicht der alten.
 func (r *Resolver) saveCast(ctx context.Context, itemID string, c *Candidate) {
+	// Die Besetzung aus der NFO bleibt, wenn NFO-Werte vorgehen (Vorgabe):
+	// Wer sie in Emby gepflegt hat, will sie behalten.
+	if n := r.nfoZu(ctx, itemID); n != nil && len(n.Besetzung) > 0 && NFOBevorzugt(ctx, r.st) {
+		return
+	}
 	leute := make([]store.Person, 0, len(c.Cast))
 	for _, p := range c.Cast {
 		person := store.Person{Name: p.Name, Rolle: p.Rolle}
@@ -561,6 +589,9 @@ func (r *Resolver) saveCast(ctx context.Context, itemID string, c *Candidate) {
 // gepflegte bleibt (gesperrt, siehe BesetzungSetzen).
 func (r *Resolver) besetzungLeeren(ctx context.Context, itemID string, c *Candidate) {
 	if len(c.Cast) > 0 {
+		return
+	}
+	if n := r.nfoZu(ctx, itemID); n != nil && len(n.Besetzung) > 0 && NFOBevorzugt(ctx, r.st) {
 		return
 	}
 	if r.st.BesetzungSetzen(ctx, itemID, nil) == nil {
@@ -753,6 +784,7 @@ func (r *Resolver) zuweisen(ctx context.Context, it *store.Item, sourceID string
 		return err
 	}
 	grundVergessen(it.ID)
+	r.vormerkungErledigt(ctx, it.ID)
 	switch it.Kind {
 	case "movie":
 		full, err := r.tmdb.Details(ctx, sourceID)

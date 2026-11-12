@@ -293,3 +293,107 @@ func (s *Store) FreigabenNachrechnen(ctx context.Context, alter func(string) *in
 	}
 	return len(neu), nil
 }
+
+// NFOZeile: ein Titel mit seiner gemerkten NFO (JSON von lokal.NFO).
+type NFOZeile struct {
+	ID, Kind, Daten string
+}
+
+// AusstehendMitNFO nennt Filme, Serien und Folgen, die auf die Zuordnung
+// warten und eine NFO haben.
+func (s *Store) AusstehendMitNFO(ctx context.Context) ([]NFOZeile, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT i.id, i.kind, n.daten FROM item i JOIN lokal_nfo n ON n.item_id = i.id
+		  WHERE i.match_state = 'pending' AND i.kind IN ('movie','series','episode')`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []NFOZeile
+	for rows.Next() {
+		var z NFOZeile
+		if err := rows.Scan(&z.ID, &z.Kind, &z.Daten); err != nil {
+			return nil, err
+		}
+		out = append(out, z)
+	}
+	return out, rows.Err()
+}
+
+// ZuordnungsZustandSetzen setzt den Zustand der Zuordnung für Titel, die
+// nicht von Hand zugewiesen sind.
+func (s *Store) ZuordnungsZustandSetzen(ctx context.Context, ids []string, zustand string) (int64, error) {
+	var n int64
+	err := s.tx(ctx, func(t *sql.Tx) error {
+		for _, id := range ids {
+			res, err := t.ExecContext(ctx,
+				`UPDATE item SET match_state = ? WHERE id = ? AND match_state NOT IN ('manual', ?)`, zustand, id, zustand)
+			if err != nil {
+				return err
+			}
+			k, _ := res.RowsAffected()
+			n += k
+		}
+		return nil
+	})
+	return n, err
+}
+
+// LokaleMitKennungNachholen: Filme und Serien, die ohne TMDb-Schlüssel als
+// „lokal" galten, aber eine Kennung haben, warten wieder auf die
+// Zuordnung — jetzt, wo ein Schlüssel da ist. Ihre Folgen ebenso.
+func (s *Store) LokaleMitKennungNachholen(ctx context.Context) (int64, error) {
+	var n int64
+	err := s.tx(ctx, func(t *sql.Tx) error {
+		res, err := t.ExecContext(ctx, `UPDATE item SET match_state = 'pending'
+			 WHERE match_state = 'lokal' AND kind IN ('movie','series')
+			   AND (COALESCE(tmdb_id,'') != '' OR COALESCE(imdb_id,'') != '' OR COALESCE(tvdb_id,'') != '')`)
+		if err != nil {
+			return err
+		}
+		n, _ = res.RowsAffected()
+		_, err = t.ExecContext(ctx, `UPDATE item SET match_state = 'pending'
+			 WHERE match_state = 'lokal' AND kind = 'episode' AND EXISTS (
+			   SELECT 1 FROM item st JOIN item se ON se.id = st.parent_id
+			    WHERE st.id = item.parent_id AND se.match_state = 'pending')`)
+		return err
+	})
+	return n, err
+}
+
+// PosterStand zählt Filme und Serien und wie viele davon ein Poster haben
+// (aus der Sammlung oder von TMDb) — für den Hinweis in der Verwaltung.
+func (s *Store) PosterStand(ctx context.Context) (titel, mitPoster int) {
+	_ = s.db.QueryRowContext(ctx,
+		`SELECT count(*), COALESCE(sum(EXISTS (SELECT 1 FROM artwork a
+		          WHERE a.item_id = i.id AND a.kind = 'poster' AND COALESCE(a.path,'') != '')), 0)
+		   FROM item i WHERE i.kind IN ('movie','series')`).Scan(&titel, &mitPoster)
+	return titel, mitPoster
+}
+
+// BisFolgen nennt für Doppelfolgen das Ende („S01E01-E02" → 2). Folgen
+// ohne Eintrag fehlen in der Antwort.
+func (s *Store) BisFolgen(ctx context.Context, ids []string) map[string]int {
+	out := map[string]int{}
+	if len(ids) == 0 {
+		return out
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT item_id, bis_folge FROM item_zusatz WHERE bis_folge > 0 AND item_id IN (`+placeholders(len(ids))+`)`, args...)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var n int
+		if rows.Scan(&id, &n) == nil {
+			out[id] = n
+		}
+	}
+	return out
+}
