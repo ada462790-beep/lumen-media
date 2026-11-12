@@ -21,6 +21,7 @@ keine Abfrage dafür. Tests im Code schlagen fehl, sobald jemand das ändert.
 | Deine Geräte: Name, Art (Fernseher, Handy …), **Tag** der Anmeldung, **Tag** der letzten Nutzung | damit du ein verlorenes Gerät abmelden kannst | nur die Anzahl deiner Geräte |
 | Wo du in einem Film stehst, ob du ihn gesehen hast | für „Weiterschauen" und die Haken auf den Postern | **nein** |
 | Reihenfolge von „Weiterschauen" | eine laufende Nummer, **keine Uhrzeit**; sie zählt nur weiter, wenn du einen anderen Titel anfängst, nicht mit der Zeit, die du schaust | **nein** |
+| Marker je Fortschritt | eine **Zufallszahl**, die sich bei jeder Änderung neu würfelt — damit ein Stand, den die Web-App unterwegs nicht loswurde, beim Nachreichen nichts Neueres überschreibt; keine Uhrzeit, keine Reihenfolge, keine Dauer | **nein** |
 | Bewertungen (Sterne), mit **Tag** statt Uhrzeit | für dich; im Haushalt nur sichtbar, wenn du das Häkchen setzt | nur freigegebene, wie alle im Haushalt |
 | Merkliste und eigene Listen | für dich | **nein** |
 | Wünsche („bitte diesen Film besorgen") | damit der Besitzer sie erfüllen kann | ja, mit deinem Namen — das ist der Sinn eines Wunsches |
