@@ -122,18 +122,6 @@ const S = {
   })(),
 };
 
-/* Welcher Code die Bestätigung öffnet: Ist eine Verwaltungssperre
-   gesetzt, gilt nur deren Code – nicht das Passwort des Profils. Früher
-   nannte der Dialog alles auf einmal, und das Profil-Passwort scheiterte
-   still mit „Das stimmt nicht". */
-function bestaetigenText() {
-  const art = S?.me?.account?.adminLock || 'none';
-  if (art === 'totp') return tr('Zur Sicherheit noch einmal den Code aus der Authenticator-App (Verwaltungssperre).');
-  if (art === 'pin') return tr('Zur Sicherheit noch einmal die PIN der Verwaltungssperre – nicht die PIN deines Profils.');
-  if (art === 'password') return tr('Zur Sicherheit noch einmal das Passwort der Verwaltungssperre – nicht das deines Profils.');
-  return tr('Zur Sicherheit noch einmal deine PIN oder dein Passwort.');
-}
-
 /* ---------------------------------------------------------------- Hilfen */
 
 // Auch das einfache Hochkomma: sonst bräche ein Wert in einem Attribut
