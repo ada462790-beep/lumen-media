@@ -432,6 +432,28 @@ hast — nur dir. Einladen geht mit einem Link, der sieben Tage gilt und nur
 einmal. Kinderprofile sehen nur, was altersfrei ist und ausdrücklich
 geprüft wurde.
 
+**Wünsche mit Titelvorschlägen.** Fehlt ein Film oder eine Serie, wünscht
+man ihn sich unter „Wünsche" oder direkt aus der Suche („„X" wünschen").
+Beim Tippen erscheinen darunter die passenden Einträge von TMDb — mit
+Poster, Jahr und ob Film oder Serie, mit Pfeiltasten und Enter wählbar.
+Gewählt wird ein Treffer (dann kennt der Wunsch die TMDb- und die
+IMDb-Kennung), oder man wünscht mit Enter bzw. „Nur den Namen wünschen"
+nur den Namen. Steht ein Titel schon in einer Bibliothek, die man sehen
+darf, heisst es „Schon da — ansehen"; hat ihn jemand schon gewünscht,
+„Schon gewünscht" — wer, steht nicht da, und ein zweites Wünschen
+schliesst sich dem ersten an, statt einen doppelten Wunsch anzulegen.
+Kinderprofile sehen nur Vorschläge, deren Freigabe bei TMDb zu ihrer
+Altersgrenze passt (ohne bekannte Freigabe keine). Kommt der Titel später
+in die Bibliothek (gleiche TMDb- oder IMDb-Kennung, sonst gleicher Titel
+und Jahr), ist der Wunsch von selbst erfüllt: mit „Ansehen" in der
+Wunschliste und als Neuigkeit für alle, die ihn sich gewünscht haben.
+Die Verwaltung sieht zu jedem Wunsch Poster, Jahr, Art und Verweise auf
+IMDb und TMDb. Lumen fragt TMDb sparsam (Zwischenspeicher, Bremse je
+Profil), die Poster laufen über den eigenen Server; der Browser spricht
+nie selbst mit TMDb. Ohne TMDb-Schlüssel gibt es keine Vorschläge,
+gewünscht wird dann mit dem Namen. Die Apps wünschen weiterhin mit dem
+Namen.
+
 **Verwaltung.** Bibliotheken, laufende Wiedergaben (nur die Last, nicht
 wer was schaut), Protokoll, Aufräumen (Filme in Teilen, fehlende Dateien,
 nicht erkannte Titel, ausgelassene Dateien),
