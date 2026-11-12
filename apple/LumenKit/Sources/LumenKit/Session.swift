@@ -542,36 +542,71 @@ public final class Session {
 
     public func unlock(_ card: ProfileCard, secret: String) async {
         lastError = nil
-        let einmal = einmalCode?.wer == card.id ? einmalCode?.code : nil
-        do {
-            _ = try await client.unlock(profileId: card.id, secret: einmal ?? secret,
+        await anmeldenMitSchutz(wer: card.id, secret: secret) { client, geheim, neu, neuArt in
+            _ = try await client.unlock(profileId: card.id, secret: geheim,
                                         deviceName: DeviceProfile.current.name,
-                                        neu: einmal == nil ? nil : secret)
-            einmalCode = nil
+                                        neu: neu, neuArt: neuArt)
+        }
+    }
+
+    /// Nach einem Zurücksetzen durch die Verwaltung: Mit dem Einmal-Code
+    /// gibt es erst eine Anmeldung, wenn die Person ihren eigenen Schutz
+    /// festlegt. Der Server sagt das mit 409 („neue_pin_noetig") und nennt
+    /// die Art. Dann fragt das Eingabefeld zweimal — „Neue PIN festlegen",
+    /// „Noch einmal" —, damit ein Tippfehler niemanden aussperrt; erst bei
+    /// gleichen Eingaben geht die Anmeldung mit dem neuen Schutz noch
+    /// einmal. Die Ansicht zeigt `neuerSchutz?.titel` und leert das Feld
+    /// nach jedem Schritt.
+    public private(set) var neuerSchutz: NeuerSchutz?
+
+    /// Das Festlegen abbrechen — etwa beim Zurück zur Profilauswahl.
+    public func neuenSchutzAbbrechen() { neuerSchutz = nil }
+
+    private func anmeldenMitSchutz(
+        wer: String, secret: String,
+        senden: (APIClient, String, String?, String) async throws -> Void
+    ) async {
+        let laufend = neuerSchutz?.wer == wer ? neuerSchutz : nil
+        if laufend == nil { neuerSchutz = nil }
+        if var schritt = laufend, schritt.erste == nil {
+            // Erste Eingabe des neuen Schutzes: noch nichts schicken.
+            schritt.erste = secret
+            neuerSchutz = schritt
+            return
+        }
+        if var schritt = laufend, schritt.erste != secret {
+            schritt.erste = nil
+            neuerSchutz = schritt
+            lastError = String(localized: "Die beiden Eingaben stimmen nicht überein.", bundle: .lumenKit, locale: .lumen)
+            return
+        }
+        do {
+            if let schritt = laufend {
+                try await senden(client, schritt.code, secret, schritt.art)
+            } else {
+                try await senden(client, secret, nil, "pin")
+            }
+            neuerSchutz = nil
             let neu = await client.token
             speichereToken(neu)
             try await hinein()
         } catch {
-            neuePinNoetig(error, wer: card.id, code: einmal ?? secret)
+            let fehler = error as? LumenError
+            if case .neuerSchutzNoetig(let art, _)? = fehler {
+                // Der Server will den eigenen Schutz — auch nach einem
+                // zweiten Versuch mit dem Einmal-Code als neuer PIN.
+                neuerSchutz = NeuerSchutz(wer: wer, code: laufend?.code ?? secret, art: art)
+            } else if var schritt = laufend, fehler?.status == 400 {
+                // Die Wahl passte nicht (zu kurz …): von vorn, mit der
+                // Meldung des Servers.
+                schritt.erste = nil
+                neuerSchutz = schritt
+            } else {
+                // Abgelaufen, zu viele Versuche, kein Netz: zurück zum
+                // gewöhnlichen Feld; die Meldung bleibt stehen.
+                neuerSchutz = nil
+            }
             lastError = Self.text(error)
-        }
-    }
-
-    /// Nach einem Zurücksetzen durch die Verwaltung: der Einmal-Code, mit
-    /// dem die nächste Eingabe als eigene neue PIN mitgeht. Der Server sagt
-    /// das mit 409 („neue_pin_noetig"); sein Text bittet um die eigene PIN,
-    /// und das PIN-Feld bleibt dasselbe.
-    @ObservationIgnored private var einmalCode: (wer: String, code: String)?
-
-    private func neuePinNoetig(_ error: any Error, wer: String, code: String) {
-        guard case LumenError.server(_, let status)? = error as? LumenError else {
-            einmalCode = nil
-            return
-        }
-        if status == 409 {
-            einmalCode = (wer: wer, code: code)
-        } else if status != 400 || einmalCode?.wer != wer {
-            einmalCode = nil
         }
     }
 
@@ -581,18 +616,10 @@ public final class Session {
     public func unlockUnterwegs(name: String, secret: String) async {
         lastError = nil
         let wer = "name:" + name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let einmal = einmalCode?.wer == wer ? einmalCode?.code : nil
-        do {
-            _ = try await client.unlock(name: name, secret: einmal ?? secret,
+        await anmeldenMitSchutz(wer: wer, secret: secret) { client, geheim, neu, neuArt in
+            _ = try await client.unlock(name: name, secret: geheim,
                                         deviceName: DeviceProfile.current.name,
-                                        neu: einmal == nil ? nil : secret)
-            einmalCode = nil
-            let neu = await client.token
-            speichereToken(neu)
-            try await hinein()
-        } catch {
-            neuePinNoetig(error, wer: wer, code: einmal ?? secret)
-            lastError = Self.text(error)
+                                        neu: neu, neuArt: neuArt)
         }
     }
 
@@ -636,6 +663,7 @@ public final class Session {
     }
 
     private func signOutLocally() async {
+        neuerSchutz = nil
         speichereToken(nil)
         await client.setToken(nil)
         // Ohne Profil gilt wieder, was der Server vorgibt.
@@ -802,5 +830,29 @@ public final class Session {
 
     public nonisolated static func text(_ error: any Error) -> String {
         (error as? LumenError)?.errorDescription ?? error.localizedDescription
+    }
+}
+
+/// Der Schritt beim Festlegen des eigenen Schutzes nach einem Zurücksetzen
+/// (Session.neuerSchutz). `wer`: die Kennung des Profils oder „name:…" von
+/// unterwegs; `erste`: die erste Eingabe, nil solange sie fehlt.
+public struct NeuerSchutz: Equatable, Sendable {
+    public let wer: String
+    let code: String
+    /// pin oder password — wie der Server es nennt.
+    public let art: String
+    var erste: String?
+
+    /// Kommt gerade die zweite Eingabe?
+    public var zweiteEingabe: Bool { erste != nil }
+
+    /// Die Überschrift über dem Eingabefeld.
+    public var titel: String {
+        if erste != nil {
+            return String(localized: "Noch einmal", bundle: .lumenKit, locale: .lumen)
+        }
+        return art == "password"
+            ? String(localized: "Neues Passwort festlegen", bundle: .lumenKit, locale: .lumen)
+            : String(localized: "Neue PIN festlegen", bundle: .lumenKit, locale: .lumen)
     }
 }

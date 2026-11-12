@@ -367,21 +367,25 @@ private fun TvRoot(store: Serverliste) {
                 onServerWechseln = { schritt { controller.serverWahl() } }) { name, geheim ->
                 hintergrund { controller.unlockByName(name, geheim) }
                 stage = controller.stage
-                controller.lastError
+                controller.lastError to controller.neuerSchutz
             }
         } else TvProfiles(controller.client, s.profiles,
             onEinladung = { einladung = true },
             onMitCode = { profilHier = false },
-            onServerWechseln = { schritt { controller.serverWahl() } }) { card, code ->
-            stage = Stage.StartingUp
+            onServerWechseln = { schritt { controller.serverWahl() } },
+            onAbbrechen = { controller.neuenSchutzAbbrechen() }) { card, code ->
+            // Ohne Zwischenstand „lädt": Die Eingabe bleibt offen, damit
+            // die Meldung des Servers dort steht — und nach einem
+            // Zurücksetzen der eigene Schutz zweimal eingegeben werden kann.
             hintergrund { controller.unlock(card, code) }
             stage = controller.stage
+            controller.lastError to controller.neuerSchutz
         }
 
         is Stage.Unlocking -> TvUnlock(controller.client, s.profile, controller.lastError) { code ->
-            stage = Stage.StartingUp
             hintergrund { controller.unlock(s.profile, code) }
             stage = controller.stage
+            controller.lastError to controller.neuerSchutz
         }
 
         // Die Einstellungen des Profils gehen mit: „Folgen automatisch
@@ -486,7 +490,8 @@ private fun TvProfiles(client: ApiClient, profiles: List<ProfileCard>,
                        onEinladung: () -> Unit,
                        onMitCode: () -> Unit,
                        onServerWechseln: () -> Unit,
-                       onUnlock: suspend (ProfileCard, String) -> Unit) {
+                       onAbbrechen: () -> Unit,
+                       onUnlock: suspend (ProfileCard, String) -> Pair<String?, SessionController.NeuerSchutz?>) {
     var gewaehlt by remember { mutableStateOf<ProfileCard?>(null) }
     var ohneCode by remember { mutableStateOf<ProfileCard?>(null) }
     val anfang = remember { FocusRequester() }
@@ -498,7 +503,7 @@ private fun TvProfiles(client: ApiClient, profiles: List<ProfileCard>,
 
     val karte = gewaehlt
     if (karte != null) {
-        androidx.activity.compose.BackHandler { gewaehlt = null }
+        androidx.activity.compose.BackHandler { gewaehlt = null; onAbbrechen() }
         TvUnlock(client, karte, null) { code -> onUnlock(karte, code) }
         return
     }
@@ -544,11 +549,24 @@ private fun TvProfiles(client: ApiClient, profiles: List<ProfileCard>,
 }
 
 @Composable
-private fun TvUnlock(client: ApiClient, profile: ProfileCard, fehler: String?,
-                     onSubmit: suspend (String) -> Unit) {
+private fun TvUnlock(client: ApiClient, profile: ProfileCard, fehlerVorher: String?,
+                     onSubmit: suspend (String) -> Pair<String?, SessionController.NeuerSchutz?>) {
     var code by remember { mutableStateOf("") }
     var senden by remember { mutableStateOf(false) }
-    LaunchedEffect(senden) { if (senden) { onSubmit(code); senden = false } }
+    var fehler by remember { mutableStateOf(fehlerVorher) }
+    // Nach einem Zurücksetzen: „Neue PIN festlegen", dann „Noch einmal" —
+    // jeder Schritt mit leerem Feld.
+    var schutz by remember { mutableStateOf<SessionController.NeuerSchutz?>(null) }
+    LaunchedEffect(senden) {
+        if (senden) {
+            val (f, s) = onSubmit(code)
+            fehler = f
+            schutz = s
+            if (s != null) code = ""
+            senden = false
+        }
+    }
+    val art = schutz?.art ?: profile.lockKind
 
     Mitte {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -557,20 +575,27 @@ private fun TvUnlock(client: ApiClient, profile: ProfileCard, fehler: String?,
             Spacer(Modifier.height(16.dp))
             Text(profile.name, fontSize = 32.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(24.dp))
+            schutz?.let {
+                Text(it.titel, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(12.dp))
+            }
             androidx.compose.material3.OutlinedTextField(
                 value = code,
                 onValueChange = { code = it },
                 singleLine = true,
                 visualTransformation =
                     androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                placeholder = { Text(if (profile.lockKind == "pin") tx(R.string.pin) else tx(R.string.passwort)) },
+                placeholder = { Text(if (art == "pin") tx(R.string.pin) else tx(R.string.passwort)) },
                 modifier = Modifier.width(420.dp))
-            if (fehler != null) {
+            fehler?.let { f ->
                 Spacer(Modifier.height(12.dp))
-                Text(fehler, color = Tv.bad, fontSize = 16.sp)
+                Text(f, color = Tv.bad, fontSize = 16.sp, textAlign = TextAlign.Center,
+                     modifier = Modifier.widthIn(max = 760.dp))
             }
             Spacer(Modifier.height(22.dp))
-            TvButton(tx(R.string.weiter)) { senden = true }
+            TvButton(if (senden) tx(R.string.einen_moment) else tx(R.string.weiter)) {
+                if (!senden && code.isNotEmpty()) senden = true
+            }
         }
     }
 }
@@ -583,14 +608,19 @@ private fun TvUnlock(client: ApiClient, profile: ProfileCard, fehler: String?,
  */
 @Composable
 private fun TvUnterwegs(onMitCode: () -> Unit, onServerWechseln: () -> Unit,
-                        onSubmit: suspend (String, String) -> String?) {
+                        onSubmit: suspend (String, String) -> Pair<String?, SessionController.NeuerSchutz?>) {
     var name by remember { mutableStateOf("") }
     var geheim by remember { mutableStateOf("") }
     var fehler by remember { mutableStateOf<String?>(null) }
     var senden by remember { mutableStateOf(false) }
+    // Nach einem Zurücksetzen: der eigene Schutz, zweimal (TvUnlock).
+    var schutz by remember { mutableStateOf<SessionController.NeuerSchutz?>(null) }
     LaunchedEffect(senden) {
         if (senden) {
-            fehler = onSubmit(name, geheim)
+            val (f, s) = onSubmit(name, geheim)
+            fehler = f
+            schutz = s
+            if (s != null) geheim = ""
             senden = false
         }
     }
@@ -611,13 +641,21 @@ private fun TvUnterwegs(onMitCode: () -> Unit, onServerWechseln: () -> Unit,
                 placeholder = { Text(tx(R.string.profilname)) },
                 modifier = Modifier.width(420.dp))
             Spacer(Modifier.height(14.dp))
+            schutz?.let {
+                Text(it.titel, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(12.dp))
+            }
             androidx.compose.material3.OutlinedTextField(
                 value = geheim,
                 onValueChange = { geheim = it },
                 singleLine = true,
                 visualTransformation =
                     androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                placeholder = { Text(tx(R.string.pin_oder_passwort)) },
+                placeholder = { Text(when (schutz?.art) {
+                    null -> tx(R.string.pin_oder_passwort)
+                    "password" -> tx(R.string.passwort)
+                    else -> tx(R.string.pin)
+                }) },
                 modifier = Modifier.width(420.dp))
             fehler?.let { f ->
                 Spacer(Modifier.height(12.dp))

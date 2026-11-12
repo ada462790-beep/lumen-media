@@ -39,6 +39,11 @@ class LumenViewModel(private val store: Serverliste) : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** Nach einem Zurücksetzen: der eigene Schutz wird festgelegt (zweimal
+     *  eingeben). null: gewöhnliches Anmelden. */
+    private val _neuerSchutz = MutableStateFlow<SessionController.NeuerSchutz?>(null)
+    val neuerSchutz: StateFlow<SessionController.NeuerSchutz?> = _neuerSchutz.asStateFlow()
+
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
@@ -220,6 +225,7 @@ class LumenViewModel(private val store: Serverliste) : ViewModel() {
             withContext(Dispatchers.IO) { block() }
             _stage.value = controller.stage
             _error.value = controller.lastError
+            _neuerSchutz.value = controller.neuerSchutz
             _busy.value = false
         }
     }

@@ -347,30 +347,77 @@ class SessionController(
         lastError = null
         if (name.isBlank()) { lastError = Texte.t(Tx.WIE_HEISST_PROFIL); return }
         if (secret.isEmpty()) { lastError = Texte.t(Tx.UNTERWEGS_NUR_MIT_GEHEIMNIS); return }
-        val einmal = einmalCode?.takeIf { it.first == "name:" + name.trim().lowercase() }?.second
-        try {
-            if (einmal != null) client.unlockByName(name, einmal, deviceName, neu = secret)
-            else client.unlockByName(name, secret, deviceName)
-            einmalCode = null
-            store.token = client.token
-            angemeldet(client.me())
-        } catch (e: LumenException) {
-            neuePinNoetig(e, "name:" + name.trim().lowercase(), einmal ?: secret)
-            lastError = e.message
+        val wer = "name:" + name.trim().lowercase()
+        anmeldenMitSchutz(wer, secret) { geheim, neu, neuArt ->
+            if (neu != null) client.unlockByName(name, geheim, deviceName, neu = neu, neuArt = neuArt)
+            else client.unlockByName(name, geheim, deviceName)
         }
     }
 
     /**
-     * Nach einem Zurücksetzen durch die Verwaltung: der Einmal-Code, mit dem
-     * die nächste Eingabe als eigene neue PIN mitgeht. Der Server sagt das
-     * mit 409 „neue_pin_noetig"; sein Text bittet um die eigene PIN, und das
-     * PIN-Feld bleibt dasselbe — ohne eigenen Bildschirm.
+     * Nach einem Zurücksetzen durch die Verwaltung: Mit dem Einmal-Code gibt
+     * es erst eine Anmeldung, wenn die Person ihren eigenen Schutz festlegt.
+     * Der Server sagt das mit 409 „neue_pin_noetig" und nennt die Art (PIN
+     * oder Passwort). Dann fragt das Eingabefeld zweimal — „Neue PIN
+     * festlegen", „Noch einmal" —, damit ein Tippfehler niemanden aussperrt.
+     * Erst wenn beide Eingaben gleich sind, geht die Anmeldung mit dem
+     * Einmal-Code und dem neuen Schutz noch einmal.
+     *
+     * [wer]: die Kennung des Profils oder „name:…" von unterwegs.
+     * [erste]: die erste Eingabe; null, solange sie noch fehlt.
      */
-    private var einmalCode: Pair<String, String>? = null
+    data class NeuerSchutz(val wer: String, val code: String, val art: String, val erste: String? = null) {
+        /** Die Überschrift über dem Feld. */
+        val titel: String get() = when {
+            erste != null -> Texte.t(Tx.NOCH_EINMAL)
+            art == "password" -> Texte.t(Tx.NEUES_PASSWORT_FESTLEGEN)
+            else -> Texte.t(Tx.NEUE_PIN_FESTLEGEN)
+        }
+        override fun toString() = "NeuerSchutz($wer, $art, zweite=${erste != null})"
+    }
 
-    private fun neuePinNoetig(e: LumenException, wer: String, code: String) {
-        einmalCode = if (e is LumenException.Server && e.code == "neue_pin_noetig") wer to code
-                     else einmalCode?.takeIf { it.first == wer && e is LumenException.Server && e.status == 400 }
+    /** Läuft gerade das Festlegen des eigenen Schutzes? Die Oberfläche
+     *  zeigt dann [NeuerSchutz.titel] und leert das Feld nach jeder Eingabe. */
+    var neuerSchutz: NeuerSchutz? = null
+        private set
+
+    /** Das Festlegen abbrechen — etwa bei „Anderes Profil". */
+    fun neuenSchutzAbbrechen() { neuerSchutz = null }
+
+    private fun anmeldenMitSchutz(wer: String, secret: String,
+                                  senden: (geheim: String, neu: String?, neuArt: String) -> Unit) {
+        val laufend = neuerSchutz?.takeIf { it.wer == wer }
+        if (laufend == null) neuerSchutz = null
+        if (laufend != null && laufend.erste == null) {
+            // Erste Eingabe des neuen Schutzes: noch nichts schicken.
+            neuerSchutz = laufend.copy(erste = secret)
+            return
+        }
+        if (laufend != null && laufend.erste != secret) {
+            neuerSchutz = laufend.copy(erste = null)
+            lastError = Texte.t(Tx.EINGABEN_UNGLEICH)
+            return
+        }
+        try {
+            if (laufend != null) senden(laufend.code, secret, laufend.art)
+            else senden(secret, null, "pin")
+            neuerSchutz = null
+            store.token = client.token
+            angemeldet(client.me())
+        } catch (e: LumenException) {
+            val server = e as? LumenException.Server
+            neuerSchutz = when {
+                // Der Server will einen eigenen Schutz — oder die Wahl
+                // passte nicht (zu kurz …): von vorn, mit seiner Meldung.
+                server?.code == "neue_pin_noetig" ->
+                    NeuerSchutz(wer, laufend?.code ?: secret, server.art ?: laufend?.art ?: "pin")
+                laufend != null && server?.status == 400 -> laufend.copy(erste = null)
+                // Abgelaufen, zu viele Versuche, kein Netz: zurück zum
+                // gewöhnlichen Feld; die Meldung des Servers bleibt stehen.
+                else -> null
+            }
+            lastError = e.message
+        }
     }
 
     fun chooseProfile(card: ProfileCard) {
@@ -379,16 +426,9 @@ class SessionController(
 
     fun unlock(card: ProfileCard, secret: String, deviceName: String = DeviceProfile.current.name) {
         lastError = null
-        val einmal = einmalCode?.takeIf { it.first == card.id }?.second
-        try {
-            if (einmal != null) client.unlock(card.id, einmal, deviceName, neu = secret)
-            else client.unlock(card.id, secret, deviceName)
-            einmalCode = null
-            store.token = client.token
-            angemeldet(client.me())
-        } catch (e: LumenException) {
-            neuePinNoetig(e, card.id, einmal ?: secret)
-            lastError = e.message
+        anmeldenMitSchutz(card.id, secret) { geheim, neu, neuArt ->
+            if (neu != null) client.unlock(card.id, geheim, deviceName, neu = neu, neuArt = neuArt)
+            else client.unlock(card.id, geheim, deviceName)
         }
     }
 
@@ -496,6 +536,7 @@ class SessionController(
     }
 
     fun signOut() {
+        neuerSchutz = null
         abmeldenBeimServer(client)
         store.token = null
         client.signOut()

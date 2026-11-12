@@ -102,6 +102,9 @@
     <string name="kern_pin_zu_kurz">Ein PIN hat mindestens vier Ziffern.</string>
     <string name="kern_passwort_zu_kurz">Ein Passwort hat mindestens acht Zeichen.</string>
     <string name="kern_eingaben_ungleich">Die beiden Eingaben stimmen nicht überein.</string>
+    <string name="kern_neue_pin_festlegen">Neue PIN festlegen</string>
+    <string name="kern_neues_passwort_festlegen">Neues Passwort festlegen</string>
+    <string name="kern_noch_einmal">Noch einmal</string>
     <string name="kern_bisheriges_falsch">Der bisherige PIN oder das bisherige Passwort stimmt nicht.</string>
     <string name="kern_vollzugriff_braucht_schutz">Mit Vollzugriff muss dein Profil geschützt bleiben. Wähle PIN oder Passwort.</string>
     <string name="kern_zu_viele_versuche">Zu viele Versuche. Warte einen Moment.</string>

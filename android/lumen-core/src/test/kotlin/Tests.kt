@@ -74,6 +74,7 @@ fun main(args: Array<String>) {
     verwaltungTests()
     medienschluesselTests()
     unterwegsTests()
+    neuerSchutzTests()
     anmeldungBehaltenTests()
     hlsUndUntertitelTests()
     adresswarnungTests()
@@ -1926,6 +1927,73 @@ private fun unterwegsTests() {
             try { ApiClient(adresse, "T").news() } catch (e: LumenException.Unterwegs) { }
             throw IllegalStateException("erwartet")
         }
+    } finally {
+        server.stop(0)
+    }
+}
+
+// ---------------------------------------------------------------- Neuer Schutz nach Zurücksetzen
+
+/**
+ * Nach einem Zurücksetzen mit Passwort: Die App fragt das neue Passwort
+ * zweimal, schickt es erst bei gleichen Eingaben, mit neuArt „password",
+ * und zeigt die Meldung des Servers, wenn es nicht passt.
+ */
+private fun neuerSchutzTests() {
+    val server = com.sun.net.httpserver.HttpServer.create(
+        java.net.InetSocketAddress("127.0.0.1", 0), 0)
+    val koerper = mutableListOf<String>()
+    server.createContext("/api/v1/") { ex ->
+        when (ex.requestURI.path) {
+            "/api/v1/hello" -> fakeAntwort(ex, 200, """{"server":"Lumen","version":"t","setUp":true}""")
+            "/api/v1/profiles" -> fakeAntwort(ex, 403,
+                """{"error":"von unterwegs gibt es keine profilauswahl","code":"unterwegs"}""")
+            "/api/v1/unlock" -> {
+                val text = ex.requestBody.readBytes().toString(Charsets.UTF_8)
+                koerper.add(text)
+                val j = Json.parse(text)
+                val neu = j["neu"].text
+                when {
+                    j["secret"].text != "einmalcode" -> fakeAntwort(ex, 401, """{"error":"das stimmt nicht"}""")
+                    neu == null -> fakeAntwort(ex, 409,
+                        """{"error":"Lege jetzt dein eigenes Passwort fest.","code":"neue_pin_noetig","art":"password"}""")
+                    neu.length < 8 -> fakeAntwort(ex, 400,
+                        """{"error":"Ein Passwort braucht mindestens acht Zeichen.","code":"neue_pin_ungueltig","art":"password"}""")
+                    else -> fakeAntwort(ex, 200, """{"token":"T","account":{"id":"acc_1","name":"Alex"}}""")
+                }
+            }
+            "/api/v1/me" -> fakeAntwort(ex, 200, ME_JSON)
+            "/api/v1/me/media-key" -> fakeAntwort(ex, 200, """{"key":"MK","gueltigSek":21600}""")
+            else -> fakeAntwort(ex, 404, """{"error":"nicht gefunden"}""")
+        }
+    }
+    server.start()
+    try {
+        val s = SessionController(MemoryTokenStore(serverUrl = "http://127.0.0.1:${server.address.port}"))
+        s.start()
+        s.unlockByName("Alex", "einmalcode")
+        gleich("Meldung des Servers", "Lege jetzt dein eigenes Passwort fest.", s.lastError)
+        gleich("Art vom Server", "password", s.neuerSchutz?.art)
+        gleich("Überschrift erste Eingabe", "Neues Passwort festlegen", s.neuerSchutz?.titel)
+        s.unlockByName("Alex", "meinpasswort")
+        gleich("erste Eingabe geht nicht zum Server", 1, koerper.size)
+        gleich("Überschrift zweite Eingabe", "Noch einmal", s.neuerSchutz?.titel)
+        s.unlockByName("Alex", "meinpasswrt")
+        gleich("Tippfehler: nichts geschickt", 1, koerper.size)
+        gleich("Tippfehler gemeldet", "Die beiden Eingaben stimmen nicht überein.", s.lastError)
+        gleich("Tippfehler: von vorn", "Neues Passwort festlegen", s.neuerSchutz?.titel)
+        s.unlockByName("Alex", "kurz")
+        s.unlockByName("Alex", "kurz")
+        gleich("zu kurz: Meldung des Servers", "Ein Passwort braucht mindestens acht Zeichen.", s.lastError)
+        gleich("zu kurz: mit neuArt password", "password", Json.parse(koerper.last())["neuArt"].text)
+        gleich("zu kurz: mit dem Einmal-Code", "einmalcode", Json.parse(koerper.last())["secret"].text)
+        gleich("zu kurz: von vorn", "Neues Passwort festlegen", s.neuerSchutz?.titel)
+        s.unlockByName("Alex", "meinpasswort")
+        s.unlockByName("Alex", "meinpasswort")
+        pruefe("angemeldet mit eigenem Passwort", s.stage is Stage.SignedIn && s.neuerSchutz == null)
+        val j = Json.parse(koerper.last())
+        gleich("neues Passwort", "meinpasswort", j["neu"].text)
+        gleich("neuArt", "password", j["neuArt"].text)
     } finally {
         server.stop(0)
     }

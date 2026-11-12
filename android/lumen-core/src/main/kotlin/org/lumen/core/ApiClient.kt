@@ -478,7 +478,7 @@ class ApiClient(
                 beiAbmeldung?.invoke()
                 throw LumenException.SignedOut
             } else {
-                throw LumenException.Server(messageOf(antwort.text), code)
+                throw LumenException.Server(messageOf(antwort.text), code, codeOf(antwort.text))
             }
             // Von unterwegs: keine Profilauswahl, sondern Name und PIN.
             403 -> if (codeOf(antwort.text) == "unterwegs") {
@@ -486,9 +486,18 @@ class ApiClient(
             } else {
                 throw LumenException.Server(messageOf(antwort.text), code, codeOf(antwort.text))
             }
-            else -> throw LumenException.Server(messageOf(antwort.text), code, codeOf(antwort.text))
+            else -> throw LumenException.Server(messageOf(antwort.text), code, codeOf(antwort.text),
+                                                 feldOf(antwort.text, "art"))
         }
     }
+
+    /** Ein weiteres Textfeld einer Fehlerantwort, etwa „art" (pin/password). */
+    private fun feldOf(body: String, name: String): String? =
+        try {
+            Json.parse(body)[name].text
+        } catch (e: JsonException) {
+            null
+        }
 
     /** Der maschinenlesbare Code einer Fehlerantwort, falls es einen gibt. */
     private fun codeOf(body: String): String? =
@@ -580,14 +589,16 @@ class ApiClient(
     /**
      * [neu]: Nach einem Zurücksetzen durch die Verwaltung antwortet der
      * Server auf den Einmal-Code mit 409 „neue_pin_noetig". Dann geht die
-     * Anmeldung noch einmal, mit dem Einmal-Code als [secret] und der
-     * eigenen neuen PIN als [neu].
+     * Anmeldung noch einmal, mit dem Einmal-Code als [secret] und dem
+     * eigenen neuen Schutz als [neu] — der Art [neuArt], die der Server in
+     * der 409 nennt (pin oder password).
      */
-    fun unlock(profileId: String, secret: String, deviceName: String, neu: String? = null): Account {
+    fun unlock(profileId: String, secret: String, deviceName: String, neu: String? = null,
+               neuArt: String = "pin"): Account {
         val felder = mutableListOf<Pair<String, Any?>>(
             "profileId" to profileId, "secret" to secret,
             "deviceName" to deviceName, "deviceKind" to DeviceProfile.current.kind)
-        if (neu != null) { felder += "neu" to neu; felder += "neuArt" to "pin" }
+        if (neu != null) { felder += "neu" to neu; felder += "neuArt" to neuArt }
         val body = JsonWriter.obj(*felder.toTypedArray())
         val j = parseOrThrow(send("POST", "/unlock", body = body), "/unlock")
         token = j.requiredText("token")
@@ -601,11 +612,12 @@ class ApiClient(
      * oder Passwort lassen sich so öffnen; nach zu vielen Fehlversuchen
      * antwortet der Server 429 mit einer Meldung, die gezeigt werden soll.
      */
-    fun unlockByName(name: String, secret: String, deviceName: String, neu: String? = null): Account {
+    fun unlockByName(name: String, secret: String, deviceName: String, neu: String? = null,
+                     neuArt: String = "pin"): Account {
         val felder = mutableListOf<Pair<String, Any?>>(
             "name" to name.trim(), "secret" to secret,
             "deviceName" to deviceName, "deviceKind" to DeviceProfile.current.kind)
-        if (neu != null) { felder += "neu" to neu; felder += "neuArt" to "pin" }
+        if (neu != null) { felder += "neu" to neu; felder += "neuArt" to neuArt }
         val body = JsonWriter.obj(*felder.toTypedArray())
         val j = parseOrThrow(send("POST", "/unlock", body = body), "/unlock")
         token = j.requiredText("token")
@@ -1307,7 +1319,9 @@ sealed class LumenException(message: String, cause: Throwable? = null) :
      * („falsch", „kein_download" …), falls er einen nennt — daran hängt
      * die App ihre eigenen, übersetzbaren Sätze.
      */
-    open class Server(message: String, val status: Int, val code: String? = null) : LumenException(message)
+    /** [art]: nach einem Zurücksetzen, womit das Profil geschützt wird (pin/password). */
+    open class Server(message: String, val status: Int, val code: String? = null, val art: String? = null) :
+        LumenException(message)
 
     /**
      * 403 „unterwegs": Der Server zeigt von aussen keine Profilauswahl. Kein

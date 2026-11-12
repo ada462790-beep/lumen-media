@@ -134,6 +134,9 @@ internal object KernUebersetzer : Uebersetzer {
         Tx.PIN_ZU_KURZ -> R.string.kern_pin_zu_kurz
         Tx.PASSWORT_ZU_KURZ -> R.string.kern_passwort_zu_kurz
         Tx.EINGABEN_UNGLEICH -> R.string.kern_eingaben_ungleich
+        Tx.NEUE_PIN_FESTLEGEN -> R.string.kern_neue_pin_festlegen
+        Tx.NEUES_PASSWORT_FESTLEGEN -> R.string.kern_neues_passwort_festlegen
+        Tx.NOCH_EINMAL -> R.string.kern_noch_einmal
         Tx.BISHERIGES_FALSCH -> R.string.kern_bisheriges_falsch
         Tx.VOLLZUGRIFF_BRAUCHT_SCHUTZ -> R.string.kern_vollzugriff_braucht_schutz
         Tx.ZU_VIELE_VERSUCHE -> R.string.kern_zu_viele_versuche

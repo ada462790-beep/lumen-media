@@ -206,14 +206,31 @@ struct TVUnlockView: View {
         VStack(spacing: 30) {
             ProfilAvatar(name: profile.name, avatar: profile.avatar, accountId: profile.id, size: 140)
             Text(profile.name).font(.system(size: 40, weight: .semibold))
-            SecureField(profile.lockKind == "pin" ? "PIN" : "Passwort", text: $secret)
+            // Nach einem Zurücksetzen: „Neue PIN festlegen", dann „Noch
+            // einmal" — der Text kommt fertig übersetzt aus LumenKit.
+            if let schutz = session.neuerSchutz {
+                Text(verbatim: schutz.titel).font(.system(size: 30, weight: .semibold))
+            }
+            SecureField(art == "pin" ? "PIN" : "Passwort", text: $secret)
                 .frame(width: 460)
-                .onSubmit { Task { await session.unlock(profile, secret: secret) } }
+                .onSubmit(weiter)
             if let error = session.lastError {
                 Text(error).foregroundStyle(Theme.bad)
             }
-            Button("Weiter") { Task { await session.unlock(profile, secret: secret) } }
+            Button("Weiter", action: weiter)
                 .disabled(secret.isEmpty)
+        }
+    }
+
+    /// Beim Festlegen nach einem Zurücksetzen die Art, die der Server
+    /// nannte, sonst die des Profils.
+    private var art: String { session.neuerSchutz?.art ?? profile.lockKind }
+
+    private func weiter() {
+        Task {
+            await session.unlock(profile, secret: secret)
+            // Jeder Schritt beim Festlegen beginnt mit einem leeren Feld.
+            if session.neuerSchutz != nil { secret = "" }
         }
     }
 }

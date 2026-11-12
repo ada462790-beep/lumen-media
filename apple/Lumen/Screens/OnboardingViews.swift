@@ -313,7 +313,13 @@ struct UnlockView: View {
             ProfilAvatar(name: profile.name, avatar: profile.avatar, accountId: profile.id, size: 88)
             Text(profile.name).font(.title3.weight(.semibold))
 
-            SecureField(profile.lockKind == "pin" ? "••••" : "Passwort", text: $secret)
+            // Nach einem Zurücksetzen: „Neue PIN festlegen", dann „Noch
+            // einmal" — der Text kommt fertig übersetzt aus LumenKit.
+            if let schutz = session.neuerSchutz {
+                Text(verbatim: schutz.titel).font(.headline)
+            }
+
+            SecureField(art == "pin" ? "••••" : "Passwort", text: $secret)
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.center)
                 .font(.title3.weight(.medium))
@@ -323,7 +329,7 @@ struct UnlockView: View {
                 .focused($focused)
                 .onSubmit(unlock)
                 #if !os(macOS)
-                .keyboardType(profile.lockKind == "pin" ? .numberPad : .default)
+                .keyboardType(art == "pin" ? .numberPad : .default)
                 #endif
 
             if let error = session.lastError {
@@ -339,6 +345,7 @@ struct UnlockView: View {
         .padding(40)
         .overlay(alignment: .topLeading) {
             Button {
+                session.neuenSchutzAbbrechen()
                 Task { await session.signOut() }
             } label: {
                 Image(systemName: "chevron.left").font(.callout.weight(.semibold))
@@ -352,10 +359,19 @@ struct UnlockView: View {
         .onAppear { focused = true }
     }
 
+    /// Womit gerade gefragt wird: beim Festlegen nach einem Zurücksetzen
+    /// die Art, die der Server nannte, sonst die des Profils.
+    private var art: String { session.neuerSchutz?.art ?? profile.lockKind }
+
     private func unlock() {
         guard !working else { return }
         working = true
-        Task { await session.unlock(profile, secret: secret); working = false }
+        Task {
+            await session.unlock(profile, secret: secret)
+            working = false
+            // Jeder Schritt beim Festlegen beginnt mit einem leeren Feld.
+            if session.neuerSchutz != nil { secret = "" }
+        }
     }
 }
 
@@ -399,7 +415,7 @@ struct UnterwegsAnmeldenView: View {
                         .autocorrectionDisabled()
                         #endif
                 }
-                Labeled(String(localized: "PIN oder Passwort", bundle: .lumen, locale: .lumen),
+                Labeled(session.neuerSchutz?.titel ?? String(localized: "PIN oder Passwort", bundle: .lumen, locale: .lumen),
                         hint: String(localized: "Ein Profil ohne PIN lässt sich nur zu Hause öffnen.", bundle: .lumen, locale: .lumen)) {
                     SecureField("", text: $secret)
                         .textFieldStyle(.plain)

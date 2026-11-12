@@ -403,6 +403,10 @@ private fun UnterwegsScreen(model: LumenViewModel,
     var geheim by remember { mutableStateOf("") }
     val error by model.error.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
+    // Nach einem Zurücksetzen: der eigene Schutz, zweimal. Jeder Schritt
+    // beginnt mit einem leeren Feld.
+    val schutz by model.neuerSchutz.collectAsStateWithLifecycle()
+    LaunchedEffect(schutz) { if (schutz != null) geheim = "" }
 
     Column(
         Modifier.fillMaxSize().padding(28.dp).verticalScrollable(),
@@ -420,7 +424,12 @@ private fun UnterwegsScreen(model: LumenViewModel,
         Spacer(Modifier.height(24.dp))
         Column(Modifier.widthIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Field(tx(R.string.profilname), name, { name = it })
-            Field(tx(R.string.pin_oder_passwort), geheim, { geheim = it }, secret = true)
+            schutz?.let { Text(it.titel, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+            Field(when (schutz?.art) {
+                      null -> tx(R.string.pin_oder_passwort)
+                      "password" -> tx(R.string.passwort)
+                      else -> tx(R.string.pin)
+                  }, geheim, { geheim = it }, secret = true)
         }
         // Die Meldung des Servers, wie sie kommt — auch die nach zu vielen
         // Versuchen, mit der Wartezeit darin.
@@ -522,6 +531,11 @@ private fun UnlockScreen(model: LumenViewModel, profile: ProfileCard) {
     var secret by remember { mutableStateOf("") }
     val error by model.error.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
+    // Nach einem Zurücksetzen: „Neue PIN festlegen", dann „Noch einmal" —
+    // jeder Schritt mit leerem Feld.
+    val schutz by model.neuerSchutz.collectAsStateWithLifecycle()
+    LaunchedEffect(schutz) { if (schutz != null) secret = "" }
+    val art = schutz?.art ?: profile.lockKind
 
     Column(
         Modifier.fillMaxSize().padding(28.dp),
@@ -532,7 +546,11 @@ private fun UnlockScreen(model: LumenViewModel, profile: ProfileCard) {
         Spacer(Modifier.height(14.dp))
         Text(profile.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(20.dp))
-        Field(if (profile.lockKind == "pin") tx(R.string.pin) else tx(R.string.passwort),
+        schutz?.let {
+            Text(it.titel, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(10.dp))
+        }
+        Field(if (art == "pin") tx(R.string.pin) else tx(R.string.passwort),
               secret, { secret = it }, secret = true,
               modifier = Modifier.widthIn(max = 280.dp))
         if (error != null) {

@@ -328,6 +328,10 @@ public actor APIClient {
         case 403 where Self.code(from: data) == "bestaetigen":
             // Der mitgeschickte Code stimmte nicht.
             throw LumenError.bestaetigen(falsch: true)
+        case 409 where Self.code(from: data) == "neue_pin_noetig":
+            // Nach einem Zurücksetzen: Erst den eigenen Schutz festlegen.
+            // Der Server nennt die Art (pin oder password).
+            throw LumenError.neuerSchutzNoetig(art: Self.art(from: data), meldung: Self.message(from: data))
         case 403 where Self.code(from: data) == "unterwegs":
             // Von unterwegs gibt es keine Profilauswahl. Die App zeigt dann
             // die Anmeldung mit Profilname und PIN.
@@ -353,6 +357,7 @@ public actor APIClient {
     /// nicht ändern.
     static let bekannteCodes: Set<String> = [
         "falsch", "verwaltung_braucht_sperre", "kein_download", "zu_viele_downloads",
+        "neue_pin_ungueltig", "einmalcode_abgelaufen",
         "wird_vorbereitet",  // = untertitelWirdVorbereitet
         "bildschirmzeit",    // = bildschirmzeit
     ]
@@ -387,6 +392,14 @@ public actor APIClient {
     private static func code(from data: Data) -> String? {
         struct Body: Decodable { let code: String? }
         return (try? JSONDecoder().decode(Body.self, from: data))?.code
+    }
+
+    /// Bei „neue_pin_noetig" steht im Rumpf, womit das Profil geschützt
+    /// wird: `{"art": "pin"}` oder `"password"`. Ältere Server sagen es
+    /// nicht — dann PIN.
+    private static func art(from data: Data) -> String {
+        struct Body: Decodable { let art: String? }
+        return (try? JSONDecoder().decode(Body.self, from: data))?.art == "password" ? "password" : "pin"
     }
 
     /// Bei 423 steht im Rumpf `{"error": "…", "sperre": "pin"}`.
@@ -437,10 +450,11 @@ public actor APIClient {
 
     /// `neu`: Nach einem Zurücksetzen durch die Verwaltung antwortet der
     /// Server auf den Einmal-Code mit 409 („neue_pin_noetig"). Dann geht
-    /// die Anmeldung noch einmal: der Einmal-Code als `secret`, die eigene
-    /// neue PIN als `neu`.
+    /// die Anmeldung noch einmal: der Einmal-Code als `secret`, der eigene
+    /// neue Schutz als `neu`, von der Art `neuArt`, die der Server nannte.
     public func unlock(profileId: String, secret: String,
-                       deviceName: String, neu: String? = nil) async throws -> SignIn {
+                       deviceName: String, neu: String? = nil,
+                       neuArt: String = "pin") async throws -> SignIn {
         struct Body: Encodable {
             let profileId: String, secret: String, deviceName: String, deviceKind: String
             let neu: String?, neuArt: String?
@@ -448,7 +462,7 @@ public actor APIClient {
         let result: SignIn = try await send("POST", "/unlock", body: Body(
             profileId: profileId, secret: secret, deviceName: deviceName,
             deviceKind: DeviceProfile.current.kind,
-            neu: neu, neuArt: neu == nil ? nil : "pin"))
+            neu: neu, neuArt: neu == nil ? nil : neuArt))
         setToken(result.token)
         return result
     }
@@ -458,7 +472,8 @@ public actor APIClient {
     /// Passwort an. Ein Profil ohne PIN öffnet sich von aussen nicht — die
     /// Meldung des Servers sagt das, und die App zeigt sie unverändert.
     public func unlock(name: String, secret: String,
-                       deviceName: String, neu: String? = nil) async throws -> SignIn {
+                       deviceName: String, neu: String? = nil,
+                       neuArt: String = "pin") async throws -> SignIn {
         struct Body: Encodable {
             let name: String, secret: String, deviceName: String, deviceKind: String
             let neu: String?, neuArt: String?
@@ -467,7 +482,7 @@ public actor APIClient {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             secret: secret, deviceName: deviceName,
             deviceKind: DeviceProfile.current.kind,
-            neu: neu, neuArt: neu == nil ? nil : "pin"))
+            neu: neu, neuArt: neu == nil ? nil : neuArt))
         setToken(result.token)
         return result
     }
@@ -1234,12 +1249,18 @@ public enum LumenError: Error, LocalizedError, Sendable {
     /// Eine Antwort mit fester Kennung (`APIClient.bekannteCodes`): die App
     /// sagt dazu einen eigenen, übersetzbaren Satz.
     case abgelehnt(code: String, meldung: String, status: Int)
+    /// Nach einem Zurücksetzen durch die Verwaltung (HTTP 409 mit `code`
+    /// „neue_pin_noetig"): Mit dem Einmal-Code gibt es erst eine Anmeldung,
+    /// wenn die Person ihren eigenen Schutz festlegt — `art`: pin oder
+    /// password. Dabei steht die Meldung des Servers.
+    case neuerSchutzNoetig(art: String, meldung: String)
 
     /// Der HTTP-Status, falls der Server geantwortet hat.
     public var status: Int? {
         switch self {
         case .server(_, let s): s
         case .abgelehnt(_, _, let s): s
+        case .neuerSchutzNoetig: 409
         case .signedOut: 401
         case .locked: 423
         default: nil
@@ -1249,6 +1270,7 @@ public enum LumenError: Error, LocalizedError, Sendable {
     /// Die feste Kennung einer Antwort, falls es eine gab.
     public var code: String? {
         if case .abgelehnt(let code, _, _) = self { return code }
+        if case .neuerSchutzNoetig = self { return "neue_pin_noetig" }
         return nil
     }
 
@@ -1276,6 +1298,8 @@ public enum LumenError: Error, LocalizedError, Sendable {
             String(localized: "Die Verwaltung ist gesperrt.", bundle: .lumenKit, locale: .lumen)
         case .unterwegs(let message):
             message
+        case .neuerSchutzNoetig(_, let meldung):
+            meldung
         case .bestaetigen(let falsch):
             falsch ? String(localized: "Das stimmt nicht.", bundle: .lumenKit, locale: .lumen)
                 : String(localized: "Zur Sicherheit braucht es noch einmal deinen PIN, dein Passwort oder den Code aus der Authenticator-App.", bundle: .lumenKit, locale: .lumen)

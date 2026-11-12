@@ -144,6 +144,11 @@ struct TVUnterwegsNameView: View {
             TextField("Profilname", text: $name)
                 .frame(width: 620)
                 .autocorrectionDisabled()
+            // Nach einem Zurücksetzen: „Neue PIN festlegen", dann „Noch
+            // einmal" — der Text kommt fertig übersetzt aus LumenKit.
+            if let schutz = session.neuerSchutz {
+                Text(verbatim: schutz.titel).font(.system(size: 30, weight: .semibold))
+            }
             SecureField("PIN oder Passwort", text: $secret)
                 .frame(width: 620)
                 .onSubmit(anmelden)

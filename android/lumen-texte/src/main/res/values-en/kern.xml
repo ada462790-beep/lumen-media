@@ -102,6 +102,9 @@
     <string name="kern_pin_zu_kurz">A PIN has at least four digits.</string>
     <string name="kern_passwort_zu_kurz">A password has at least eight characters.</string>
     <string name="kern_eingaben_ungleich">The two entries don’t match.</string>
+    <string name="kern_neue_pin_festlegen">Set a new PIN</string>
+    <string name="kern_neues_passwort_festlegen">Set a new password</string>
+    <string name="kern_noch_einmal">Once more</string>
     <string name="kern_bisheriges_falsch">The current PIN or password is incorrect.</string>
     <string name="kern_vollzugriff_braucht_schutz">With full access, your profile must stay protected. Choose a PIN or password.</string>
     <string name="kern_zu_viele_versuche">Too many attempts. Wait a moment.</string>
