@@ -13,10 +13,18 @@ package api
 // 3 KB. Gepackt wird nur, was sich lohnt — JSON, Untertitel, Text — und
 // nur, wenn der Browser es versteht. Bilder und Filme sind schon gepackt;
 // sie (und alles mit Range, also jeder Strom) bleiben, wie sie sind.
+//
+// Die Wege für Filme, Ströme, HLS-Segmente, Downloads und Bilder laufen
+// gar nicht erst durch den Packer (ohnePacken): Sonst bekäme
+// http.ServeContent einen Schreiber ohne ReadFrom, und der Kern könnte die
+// Datei nicht mehr mit sendfile direkt ins Netz geben — jedes Byte ginge
+// durch den Speicher. Wo der Packer doch dazwischen steht und nicht packt,
+// reicht er ReadFrom durch.
 
 import (
 	"bufio"
 	"compress/gzip"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -54,10 +62,37 @@ func nimmtGzip(r *http.Request) bool {
 	return false
 }
 
+// ohnePacken: Wege, deren Antworten nie gepackt werden — Filme, Ströme,
+// HLS, Downloads, Vorschaubilder und Bilder. Untertitel und die kleinen
+// JSON-Antworten unter /stream/ (Plan, Sprungpunkt, Grund) lohnen sich.
+func ohnePacken(pfad string) bool {
+	for _, p := range []string{"/api/v1/art/", "/api/v1/avatar/", "/api/v1/wishes/poster/"} {
+		if strings.HasPrefix(pfad, p) {
+			return true
+		}
+	}
+	if strings.HasPrefix(pfad, "/api/v1/persons/") && strings.HasSuffix(pfad, "/bild") {
+		return true
+	}
+	rest, ok := strings.CutPrefix(pfad, "/api/v1/stream/")
+	if !ok {
+		return false
+	}
+	if strings.Contains(rest, "/subtitles/") || strings.Contains(rest, "/untertitel/") {
+		return false
+	}
+	for _, s := range []string{"/plan", "/seek", "/browser/grund"} {
+		if strings.HasSuffix(rest, s) {
+			return false
+		}
+	}
+	return true
+}
+
 // kompression packt, wo es geht.
 func kompression(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodHead || r.Header.Get("Range") != "" || !nimmtGzip(r) {
+		if r.Method == http.MethodHead || r.Header.Get("Range") != "" || ohnePacken(r.URL.Path) || !nimmtGzip(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -149,6 +184,24 @@ func (g *gzipSchreiber) Write(b []byte) (int, error) {
 	}
 	return len(b), nil
 }
+
+// ReadFrom: Packt der Schreiber nicht, geht der Inhalt direkt an den
+// Schreiber darunter — mit dessen ReadFrom (sendfile). Sonst gewöhnlich
+// über Write.
+func (g *gzipSchreiber) ReadFrom(src io.Reader) (int64, error) {
+	if g.status == 0 {
+		g.WriteHeader(http.StatusOK)
+	}
+	if g.entschie && !g.packen {
+		if rf, ok := g.ResponseWriter.(io.ReaderFrom); ok {
+			return rf.ReadFrom(src)
+		}
+	}
+	return io.Copy(nurSchreiber{g}, src)
+}
+
+// nurSchreiber versteckt ReadFrom, damit io.Copy nicht wieder hier landet.
+type nurSchreiber struct{ io.Writer }
 
 // Flush: Wer zwischendurch ausliefern will, bekommt, was bis dahin da ist.
 func (g *gzipSchreiber) Flush() {

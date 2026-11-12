@@ -125,3 +125,81 @@ func TestBildschluessel(t *testing.T) {
 		t.Fatalf("nach Abmelden: %d", got)
 	}
 }
+
+// Filme, Ströme, HLS und Bilder laufen nicht durch den Packer: Der Handler
+// bekommt den Schreiber des Servers (mit ReadFrom, also sendfile).
+// Untertitel und kleine JSON-Antworten unter /stream/ werden weiter gepackt.
+func TestKompressionNichtFuerMedien(t *testing.T) {
+	var gepackt bool
+	h := kompression(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, gepackt = w.(*gzipSchreiber)
+	}))
+	for pfad, soll := range map[string]bool{
+		"/api/v1/stream/f1":                   false,
+		"/api/v1/stream/f1/browser.mp4":       false,
+		"/api/v1/stream/f1/hls/s1/seg3.ts":    false,
+		"/api/v1/stream/f1/hls/s1/media.m3u8": false,
+		"/api/v1/stream/f1/download":          false,
+		"/api/v1/stream/f1/trickplay/2":       false,
+		"/api/v1/art/it1/poster":              false,
+		"/api/v1/avatar/acc1":                 false,
+		"/api/v1/persons/Name/bild":           false,
+		"/api/v1/wishes/poster/w185/a.jpg":    false,
+		"/api/v1/stream/f1/subtitles/2":       true,
+		"/api/v1/stream/f1/plan":              true,
+		"/api/v1/items":                       true,
+	} {
+		req := httptest.NewRequest("GET", pfad, nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		h.ServeHTTP(httptest.NewRecorder(), req)
+		if gepackt != soll {
+			t.Errorf("%s: durch den Packer %v, erwartet %v", pfad, gepackt, soll)
+		}
+	}
+}
+
+// leserZaehler: ein Schreiber mit ReadFrom, der zählt, ob es benutzt wurde.
+type leserZaehler struct {
+	*httptest.ResponseRecorder
+	readFrom int
+}
+
+func (l *leserZaehler) ReadFrom(r io.Reader) (int64, error) {
+	l.readFrom++
+	return io.Copy(l.ResponseRecorder, r)
+}
+
+// Packt der Schreiber nicht (Bild, Teilinhalt), reicht er ReadFrom durch.
+func TestKompressionReichtReadFromDurch(t *testing.T) {
+	h := kompression(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		if _, ok := w.(io.ReaderFrom); !ok {
+			t.Fatal("kein ReadFrom")
+		}
+		_, _ = w.(io.ReaderFrom).ReadFrom(strings.NewReader(strings.Repeat("x", 5000)))
+	}))
+	req := httptest.NewRequest("GET", "/api/v1/sonstwas", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := &leserZaehler{ResponseRecorder: httptest.NewRecorder()}
+	h.ServeHTTP(rec, req)
+	if rec.readFrom != 1 || rec.Body.Len() != 5000 || rec.Header().Get("Content-Encoding") != "" {
+		t.Fatalf("ReadFrom %d, %d Bytes, %v", rec.readFrom, rec.Body.Len(), rec.Header())
+	}
+	// Gepackt: über Write, und was ankommt, ist gzip.
+	h2 := kompression(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.(io.ReaderFrom).ReadFrom(strings.NewReader(strings.Repeat(`{"a":1}`, 500)))
+	}))
+	rec2 := &leserZaehler{ResponseRecorder: httptest.NewRecorder()}
+	h2.ServeHTTP(rec2, req)
+	if rec2.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatalf("JSON über ReadFrom nicht gepackt: %v", rec2.Header())
+	}
+	zr, err := gzip.NewReader(rec2.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := io.ReadAll(zr); len(b) != 3500 {
+		t.Fatalf("entpackt %d Bytes", len(b))
+	}
+}
