@@ -3789,8 +3789,8 @@ async function zuweisenSuchen(itemId, q, year) {
     const ohne = err.code === 'ohne_schluessel' || err.code === 'schluessel_abgelehnt';
     box.innerHTML = `<p class="hint" style="padding:12px 16px;margin:0">${esc(err.message)}</p>${ohne ? `
       <div style="display:flex;gap:10px;flex-wrap:wrap;padding:0 16px 12px">
-        <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:13px" data-kennung-merken="${esc(itemId)}" data-q="${esc(q)}">${tr('Nur die Kennung speichern')}</button>
-        ${S.me?.account?.isAdmin ? `<button class="btn btn-pill" style="height:30px;font-size:13px" data-go="metadata">${tr('TMDb-Schlüssel eintragen')}</button>` : ''}</div>` : ''}`;
+        <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-kennung-merken="${esc(itemId)}" data-q="${esc(q)}">${tr('Nur die Kennung speichern')}</button>
+        ${S.me?.account?.isAdmin ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-go="metadata">${tr('TMDb-Schlüssel eintragen')}</button>` : ''}</div>` : ''}`;
     return;
   }
   box.innerHTML = t.length ? t.map(x => `
@@ -4967,7 +4967,7 @@ function viewCleanup() {
     <div class="orow">
       <span style="color:#ff9f0a;display:flex;flex:none">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
       <span class="mono c-2 clamp-1" style="flex:1">${esc(f.path)}</span>
-      ${voll() ? `<button class="btn btn-pill" style="height:28px;font-size:12px;flex:none;background:rgba(120,120,128,.2)" data-fehlend-weg="${esc(f.id)}">${tr('Endgültig entfernen')}</button>` : ''}</div>`).join('');
+      ${voll() ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem;flex:none;background:rgba(120,120,128,.2)" data-fehlend-weg="${esc(f.id)}">${tr('Endgültig entfernen')}</button>` : ''}</div>`).join('');
   const nFehlend = d.offen?.missing ?? (d.missing || []).length;
 
   // Nicht erkannt: wonach Lumen gesucht hat (Titel und Jahr aus dem
@@ -5060,7 +5060,7 @@ function viewCleanup() {
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>
-      ${voll() ? `<div style="margin:10px 16px 0"><button class="btn btn-pill" style="height:32px;font-size:13px" data-fehlende-weg-alle>${tr('Alle entfernen, die länger als einen Tag fehlen')}</button></div>` : ''}</section>` : ''}
+      ${voll() ? `<div style="margin:10px 16px 0"><button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-fehlende-weg-alle>${tr('Alle entfernen, die länger als einen Tag fehlen')}</button></div>` : ''}</section>` : ''}
     ${unmatched ? `<section style="margin-top:22px"><div class="section-h">${tr('Nicht erkannt · {n}', { n: nUnmatched })}</div>
       <div class="group group--inset">${unmatched}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0;line-height:1.5">${tr('Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. „Suchen“ sucht frei bei TMDb, „ID eingeben“ nimmt eine IMDb-, TMDb- oder TheTVDB-Kennung oder einen Link. Zugewiesenes gilt als von Hand zugeordnet und bleibt so.')}
