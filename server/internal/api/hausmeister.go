@@ -132,6 +132,9 @@ func (s *Server) ArbeitAbwarten(hoechstens time.Duration) bool {
 		arbeitMu.Unlock() // nur warten, bis sie frei ist
 		nachholenMu.Lock()
 		nachholenMu.Unlock()
+		// Und was über begleitet läuft (Hintergrund-Durchgang,
+		// Zusammenführen, Durchlauf danach).
+		<-s.begleiter.alleFertig()
 		close(fertig)
 	}()
 	select {

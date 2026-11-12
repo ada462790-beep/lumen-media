@@ -66,6 +66,8 @@ type Server struct {
 	bz bzWaechter
 	// jetzt: die Uhr für Bildschirmzeit-Fenster; nil = time.Now (Tests stellen sie).
 	jetzt func() time.Time
+	// begleiter: Goroutinen, auf die das Herunterfahren wartet (begleitet.go).
+	begleiter begleitZaehler
 }
 
 // SetzeGrund gibt den Kontext, der beim Herunterfahren endet.
