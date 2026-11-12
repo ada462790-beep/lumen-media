@@ -598,7 +598,7 @@ Im Container stehen sie bei `environment`, ohne Docker gehen sie genauso
 | `LUMEN_ADDR` | `--addr` | `:8097` | Adresse und Port. Im Container `:8097` lassen und nur den Port nach aussen ändern |
 | `LUMEN_DATA` | `--data` | `/data` im Container, sonst der Konfigurationsordner des Systems | Datenbank, Poster, Zwischenspeicher, Sicherungen |
 | `LUMEN_UMWANDLUNG_DIR` | — | der Datenordner | Wohin die Zwischendateien beim Umwandeln kommen. Auf einem schwachen NAS gern in den Arbeitsspeicher: `tmpfs` (in der Compose-Datei vorbereitet) und `LUMEN_UMWANDLUNG_DIR=/umwandlung` |
-| `LUMEN_MAX_UMWANDLUNGEN` | — | `2`, mit Hardware-Beschleunigung `4` | Wie viele Filme gleichzeitig umgewandelt werden dürfen. Auf einem ARM-NAS ohne Hardware eher `1` |
+| `LUMEN_MAX_UMWANDLUNGEN` | — | nach Rechner: ohne Hardware `1` bei höchstens zwei Kernen, `2` bis sieben Kerne, darüber ein Viertel der Kerne; mit Hardware-Beschleunigung `4` (auf zwei Kernen `2`) | Wie viele Filme gleichzeitig umgewandelt werden dürfen. Auf einem ARM-NAS ohne Hardware eher `1` |
 | `LUMEN_HARDWARE` | — | `auto` | Hardware-Beschleunigung: `auto`, `aus`, `vaapi`, `qsv` oder `nvenc`. Hat Vorrang vor der Einstellung in der Verwaltung (Umwandeln) |
 | `LUMEN_VAAPI_GERAET` | — | `/dev/dri/renderD128` | Welches Grafikgerät VAAPI nutzt, falls es mehrere gibt |
 | `LUMEN_FFMPEG`, `LUMEN_FFPROBE` | `--ffmpeg`, `--ffprobe` | `ffmpeg`, `ffprobe` | Pfad zu FFmpeg (im Abbild schon dabei) |
