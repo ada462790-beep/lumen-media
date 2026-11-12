@@ -42,6 +42,8 @@ COPY --from=bau /lumen-relay /lumen-relay
 # konnte sein Zertifikat nicht speichern.
 COPY --from=bau --chown=65532:65532 /daten-leer /daten
 COPY LICENSE /LICENSE
+# Lizenzhinweise der Go-Standardbibliothek (BSD) gehören mit in jede Kopie.
+COPY THIRD_PARTY.md /THIRD_PARTY.md
 
 # Die Zeitzonen fürs Protokoll stecken in der Binärdatei (time/tzdata).
 # Hier stand erst ein COPY aus dem Bau-Abbild — nur führt Alpine das

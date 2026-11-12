@@ -182,7 +182,7 @@ jobs:
           mkdir "$PAKET"
           mv "server/lumen${ENDUNG}" "$PAKET/"
           mv "server/lumen-relay${ENDUNG}" "$PAKET/"
-          cp LICENSE README.md "$PAKET/"
+          cp LICENSE README.md THIRD_PARTY.md DRITTSOFTWARE.md "$PAKET/"
           if [ "$ENDUNG" = ".exe" ]; then
             7z a -tzip "$PAKET.zip" "$PAKET" > /dev/null
           else

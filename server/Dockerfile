@@ -50,6 +50,15 @@ COPY server/docker-start.sh /usr/local/bin/lumen-start
 # Die AGPL verlangt, dass der Lizenztext jede Kopie begleitet — ein Abbild
 # ist eine Kopie. Darum liegt er hier mit drin und nicht nur im Lesemich.
 COPY LICENSE /usr/share/licenses/lumen/LICENSE
+# Die Bibliotheken in der Binärdatei (MIT, BSD) verlangen ihren Lizenzhinweis
+# in jeder Kopie; die Liste der Drittsoftware nennt sie samt Text. Dazu die
+# genauen Alpine-Pakete dieses Abbilds: Für FFmpeg, BusyBox und die übrigen
+# GPL-Pakete muss sich der passende Quelltext finden lassen — bei Alpine
+# (aports und distfiles) unter genau diesen Fassungen.
+COPY THIRD_PARTY.md DRITTSOFTWARE.md /usr/share/licenses/lumen/
+RUN { echo "Alpine Linux $(cat /etc/alpine-release)"; \
+      echo "Quelltext: https://distfiles.alpinelinux.org/distfiles/ und https://gitlab.alpinelinux.org/alpine/aports"; \
+      echo; apk info -v | sort; } > /usr/share/licenses/lumen/alpine-pakete.txt
 
 LABEL org.opencontainers.image.title="Lumen" \
       org.opencontainers.image.description="Eigener Streaming-Server fürs Heimnetz" \
