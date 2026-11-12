@@ -137,7 +137,11 @@ func Open(path string) (*Store, error) {
 // (vorspannErkennungTabellen): Lesefehler gelten nicht mehr für immer.
 // Alte Fehler-Zeilen haben kein wieder_ab und kommen einmal neu dran.
 // Dazu die Tabelle abspann (spuren.go): Abspann von Hand oder „keiner".
-const SchemaStand = 13
+//
+// Stand 14: Wünsche mit Kennung (wunsch_kennung.go,
+// wunschKennungNachruesten) — neue Spalten an wish und die Tabelle
+// wish_dabei, nichts umzurechnen.
+const SchemaStand = 14
 
 // umbauOffenEndung: die Marke neben der Datenbank, solange ein Umbau
 // nicht ganz durch ist (vorDemNachruesten).
@@ -295,6 +299,8 @@ func umbauen(db *sql.DB) error {
 	// nichts. Der Stand zählt trotzdem hoch, damit vorher gesichert wird.
 	// Stand 13: zwei neue Spalten in vorspann_erkannt (nachgerüstet in
 	// vorspannErkennungTabellen), nichts umzurechnen.
+	// Stand 14: Wünsche mit Kennung (wunschKennungNachruesten), nichts
+	// umzurechnen.
 	return nil
 }
 
@@ -677,6 +683,10 @@ func nachruesten(db *sql.DB) error {
 	}
 	// Bildschirmzeit (bildschirmzeit.go, Stand 12).
 	if err := bildschirmzeitNachruesten(db); err != nil {
+		return err
+	}
+	// Wünsche mit TMDb-/IMDb-Kennung (wunsch_kennung.go, Stand 14).
+	if err := wunschKennungNachruesten(db); err != nil {
 		return err
 	}
 	// Handbearbeitung, eigene Sammlungen, Untertitel (funktionen_schema.go).
