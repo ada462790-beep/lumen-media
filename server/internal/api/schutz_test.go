@@ -559,3 +559,45 @@ func TestBremseOhneUmwegUeberKopf(t *testing.T) {
 		t.Fatalf("mit X-Forwarded-For an der Bremse vorbei: %d", c)
 	}
 }
+
+// Wer über den Reverse-Proxy (oder einen weitergeleiteten Port) den PIN
+// eines Profils rät, sperrt damit nicht den Fernseher im Wohnzimmer: Zu
+// Hause zählt ein eigener Zähler. Umgekehrt holt kein Kopf eine Anfrage
+// von aussen in den Zähler von zu Hause zurück.
+func TestBremseUnterwegsGetrenntVonZuHause(t *testing.T) {
+	h := newHarness(t)
+	mitGateways(t, "", "172.17.0.1")
+	lea, _ := h.st.CreateAccount(t.Context(), store.NewAccount{Name: "Lea", LockKind: "pin", Secret: "1234"})
+	versuch := func(von string, koepfe map[string]string, geheim string) int {
+		req := httptest.NewRequest("POST", "/api/v1/unlock",
+			strings.NewReader(fmt.Sprintf(`{"profileId":%q,"name":"Lea","secret":%q}`, lea.ID, geheim)))
+		req.RemoteAddr = von
+		req.Host = "192.168.1.10:8097"
+		for k, v := range koepfe {
+			req.Header.Set(k, v)
+		}
+		rec := httptest.NewRecorder()
+		h.srv.Config.Handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	proxy := map[string]string{"X-Forwarded-For": "203.0.113.50"}
+	gebremst := false
+	for i := 0; i < 12 && !gebremst; i++ {
+		gebremst = versuch("172.17.0.1:40000", proxy, "0000") == 429
+	}
+	if !gebremst {
+		t.Fatal("Rateversuche über den Reverse-Proxy ungebremst")
+	}
+	// Der Fernseher zu Hause meldet sich trotzdem an.
+	if c := versuch("192.168.1.20:5000", nil, "1234"); c != 200 {
+		t.Fatalf("Fremder über den Reverse-Proxy sperrt das Profil zu Hause: %d", c)
+	}
+	// Von einer anderen Adresse draussen (weitergeleiteter Port) bleibt der
+	// Zähler „unterwegs" zu — auch mit einem Kopf, der „zu Hause" behauptet.
+	if c := versuch("203.0.113.9:1", nil, "1234"); c != 429 {
+		t.Fatalf("weitergeleiteter Port an der Bremse vorbei: %d", c)
+	}
+	if c := versuch("203.0.113.10:1", map[string]string{"X-Real-Ip": "192.168.1.20"}, "1234"); c != 429 {
+		t.Fatalf("Kopf holt die Anfrage in den Zähler von zu Hause: %d", c)
+	}
+}

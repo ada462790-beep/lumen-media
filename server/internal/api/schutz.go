@@ -259,20 +259,24 @@ func (s *Server) pinHinweis(ctx context.Context, accountID string) (time.Time, b
 // Profils. Derselbe Zähler für Anmelden und PIN-Ändern; zusätzlich je
 // Absender.
 //
-// Welcher Zähler gilt, richtet sich nur nach dem, was sich nicht fälschen
-// lässt: Kam die Anfrage über den Vermittler (VonAussen), zählt der Zähler
-// „Vermittler" — so sperrt ein Fremder, der von aussen den PIN von „Alex"
-// rät, nicht die Profilauswahl im Wohnzimmer. Alles andere zählt am
-// Zähler der direkten Verbindung, und der Absender ist die echte Adresse
-// der Verbindung. Köpfe wie X-Forwarded-For machen eine Anfrage zwar
-// strenger zu „unterwegs" (vonAussen), wählen aber nie den Zähler: Früher
-// schickte, wer zu Hause ausgesperrt war, einfach den Kopf mit und riet im
-// frischen Zähler weiter.
+// Es gibt zwei Zähler je Profil: „direkt" für Anfragen, die nachweislich
+// direkt aus dem Heimnetz kommen (nicht über den Vermittler, kein Kopf
+// eines Reverse-Proxys, Absender im Heimnetz — also genau dann, wenn
+// vonAussen nein sagt), und „unterwegs" für alles andere: Vermittler,
+// Reverse-Proxy auf dem NAS, weitergeleiteter Port. So sperrt ein Fremder,
+// der von aussen den PIN von „Alex" rät, nicht die Profilauswahl im
+// Wohnzimmer — auch nicht über den Reverse-Proxy aus der Anleitung.
+//
+// Köpfe wie X-Forwarded-For können eine Anfrage nur in den Zähler
+// „unterwegs" schieben, nie zurück in den Zähler „direkt". Wer zu Hause
+// ausgesperrt ist und den Kopf mitschickt, landet zwar im anderen Zähler,
+// bleibt aber am Zähler seines Absenders (quelle, die echte Adresse der
+// Verbindung) hängen.
 // name: wenn das Profil (von unterwegs) nur über den Namen bekannt ist.
 func (s *Server) profilBremse(r *http.Request, id, name string) []string {
 	weg := ":direkt"
-	if v, _ := r.Context().Value(ctxVonAussen).(bool); v {
-		weg = ":vermittler"
+	if vonAussen(r) {
+		weg = ":unterwegs"
 	}
 	profil := "profil:" + id
 	if id == "" {
