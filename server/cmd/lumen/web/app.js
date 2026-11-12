@@ -25,7 +25,7 @@ import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBe
   sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter } from './funktionen.js';
 // Bildschirmzeit der Kinderprofile (durchgesetzt vom Server).
 import { grenzenBearbeiten } from './konto.js';
-import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss } from './bildschirmzeit.js';
+import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss, bzBand, bzTagText } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
@@ -52,8 +52,8 @@ api.bestaetigen = (hinweis = '') => new Promise(fertig => {
     'border:0;border-radius:22px;padding:22px;width:min(360px,calc(100vw - 32px));' +
     'box-sizing:border-box;overflow:hidden;color:var(--label)';
   d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
-    <div id="bestaetigen-t" class="t-title" style="font-size:19px;font-weight:700">${tr('Rechte ändern')}</div>
-    <div class="t-caption c-2">${hinweis ? hinweis.replace(/[<&]/g, '') : tr('Zur Sicherheit noch einmal deine PIN, dein Passwort oder den Code aus der Authenticator-App.')}</div>
+    <div id="bestaetigen-t" class="t-title" style="font-size:19px;font-weight:700">${tr('Änderung bestätigen')}</div>
+    <div class="t-caption c-2">${hinweis ? hinweis.replace(/[<&]/g, '') : bestaetigenText()}</div>
     <input type="password" name="code" autocomplete="current-password" required aria-label="${tr('PIN, Passwort oder Code')}"
       style="width:100%;box-sizing:border-box;height:44px;border-radius:12px;border:0;outline:none;background:var(--fill);color:var(--label);padding:0 14px;font:inherit;font-size:16px">
     <div style="display:flex;gap:10px;justify-content:flex-end">
@@ -101,6 +101,18 @@ const S = {
     return window.innerWidth <= 860;
   })(),
 };
+
+/* Welcher Code die Bestätigung öffnet: Ist eine Verwaltungssperre
+   gesetzt, gilt nur deren Code – nicht das Passwort des Profils. Früher
+   nannte der Dialog alles auf einmal, und das Profil-Passwort scheiterte
+   still mit „Das stimmt nicht". */
+function bestaetigenText() {
+  const art = S?.me?.account?.adminLock || 'none';
+  if (art === 'totp') return tr('Zur Sicherheit noch einmal den Code aus der Authenticator-App (Verwaltungssperre).');
+  if (art === 'pin') return tr('Zur Sicherheit noch einmal die PIN der Verwaltungssperre – nicht die PIN deines Profils.');
+  if (art === 'password') return tr('Zur Sicherheit noch einmal das Passwort der Verwaltungssperre – nicht das deines Profils.');
+  return tr('Zur Sicherheit noch einmal deine PIN oder dein Passwort.');
+}
 
 /* ---------------------------------------------------------------- Hilfen */
 
@@ -782,7 +794,10 @@ async function fetchFor(view) {
       catch (e) { if (e.code === 'unterwegs') return { unterwegs: true }; throw e; }
     case 'home': {
       // Die Startseite zeigt höchstens zwölf Reihen — nur die holen, nicht alle.
-      const [h, reihen] = await Promise.all([api.home(), api.call('/collections?limit=12').catch(() => [])]);
+      // Kinderprofil: auch die Bildschirmzeit — ist sie um, sagt es ein
+      // Band oben (bzBand), nicht erst der Knopf „Ansehen".
+      const [h, reihen] = await Promise.all([api.home(), api.call('/collections?limit=12').catch(() => []),
+        S.me?.account?.isKid ? bzLaden() : null]);
       return { ...h, collections: reihen };
     }
     case 'collections': return { collections: await api.collections() };
@@ -1087,7 +1102,10 @@ function viewRedeem() {
   const art = S.redeemLock;
   const code = S.id || f.code || '';
 
-  const wahl = [['pin', 'PIN'], ['password', tr('Passwort')], ['none', tr('Ohne Schutz')]].map(([v, n]) =>
+  // Von unterwegs kein „Ohne Schutz": so ein Profil öffnet sich nur zu
+  // Hause – wer es von unterwegs anlegt, sperrte sich aus.
+  const wahl = [['pin', 'PIN'], ['password', tr('Passwort')], ['none', tr('Ohne Schutz')]]
+    .filter(([v]) => v !== 'none' || !S.hello?.unterwegs).map(([v, n]) =>
     `<button type="button" class="tab-pill" role="tab" aria-selected="${art === v}"
        data-lockkind="${v}" style="height:32px;font-size:14px">${n}</button>`).join('');
 
@@ -1228,7 +1246,7 @@ function viewHome() {
     <section class="sec"><h2 class="t-title3">
       <a href="#" class="titel-link" data-go="collections">${tr('Filmreihen')} ${svg(I.chev, 16, 2.4)}</a></h2>
       <div class="rail">${reihen.slice(0, 12).map(reiheKarte).join('')}</div></section>` : '';
-  return shell(`<div class="wrap"><h1 class="sr-only">${tr('Startseite')}</h1>${hero}
+  return shell(`<div class="wrap"><h1 class="sr-only">${tr('Startseite')}</h1>${S.me?.account?.isKid ? bzBand() : ''}${hero}
     ${rows.slice(0, 1).map(r => rail(r.title, r.items, r.wide)).join('')}
     ${reihenRail}
     ${rows.slice(1).map(r => rail(r.title, r.items, r.wide)).join('')}
@@ -3654,8 +3672,7 @@ function viewSettings() {
             ${segment(tr('Darstellung'), [['dunkel', tr('Dunkel')], ['hell', tr('Hell')], ['auto', tr('Wie das Gerät')]].map(([v, n]) =>
               ({ name: n, an: darstellung() === v, attr: `data-darstellung="${v}"` })))}
             </div>`, tr('Gilt für diesen Browser.'))}
-        ${a.isKid && bzStand()?.aktiv ? grp(tr('Bildschirmzeit'), bzIchZeile(),
-          tr('Gezählt wird, solange ein Video läuft. Um Mitternacht beginnt ein neuer Tag.')) : ''}
+        ${a.isKid && bzStand()?.aktiv ? grp(tr('Bildschirmzeit'), bzIchZeile(), bzTagText()) : ''}
         ${grp(tr('Privatsphäre'),
           swRow(tr('Bewertungen im Haushalt zeigen'), prefs.shareRatings === '1', null, 'shareRatings'),
           [a.isKid && bzStand()?.aktiv
@@ -4028,7 +4045,7 @@ function viewAdminLibraries() {
     ${libs.length ? `<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
       <button class="btn btn-pill btn-pill--fill" data-metaneu="">${tr('Alle Metadaten neu laden')}</button>
       <span class="t-caption c-2" style="align-self:center">${tr('Holt Beschreibungen, Besetzung und Bilder für alle Titel noch einmal. Von Hand zugewiesene bleiben.')}</span></div>` : ''}
-    <section style="margin-top:26px"><div class="section-h">${tr('Neue Bibliothek')}</div>
+    ${voll() ? `<section style="margin-top:26px"><div class="section-h">${tr('Neue Bibliothek')}</div>
       <form id="libform" class="group group--inset" style="padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px">
         <div class="field"><label for="lname">${tr('Name')}</label>
           <input id="lname" name="name" placeholder="${tr('Filme')}" required></div>
@@ -4045,7 +4062,7 @@ function viewAdminLibraries() {
           <span class="hint">${tr('Der Pfad, unter dem der Server die Dateien sieht — bei Docker der Pfad im Container. Unterordner werden mitgelesen.')}</span></div>
         <div id="bibwaehler">${bibWaehler()}</div>
         <button class="btn btn-primary" style="height:44px">${tr('Anlegen und prüfen')}</button>
-      </form></section>
+      </form></section>` : ''}
     <div style="height:40px"></div></div>`);
 }
 
@@ -4355,7 +4372,8 @@ function viewAdminGroups() {
       ${ROLLEN_GRUPPEN[a.groupId] ? `<span class="t-caption c-2">${tr('Rolle „{rolle}“ – unter Konten und Rechte', { rolle: rollenName(a.groupId) })}</span>`
         : `<select class="takt" data-grpacc="${esc(a.id)}" aria-label="${tr('Gruppe von {name}', { name: esc(a.name) })}">
         <option value="">${tr('keine Gruppe')}</option>
-        ${eigene.map(x => `<option value="${esc(x.id)}"${a.groupId === x.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`}</label>`).join('');
+        ${eigene.filter(x => !a.isKid || !x.verwaltung || a.groupId === x.id)
+          .map(x => `<option value="${esc(x.id)}"${a.groupId === x.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`}</label>`).join('');
   const form = `
     <form id="grpform" style="margin-top:24px">
       <!-- nicht name="id": das würde form.id überdecken -->
@@ -4370,7 +4388,7 @@ function viewAdminGroups() {
               <option value="voll"${g?.vollzugriff ? ' selected' : ''}>${tr('Vollzugriff — alles wie der Besitzer')}</option></select>
             <span class="hint">${tr('Wer was schaut, sieht auch hier niemand.')}</span></div>
           <div class="field"><label>${tr('Bibliotheken')}</label>
-            ${libs.length ? libs.map(l => `<label class="row" style="min-height:36px;padding:0;cursor:pointer"><input type="checkbox" name="lib" value="${esc(l.id)}"${(g?.libraries || []).includes(l.id) ? ' checked' : ''} style="margin-right:10px"><span class="t-body">${esc(l.name)}</span></label>`).join('')
+            ${libs.length ? libs.map(l => `<label class="row" style="min-height:36px;padding:0;cursor:pointer"><input type="checkbox" name="lib" value="${esc(l.id)}"${(g ? (g.libraries || []).includes(l.id) : true) ? ' checked' : ''} style="margin-right:10px"><span class="t-body">${esc(l.name)}</span></label>`).join('')
               : `<span class="hint">${tr('Noch keine Bibliotheken.')}</span>`}</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
             <div class="field"><label for="gstreams">${tr('Gleichzeitig')}</label><input id="gstreams" name="maxStreams" type="number" min="1" max="20" value="${lim.maxStreams}"></div>
@@ -4382,7 +4400,7 @@ function viewAdminGroups() {
             <label class="t-sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="allowTranscode"${lim.allowTranscode ? ' checked' : ''}>${tr('Umwandeln')}</label>
             <label class="t-sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="allowDownload"${lim.allowDownload ? ' checked' : ''}>${tr('Herunterladen')}</label>
           </div>
-          <span class="hint">${tr('Ohne „Herunterladen“ gibt es keinen Download-Knopf, und Lumen liefert Filme nur etwa doppelt so schnell aus, wie sie laufen. Wer technisch versiert ist, kann einen Strom trotzdem mitschneiden.')}</span>
+          <span class="hint">${tr('Ohne „Herunterladen“ gibt es keinen Download-Knopf, und Lumen liefert Filme nur etwa doppelt so schnell aus, wie sie laufen (Kinderprofile mit Bildschirmzeit ungefähr in Echtzeit). Wer technisch versiert ist, kann einen Strom trotzdem mitschneiden.')}</span>
         </div>`)}
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:-10px">
         ${g ? `<button class="btn btn-pill" type="button" data-grpneu>${tr('Abbrechen')}</button>` : ''}
@@ -5532,6 +5550,10 @@ async function formularAbschicken(e) {
     const g = { name: fd.get('name'), verwaltung: recht === 'verwalten' || recht === 'voll', vollzugriff: recht === 'voll', libraries: fd.getAll('lib'),
       limits: { maxStreams: Number(fd.get('maxStreams')) || 2, maxAge: Number(fd.get('maxAge')), maxDownloads: Number(fd.get('maxDownloads')) || 0,
         allowUnrated: !!fd.get('allowUnrated'), allowTranscode: !!fd.get('allowTranscode'), allowDownload: !!fd.get('allowDownload'), remoteQuality: '1080p' } };
+    // Eine Gruppe ohne Bibliothek: Wer darin ist, sieht gar nichts –
+    // früher ohne jeden Hinweis (ein Kind stand dann vor „Noch nichts da").
+    if (!g.libraries.length && !(await rueckfrage({ titel: tr('Keine Bibliothek gewählt'),
+      text: tr('Wer in dieser Gruppe ist, sieht dann gar nichts. Trotzdem speichern?'), ja: tr('Speichern') }))) return;
     try {
       if (fd.get('gid')) await api.adminUpdateGroup(fd.get('gid'), g); else await api.adminCreateGroup(g);
       toast(tr('Gespeichert')); S.gruppe = null; return load();
@@ -5707,8 +5729,14 @@ app.addEventListener('change', async e => {
     return load();
   }
   if (z.matches && z.matches('select[data-grpacc]')) {
+    // Eine Gruppe ohne Bibliothek nimmt der Person alles: vorher fragen.
+    const ziel = (S.data?.groups || []).find(x => x.id === z.value);
+    if (ziel && !(ziel.libraries || []).length && !(await rueckfrage({ titel: tr('Gruppe ohne Bibliothek'),
+      text: tr('„{gruppe}“ sieht keine Bibliothek – wer darin ist, sieht danach nichts mehr. Trotzdem zuordnen?', { gruppe: ziel.name }), ja: tr('Zuordnen') }))) return load();
     try { await api.adminSetGroup(z.dataset.grpacc, z.value); toast(z.value ? tr('Zugeordnet') : tr('Aus der Gruppe genommen')); return load(); }
-    catch (err) { return toast(err.message); }
+    // Abgelehnt (etwa: Kinderprofil in eine Gruppe mit Verwaltung): die
+    // Auswahl springt zurück, statt etwas anzuzeigen, das nicht gilt.
+    catch (err) { toast(err.message); return load(); }
   }
   if (z.matches && z.matches('input[name=kind]') && z.form?.id === 'lockform') {
     const box = document.getElementById('lockdetail'); if (box) box.innerHTML = lockDetail(z.value); return;

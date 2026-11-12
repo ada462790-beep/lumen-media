@@ -449,6 +449,10 @@ export const api = {
   adminBildschirmzeitGeschenk(id, minuten) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}/bildschirmzeit/geschenk`, { method: 'POST', body: { minuten } });
   },
+  /* Nimmt zurück, was heute dazugegeben wurde. */
+  adminBildschirmzeitGeschenkZurueck(id) {
+    return this.call(`/admin/accounts/${encodeURIComponent(id)}/bildschirmzeit/geschenk`, { method: 'DELETE' });
+  },
   adminDeleteAccount(id) {
     return this.call(`/admin/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },

@@ -246,11 +246,29 @@ func (s *Server) neuigkeitenGelesen(r *http.Request, accountID string) time.Time
 	return time.Time{}
 }
 
-// neuigkeitenGesehen: alles bis jetzt gilt als gelesen.
+// neuigkeitenGesehen: alles, was jetzt in der Liste steht, gilt als
+// gelesen. Gemerkt wird der Zeitpunkt der neuesten Neuigkeit, nicht die
+// Uhrzeit des Lesens — sonst stünde im Profil auf die Sekunde, wann die
+// Person zuletzt hineingeschaut hat.
 func (s *Server) neuigkeitenGesehen(w http.ResponseWriter, r *http.Request) {
-	if err := s.st.SetPref(r.Context(), accountOf(r).ID, "newsSeen", strconv.FormatInt(time.Now().Unix(), 10)); err != nil {
-		failErr(w, err)
-		return
+	acc := accountOf(r)
+	bis := s.neuigkeitenGelesen(r, acc.ID)
+	if q, err := s.scope(r); err == nil {
+		liste, _ := s.st.Neuigkeiten(r.Context(), q, acc.ID)
+		if acc.Besitzerrechte() {
+			liste = append(liste, s.serverMeldungen(r.Context())...)
+		}
+		for _, n := range append(liste, s.eigeneMeldungen(r.Context(), acc.ID)...) {
+			if n.At.After(bis) {
+				bis = n.At
+			}
+		}
+	}
+	if !bis.IsZero() {
+		if err := s.st.SetPref(r.Context(), acc.ID, "newsSeen", strconv.FormatInt(bis.Unix(), 10)); err != nil {
+			failErr(w, err)
+			return
+		}
 	}
 	// Der Hinweis auf den zurückgesetzten PIN ist damit gelesen und geht
 	// aus der Liste — er soll einmal erscheinen, nicht für immer.

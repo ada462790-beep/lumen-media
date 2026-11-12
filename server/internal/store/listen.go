@@ -59,7 +59,7 @@ func scanListe(sc interface{ Scan(...any) error }, ich string) (*Liste, error) {
 	l.Geteilt, l.Gemeinsam = geteilt == 1, gemeinsam == 1
 	l.Meine = l.Von.ID == ich
 	l.DarfAendern = l.Meine || (l.Geteilt && l.Gemeinsam)
-	l.ErstelltAm = time.Unix(am, 0)
+	l.ErstelltAm = time.Unix(am-am%86400, 0).UTC() // nur der Tag, auch bei alten Listen
 	return &l, nil
 }
 
@@ -139,7 +139,7 @@ func (s *Store) ListeAnlegen(ctx context.Context, ich, name string) (*Liste, err
 	id := newID("pl")
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO playlist (id, account_id, name, shared, collaborative, created_at)
-		 VALUES (?, ?, ?, 0, 0, ?)`, id, ich, name, time.Now().Unix()); err != nil {
+		 VALUES (?, ?, ?, 0, 0, ?)`, id, ich, name, heute()); err != nil { // nur der Tag
 		return nil, err
 	}
 	return s.Liste(ctx, ich, id)

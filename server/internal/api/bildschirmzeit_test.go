@@ -61,6 +61,7 @@ func neuesBzKind(t *testing.T, regel store.Bildschirmzeit) *bzKind {
 	h.api.bz.mu.Lock()
 	h.api.bz.init()
 	h.api.bz.nachfrist = 0
+	h.api.bz.verwaltungSofort = true
 	h.api.bz.mu.Unlock()
 	return k
 }
@@ -292,7 +293,7 @@ func TestBildschirmzeitMitternacht(t *testing.T) {
 	k.um("23:50")
 	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", 30*60)
 	resp, raw := h.do("GET", "/api/v1/stream/"+k.fileID+"/plan", "", k.tok)
-	if code, text := fehlerCode(raw); resp.StatusCode != 403 || code != "bildschirmzeit" || !strings.Contains(text, "morgen ab 00:00") {
+	if code, text := fehlerCode(raw); resp.StatusCode != 403 || code != "bildschirmzeit" || !strings.Contains(text, "morgen geht es weiter") || strings.Contains(text, "00:00") {
 		t.Fatalf("aufgebraucht: %d %s", resp.StatusCode, raw)
 	}
 	h.api.bildschirmzeitTakt(ctx)

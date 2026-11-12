@@ -43,6 +43,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	mrand "math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
@@ -82,8 +83,10 @@ type bzWaechter struct {
 	stand map[string]int64
 	// ueberSeit: seit wann ein Konto über der Zeit ist, während noch etwas
 	// läuft.
-	ueberSeit  map[string]time.Time
-	letzterTag string
+	ueberSeit map[string]time.Time
+	// ueberZufall: der zufällige Aufschlag auf die Nachfrist je Konto.
+	ueberZufall map[string]time.Duration
+	letzterTag  string
 	// nachfrist: bzNachfrist; Tests setzen sie auf null.
 	nachfrist time.Duration
 	// gewarnt: wann zuletzt eine unlesbare Regel gemeldet wurde.
@@ -95,6 +98,13 @@ type bzWaechter struct {
 	// Uhrzeit und wie viel ausgelieferte Filmzeit bisher zusammenkamen
 	// und wie viel davon schon gezählt ist.
 	sitzung map[string]*bzSitzung
+	// zuletztAktiv: wann für ein Konto zuletzt gezählt wurde (für den
+	// Stand der Verwaltung, bzVerwaltungsStand).
+	zuletztAktiv map[string]time.Time
+	// verwaltung: der Stand, den die Verwaltung zuletzt sah.
+	verwaltung map[string]bzStand
+	// verwaltungSofort: Tests sehen den Stand ohne Verzögerung.
+	verwaltungSofort bool
 }
 
 // bzSitzung: eine Strecke ohne längere Pause.
@@ -128,6 +138,9 @@ func (b *bzWaechter) init() {
 	if b.geliefert == nil {
 		b.geliefert = map[string]float64{}
 		b.sitzung = map[string]*bzSitzung{}
+		b.zuletztAktiv = map[string]time.Time{}
+		b.verwaltung = map[string]bzStand{}
+		b.ueberZufall = map[string]time.Duration{}
 	}
 }
 
@@ -169,6 +182,9 @@ type bzLage struct {
 	// fehler: Regel oder Zähler liessen sich nicht lesen. Dann ist
 	// gesperrt — lieber einmal zu streng als still ohne Grenze.
 	fehler error
+	// verlaengertBis: das Fenster ist heute bis dahin verlängert
+	// („heute einmalig mehr"); Nullzeit: nicht.
+	verlaengertBis time.Time
 }
 
 // bildschirmzeitLage: false, wenn für dieses Konto keine Bildschirmzeit
@@ -195,7 +211,9 @@ func (s *Server) bildschirmzeitLage(ctx context.Context, acc *store.Account) (bz
 	if err != nil {
 		return gesperrt(err)
 	}
-	return bzLage{regel: regel, urteil: regel.Pruefen(jetzt, g, gs), genutzt: g, geschenkt: gs, jetzt: jetzt, tag: tag}, true
+	bis := s.st.BildschirmzeitVerlaengerung(ctx, acc.ID, tag)
+	return bzLage{regel: regel, urteil: regel.PruefenMit(jetzt, g, gs, bis), genutzt: g, geschenkt: gs,
+		jetzt: jetzt, tag: tag, verlaengertBis: bis}, true
 }
 
 // bzWarnen schreibt höchstens alle zehn Minuten eine Zeile ins Protokoll —
@@ -220,21 +238,26 @@ func (s *Server) bzWarnen(err error) {
 }
 
 // bildschirmzeitText: der Satz für das Kind, mit der Zeit, ab der es
-// weitergeht.
+// weitergeht. Für ein Kind von acht Jahren: „morgen ab 00:00" heisst
+// „morgen", und nach dem Ende eines Fensters über Mitternacht ist es
+// keine „Pause", sondern Schluss bis heute Abend.
 func bildschirmzeitText(w http.ResponseWriter, l bzLage) string {
 	if l.fehler != nil {
 		return tr(w, "Die Bildschirmzeit lässt sich gerade nicht prüfen. Bitte später nochmals versuchen.")
 	}
 	weiter := l.urteil.WeiterAb
 	zeit := weiter.Format("15:04")
+	heute := !weiter.IsZero() && store.Tag(weiter) == store.Tag(l.jetzt)
+	morgen := !weiter.IsZero() && store.Tag(weiter) == store.Tag(l.jetzt.AddDate(0, 0, 1))
 	switch {
-	case weiter.IsZero():
-	case l.regel.Schautag(weiter) == l.tag:
-		return tr(w, "Gerade ist Pause — ab {zeit} geht es weiter.", "zeit", zeit)
-	case store.Tag(weiter) == store.Tag(l.jetzt):
-		// Nach Mitternacht, am Ende eines Nachtfensters.
-		return tr(w, "Für heute ist Schluss — ab {zeit} geht es weiter.", "zeit", zeit)
-	case store.Tag(weiter) == store.Tag(l.jetzt.AddDate(0, 0, 1)):
+	case heute && l.urteil.Grund == "fenster" && !l.regel.NachtfensterVorbei(l.jetzt):
+		// Vor dem Fenster am selben Tag (früh am Morgen).
+		return tr(w, "Gerade ist Pause — heute ab {zeit} geht es weiter.", "zeit", zeit)
+	case heute:
+		return tr(w, "Für heute ist Schluss — heute ab {zeit} geht es weiter.", "zeit", zeit)
+	case morgen && zeit == "00:00":
+		return tr(w, "Für heute ist Schluss — morgen geht es weiter.")
+	case morgen:
 		return tr(w, "Für heute ist Schluss — morgen ab {zeit} geht es weiter.", "zeit", zeit)
 	}
 	return tr(w, "Für heute ist Schluss mit Schauen.")
@@ -357,6 +380,7 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 			b.sitzung[id] = si
 		}
 		si.zuletzt = echt
+		b.zuletztAktiv[id] = echt
 		si.wand += dauer.Seconds()
 		si.film += film
 		soll := max(si.wand, si.film-bzFilmVorsprung)
@@ -407,10 +431,20 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 		if !da {
 			seit = echt
 			b.ueberSeit[id] = echt
+			// Mit zufälligem Aufschlag (bis eine Minute): Stellt die
+			// Verwaltung die Zeit auf null, soll die Zahl der Wiedergaben
+			// nicht auf die Sekunde genau eine Minute später fallen — das
+			// verriete, dass genau dieses Kind gerade schaute.
+			b.ueberZufall[id] = time.Duration(mrand.Int64N(int64(time.Minute)))
 		}
-		faellig := echt.Sub(seit) >= b.nachfrist
+		frist := b.nachfrist
+		if frist > 0 {
+			frist += b.ueberZufall[id]
+		}
+		faellig := echt.Sub(seit) >= frist
 		if faellig {
 			delete(b.ueberSeit, id)
+			delete(b.ueberZufall, id)
 		}
 		b.mu.Unlock()
 		if faellig {
@@ -462,6 +496,9 @@ func (s *Server) meineBildschirmzeit(w http.ResponseWriter, r *http.Request) {
 	if heute.Von != "" {
 		out["von"], out["bis"] = heute.Von, heute.Bis
 	}
+	if !l.verlaengertBis.IsZero() && l.jetzt.Before(l.verlaengertBis) {
+		out["verlaengertBis"] = l.verlaengertBis.Format("15:04")
+	}
 	if l.urteil.Budget > 0 {
 		out["budgetMinuten"] = int(l.urteil.Budget / time.Minute)
 	}
@@ -483,21 +520,69 @@ func (s *Server) meineBildschirmzeit(w http.ResponseWriter, r *http.Request) {
 // Kinderprofils sieht — die Regel und ungefähr, wie viel heute verbraucht
 // ist. Was in diesen Minuten lief, steht nirgends.
 //
-// Die Minuten sind auf Viertelstunden abgerundet (bzStufe): Wer die
-// Kontenliste immer wieder lädt, sähe sonst Minute für Minute, wann das
-// Kind zu schauen beginnt und aufhört.
+// Die Minuten sind auf Viertelstunden abgerundet (bzStufe) und zudem ein
+// älterer Stand (bzVerwaltungsStand): Früher sprang die Zahl genau dann
+// von 0 auf 15, wenn das Kind gerade schaute — wer die Kontenliste alle
+// zehn Sekunden lud, wusste so auf die Sekunde, wann es schaute.
 type bzVerwaltung struct {
 	Regel store.Bildschirmzeit `json:"regel"`
-	// GenutztMinuten: heute verbraucht, abgerundet auf Viertelstunden.
+	// GenutztMinuten: heute verbraucht, abgerundet auf Viertelstunden,
+	// Stand nach bzVerwaltungsStand.
 	GenutztMinuten int `json:"genutztMinuten"`
 	// GenutztStufe: auf so viele Minuten ist GenutztMinuten abgerundet.
 	GenutztStufe  int `json:"genutztStufe"`
 	BudgetMinuten int `json:"budgetMinuten"` // heute, samt Geschenktem; 0 = keine Grenze
 	Geschenkt     int `json:"geschenkt"`
+	// VerlaengertBis: das Fenster ist heute bis dahin verlängert ("15:04").
+	VerlaengertBis string `json:"verlaengertBis,omitempty"`
+	// FensterHeute: heute gilt ein Zeitfenster („heute einmalig mehr"
+	// verlängert es).
+	FensterHeute bool `json:"fensterHeute,omitempty"`
 }
 
 // bzStufe: auf so viele Minuten rundet die Verwaltung ab.
 const bzStufe = 15
+
+// Wann die Verwaltung einen neuen Stand sieht: erst eine Weile, nachdem
+// das Kind aufgehört hat (bzStandRuhe, mit zufälligem Aufschlag bis
+// bzStandRuheZufall) — oder spätestens nach bzStandAlter, auch wenn es
+// noch schaut. So zeigt die Zahl, wie viel heute zusammenkam, aber nicht,
+// wann.
+const (
+	bzStandRuhe       = 10 * time.Minute
+	bzStandRuheZufall = 15 * time.Minute
+	bzStandAlter      = time.Hour
+)
+
+// bzStand: der Stand, den die Verwaltung zuletzt sehen durfte.
+type bzStand struct {
+	tag     string
+	minuten int // schon abgerundet
+	am      time.Time
+	ruhe    time.Duration // diese Ruhe muss vor dem nächsten Stand sein
+}
+
+// bzVerwaltungsStand: die Minuten, die die Verwaltung jetzt sieht.
+func (s *Server) bzVerwaltungsStand(kontoID, tag string, genutzt time.Duration) int {
+	b := &s.bz
+	echt := time.Now()
+	min := int(genutzt / time.Minute)
+	min -= min % bzStufe
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.init()
+	alt, da := b.verwaltung[kontoID]
+	aktiv := echt.Sub(b.zuletztAktiv[kontoID])
+	if da && alt.tag == tag && alt.minuten == min {
+		return min
+	}
+	if !da || alt.tag != tag || aktiv >= alt.ruhe || echt.Sub(alt.am) >= bzStandAlter || b.verwaltungSofort {
+		ruhe := bzStandRuhe + time.Duration(mrand.Int64N(int64(bzStandRuheZufall)))
+		b.verwaltung[kontoID] = bzStand{tag: tag, minuten: min, am: echt, ruhe: ruhe}
+		return min
+	}
+	return alt.minuten
+}
 
 func (s *Server) bildschirmzeitVerwaltung(ctx context.Context, acc *store.Account) *bzVerwaltung {
 	if acc == nil || !acc.IsKid || acc.IsAdmin {
@@ -518,11 +603,17 @@ func (s *Server) bildschirmzeitVerwaltung(ctx context.Context, acc *store.Accoun
 		regel = store.StandardBildschirmzeit()
 	}
 	jetzt := s.uhr()
-	g, gs, _ := s.st.BildschirmzeitHeute(ctx, acc.ID, regel.Schautag(jetzt))
-	min := int(g / time.Minute)
-	out := &bzVerwaltung{Regel: regel, GenutztMinuten: min - min%bzStufe, GenutztStufe: bzStufe, Geschenkt: gs}
-	if m := regel.Regel(regel.SchautagBeginn(jetzt)).Minuten; m > 0 {
+	tag := regel.Schautag(jetzt)
+	g, gs, _ := s.st.BildschirmzeitHeute(ctx, acc.ID, tag)
+	out := &bzVerwaltung{Regel: regel, GenutztMinuten: s.bzVerwaltungsStand(acc.ID, tag, g),
+		GenutztStufe: bzStufe, Geschenkt: gs}
+	heute := regel.Regel(regel.SchautagBeginn(jetzt))
+	if m := heute.Minuten; m > 0 {
 		out.BudgetMinuten = m + gs
+	}
+	out.FensterHeute = heute.Von != ""
+	if bis := s.st.BildschirmzeitVerlaengerung(ctx, acc.ID, tag); !bis.IsZero() && jetzt.Before(bis) {
+		out.VerlaengertBis = bis.Format("15:04")
 	}
 	return out
 }
@@ -564,7 +655,12 @@ func (s *Server) adminBildschirmzeit(w http.ResponseWriter, r *http.Request) {
 }
 
 // adminBildschirmzeitGeschenk: POST …/bildschirmzeit/geschenk
-// {"minuten": 30} — heute einmalig mehr.
+// {"minuten": 30} — heute einmalig mehr. Mit Tagesgrenze kommen die
+// Minuten dazu; mit Zeitfenster geht das Fenster heute so viel länger —
+// ab seinem Ende, oder ab jetzt, wenn es schon zu ist („darf ich noch eine
+// Folge?" um 22:15). Früher verlängerte das nur die Tagesgrenze, und die
+// Oberfläche meldete Erfolg, während das Kind ausserhalb des Fensters
+// weiter vor „Für heute ist Schluss" stand.
 func (s *Server) adminBildschirmzeitGeschenk(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Minuten int `json:"minuten"`
@@ -581,7 +677,52 @@ func (s *Server) adminBildschirmzeitGeschenk(w http.ResponseWriter, r *http.Requ
 		failErr(w, err)
 		return
 	}
-	if _, err := s.st.BildschirmzeitSchenken(r.Context(), ziel.ID, regel.Schautag(s.uhr()), in.Minuten); err != nil {
+	if in.Minuten <= 0 || in.Minuten > store.MaxGeschenkt {
+		fail(w, http.StatusBadRequest, "So viele Minuten lassen sich nicht dazugeben.")
+		return
+	}
+	jetzt := s.uhr()
+	tag := regel.Schautag(jetzt)
+	heute := regel.Regel(regel.SchautagBeginn(jetzt))
+	if heute.Minuten > 0 {
+		if _, err := s.st.BildschirmzeitSchenken(r.Context(), ziel.ID, tag, in.Minuten); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	if heute.Von != "" {
+		ab := regel.FensterEnde(jetzt)
+		if alt := s.st.BildschirmzeitVerlaengerung(r.Context(), ziel.ID, tag); alt.After(ab) {
+			ab = alt
+		}
+		if jetzt.After(ab) {
+			ab = jetzt
+		}
+		bis := ab.Add(time.Duration(in.Minuten) * time.Minute)
+		if grenze := jetzt.Add(time.Duration(store.MaxGeschenkt) * time.Minute); bis.After(grenze) {
+			bis = grenze
+		}
+		if err := s.st.BildschirmzeitVerlaengern(r.Context(), ziel.ID, tag, bis); err != nil {
+			failErr(w, err)
+			return
+		}
+	}
+	ok(w, s.bildschirmzeitVerwaltung(r.Context(), ziel))
+}
+
+// adminBildschirmzeitGeschenkZurueck: DELETE …/bildschirmzeit/geschenk —
+// nimmt zurück, was heute dazugegeben wurde (Minuten und Verlängerung).
+func (s *Server) adminBildschirmzeitGeschenkZurueck(w http.ResponseWriter, r *http.Request) {
+	ziel, gilt := s.bzZiel(w, r)
+	if !gilt {
+		return
+	}
+	regel, err := s.st.BildschirmzeitRegel(r.Context(), ziel.ID)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	if err := s.st.BildschirmzeitGeschenkZurueck(r.Context(), ziel.ID, regel.Schautag(s.uhr())); err != nil {
 		failErr(w, err)
 		return
 	}

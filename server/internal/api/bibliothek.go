@@ -449,6 +449,21 @@ func (s *Server) adminWishes(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Mitverwaltung mit einem Teil der Bibliotheken: nur die Wünsche der
+	// Konten in ihrem Bereich (und die eigenen).
+	if !acc.Besitzerrechte() {
+		sichtbar := alle[:0:0]
+		darf := map[string]bool{}
+		for _, x := range alle {
+			if _, da := darf[x.AccountID]; !da {
+				darf[x.AccountID] = x.AccountID == acc.ID || s.verwaltetKonto(r, x.AccountID)
+			}
+			if darf[x.AccountID] {
+				sichtbar = append(sichtbar, x)
+			}
+		}
+		alle = sichtbar
+	}
 	offen := 0
 	for _, w := range alle {
 		if w.State == "open" || w.State == "" {

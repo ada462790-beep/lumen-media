@@ -365,6 +365,7 @@ func (s *Server) Handler() http.Handler {
 	// mehr") ohne erneuten Code, es gilt nur heute (bildschirmzeit.go).
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/bildschirmzeit", admin(s.bestaetigt(s.adminBildschirmzeit)))
 	mux.Handle("POST /api/v1/admin/accounts/{id}/bildschirmzeit/geschenk", admin(s.adminBildschirmzeitGeschenk))
+	mux.Handle("DELETE /api/v1/admin/accounts/{id}/bildschirmzeit/geschenk", admin(s.adminBildschirmzeitGeschenkZurueck))
 	// PIN eines Haushaltsprofils zurücksetzen — nie die des Besitzers.
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/sperre", admin(s.bestaetigt(s.adminKontoSperre)))
 	mux.Handle("PUT /api/v1/admin/wishes/{id}", admin(s.adminSetWishState))

@@ -26,6 +26,9 @@ type Wish struct {
 	Note      string    `json:"note,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	Mine      bool      `json:"mine"`
+	// AccountID: wer sich das gewünscht hat — nur für die Prüfung der
+	// Rechte, nie in der Antwort.
+	AccountID string `json:"-"`
 }
 
 func (s *Store) CreateWish(ctx context.Context, accountID, title string, year int) (*Wish, error) {
@@ -46,13 +49,15 @@ func (s *Store) CreateWish(ctx context.Context, accountID, title string, year in
 			}
 		}
 	}
-	now := time.Now()
+	// Nur der Tag: Wann genau sich jemand etwas gewünscht hat, geht die
+	// Verwaltung nichts an. Die Reihenfolge hält die Zeilennummer.
+	tag := heute()
 	w := &Wish{ID: newID("w"), Title: title, Year: year, State: "open",
-		CreatedAt: now, Mine: true}
+		CreatedAt: time.Unix(tag, 0), Mine: true, AccountID: accountID}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO wish (id, account_id, title, year, state, created_at, updated_at)
 		 VALUES (?,?,?,?,?,?,?)`,
-		w.ID, accountID, title, nullInt(year), w.State, now.Unix(), now.Unix())
+		w.ID, accountID, title, nullInt(year), w.State, tag, tag)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +80,7 @@ func (s *Store) Wishes(ctx context.Context, accountID string, all bool) ([]Wish,
 		args = append(args, accountID)
 	}
 	q += ` ORDER BY CASE w.state WHEN 'open' THEN 0 WHEN 'working' THEN 1 ELSE 2 END,
-	                w.created_at DESC`
+	                w.created_at DESC, w.rowid DESC`
 
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -92,10 +97,22 @@ func (s *Store) Wishes(ctx context.Context, accountID string, all bool) ([]Wish,
 			&w.Note, &created, &owner); err != nil {
 			return nil, err
 		}
-		w.CreatedAt, w.Mine = time.Unix(created, 0), owner == accountID
+		// Auf den Tag gekürzt, auch alte Einträge mit Uhrzeit.
+		created -= created % 86400
+		w.CreatedAt, w.Mine, w.AccountID = time.Unix(created, 0).UTC(), owner == accountID, owner
 		out = append(out, w)
 	}
 	return out, rows.Err()
+}
+
+// WunschVon: wer sich diesen Wunsch gewünscht hat (für die Rechte).
+func (s *Store) WunschVon(ctx context.Context, id string) (string, error) {
+	var acc string
+	err := s.db.QueryRowContext(ctx, `SELECT account_id FROM wish WHERE id = ?`, id).Scan(&acc)
+	if err != nil {
+		return "", ErrNotFound
+	}
+	return acc, nil
 }
 
 func (s *Store) SetWishState(ctx context.Context, id, state, note string) error {
@@ -106,7 +123,7 @@ func (s *Store) SetWishState(ctx context.Context, id, state, note string) error 
 	}
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE wish SET state = ?, note = ?, updated_at = ? WHERE id = ?`,
-		state, nullStr(note), time.Now().Unix(), id)
+		state, nullStr(note), heute(), id)
 	return err
 }
 

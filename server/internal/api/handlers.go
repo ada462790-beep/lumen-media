@@ -48,6 +48,11 @@ type helloBody struct {
 	License   string `json:"license"`
 	SourceURL string `json:"sourceUrl"`
 
+	// Unterwegs: die Anfrage kommt nicht aus dem Heimnetz. Die Web-App
+	// bietet dann beim Einlösen einer Einladung kein „Ohne Schutz" an —
+	// so ein Profil liesse sich von unterwegs nie öffnen.
+	Unterwegs bool `json:"unterwegs,omitempty"`
+
 	// Sprache des Servers und die Auswahl — schon vor der Anmeldung, damit
 	// Profilwahl und Einrichtung in der richtigen Sprache erscheinen.
 	Sprache  string            `json:"sprache"`
@@ -67,6 +72,8 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
 
 		Sprache:  s.serverSprache(r.Context()),
 		Sprachen: sprachAuswahl(),
+
+		Unterwegs: vonAussen(r),
 	})
 }
 
@@ -274,6 +281,12 @@ func (s *Server) redeemInvite(w http.ResponseWriter, r *http.Request) {
 		DeviceKind string `json:"deviceKind"`
 	}
 	if !readJSON(w, r, &in) {
+		return
+	}
+	// Von unterwegs öffnet sich ein Profil ohne PIN nie — wer so einlöst,
+	// sperrte sich selbst aus.
+	if vonAussen(r) && (in.LockKind == "none" || in.LockKind == "") {
+		fail(w, http.StatusBadRequest, "Von unterwegs braucht dein Profil eine PIN oder ein Passwort – ohne lässt es sich von hier aus nie öffnen.")
 		return
 	}
 	frei, warte := s.bremse.anfangen("einladung:" + quelle(r))
@@ -1440,6 +1453,18 @@ func (s *Server) createWish(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminOverview(w http.ResponseWriter, r *http.Request) {
 	libs, _ := s.st.Libraries(r.Context())
+	// Mitverwaltung mit einem Teil der Bibliotheken: nur ihre — fremde
+	// Namen und Ordner gehen sie nichts an (/admin/libraries filtert
+	// ebenso).
+	if darf := s.verwalteteMediatheken(r); darf != nil {
+		sichtbar := libs[:0:0]
+		for _, l := range libs {
+			if darf[l.ID] {
+				sichtbar = append(sichtbar, l)
+			}
+		}
+		libs = sichtbar
+	}
 	accs, _ := s.st.Accounts(r.Context())
 	// Die Übersicht zeigt nur die Zahlen — gezählt wird in der Datenbank,
 	// statt alle Doppel samt Dateien und alle fehlenden Dateien zu laden.
@@ -1678,7 +1703,36 @@ func (s *Server) adminLog(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Mitverwaltung mit einem Teil der Bibliotheken sieht nur Zeilen, die
+	// eine ihrer Bibliotheken nennen — Durchläufe und Namen fremder
+	// Bibliotheken, Verwaltungsschritte anderer gehen sie nichts an.
+	if darf := s.verwalteteMediatheken(r); darf != nil {
+		libs, _ := s.st.Libraries(r.Context())
+		var namen []string
+		for _, l := range libs {
+			if darf[l.ID] && strings.TrimSpace(l.Name) != "" {
+				namen = append(namen, l.Name)
+			}
+		}
+		gefiltert := lines[:0:0]
+		for _, z := range lines {
+			for _, n := range namen {
+				if strings.Contains(z.Message, n) {
+					gefiltert = append(gefiltert, z)
+					break
+				}
+			}
+		}
+		lines = gefiltert
+	}
 	ok(w, lines)
+}
+
+// verwaltetKonto: ob das fragende Konto dieses Konto verwaltet — mit
+// Besitzerrechten jedes ausser dem Besitzer, sonst Konten ohne Verwaltung
+// ganz innerhalb der eigenen Bibliotheken (wie mitverwalterDarf).
+func (s *Server) verwaltetKonto(r *http.Request, id string) bool {
+	return s.mitverwalterDarf(r, id, nil) == nil
 }
 
 func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
@@ -1999,6 +2053,14 @@ func (s *Server) adminSetWishState(w http.ResponseWriter, r *http.Request) {
 	}
 	if !readJSON(w, r, &in) {
 		return
+	}
+	// Mitverwaltung: nur Wünsche aus dem eigenen Bereich (adminWishes).
+	if acc := accountOf(r); !acc.Besitzerrechte() {
+		von, err := s.st.WunschVon(r.Context(), r.PathValue("id"))
+		if err != nil || (von != acc.ID && !s.verwaltetKonto(r, von)) {
+			fail(w, http.StatusNotFound, "nicht gefunden")
+			return
+		}
 	}
 	if err := s.st.SetWishState(r.Context(), r.PathValue("id"), in.State, in.Note); err != nil {
 		failErr(w, err)

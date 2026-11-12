@@ -105,3 +105,43 @@ func TestMitverwalterinBleibtInIhremBereich(t *testing.T) {
 		t.Fatalf("Carla setzt Kiras PIN zurück: %d %s", resp.StatusCode, raw)
 	}
 }
+
+// Eine Mitverwalterin „nur Kinder" sieht in Übersicht, Protokoll und
+// Wünschen nur ihren Bereich — und Wünsche nur mit dem Tag, ohne Uhrzeit.
+func TestMitverwalterinSiehtNurIhrenBereich(t *testing.T) {
+	h := newHarness(t)
+	ctx := t.Context()
+	h.film("Horror Nacht", 1)
+	kinderLib, _ := h.st.CreateLibrary(ctx, "Kinder", "movie", t.TempDir(), "de")
+	ctok, _ := h.mitverwalter("Carla")
+	g, _ := h.st.GruppeAnlegen(ctx, store.Gruppe{Name: "Kinderverwaltung", Verwaltung: true,
+		Libraries: []string{kinderLib.ID}, Limits: store.VerwaltungsLimits()})
+	_ = h.st.GruppeZuweisen(ctx, h.idVon(ctok), g.ID)
+	anna := h.gast("Anna", false, h.lib.ID, kinderLib.ID)
+	kira := h.gast("Kira", true, kinderLib.ID)
+	h.do("POST", "/api/v1/wishes", `{"title":"Erwachsenenwunsch"}`, anna)
+	h.do("POST", "/api/v1/wishes", `{"title":"Kinderwunsch"}`, kira)
+	h.st.Log(ctx, "info", "scan", "Bibliothek „Filme“ durchgesehen")
+	h.st.Log(ctx, "info", "scan", "Bibliothek „Kinder“ durchgesehen")
+
+	_, raw := h.do("GET", "/api/v1/admin/overview", "", ctok)
+	if strings.Contains(string(raw), h.root) || strings.Contains(string(raw), `"name":"Filme"`) {
+		t.Fatalf("Übersicht zeigt fremde Bibliothek: %s", raw)
+	}
+	_, raw = h.do("GET", "/api/v1/admin/log", "", ctok)
+	if strings.Contains(string(raw), "„Filme“") || !strings.Contains(string(raw), "„Kinder“") {
+		t.Fatalf("Protokoll: %s", raw)
+	}
+	_, raw = h.do("GET", "/api/v1/admin/wishes", "", ctok)
+	if strings.Contains(string(raw), "Erwachsenenwunsch") || !strings.Contains(string(raw), "Kinderwunsch") {
+		t.Fatalf("Wünsche: %s", raw)
+	}
+	if !strings.Contains(string(raw), "T00:00:00Z") {
+		t.Fatalf("Wunsch mit Uhrzeit: %s", raw)
+	}
+	// Der Besitzer sieht alles.
+	_, raw = h.do("GET", "/api/v1/admin/wishes", "", h.tok)
+	if !strings.Contains(string(raw), "Erwachsenenwunsch") {
+		t.Fatalf("Besitzer: %s", raw)
+	}
+}

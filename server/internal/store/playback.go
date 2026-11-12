@@ -27,7 +27,6 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
-	"time"
 )
 
 type Progress struct {
@@ -556,7 +555,7 @@ func (s *Store) SharedRatings(ctx context.Context, ich, itemID string) ([]struct
 func (s *Store) AddToWatchlist(ctx context.Context, accountID, itemID string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO watchlist (account_id, item_id, added_at) VALUES (?,?,?)`,
-		accountID, itemID, time.Now().Unix())
+		accountID, itemID, heute()) // nur der Tag; die Reihenfolge hält rowid
 	return err
 }
 

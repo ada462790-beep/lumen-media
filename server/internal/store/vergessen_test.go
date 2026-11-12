@@ -83,3 +83,47 @@ func TestZuruecksetzenLoeschtAuchWalUndSicherung(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Merkliste, Listen und Wünsche tragen nur den Tag, keine Uhrzeit — die
+// Reihenfolge bleibt trotzdem stabil (neueste zuerst).
+func TestPersoenlicheDatenNurMitTag(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "l.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := t.Context()
+	a, _ := st.CreateAccount(ctx, NewAccount{Name: "Anna"})
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", t.TempDir(), "de")
+	var ids []string
+	for _, n := range []string{"Eins", "Zwei", "Drei"} {
+		it := &Item{LibraryID: lib.ID, Kind: "movie", Title: n, MatchState: "matched"}
+		_ = st.UpsertItem(ctx, it)
+		ids = append(ids, it.ID)
+		_ = st.AddToWatchlist(ctx, a.ID, it.ID)
+	}
+	_, _ = st.ListeAnlegen(ctx, a.ID, "Abend")
+	_, _ = st.CreateWish(ctx, a.ID, "Wunsch", 0)
+	for _, q := range []string{
+		`SELECT added_at FROM watchlist WHERE account_id = ?`,
+		`SELECT created_at FROM playlist WHERE account_id = ?`,
+		`SELECT created_at FROM wish WHERE account_id = ?`,
+	} {
+		rows, err := st.DB().Query(q, a.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for rows.Next() {
+			var v int64
+			_ = rows.Scan(&v)
+			if v%86400 != 0 {
+				t.Errorf("%s: Uhrzeit gespeichert (%d)", q, v)
+			}
+		}
+		rows.Close()
+	}
+	got, _ := st.WatchlistIDs(ctx, a.ID)
+	if len(got) != 3 || got[0] != ids[2] || got[2] != ids[0] {
+		t.Fatalf("Reihenfolge: %v (erwartet umgekehrt %v)", got, ids)
+	}
+}
