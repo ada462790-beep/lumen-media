@@ -106,7 +106,7 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 		Mode: bp.mode, Reason: bp.reason, Bitrate: bp.plan.Bitrate,
 		FromCodec: f.VideoCodec, ToCodec: zielCodec(bp.plan, f),
 		FromHeight: f.Height, ToHeight: zielHoehe(bp.plan, f),
-		Drossel: drosselFuer(lim, f),
+		Drossel: s.drosselFuer(r, lim, f, &bp.plan),
 	})
 	s.laeufe.setzen(acc.ID, lauf, laufEintrag{sid: sess.ID})
 	// Endet der Strom, ohne dass jemand ihn beendet hat (FFmpeg bricht ab,

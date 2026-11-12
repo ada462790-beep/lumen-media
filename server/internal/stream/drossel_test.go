@@ -18,7 +18,7 @@ import (
 // mehreren gleichzeitigen Anfragen derselben Wiedergabe.
 func TestDrosselHaeltRate(t *testing.T) {
 	d := NeueDrossel(8_000_000) // 2 × 8 Mbit/s = 2 MB/s, Anlauf 60 MB
-	d.vorrat = 0                // Anlauf aufgebraucht
+	d.vorrat = 0                // Anlauf aufgebraucht (in Sekunden Film)
 	start := time.Now()
 	var wg sync.WaitGroup
 	for i := 0; i < 4; i++ {

@@ -96,7 +96,7 @@ func (s *Server) streamFile(w http.ResponseWriter, r *http.Request) {
 		Mode: "direct", Reason: plan.Reason, Bitrate: f.Bitrate,
 		FromCodec: f.VideoCodec, ToCodec: f.VideoCodec,
 		FromHeight: f.Height, ToHeight: f.Height,
-		Drossel: drosselFuer(lim, f),
+		Drossel: s.drosselFuer(r, lim, f, &plan),
 	}, lim.MaxStreams)
 	if sess == nil {
 		fail(w, http.StatusTooManyRequests,
@@ -273,13 +273,27 @@ func (w *stoppableWriter) Write(p []byte) (int, error) {
 // auf etwa die doppelte Bitrate begrenzt (stream/drossel.go) — sonst wäre
 // der Direktstrom ein Download-Knopf ohne Knopf. Darf es, gibt es keine
 // Bremse (nil).
-func drosselFuer(lim store.Limits, f *store.MediaFile) *stream.Drossel {
-	if lim.AllowDownload {
-		return nil
-	}
+//
+// Ein Kinderprofil mit Bildschirmzeit bekommt die enge Drossel (ungefähr
+// Echtzeit, stream.NeueKinderDrossel), und was ausgeliefert wird, zählt als
+// Bildschirmzeit (bzWaechter.geliefertMelden) — auch wenn ein eigenes
+// Programm statt eines Players holt und sich nie mit einem Fortschritt
+// meldet. plan: beim Umwandeln zählt die Ziel-Bitrate (nil = die Datei).
+func (s *Server) drosselFuer(r *http.Request, lim store.Limits, f *store.MediaFile, plan *stream.Plan) *stream.Drossel {
 	bitrate := f.Bitrate
 	if bitrate <= 0 && f.DurationMS > 0 && f.SizeBytes > 0 {
 		bitrate = int(f.SizeBytes * 8 * 1000 / f.DurationMS)
+	}
+	if plan != nil && plan.VideoCodec != "" && plan.VideoCodec != "copy" && plan.Bitrate > 0 {
+		bitrate = plan.Bitrate
+	}
+	acc := accountOf(r)
+	if _, gilt := s.bildschirmzeitLage(r.Context(), acc); gilt {
+		id := acc.ID
+		return stream.NeueKinderDrossel(bitrate, func(sek float64) { s.bz.geliefertMelden(id, sek) })
+	}
+	if lim.AllowDownload {
+		return nil
 	}
 	return stream.NeueDrossel(bitrate)
 }

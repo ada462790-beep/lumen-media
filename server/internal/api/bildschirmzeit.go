@@ -24,6 +24,12 @@ package api
 //     vielen Geräten: Bildschirmzeit ist Uhrzeit. Nach der letzten Meldung
 //     zählt nichts mehr nach; eine Lücke von höchstens bzLuecke (kurze
 //     Pause, Puffer voll) gilt als durchgehend.
+//     Dazu zählt die ausgelieferte Filmzeit: Ein Kinderprofil mit
+//     Bildschirmzeit bekommt Direktstrom, Browser-Strom und HLS-Segmente
+//     höchstens etwa 1,25-fach schneller als Echtzeit (Kinderdrossel), und
+//     was schneller ankam als die Uhr lief, zählt nach Filmzeit. Ein
+//     eigenes Programm, das nur Segmente holt, kommt so nicht mehr mit
+//     null Minuten an einen ganzen Film.
 //  3. Ist die Zeit um, während etwas läuft, endet die Wiedergabe nach einer
 //     kurzen Nachfrist. Die nächste Anfrage des Geräts (Segment,
 //     Bereichsanfrage, /browser/grund) bekommt dieselbe Meldung.
@@ -82,6 +88,33 @@ type bzWaechter struct {
 	nachfrist time.Duration
 	// gewarnt: wann zuletzt eine unlesbare Regel gemeldet wurde.
 	gewarnt time.Time
+	// geliefert: seit dem letzten Takt ausgelieferte Sekunden Film je
+	// Konto (Kinderdrossel, stream.NeueKinderDrossel).
+	geliefert map[string]float64
+	// sitzung: je Konto, solange es ohne längere Pause schaut: wie viel
+	// Uhrzeit und wie viel ausgelieferte Filmzeit bisher zusammenkamen
+	// und wie viel davon schon gezählt ist.
+	sitzung map[string]*bzSitzung
+}
+
+// bzSitzung: eine Strecke ohne längere Pause.
+type bzSitzung struct {
+	wand, film, gezaehlt float64
+	zuletzt              time.Time
+}
+
+// bzFilmVorsprung: so viel mehr Filmzeit als Uhrzeit darf ausgeliefert
+// sein, bevor sie zählt — ein Player lädt etwas vor, und nach einem
+// Sprung holt er neu. Was darüber hinausgeht, kam schneller als in
+// Echtzeit und zählt als geschaut.
+const bzFilmVorsprung = 30.0
+
+// geliefertMelden: die Kinderdrossel hat sek Sekunden Film ausgeliefert.
+func (b *bzWaechter) geliefertMelden(kontoID string, sek float64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.init()
+	b.geliefert[kontoID] += sek
 }
 
 func (b *bzWaechter) init() {
@@ -91,6 +124,10 @@ func (b *bzWaechter) init() {
 		b.stand = map[string]int64{}
 		b.ueberSeit = map[string]time.Time{}
 		b.nachfrist = bzNachfrist
+	}
+	if b.geliefert == nil {
+		b.geliefert = map[string]float64{}
+		b.sitzung = map[string]*bzSitzung{}
 	}
 }
 
@@ -272,25 +309,63 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 	// Zählen: die Sekunden von der zuletzt gezählten Meldung bis zur
 	// neuesten — je Konto einmal, wie viele Geräte auch laufen. Nach einer
 	// längeren Stille (Pause) beginnt die Zählung neu bei der Meldung.
-	for id, letzte := range zuletzt {
+	//
+	// Dazu die ausgelieferte Filmzeit: Holt ein Programm schneller als in
+	// Echtzeit (die Kinderdrossel lässt höchstens etwa 1,25-fach zu), zählt
+	// die Filmzeit statt der Uhrzeit. Gezählt wird je Strecke ohne Pause
+	// das Grössere von beidem (mit bzFilmVorsprung Spielraum fürs
+	// Vorladen) — nie doppelt.
+	b.mu.Lock()
+	geliefert := b.geliefert
+	b.geliefert = map[string]float64{}
+	b.mu.Unlock()
+	konten := map[string]bool{}
+	for id := range zuletzt {
+		konten[id] = true
+	}
+	for id := range geliefert {
+		konten[id] = true
+	}
+	for id := range konten {
+		letzte := zuletzt[id]
+		film := geliefert[id]
 		b.mu.Lock()
 		bis := b.gezaehlt[id]
 		b.mu.Unlock()
-		if !letzte.After(bis) {
+		neueMeldung := letzte.After(bis)
+		if !neueMeldung && film <= 0 {
 			continue
 		}
 		l, gilt := lage(id)
 		if !gilt || l.fehler != nil {
 			continue
 		}
-		dauer := letzte.Sub(bis)
-		if bis.IsZero() || dauer > bzLuecke {
-			dauer = 0 // neu angefangen: erst ab hier
+		var dauer time.Duration
+		if neueMeldung {
+			dauer = letzte.Sub(bis)
+			if bis.IsZero() || dauer > bzLuecke {
+				dauer = 0 // neu angefangen: erst ab hier
+			}
 		}
 		b.mu.Lock()
-		b.gezaehlt[id] = letzte
+		if neueMeldung {
+			b.gezaehlt[id] = letzte
+		}
+		si := b.sitzung[id]
+		if si == nil || echt.Sub(si.zuletzt) > bzLuecke {
+			si = &bzSitzung{}
+			b.sitzung[id] = si
+		}
+		si.zuletzt = echt
+		si.wand += dauer.Seconds()
+		si.film += film
+		soll := max(si.wand, si.film-bzFilmVorsprung)
+		sek := int(soll - si.gezaehlt)
+		if sek > 0 {
+			si.gezaehlt += float64(sek)
+		}
 		b.mu.Unlock()
-		if sek := int(dauer / time.Second); sek > 0 {
+		if sek > 0 {
 			_ = s.st.BildschirmzeitZaehlen(ctx, id, l.tag, sek)
 		}
 	}
@@ -298,6 +373,11 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 	for id, bis := range b.gezaehlt {
 		if echt.Sub(bis) > bzLuecke {
 			delete(b.gezaehlt, id)
+		}
+	}
+	for id, si := range b.sitzung {
+		if echt.Sub(si.zuletzt) > bzLuecke {
+			delete(b.sitzung, id)
 		}
 	}
 	b.mu.Unlock()
