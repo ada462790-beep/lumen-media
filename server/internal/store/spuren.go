@@ -113,6 +113,24 @@ var bitmapCodecs = map[string]bool{
 	"hdmv_pgs_subtitle": true, "dvd_subtitle": true, "dvb_subtitle": true, "xsub": true,
 }
 
+// textCodecs: Untertitel, die FFmpeg als WebVTT ausgeben kann. Alles andere
+// in der Datei — Teletext, Closed Captions (eia_608), unbekannte Spuren, die
+// ffprobe als „none" meldet — lässt sich nicht als Text liefern. Ohne diese
+// Liste versuchte Lumen täglich, sie umzuwandeln, und scheiterte mit
+// „Error opening output file … Invalid argument".
+var textCodecs = map[string]bool{
+	"subrip": true, "srt": true, "ass": true, "ssa": true, "webvtt": true, "mov_text": true,
+	"text": true, "microdvd": true, "subviewer": true, "subviewer1": true, "sami": true,
+	"realtext": true, "mpl2": true, "pjs": true, "vplayer": true, "jacosub": true, "stl": true,
+}
+
+// unbrauchbar: eine eingebettete Untertitelspur, die weder als Text noch
+// als Bild (eingebrannt) gezeigt werden kann. Sie wird gar nicht erst
+// angeboten.
+func unbrauchbar(t Track) bool {
+	return t.Kind == "subtitle" && !t.External && !bitmapCodecs[t.Codec] && !textCodecs[t.Codec]
+}
+
 // SpurenSetzen schreibt Spuren und Kapitel einer Datei neu und merkt sich,
 // dass gemessen wurde — auch wenn nichts dabei herauskam.
 func (s *Store) SpurenSetzen(ctx context.Context, fileID string, tracks []Track, chapters []Chapter) error {
@@ -183,6 +201,9 @@ func (s *Store) Spuren(ctx context.Context, fileID string) ([]Track, error) {
 		t.Forced, t.HearingImpaired = forced == 1, hi == 1
 		t.External = t.ExternalPath != ""
 		t.Bitmap = bitmapCodecs[t.Codec]
+		if unbrauchbar(t) {
+			continue
+		}
 		out = append(out, t)
 	}
 	if err := rows.Err(); err != nil {

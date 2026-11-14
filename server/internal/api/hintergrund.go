@@ -399,6 +399,28 @@ func (s *Server) untertitelVorbereiten(ctx context.Context, f *store.MediaFile) 
 		return nil
 	}
 	inhalte, err := s.textUntertitelZiehen(ctx, f, fehlt, true, nil)
+	if err != nil && len(fehlt) > 1 && ctx.Err() == nil {
+		// Eine kaputte Spur soll die anderen nicht mitreissen: einzeln
+		// versuchen und behalten, was geht.
+		inhalte = map[int][]byte{}
+		var erster error
+		for _, t := range fehlt {
+			einzeln, e := s.textUntertitelZiehen(ctx, f, []store.Track{t}, true, nil)
+			if e != nil {
+				if erster == nil {
+					erster = e
+				}
+				continue
+			}
+			for k, v := range einzeln {
+				inhalte[k] = v
+			}
+		}
+		err = nil
+		if len(inhalte) == 0 {
+			err = erster
+		}
+	}
 	if err != nil {
 		return err
 	}
