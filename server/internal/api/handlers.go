@@ -1078,13 +1078,23 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	rows := []row{}
+	// Erst alle Reihen als rohe Titel sammeln, dann einmal für alle
+	// zusammen ausschmücken (decorate): Früher lief decorate je Reihe —
+	// bei zwölf Reihen zwölfmal Merkliste, Favoriten, Fortschritt,
+	// Bewertungen, Bilder und Serienstände, rund 90 Abfragen statt 15.
+	type rohReihe struct {
+		key, title string
+		wide       bool
+		items      []store.Item
+		fertig     []view // schon ausgeschmückt (eigene Sammlungen)
+	}
+	var roh []rohReihe
+	naechste := map[string]bool{}
 
 	// Weiterschauen kommt aus dem eigenen Profil — und nur daraus. Nach
 	// einer fertigen Folge steht hier die nächste (wie bei Netflix).
 	if weiter, err := s.st.Weiterschauen(r.Context(), acc.ID, 20); err == nil && len(weiter) > 0 {
 		ids := make([]string, len(weiter))
-		naechste := map[string]bool{}
 		for i, x := range weiter {
 			ids[i] = x.ItemID
 			naechste[x.ItemID] = x.Naechste
@@ -1092,13 +1102,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		rq := q
 		rq.IDs, rq.Kinds = ids, []string{"movie", "series", "episode"}
 		if its, err := s.st.Query(r.Context(), rq); err == nil && len(its) > 0 {
-			its = inOrder(its, ids)
-			if v, err := s.decorate(r, its); err == nil {
-				for i := range v {
-					v[i].NaechsteFolge = naechste[v[i].ID]
-				}
-				rows = append(rows, row{"resume", tr(w, "Weiterschauen"), true, v})
-			}
+			roh = append(roh, rohReihe{key: "resume", title: tr(w, "Weiterschauen"), wide: true, items: inOrder(its, ids)})
 		}
 	}
 
@@ -1109,9 +1113,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		if err != nil || len(its) == 0 {
 			return
 		}
-		if v, err := s.decorate(r, its); err == nil {
-			rows = append(rows, row{key, tr(w, title), wide, v})
-		}
+		roh = append(roh, rohReihe{key: key, title: tr(w, title), wide: wide, items: its})
 	}
 	add("new", "Neu dazugekommen", "added", nil, false)
 
@@ -1121,9 +1123,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		nq := q
 		nq.NotIDs, nq.Sort, nq.Limit = angefangen, "random", 20
 		if its, err := s.st.Query(r.Context(), nq); err == nil && len(its) > 0 {
-			if v, err := s.decorate(r, its); err == nil {
-				rows = append(rows, row{"unberuehrt", tr(w, "Noch nicht angefangen"), false, v})
-			}
+			roh = append(roh, rohReihe{key: "unberuehrt", title: tr(w, "Noch nicht angefangen"), items: its})
 		}
 	}
 
@@ -1141,15 +1141,15 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if len(gute) >= 4 {
-				if v, err := s.decorate(r, gute); err == nil {
-					rows = append(rows, row{"top", tr(w, "Gut bewertet"), false, v})
-				}
+				roh = append(roh, rohReihe{key: "top", title: tr(w, "Gut bewertet"), items: gute})
 			}
 		}
 	}
 
 	// Eigene Sammlungen, die auf die Startseite sollen (sammlungen.go).
-	rows = append(rows, s.sammlungsReihen(r)...)
+	for _, x := range s.sammlungsReihen(r) {
+		roh = append(roh, rohReihe{key: x.Key, title: x.Title, wide: x.Wide, fertig: x.Items})
+	}
 
 	// Je ein Genre als eigene Reihe — die drei häufigsten, damit die
 	// Startseite nicht nur „Filme" und „Serien" kennt.
@@ -1161,9 +1161,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 			nq := q
 			nq.Genre, nq.Sort, nq.Limit = g, "rating", 20
 			if its, err := s.st.Query(r.Context(), nq); err == nil && len(its) >= 4 {
-				if v, err := s.decorate(r, its); err == nil {
-					rows = append(rows, row{"genre:" + g, g, false, v})
-				}
+				roh = append(roh, rohReihe{key: "genre:" + g, title: g, items: its})
 			}
 		}
 	}
@@ -1173,10 +1171,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		rq := q
 		rq.IDs, rq.Kinds = ids, []string{"movie", "series"}
 		if its, err := s.st.Query(r.Context(), rq); err == nil && len(its) > 0 {
-			its = inOrder(its, ids)
-			if v, err := s.decorate(r, its); err == nil {
-				rows = append(rows, row{"nochmal", tr(w, "Nochmal ansehen"), false, v})
-			}
+			roh = append(roh, rohReihe{key: "nochmal", title: tr(w, "Nochmal ansehen"), items: inOrder(its, ids)})
 		}
 	}
 
@@ -1189,10 +1184,47 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		nq := q
 		nq.IDs, nq.Limit = ids, 20
 		if its, err := s.st.Query(r.Context(), nq); err == nil && len(its) > 0 {
-			if v, err := s.decorate(r, its); err == nil {
-				rows = append(rows, row{"watchlist", tr(w, "Deine Merkliste"), false, v})
+			roh = append(roh, rohReihe{key: "watchlist", title: tr(w, "Deine Merkliste"), items: its})
+		}
+	}
+
+	// Alle Titel einmal ausschmücken — jeder nur einmal, auch wenn er in
+	// mehreren Reihen steht.
+	var alle []store.Item
+	schon := map[string]bool{}
+	for _, x := range roh {
+		for _, it := range x.items {
+			if !schon[it.ID] {
+				schon[it.ID] = true
+				alle = append(alle, it)
 			}
 		}
+	}
+	geschmueckt := map[string]view{}
+	if len(alle) > 0 {
+		v, err := s.decorate(r, alle)
+		if err != nil {
+			failErr(w, err)
+			return
+		}
+		for _, x := range v {
+			geschmueckt[x.ID] = x
+		}
+	}
+	rows := []row{}
+	for _, x := range roh {
+		if x.fertig != nil {
+			rows = append(rows, row{x.key, x.title, x.wide, x.fertig})
+			continue
+		}
+		v := make([]view, 0, len(x.items))
+		for _, it := range x.items {
+			e := geschmueckt[it.ID]
+			// „Nächste Folge" gilt nur in Weiterschauen.
+			e.NaechsteFolge = x.key == "resume" && naechste[it.ID]
+			v = append(v, e)
+		}
+		rows = append(rows, row{x.key, x.title, x.wide, v})
 	}
 	ok(w, map[string]any{"rows": rows})
 }

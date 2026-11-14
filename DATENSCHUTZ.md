@@ -43,8 +43,11 @@ Statistik.
   ändert, darum lässt sich auch nicht erkennen, ob zwei Wiedergaben aus
   demselben Profil kommen.
 - **Protokoll:** Serverereignisse wie „Umwandlung gestartet · Bandbreite" oder
-  „eine Datei liess sich nicht ausmessen". **Nicht:** welches Gerät, welche
-  Person, welche Datei. Das Protokoll wird nach 14 Tagen gelöscht.
+  „eine Datei liess sich nicht ausmessen". Dauert eine Anfrage länger als
+  eine Sekunde, steht dort ihr Weg als Muster („GET /api/v1/items/{id}") mit
+  der Dauer — ohne Kennung, ohne Titel, höchstens einmal je Weg und Minute.
+  **Nicht:** welches Gerät, welche Person, welche Datei. Das Protokoll wird
+  nach 14 Tagen gelöscht.
 - **Konten:** Namen, Gruppen, Freigaben, Anzahl der Geräte.
 - **Mitverwaltung mit einem Teil der Bibliotheken** (etwa nur „Kinder")
   sieht und ändert nur Konten, deren Bibliotheken ganz in ihrem Bereich

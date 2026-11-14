@@ -624,6 +624,11 @@ func (s *Store) LookupToken(ctx context.Context, token string) (*Account, *Devic
 // LookupTokenHash ist LookupToken für den, der nur den Prüfwert kennt —
 // der Medienschlüssel merkt sich den, nicht das Token selbst.
 func (s *Store) LookupTokenHash(ctx context.Context, sum [32]byte) (*Account, *Device, error) {
+	// Schon geprüft, und seither hat sich nichts geändert (merken.go)?
+	if e, ok := s.tokens.holen(sum); ok {
+		return s.tokenGilt(sum, e)
+	}
+	stand := Stand()
 	var d Device
 	var created, seen int64
 	err := s.db.QueryRowContext(ctx,
@@ -643,19 +648,38 @@ func (s *Store) LookupTokenHash(ctx context.Context, sum [32]byte) (*Account, *D
 	if err != nil {
 		return nil, nil, err
 	}
-	if acc.Disabled {
+	e := tokenMerk{acc: *acc, dev: d, stand: stand}
+	s.tokens.ablegen(sum, e)
+	return s.tokenGilt(sum, e)
+}
+
+// tokenGilt prüft ein gefundenes Token (gesperrt, abgelaufen) und merkt
+// „zuletzt gesehen" vor. Gibt Kopien heraus — der Speicher bleibt heil,
+// wenn jemand das Konto in der Anfrage verändert.
+func (s *Store) tokenGilt(sum [32]byte, e tokenMerk) (*Account, *Device, error) {
+	if e.acc.Disabled {
 		return nil, nil, errors.New("konto gesperrt")
 	}
-	if acc.ExpiresAt != nil && acc.ExpiresAt.Before(time.Now()) {
+	if e.acc.ExpiresAt != nil && e.acc.ExpiresAt.Before(time.Now()) {
 		return nil, nil, errors.New("zugang abgelaufen")
 	}
 	// Nur der Tag, und nur einmal am Tag geschrieben: „Leas iPad zuletzt
-	// 01:47" soll nirgends stehen.
-	if tag := heute(); seen != tag {
-		_, _ = s.db.ExecContext(ctx,
-			`UPDATE token SET last_seen_at = ? WHERE hash = ?`, tag, sum[:])
+	// 01:47" soll nirgends stehen. Geschrieben wird nebenbei (merken.go):
+	// Die Anfrage wartet nicht auf die Schreibsperre.
+	if tag := heute(); e.dev.LastSeen.Unix() != tag {
+		e.dev.LastSeen = time.Unix(tag, 0)
+		s.tokens.ablegen(sum, e)
+		s.zuletztVormerken(sum, tag)
 	}
-	return acc, &d, nil
+	acc, dev := e.acc, e.dev
+	dev.TokenHash = append([]byte(nil), sum[:]...)
+	return &acc, &dev, nil
+}
+
+// tokenGesehen schreibt „zuletzt gesehen" (nur den Tag) für ein Token.
+func (s *Store) tokenGesehen(ctx context.Context, sum [32]byte, tag int64) {
+	_, _ = s.db.ExecContext(ctx,
+		`UPDATE token SET last_seen_at = ? WHERE hash = ?`, tag, sum[:])
 }
 
 func (s *Store) Devices(ctx context.Context, accountID string) ([]Device, error) {
