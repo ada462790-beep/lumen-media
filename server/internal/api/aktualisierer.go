@@ -100,11 +100,12 @@ func aktualisiererBereit() bool {
 	return updateImContainer() && aktualisiererAdresse() != "" && aktualisiererToken() != ""
 }
 
-// aktualisiererHalb: Eines von beiden fehlt oder die Adresse taugt nicht —
-// dann sagt die Seite, was fehlt, statt den Knopf still wegzulassen.
+// aktualisiererHalb: Das Token ist da, aber die Adresse fehlt oder taugt
+// nicht — dann sagt die Seite, was fehlt, statt den Knopf still
+// wegzulassen. Eine Adresse ohne Token zählt nicht: So steht es in der
+// Vorlage für alle, die den Aktualisierer (noch) nicht eingerichtet haben.
 func aktualisiererHalb() bool {
-	gesetzt := strings.TrimSpace(os.Getenv("LUMEN_AKTUALISIERER_URL")) != ""
-	return updateImContainer() && !aktualisiererBereit() && (gesetzt || aktualisiererToken() != "")
+	return updateImContainer() && !aktualisiererBereit() && aktualisiererToken() != ""
 }
 
 // aktualisiererClient geht ohne Proxy: Der Begleiter steht im selben

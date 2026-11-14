@@ -152,8 +152,9 @@ services:
       - LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080
       - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
 
-      # Zusätzlich verschlüsselt (HTTPS) auf 8920 hören — oben den Port
-      # einkommentieren. LUMEN_TLS_NAME ist der Name oder die Adresse, unter
+      # Zusätzlich verschlüsselt (HTTPS) auf 8920 hören (im Host-Netz ohne
+      # eigene Port-Zeile; die Firewall des NAS muss 8920 erlauben).
+      # LUMEN_TLS_NAME ist der Name oder die Adresse, unter
       # der Geräte das NAS erreichen; er kommt ins eigene Zertifikat.
       # - LUMEN_TLS=1
       # - LUMEN_TLS_NAME=192.168.1.20

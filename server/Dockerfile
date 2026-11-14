@@ -79,7 +79,10 @@ EXPOSE 8097
 # Der Port kommt aus LUMEN_ADDR (wer ihn ändert, soll keinen dauerhaft
 # „ungesunden" Container bekommen). Beim ersten Start nach einem Update
 # laufen Sicherung und Umbau der Datenbank — dafür die längere Anlaufzeit.
+# Hört Lumen nur auf einer festen Adresse (LUMEN_ADDR=192.168.1.20:8097,
+# etwa im Host-Netz), fragt die Prüfung dort; sonst 127.0.0.1.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s \
-  CMD wget -qO- "http://127.0.0.1:${LUMEN_ADDR##*:}/api/v1/health" >/dev/null || exit 1
+  CMD h="${LUMEN_ADDR%:*}"; case "$h" in ""|0.0.0.0|"[::]") h=127.0.0.1;; esac; \
+      wget -qO- "http://$h:${LUMEN_ADDR##*:}/api/v1/health" >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/local/bin/lumen-start"]

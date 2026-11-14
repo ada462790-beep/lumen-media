@@ -566,7 +566,8 @@ func vorDemNachruesten(db *sql.DB, path string) error {
 	}
 	if stand > SchemaStand {
 		return fmt.Errorf("die datenbank stammt von einer neueren Lumen-Fassung "+
-			"(Stand %d, diese Fassung kennt %d) — bitte die neuere Fassung starten", stand, SchemaStand)
+			"(Stand %d, diese Fassung kennt %d) — bitte die neuere Fassung starten; wer wirklich "+
+			"zurück will, findet den Stand vor dem letzten Update in %s.vor-umbau", stand, SchemaStand, filepath.Base(path))
 	}
 	if stand == SchemaStand {
 		return nil
@@ -590,6 +591,11 @@ func vorDemNachruesten(db *sql.DB, path string) error {
 	}
 	if err := os.Chmod(neu, 0o600); err != nil {
 		return fmt.Errorf("sicherung vor dem umbau: %w", err)
+	}
+	// Die Sicherung vom vorletzten Update bleibt als .vor-umbau.alt liegen —
+	// wer zwei Fassungen zurück will, findet sie dort.
+	if _, err := os.Stat(ziel); err == nil {
+		_ = os.Rename(ziel, ziel+".alt")
 	}
 	if err := os.Rename(neu, ziel); err != nil {
 		return fmt.Errorf("sicherung vor dem umbau: %w", err)

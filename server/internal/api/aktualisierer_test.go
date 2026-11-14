@@ -284,8 +284,10 @@ func TestAktualisiererOhneBegleiter(t *testing.T) {
 	_, raw := h.do("GET", "/api/v1/admin/update", "", h.tok)
 	var u map[string]any
 	_ = json.Unmarshal(raw, &u)
-	if u["aktualisierer"] != false || u["aktualisiererHalb"] != true || u["container"] != true {
-		t.Fatalf("halb eingerichtet: %s", raw)
+	// Adresse ohne Token ist der Stand der Vorlage für alle ohne
+	// Aktualisierer: kein Knopf, aber auch keine Warnung.
+	if u["aktualisierer"] != false || u["aktualisiererHalb"] != false || u["container"] != true {
+		t.Fatalf("ohne Token: %s", raw)
 	}
 	resp, raw := h.do("POST", "/api/v1/admin/update/container", "", h.tok)
 	if resp.StatusCode != http.StatusPreconditionFailed || !strings.Contains(string(raw), "aktualisierer_fehlt") {

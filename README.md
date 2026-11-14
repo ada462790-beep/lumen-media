@@ -306,9 +306,9 @@ meldet sich, sobald die neue Fassung läuft. Nachts im Zeitfenster
 aber nur, wenn niemand schaut.
 
 **Sicherheit:** Nur der Aktualisierer bekommt Zugriff auf Docker
-(`/var/run/docker.sock`), Lumen nicht. Er hört nur im internen Netz des
-Projekts, ohne Port nach aussen, und nimmt nur Anfragen mit dem geheimen
-Token an. Lumen kann ihm damit genau eines sagen: „aktualisiere jetzt".
+(`/var/run/docker.sock`), Lumen nicht. Er hört nur auf `127.0.0.1:8080`
+des NAS selbst (andere Geräte erreichen ihn nicht) und nimmt nur Anfragen
+mit dem geheimen Token an. Lumen kann ihm damit genau eines sagen: „aktualisiere jetzt".
 Er tauscht nur Container mit dem Label
 `com.centurylinklabs.watchtower.enable=true` — also nur Lumen. Das Token
 steht in keiner Antwort, keinem Protokoll und keiner Fehlermeldung; die
@@ -905,7 +905,11 @@ Datenbank legt Lumen `daten/lumen.db.vor-umbau` an. Eine ältere Fassung
 startet mit der umgebauten Datenbank absichtlich nicht (sie kennt den neuen
 Aufbau nicht). Zurück geht es so: `lumen.db.vor-umbau` nach
 `lumen.db.wiederherstellen` kopieren und die ältere Fassung starten — was
-seit dem Update dazukam (Fortschritt, Merkliste …), fehlt dann. Scheitert ein
+seit dem Update dazukam (Fortschritt, Merkliste …), fehlt dann. Im
+Container dabei in der Projektdatei statt `:latest` die alte Fassung
+eintragen (etwa `ghcr.io/ada462790-beep/lumen-media:v0.1.24`), sonst holt
+`pull_policy: always` gleich wieder die neueste. Den Stand vor dem
+vorletzten Update hebt Lumen als `lumen.db.vor-umbau.alt` auf. Scheitert ein
 Umbau mittendrin, steht daneben `lumen.db.umbau-offen`; beim nächsten Start
 macht Lumen beim erreichten Schritt weiter und lässt die Sicherung von vor
 dem Update unangetastet. Die Marke verschwindet, sobald der Umbau durch ist.

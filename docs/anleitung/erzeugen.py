@@ -394,7 +394,8 @@ grep -qs LUMEN_AKTUALISIERER_TOKEN /volume1/docker/lumen/.env || \\
         ["„Geht nur zu Hause im Heimnetz“, obwohl du zu Hause bist",
          "<i>Verwaltung › Dieses Gerät</i> zeigt, welche Adresse Lumen sieht und warum. Steht dort "
          "ein Gateway wie 172.17.0.1, fehlt <font face='%s'>network_mode: host</font> in der "
-         "Projektdatei (alte Fassung mit „ports:“) – wie oben in Schritt 4 umstellen." % MONO],
+         "Projektdatei (alte Fassung mit „ports:“): Projekt stoppen, den Block „ports:“ durch "
+         "„network_mode: host“ ersetzen wie in Schritt 4, dann Aktion › Erstellen." % MONO],
         ["Bibliothek bleibt leer", "Darf der Benutzer aus PUID/PGID den Ordner lesen? Ist der "
          "Ordner unter volumes freigegeben? Lumen sagt es beim „Durchsuchen“."],
         ["Keine Poster, Titel wie Dateinamen", "TMDb-Schlüssel fehlt oder ist der kurze statt des "
