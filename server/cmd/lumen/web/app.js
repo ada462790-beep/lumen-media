@@ -5693,6 +5693,44 @@ function viewLogs() {
     <div style="height:40px"></div></div>`);
 }
 
+// „In MKV umwandeln" unter Aufräumen › Ausgelassene Dateien: Knopf,
+// Fortschritt, Ergebnis je ISO-Datei bzw. DVD-/Blu-ray-Ordner. Der Stand
+// kommt vom Server (ein Auftrag zur Zeit) und wird nachgefragt, solange er
+// läuft — nur die betroffenen Zeilen werden neu gezeichnet.
+let scheibeStand = null, scheibeUhr = 0;
+function scheibeTat(pfad, st, schonFertig) {
+  const iso = /\.iso$/i.test(pfad);
+  const erklaerung = iso ? tr('Der Hauptfilm wird ohne Qualitätsverlust als MKV daneben gelegt. Die ISO bleibt.')
+    : tr('Der Hauptfilm wird ohne Qualitätsverlust als MKV in den Ordner gelegt. Der Ordner bleibt.');
+  const meinLauf = st && st.pfad === pfad;
+  if (meinLauf && st.laeuft) {
+    const p = Math.round((st.anteil || 0) * 100);
+    const was = st.schritt === 'auspacken' ? tr('Wird ausgepackt … {p} %', { p }) : st.schritt === 'umwandeln' ? tr('Wird umgewandelt … {p} %', { p }) : tr('Wird vorbereitet …');
+    const rest = st.restSek > 0 ? ' · ' + (st.restSek < 90 ? tr('noch knapp eine Minute') : tr('noch etwa {n} Min.', { n: Math.round(st.restSek / 60) })) : '';
+    return `<div class="auslass-fortschritt" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}" aria-label="${esc(tr('Umwandeln in MKV'))}"><span style="width:${p}%"></span></div>
+      <div class="auslass-tat-zeile"><span class="t-caption c-2">${esc(was + rest)}</span>
+      <button class="btn btn-pill" style="height:28px;font-size:.75rem" data-scheibe-abbrechen>${tr('Abbrechen')}</button></div>`;
+  }
+  if (meinLauf && st.ergebnis === 'fertig') return `<p class="t-caption auslass-ok">${tr('Fertig – der Film erscheint nach dem nächsten Durchlauf.')}</p>`;
+  if (schonFertig) return `<p class="t-caption c-2">${tr('Schon umgewandelt – die MKV liegt daneben.')}</p>`;
+  const meldung = meinLauf && st.ergebnis === 'fehler' ? `<p class="t-caption auslass-fehler">${esc(st.fehler || tr('Das Umwandeln ist gescheitert.'))}</p>`
+    : meinLauf && st.ergebnis === 'abgebrochen' ? `<p class="t-caption c-2">${tr('Abgebrochen.')}</p>` : '';
+  return `${meldung}<div class="auslass-tat-zeile"><button class="btn btn-pill btn-pill--fill" style="height:28px;font-size:.75rem" data-scheibe-umwandeln="${esc(pfad)}"${st?.laeuft ? ' disabled' : ''}>${tr('In MKV umwandeln')}</button>
+    <span class="t-caption c-2">${erklaerung}</span></div>`;
+}
+function scheibeMalen() {
+  for (const n of document.querySelectorAll('[data-scheibe-zeile]')) n.innerHTML = scheibeTat(n.dataset.scheibeZeile, scheibeStand, n.hasAttribute('data-scheibe-fertig'));
+}
+async function scheibeBeobachten() {
+  clearTimeout(scheibeUhr);
+  if (S.view !== 'cleanup' || !document.querySelector('[data-scheibe-zeile]')) return;
+  const vorher = scheibeStand?.laeuft;
+  try { scheibeStand = await api.call('/admin/cleanup/umwandeln'); } catch { return; }
+  scheibeMalen();
+  if (scheibeStand?.laeuft) scheibeUhr = setTimeout(scheibeBeobachten, 1500);
+  else if (vorher && scheibeStand?.ergebnis === 'fertig') toast(tr('Fertig – der Film erscheint nach dem nächsten Durchlauf.'));
+}
+
 function viewCleanup() {
   const d = S.data || {};
   const aufgeloest = (d.reihen || []).filter(r => r.hidden);
@@ -5797,6 +5835,7 @@ function viewCleanup() {
     defekt_leer: [tr('Leere Datei'), tr('Die Datei hat 0 Byte – vielleicht wird sie noch kopiert. Ist sie fertig, liest Lumen sie beim nächsten Durchlauf ein.')],
     defekt_gesperrt: [tr('Keine Leserechte'), tr('Lumen darf die Datei nicht öffnen (Rechte auf dem NAS prüfen). Sie wird nicht angeboten, bis sie lesbar ist.')],
     defekt_kaputt: [tr('Defekte Datei'), tr('FFmpeg erkennt darin kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten.')],
+    scheibe: [tr('DVD- und Blu-ray-Ordner'), tr('Davon spielt Lumen nur einen Titel direkt ab – ohne Menü, Kapitel und Sprachangaben. „In MKV umwandeln“ legt den Hauptfilm als eine Datei in den Ordner.')],
   };
   // Jede Zeile klappt auf und nennt die Dateien (oder Ordner): der Name
   // hervorgehoben, davor der Ordner, lang umbrechend. Vorher sah man nur
@@ -5805,6 +5844,12 @@ function viewCleanup() {
     const i = pfad.replace(/\/+$/, '').lastIndexOf('/');
     const ordner = i >= 0 ? pfad.slice(0, i + 1) : '', name = i >= 0 ? pfad.slice(i + 1) : pfad;
     return `<li class="auslass-pfad" title="${esc(pfad)}"><span class="auslass-ordner">${esc(ordner)}</span><span class="auslass-name">${esc(name)}</span></li>`;
+  };
+  // ISO-Dateien und DVD-/Blu-ray-Ordner: „In MKV umwandeln" (scheibeTat).
+  const scheibeZeile = (pfad, grund, fertig) => {
+    if (!voll() || !((grund === 'endung' && /\.iso$/i.test(pfad)) || grund === 'scheibe')) return '';
+    clearTimeout(scheibeUhr); scheibeUhr = setTimeout(scheibeBeobachten, 0); // einmal nach dem Zeichnen
+    return pfadZeile(pfad).replace('</li>', `<div class="auslass-tat" data-scheibe-zeile="${esc(pfad)}"${(fertig || []).includes(pfad) ? ' data-scheibe-fertig' : ''}>${scheibeTat(pfad, null, (fertig || []).includes(pfad))}</div></li>`);
   };
   const ausgelassen = (d.ausgelassen || []).map(b => b.liste.map(a => {
     const [titel, grund] = AUSLASS[a.grund] || [a.grund, ''];
@@ -5818,7 +5863,7 @@ function viewCleanup() {
       </summary>
       <div class="auslass-inhalt">
         ${grund ? `<p class="t-caption c-2 auslass-grund">${esc(grund)}</p>` : ''}
-        <ul class="auslass-pfade">${(a.pfade || []).map(pfadZeile).join('')}</ul>
+        <ul class="auslass-pfade">${(a.pfade || []).map(p => scheibeZeile(p, a.grund, d.umgewandelt) || pfadZeile(p)).join('')}</ul>
         ${a.anzahl > (a.pfade || []).length ? `<p class="t-caption c-2" style="margin:8px 0 0">${tr('… und {n} weitere (gezeigt werden die ersten {m}).', { n: a.anzahl - (a.pfade || []).length, m: (a.pfade || []).length })}</p>` : ''}
       </div>
     </details>`;
@@ -6696,6 +6741,16 @@ app.addEventListener('click', async e => {
     try { await api.call('/admin/cleanup/fehlende-entfernen', { method: 'POST', body: { fileIds: ids } }); toast(tr('Endgültig entfernt')); }
     catch (err) { toast(err.message); }
     return load();
+  }
+  if ((n = hit('data-scheibe-umwandeln'))) {
+    n.disabled = true;
+    try { const r = await api.call('/admin/cleanup/umwandeln', { method: 'POST', body: { pfad: n.dataset.scheibeUmwandeln } }); toast(r?.status || tr('Läuft …')); }
+    catch (err) { toast(err.message); n.disabled = false; return; }
+    return scheibeBeobachten();
+  }
+  if (hit('data-scheibe-abbrechen')) {
+    try { await api.call('/admin/cleanup/umwandeln', { method: 'DELETE' }); } catch (err) { toast(err.message); }
+    return scheibeBeobachten();
   }
   if ((n = hit('data-abtrennen'))) {
     try { await api.call(`/admin/files/${encodeURIComponent(n.dataset.abtrennen)}/abtrennen`, { method: 'POST' }); toast(tr('Als eigener Titel geführt')); }

@@ -55,6 +55,7 @@ Abbilds liegt darin unter `/usr/share/licenses/lumen/alpine-pakete.txt`):
 | x265-libs | 3.6-r0 | GPL-2.0-or-later | im Abbild (von ffmpeg gezogen) |
 | weitere Codec-Bibliotheken von ffmpeg (dav1d, aom, opus, vorbis, vpx, lame, libass …) | je nach Alpine | BSD, LGPL, MIT u. a. | im Abbild |
 | libssl3 / libcrypto3 (OpenSSL) | 3.5.x | Apache-2.0 | im Abbild |
+| 7zip (7-Zip, Programm `7zz`) | 24.09-r0 | LGPL-2.0-only laut Alpine (7-Zip selbst: LGPL-2.1-or-later, einzelne Teile BSD-3-Clause); Alpine baut ohne den RAR-Code (`DISABLE_RAR=1`), die unRAR-Einschränkung gilt darum nicht | im Abbild; Lumen ruft es als eigenes Programm auf (ISO-Abbilder auspacken für „In MKV umwandeln“), Quelltext über `tools/gpl_quellen.sh` |
 | busybox | 1.37.0-r20 | GPL-2.0-only | im Abbild (Basis) |
 | musl | 1.2.5-r13 | MIT | im Abbild (Basis) |
 | alpine-baselayout, apk-tools | 3.7.0-r0, 2.14.13-r0 | GPL-2.0-only | im Abbild (Basis) |

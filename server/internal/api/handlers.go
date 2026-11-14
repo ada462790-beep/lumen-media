@@ -1932,11 +1932,19 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// ISO-Dateien, deren Hauptfilm schon als MKV daneben liegt („In MKV
+	// umwandeln", scheiben.go) — die Liste zeigt dann „Schon umgewandelt".
+	umgewandelt := []string{}
+	for _, b := range ausgelassen {
+		for _, a := range b.Liste {
+			umgewandelt = append(umgewandelt, isoUmgewandelt(a.Pfade)...)
+		}
+	}
 	nFehlend, _ := s.st.FehlendZahl(r.Context())
 	nUnmatched, nPending := s.st.OffeneZuordnungenZahl(r.Context())
 	ok(w, map[string]any{"duplicates": dups, "missing": missing,
 		"unmatched": anreichern(unmatched), "ausstehend": anreichern(ausstehend),
-		"ausgelassen": ausgelassen,
+		"ausgelassen": ausgelassen, "umgewandelt": umgewandelt,
 		// Gesamtzahlen (die Listen sind begrenzt). Für einen
 		// beschränkten Mitverwalter zählen nur die eigenen.
 		"offen": map[string]int{"unmatched": zahlOder(darf, nUnmatched, len(unmatched)),
