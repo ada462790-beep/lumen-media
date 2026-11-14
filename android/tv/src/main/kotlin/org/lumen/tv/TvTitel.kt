@@ -554,7 +554,7 @@ private fun TvFolgenKarte(client: ApiClient, folge: Item, onGesehen: () -> Unit,
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("${folge.episodeNo ?: ""}  ${folge.title}" + if (folge.finished) "  ✓" else "",
+        Text(listOf(folge.folgenNummer, folge.title).filter { it.isNotEmpty() }.joinToString("  ") + if (folge.finished) "  ✓" else "",
              fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
              fontWeight = if (fokussiert) FontWeight.SemiBold else FontWeight.Normal)
         val zeile = Titelseite.folgenZeile(folge)

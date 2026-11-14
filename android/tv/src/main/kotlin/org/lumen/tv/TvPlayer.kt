@@ -95,6 +95,7 @@ internal fun TvPlayer(
     client: ApiClient,
     start: TvAbspielen,
     prefs: Map<String, String>,
+    verwalter: Boolean = false,
     onPref: (String, String) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -109,6 +110,12 @@ internal fun TvPlayer(
     // ein Zähler, der für jeden Teil einen frischen Player erzwingt.
     var teilAb by remember { mutableStateOf<Double?>(null) }
     var teilLauf by remember { mutableStateOf(0) }
+    // Unter „Qualität" mitten im Film eine andere Fassung gewählt: für
+    // welchen Titel welche Datei, und Ton und Untertitel der vorigen, um
+    // sie nach Sprache zu übernehmen. Ein frischer Player an derselben Stelle.
+    var fassungFuer by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var uebernahme by remember { mutableStateOf<Pair<List<Track>, Spuren.Wahl>?>(null) }
+    var startHinweis by remember { mutableStateOf<String?>(null) }
     // Eines pro Wiedergabe: es merkt sich, welche Titel eine Datei haben.
     val folge = remember { Abspielfolge(client) }
     val scope = rememberCoroutineScope()
@@ -118,6 +125,8 @@ internal fun TvPlayer(
         naechstes = null
         startAb = null
         teilAb = null
+        uebernahme = null
+        startHinweis = null
         if (n.index >= 0) index = n.index
         aktuell = n.titel
     }
@@ -150,10 +159,13 @@ internal fun TvPlayer(
         // Ein neuer Titel bekommt einen ganz neuen Player samt Zustand.
         key(aktuell.id, teilLauf) {
             TvWiedergabe(
-                client, aktuell, prefs,
+                client, aktuell, prefs, verwalter,
                 abSekunden = teilAb ?: if (aktuell.id == start.titel.id) startAb else null,
                 // Die gewählte Fassung gilt für ihren Titel, über alle Teile.
-                dateiId = if (aktuell.id == start.titel.id) start.dateiId else null,
+                dateiId = fassungFuer?.takeIf { it.first == aktuell.id }?.second
+                    ?: if (aktuell.id == start.titel.id) start.dateiId else null,
+                uebernahme = uebernahme,
+                startHinweis = startHinweis,
                 // Oben im Bild: aus welcher Liste und der wievielte Titel.
                 unterzeile = if (start.liste.isNotEmpty() && index >= 0)
                     tx(R.string.liste_platz, start.listenName ?: tx(R.string.liste), index + 1, start.liste.size)
@@ -163,18 +175,27 @@ internal fun TvPlayer(
                 onAbspann = { suchen(it) },
                 onEnded = { beendet -> if (naechstes == null) suchen(beendet) },
                 // Noch ein Teil übrig: gleich weiter, ohne Countdown.
-                onNaechsterTeil = { ab -> teilAb = ab; teilLauf++ },
+                onNaechsterTeil = { ab -> teilAb = ab; uebernahme = null; startHinweis = null; teilLauf++ },
+                // Eine andere Fassung mitten im Film: an derselben Stelle weiter,
+                // mit derselben Ton- und Untertitelsprache — wie im Browser.
+                onFassung = { dateiId, ab, spuren, alteWahl, hinweis ->
+                    fassungFuer = aktuell.id to dateiId
+                    uebernahme = spuren to alteWahl
+                    startHinweis = hinweis
+                    teilAb = ab
+                    teilLauf++
+                },
                 onNaechstes = { naechstes?.let { weiter(it) } },
                 onAbbrechen = { abgelehntFuer = aktuell.id; naechstes = null },
                 // „Nächste Folge" oder eine Folge aus dem Folgen-Feld.
-                onWechsel = { neu -> naechstes = null; startAb = null; teilAb = null; aktuell = neu },
+                onWechsel = { neu -> naechstes = null; startAb = null; teilAb = null; uebernahme = null; startHinweis = null; aktuell = neu },
                 onClose = onClose)
         }
     }
 }
 
 /** Welches Feld offen ist. */
-private enum class TvFeld { TON, UNTERTITEL, FOLGEN }
+private enum class TvFeld { TON, UNTERTITEL, FOLGEN, QUALITAET }
 
 /**
  * Die Bildfläche von Media3 mit einem Griff fürs Steuerkreuz: „hoch" bei
@@ -197,14 +218,18 @@ private fun TvWiedergabe(
     client: ApiClient,
     item: Item,
     prefs: Map<String, String>,
+    verwalter: Boolean,
     abSekunden: Double?,
     dateiId: String?,
+    uebernahme: Pair<List<Track>, Spuren.Wahl>?,
+    startHinweis: String?,
     unterzeile: String?,
     naechstes: AmStueck.Naechstes?,
     onPref: (String, String) -> Unit,
     onAbspann: (Item) -> Unit,
     onEnded: (Item) -> Unit,
     onNaechsterTeil: (Double) -> Unit,
+    onFassung: (String, Double, List<Track>, Spuren.Wahl, String) -> Unit,
     onNaechstes: () -> Unit,
     onAbbrechen: () -> Unit,
     onWechsel: (Item) -> Unit,
@@ -221,6 +246,12 @@ private fun TvWiedergabe(
     // Vorschaubilder beim Spulen, und wo gerade gespult wird.
     var trickplay by remember { mutableStateOf<Trickplay?>(null) }
     var spultBei by remember { mutableStateOf<Long?>(null) }
+    // „Qualität": die Stufe für dieses Gerät (Original, 1080p · 8 Mbit/s …,
+    // Auto), die Fassungen des Titels, welche läuft und welche Standard ist.
+    var stufe by remember { mutableStateOf(Qualitaetswahl.lesen(context)) }
+    var fassungen by remember { mutableStateOf<List<MediaFile>>(emptyList()) }
+    var fassungId by remember { mutableStateOf<String?>(null) }
+    var standardId by remember { mutableStateOf<String?>(null) }
     var fehler by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<ItemDetail?>(null) }
     var datei by remember { mutableStateOf<MediaFile?>(null) }
@@ -288,10 +319,13 @@ private fun TvWiedergabe(
     // Datei noch nicht da war. Gelesen wird darum immer der aktuelle Stand.
     fun spuren(): List<Track> = datei?.tracks ?: emptyList()
 
+    /** Das Geräteprofil mit den Grenzen der gewählten Stufe — für Plan und Strom. */
+    fun profil(): DeviceProfile = Qualitaet.profil(stufe, datei?.height)
+
     fun mediaItem(): MediaItem? {
         val d = datei ?: return null
         val p = plan ?: return null
-        val adresse = client.streamUrl(d, p, wahl.ton)
+        val adresse = client.streamUrl(d, p, wahl.ton, profil())
         // Nur die fertigen Untertitelspuren, siehe [utBereit].
         val untertitel = Spuren.text(d.tracks).filter { it.index in utBereit }.map { t ->
             MediaItem.SubtitleConfiguration.Builder(
@@ -454,19 +488,31 @@ private fun TvWiedergabe(
             val f = alle.dateien[stelle.teil]
             // Mit dem Plan ein frischer Medienschlüssel: der Film läuft
             // Stunden, und der Abspieler lädt mit derselben Adresse nach.
-            val pl = withContext(Dispatchers.IO) { client.wiedergabeVorbereiten(f.id) }
+            val pl = withContext(Dispatchers.IO) { client.wiedergabeVorbereiten(f.id, Qualitaet.profil(stufe, f.height)) }
             detail = d
             datei = f
             plan = pl
             teile = alle
             teil = stelle.teil
             vorher = stelle.vorher
+            fassungen = Fassungen.liste(d.files)
+            fassungId = erste.id
+            standardId = fassungen.firstOrNull()?.id
             // Der Vorspann liegt im ersten Teil; in Teil 2 wäre die Marke falsch.
             // Es gelten die Marken der Fassung, die wirklich läuft (jeDatei).
             val marken = d.marken(erste.id)
             intro = if (stelle.teil == 0) marken.intro else null
             abspannMs = marken.creditsMs
             wahl = Spuren.vorbelegen(f.tracks, prefs)
+            // Nach einem Fassungswechsel: Ton und Untertitel nach Sprache übernehmen.
+            uebernahme?.let { (alteSpuren, alteWahl) -> wahl = Spuren.uebernehmen(alteSpuren, alteWahl, f.tracks, wahl) }
+            startHinweis?.let { h ->
+                scope.launch {
+                    kurzHinweis = h
+                    delay(2500)
+                    if (kurzHinweis == h) kurzHinweis = null
+                }
+            }
             // Ist die vorgewählte Untertitelspur schon fertig, kommt sie
             // gleich mit; sonst startet der Film ohne, und sie folgt, sobald
             // sie da ist. Kurz gefragt: der Server wartet nur eine Sekunde.
@@ -495,7 +541,7 @@ private fun TvWiedergabe(
                             val dateiJetzt = datei
                             scope.launch {
                                 val neuerPlan = dateiJetzt?.let { d ->
-                                    withContext(Dispatchers.IO) { oderNull { client.wiedergabeVorbereiten(d.id) } }
+                                    withContext(Dispatchers.IO) { oderNull { client.wiedergabeVorbereiten(d.id, profil()) } }
                                 }
                                 if (neuerPlan != null) { plan = neuerPlan; laden(p, stelle) }
                                 else fehler = tx(R.string.der_strom_ist_abgerissen_x, error.errorCodeName)
@@ -527,7 +573,7 @@ private fun TvWiedergabe(
                             scope.launch {
                                 val grund = dateiJetzt?.let { d ->
                                     withContext(Dispatchers.IO) {
-                                        try { client.plan(d.id); null } catch (e: LumenException) { e.message }
+                                        try { client.plan(d.id, profil()); null } catch (e: LumenException) { e.message }
                                     }
                                 }
                                 fehler = grund ?: tx(R.string.der_strom_ist_abgerissen_x, error.errorCodeName)
@@ -625,6 +671,69 @@ private fun TvWiedergabe(
         }
     }
 
+    /**
+     * Eine andere Stufe: dieselbe Datei an derselben Stelle neu holen, mit
+     * den neuen Grenzen. Ton und Untertitel bleiben, wie sie sind.
+     */
+    fun qualitaetWaehlen(id: String) {
+        val vorher = profil()
+        stufe = id
+        Qualitaetswahl.merken(context, id)
+        zumBild()
+        val d = datei ?: return
+        val neu = profil()
+        if (neu == vorher) return
+        scope.launch {
+            try {
+                val neuerPlan = withContext(Dispatchers.IO) { client.wiedergabeVorbereiten(d.id, neu) }
+                plan = neuerPlan
+                player?.let { p ->
+                    val spielte = p.playWhenReady
+                    laden(p, p.currentPosition)
+                    p.playWhenReady = spielte
+                }
+                kurzHinweis = tx(R.string.pl_qualitaet_x, Qualitaet.name(Qualitaet.wirksam(stufe, d.height)))
+            } catch (e: LumenException) {
+                kurzHinweis = e.message
+            }
+            delay(2500)
+            kurzHinweis = null
+        }
+    }
+
+    /**
+     * Eine andere Fassung (Datei) desselben Titels: an derselben Stelle
+     * weiter, mit derselben Ton- und Untertitelsprache. Der Fortschritt
+     * gehört zum Titel, nicht zur Datei — er bleibt.
+     */
+    fun fassungWechseln(f: MediaFile) {
+        if (f.id == fassungId) { zumBild(); return }
+        offen = null
+        val p = player ?: return
+        val stelle = gesamtStelle(p.currentPosition / 1000.0)
+        val i = fassungen.indexOfFirst { it.id == f.id }
+        val name = Fassungen.namen(fassungen).getOrNull(i) ?: ""
+        standSichern()
+        onFassung(f.id, stelle, spuren(), wahl, tx(R.string.pl_fassung_x, name))
+    }
+
+    /** Verwaltung: die laufende Fassung für alle zum Standard machen. */
+    fun alsStandard() {
+        val id = fassungId ?: return
+        zumBild()
+        scope.launch {
+            kurzHinweis = try {
+                withContext(Dispatchers.IO) { client.fassungAlsStandard(item.id, id) }
+                standardId = id
+                tx(R.string.pl_gilt_fuer_alle)
+            } catch (e: LumenException) {
+                e.message
+            }
+            delay(2500)
+            kurzHinweis = null
+        }
+    }
+
     /** Den Player freigeben und eine laufende Umwandlung gleich beenden. */
     fun freigeben() {
         player?.release()
@@ -702,7 +811,8 @@ private fun TvWiedergabe(
 
     val zeigeTon = Spuren.ton(spuren()).size > 1
     val zeigeText = Spuren.text(spuren()).isNotEmpty()
-    val etwasZuWaehlen = zeigeTon || zeigeText || istFolge
+    // „Qualität" (Zahnrad) gibt es immer — darum ist immer etwas zu wählen.
+    val etwasZuWaehlen = true
     // Die Bildfläche entsteht einmal; ihr Griff fürs Steuerkreuz liest
     // darum den jeweils aktuellen Stand, nicht den vom ersten Aufbau.
     val hochErlaubt by rememberUpdatedState(etwasZuWaehlen && naechstes == null)
@@ -795,8 +905,7 @@ private fun TvWiedergabe(
                      overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 760.dp))
                 // Bei einem Film in Teilen: „Teil 2 von 3".
                 val unten = unterzeile ?: teile?.beschriftung(teil) ?: if (istFolge)
-                    listOfNotNull(item.seasonNo?.let { tx(R.string.staffel_x, it) }, item.episodeNo?.let { tx(R.string.folge_x, it) })
-                        .joinToString(", ") else ""
+                    Titelseite.folgenKennung(item) else ""
                 if (unten.isNotEmpty()) Text(unten, fontSize = 17.sp, color = Tv.label2)
             }
         }
@@ -822,7 +931,8 @@ private fun TvWiedergabe(
                 val erster = when {
                     istFolge -> "naechste"
                     zeigeText -> "untertitel"
-                    else -> "ton"
+                    zeigeTon -> "ton"
+                    else -> "qualitaet"
                 }
                 fun fokus(name: String) = if (name == erster) Modifier.focusRequester(leisteFokus) else Modifier
                 if (istFolge) {
@@ -846,6 +956,10 @@ private fun TvWiedergabe(
                         onFocus = { leisteFokussiert = it },
                         onClick = { offen = TvFeld.TON })
                 }
+                TvSpurKnopf(TvFeld.QUALITAET,
+                    modifier = fokus("qualitaet"),
+                    onFocus = { leisteFokussiert = it },
+                    onClick = { offen = TvFeld.QUALITAET })
             }
         }
 
@@ -902,6 +1016,34 @@ private fun TvWiedergabe(
     offen?.let { feld ->
         val abschnitte = when (feld) {
             TvFeld.FOLGEN -> emptyList()
+            // Wie im Browser (qualitaetPanel): oben die Fassungen, darunter
+            // die Stufen fürs Umwandeln, für Verwalter „Diese Fassung als Standard".
+            TvFeld.QUALITAET -> buildList {
+                val standard = standardId ?: fassungen.firstOrNull()?.id
+                if (fassungen.size > 1) {
+                    val namen = Fassungen.namen(fassungen)
+                    add(TvSpurabschnitt(tx(R.string.pl_fassung), fassungen.mapIndexed { i, f ->
+                        TvSpureintrag(if (f.id == standard) namen[i] + " · " + tx(R.string.pl_standard) else namen[i],
+                            gewaehlt = f.id == fassungId, onClick = { fassungWechseln(f) })
+                    }))
+                }
+                val quelle = datei?.height
+                val jetzt = Qualitaet.wirksam(stufe, quelle)
+                add(TvSpurabschnitt(tx(R.string.pl_qualitaet), buildList {
+                    val herkunft = Fassungen.aufloesung(quelle)
+                    add(TvSpureintrag(Qualitaet.name(Qualitaet.ORIGINAL) + (herkunft?.let { " · $it" } ?: ""),
+                        gewaehlt = jetzt == Qualitaet.ORIGINAL, onClick = { qualitaetWaehlen(Qualitaet.ORIGINAL) }))
+                    Qualitaet.stufenFuer(quelle).forEach { st ->
+                        add(TvSpureintrag(Qualitaet.name(st.id), gewaehlt = jetzt == st.id, onClick = { qualitaetWaehlen(st.id) }))
+                    }
+                    add(TvSpureintrag(Qualitaet.name(Qualitaet.AUTO), gewaehlt = jetzt == Qualitaet.AUTO,
+                        onClick = { qualitaetWaehlen(Qualitaet.AUTO) }))
+                }))
+                if (verwalter && fassungen.size > 1 && fassungId != standard) {
+                    add(TvSpurabschnitt(tx(R.string.pl_fuer_alle), listOf(
+                        TvSpureintrag(tx(R.string.pl_als_standard), gewaehlt = false, onClick = { alsStandard() }))))
+                }
+            }
             TvFeld.TON -> listOf(TvSpurabschnitt(tx(R.string.tonspur), Spuren.ton(spuren()).mapIndexed { i, t ->
                 TvSpureintrag(t.anzeigename,
                     gewaehlt = wahl.ton == t.index || (wahl.ton < 0 && i == 0),
@@ -1021,7 +1163,29 @@ private fun TvSpurKnopf(
             TvFeld.UNTERTITEL -> TvSprechblase(glyph, Modifier.size(30.dp))
             TvFeld.TON -> TvTonBalken(glyph, Modifier.size(30.dp))
             TvFeld.FOLGEN -> TvFolgenStriche(glyph, Modifier.size(30.dp))
+            TvFeld.QUALITAET -> TvZahnrad(glyph, Modifier.size(30.dp))
         }
+    }
+}
+
+/** Das Symbol für „Qualität": ein Zahnrad mit acht Zähnen — wie im Browser. */
+@Composable
+private fun TvZahnrad(farbe: Color, modifier: Modifier) {
+    Canvas(modifier) {
+        val s = size.minDimension
+        val mitte = Offset(size.width / 2, size.height / 2)
+        val strich = s * 0.1f
+        for (i in 0 until 8) {
+            val winkel = Math.toRadians(i * 45.0)
+            val innen = s * 0.3f
+            val aussen = s * 0.46f
+            drawLine(farbe,
+                Offset(mitte.x + innen * kotlin.math.cos(winkel).toFloat(), mitte.y + innen * kotlin.math.sin(winkel).toFloat()),
+                Offset(mitte.x + aussen * kotlin.math.cos(winkel).toFloat(), mitte.y + aussen * kotlin.math.sin(winkel).toFloat()),
+                strich * 1.4f, StrokeCap.Round)
+        }
+        drawCircle(farbe, radius = s * 0.3f, center = mitte, style = Stroke(width = strich))
+        drawCircle(farbe, radius = s * 0.1f, center = mitte, style = Stroke(width = strich * 0.8f))
     }
 }
 
@@ -1194,7 +1358,7 @@ private fun TvFolgenZeile(f: Item, aktuell: Boolean, bild: String?, modifier: Mo
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${f.episodeNo ?: ""}", fontSize = 18.sp, color = hinten, modifier = Modifier.width(30.dp))
+                Text(f.folgenNummer, fontSize = 18.sp, color = hinten, modifier = Modifier.width(30.dp))
                 Text(f.title, fontSize = 19.sp, color = vorn, maxLines = 1, overflow = TextOverflow.Ellipsis,
                      fontWeight = if (aktuell) FontWeight.SemiBold else FontWeight.Normal,
                      modifier = Modifier.weight(1f, fill = false))

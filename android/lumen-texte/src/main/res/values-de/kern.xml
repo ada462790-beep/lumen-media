@@ -149,4 +149,15 @@
         <item quantity="one">%1$d Reihe</item>
         <item quantity="other">%1$d Reihen</item>
     </plurals>
+    <string name="kern_reihe_nfo">aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)</string>
+    <string name="kern_reihe_emby">aus Emby oder Jellyfin übernommen</string>
+    <string name="kern_tmdb_wertung">TMDb %1$s %%</string>
+    <string name="kern_wunsch_schon_dabei">Schon gewünscht – du bist jetzt mit dabei</string>
+    <string name="kern_wunsch_schon_eigen">Das hast du dir schon gewünscht</string>
+    <string name="kern_wunsch_geschickt">Wunsch an den Besitzer geschickt</string>
+    <string name="kern_qualitaet_original">Original</string>
+    <string name="kern_qualitaet_auto">Auto</string>
+    <string name="kern_mbit_s">%1$s Mbit/s</string>
+    <string name="kern_fassung_n">Fassung %1$s</string>
+    <string name="kern_special">Special</string>
 </resources>

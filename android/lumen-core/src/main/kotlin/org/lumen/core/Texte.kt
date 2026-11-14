@@ -99,7 +99,10 @@ enum class Tx(val vorgabe: String) {
     N_GESEHEN("%1\$s gesehen"),
     REIHE_TMDB("zusammengestellt nach TMDb"),
     REIHE_LUMEN("von Lumen am Titel erkannt"),
+    REIHE_NFO("aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)"),
+    REIHE_EMBY("aus Emby oder Jellyfin übernommen"),
     TOMATEN("%1\$s %% Rotten Tomatoes"),
+    TMDB_WERTUNG("TMDb %1\$s %%"),
     DATEI_FEHLT("fehlt"),
 
     // Geräte und Wiedergabe
@@ -176,6 +179,14 @@ enum class Tx(val vorgabe: String) {
     BZ_OHNE_GRENZE("Heute ohne Grenze"),
     BZ_GEBRAUCHT("%1\$d von %2\$d Min. gebraucht"),
     BZ_FENSTER("heute %1\$s bis %2\$s"),
+    WUNSCH_SCHON_DABEI("Schon gewünscht – du bist jetzt mit dabei"),
+    WUNSCH_SCHON_EIGEN("Das hast du dir schon gewünscht"),
+    WUNSCH_GESCHICKT("Wunsch an den Besitzer geschickt"),
+    QUALITAET_ORIGINAL("Original"),
+    QUALITAET_AUTO("Auto"),
+    MBIT_S("%1\$s Mbit/s"),
+    FASSUNG_N("Fassung %1\$s"),
+    SPECIAL("Special"),
 }
 
 /** Sätze mit Mehrzahl: [eins] für genau eins, [mehr] sonst — wie `<plurals>` in Android. */

@@ -22,6 +22,8 @@ struct TVSucheView: View {
     @State private var playing: Abspielstart?
     @State private var gewuenscht: String?
     @State private var wunschFehler: String?
+    /// Die Rückmeldung des Servers: neu, schon eigen oder angeschlossen.
+    @State private var wunschMeldung: String?
 
     private var sauber: String { eingabe.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -138,8 +140,8 @@ struct TVSucheView: View {
             Text("Nichts gefunden für „\(sauber)“.").font(.title2)
             Text("Du kannst dir den Titel wünschen — der Besitzer sieht den Wunsch und sonst nichts.")
                 .font(.title3).foregroundStyle(Theme.label2)
-            if gewuenscht == sauber {
-                Label("Wunsch an den Besitzer geschickt", systemImage: "checkmark.circle.fill")
+            if gewuenscht == sauber, let wunschMeldung {
+                Label(wunschMeldung, systemImage: "checkmark.circle.fill")
                     .font(.title3.weight(.medium)).foregroundStyle(Theme.good)
             } else {
                 Button("„\(sauber)“ wünschen") {
@@ -170,7 +172,8 @@ struct TVSucheView: View {
     private func wuenschen(_ titel: String) async {
         wunschFehler = nil
         do {
-            _ = try await session.client.wish(title: titel)
+            let w = try await session.client.wish(title: titel)
+            wunschMeldung = w.rueckmeldung
             gewuenscht = titel
         } catch {
             wunschFehler = Session.text(error)

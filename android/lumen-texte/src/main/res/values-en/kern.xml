@@ -149,4 +149,15 @@
         <item quantity="one">%1$d franchise</item>
         <item quantity="other">%1$d franchises</item>
     </plurals>
+    <string name="kern_reihe_nfo">from the NFO files (collection from Emby, Jellyfin or Kodi)</string>
+    <string name="kern_reihe_emby">imported from Emby or Jellyfin</string>
+    <string name="kern_tmdb_wertung">TMDb %1$s%%</string>
+    <string name="kern_wunsch_schon_dabei">Already wished for – you’ve been added</string>
+    <string name="kern_wunsch_schon_eigen">You already requested this</string>
+    <string name="kern_wunsch_geschickt">Request sent to the owner</string>
+    <string name="kern_qualitaet_original">Original</string>
+    <string name="kern_qualitaet_auto">Auto</string>
+    <string name="kern_mbit_s">%1$s Mbps</string>
+    <string name="kern_fassung_n">Version %1$s</string>
+    <string name="kern_special">Special</string>
 </resources>

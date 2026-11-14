@@ -798,7 +798,7 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
     val spielt = laeuft
     if (spielt != null) {
         key(spielt) {
-            TvPlayer(client, spielt, prefs, onPref = { k, w -> prefSetzen(k, w) }) {
+            TvPlayer(client, spielt, prefs, verwalter = me.account.isAdmin, onPref = { k, w -> prefSetzen(k, w) }) {
                 laeuft = null
                 // Zurück auf eine Titelseite, die neu lädt — der Stand hat sich geändert.
                 titelStand++

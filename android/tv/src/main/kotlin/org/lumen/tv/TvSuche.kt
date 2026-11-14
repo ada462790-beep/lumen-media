@@ -26,6 +26,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +62,7 @@ internal fun TvSuche(
     var sucht by remember { mutableStateOf(false) }
     var fehler by remember { mutableStateOf<String?>(null) }
     var gewuenscht by remember { mutableStateOf<String?>(null) }
+    var rueckmeldung by remember { mutableStateOf<String?>(null) }
     val feld = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
 
@@ -180,13 +182,16 @@ internal fun TvSuche(
                         Text(tx(R.string.du_kannst_dir_den_titel),
                              color = Tv.label2, fontSize = 18.sp)
                         Spacer(Modifier.height(20.dp))
-                        if (gewuenscht == q) {
-                            Text(tx(R.string.wunsch_an_den_besitzer_geschickt), color = Tv.good, fontSize = 18.sp)
+                        val meldung = rueckmeldung
+                        if (gewuenscht == q && meldung != null) {
+                            // Neu, schon eigen oder angeschlossen — wie im Browser.
+                            Text(meldung, color = Tv.good, fontSize = 18.sp)
                         } else {
                             TvButton(tx(R.string.x_wuenschen, q)) {
                                 scope.launch {
                                     try {
-                                        withContext(Dispatchers.IO) { client.wish(q) }
+                                        val w = withContext(Dispatchers.IO) { client.wish(q) }
+                                        rueckmeldung = w.rueckmeldung
                                         gewuenscht = q
                                     } catch (ex: LumenException) {
                                         fehler = ex.message
@@ -215,6 +220,8 @@ internal fun TvWuensche(client: ApiClient) {
     var hinweis by remember { mutableStateOf<String?>(null) }
     var fehler by remember { mutableStateOf<String?>(null) }
     var stand by remember { mutableStateOf(0) }
+    // Löschen oder austreten: erst nach einer Rückfrage (Fokus auf „Abbrechen").
+    var weg by remember { mutableStateOf<Wish?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(stand) {
@@ -230,9 +237,9 @@ internal fun TvWuensche(client: ApiClient) {
         if (t.isEmpty()) return
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { client.wish(t) }
+                val w = withContext(Dispatchers.IO) { client.wish(t) }
                 eingabe = ""
-                hinweis = tx(R.string.wunsch_geschickt)
+                hinweis = w.rueckmeldung
                 fehler = null
                 stand++
             } catch (e: LumenException) {
@@ -268,21 +275,47 @@ internal fun TvWuensche(client: ApiClient) {
         when {
             liste == null -> item { TvLadeZeile() }
             liste.isEmpty() -> item { Text(tx(R.string.noch_keine_wuensche), color = Tv.label2, fontSize = 20.sp) }
-            else -> items(liste, key = { it.id }) { w -> TvWunschZeile(w) }
+            else -> items(liste, key = { it.id }) { w -> TvWunschZeile(w) { weg = w } }
+        }
+    }
+
+    weg?.let { w ->
+        val austreten = w.wegArt == WunschWeg.AUSTRETEN
+        TvFrage(
+            titel = tx(if (austreten) R.string.nicht_mehr_wuenschen_frage else R.string.wunsch_loeschen_frage),
+            text = if (austreten) tx(R.string.wunsch_austreten_text, w.title) else tx(R.string.wunsch_loeschen_text, w.title),
+            ja = tx(if (austreten) R.string.nicht_mehr_wuenschen else R.string.loeschen),
+            onNein = { weg = null },
+        ) {
+            weg = null
+            hinweis = null
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) { client.wunschLoeschen(w.id) }
+                    fehler = null
+                } catch (e: LumenException) {
+                    // 409 nicht_offen: Der Satz des Servers sagt, warum.
+                    fehler = e.message
+                }
+                stand++
+            }
         }
     }
 }
 
 /** Ein Wunsch: Titel, von wem, rechts der Stand. Fokussierbar, damit sich die Liste blättern lässt. */
 @Composable
-private fun TvWunschZeile(w: Wish) {
+private fun TvWunschZeile(w: Wish, onWeg: () -> Unit) {
     var fokussiert by remember { mutableStateOf(false) }
+    val art = w.wegArt
     Row(
         Modifier
             .widthIn(max = 980.dp)
             .fillMaxWidth()
             .onFocusChanged { fokussiert = it.isFocused }
-            .focusable()
+            // Mit OK: den eigenen offenen Wunsch löschen oder einen
+            // angeschlossenen verlassen. Sonst nur fokussierbar zum Blättern.
+            .then(if (art != null) Modifier.clickable(role = Role.Button, onClick = onWeg) else Modifier.focusable())
             .clip(RoundedCornerShape(14.dp))
             .background(if (fokussiert) Color(0x33FFFFFF) else Color.Transparent)
             .padding(horizontal = 20.dp, vertical = 14.dp),
@@ -297,6 +330,10 @@ private fun TvWunschZeile(w: Wish) {
             "done" -> Color(0x2930D158) to Color(0xFF30D158)
             "declined" -> Color(0x24FF453A) to Color(0xFFFF6961)
             else -> Color(0x3D787880) to Tv.label2
+        }
+        if (fokussiert && art != null) {
+            Text(tx(if (art == WunschWeg.AUSTRETEN) R.string.nicht_mehr_wuenschen else R.string.loeschen),
+                 color = Tv.label2, fontSize = 15.sp, modifier = Modifier.padding(end = 14.dp))
         }
         Text(w.stateLabel, color = schrift, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
              modifier = Modifier.clip(CircleShape).background(grund)

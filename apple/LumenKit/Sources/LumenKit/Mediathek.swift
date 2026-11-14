@@ -459,8 +459,17 @@ extension Reihe {
     public var unterzeile: String {
         var teile = [anzahlText]
         if gesehenAnzahl > 0 { teile.append(String(localized: "\(gesehenAnzahl) gesehen", bundle: .lumenKit, locale: .lumen)) }
-        teile.append(source == "tmdb" ? String(localized: "zusammengestellt nach TMDb", bundle: .lumenKit, locale: .lumen)
-                                      : String(localized: "von Lumen am Titel erkannt", bundle: .lumenKit, locale: .lumen))
+        // Woher die Reihe stammt — wie im Browser (app.js, reiheHerkunft).
+        switch source {
+        case "tmdb":
+            teile.append(String(localized: "zusammengestellt nach TMDb", bundle: .lumenKit, locale: .lumen))
+        case "nfo":
+            teile.append(String(localized: "aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)", bundle: .lumenKit, locale: .lumen))
+        case "emby":
+            teile.append(String(localized: "aus Emby oder Jellyfin übernommen", bundle: .lumenKit, locale: .lumen))
+        default:
+            teile.append(String(localized: "von Lumen am Titel erkannt", bundle: .lumenKit, locale: .lumen))
+        }
         return teile.joined(separator: " · ")
     }
 }

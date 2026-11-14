@@ -64,6 +64,9 @@ fun main(args: Array<String>) {
     profilbildTests()
     neuigkeitenTests()
     titelseiteTests()
+    wunschTests()
+    qualitaetTests()
+    specialTests()
     fassungenTests()
     rasterTests()
     einladungTests()
@@ -1159,6 +1162,14 @@ private fun neuigkeitenTests() {
     pruefe("Erster ist neu", n.istNeu(n.eintraege[0]))
     pruefe("Zweiter ist gelesen", !n.istNeu(n.eintraege[1]))
     gleich("Ohne Titel-Kennung null", null, n.eintraege[1].itemId)
+    pruefe("ohne Liste nicht klappbar", !n.eintraege[1].klappbar)
+    val mitListe = Neuigkeiten.from(Json.parse("""{"eintraege":[{"art":"neu","titel":"5 neue Titel","text":"x",
+        "at":"2026-10-20T08:00:00Z","anzahl":5,"titelListe":[{"id":"a","title":"A","kind":"movie","poster":"/p/a"},
+        {"id":"b","title":"B","kind":"series"}]}],"ungelesen":0}""")).eintraege[0]
+    pruefe("mit Liste klappbar", mitListe.klappbar)
+    gleich("Liste gelesen", listOf("a", "b"), mitListe.titelListe.map { it.id })
+    gleich("weitere", 3, mitListe.weitere)
+    pruefe("einzelner Titel klappt nicht", !mitListe.copy(itemId = "x").klappbar)
     val nie = Neuigkeiten.from(Json.parse("""{"eintraege":[{"art":"neu","titel":"T","text":"x","at":"2026-10-20T08:00:00Z"}],
         "ungelesen":1,"gelesenBis":"0001-01-01T00:00:00Z"}"""))
     pruefe("Nie gelesen: alles neu", nie.istNeu(nie.eintraege[0]))
@@ -1200,6 +1211,21 @@ private fun fassungenTests() {
     gleich("ohne Wahl: die erste", "mkv", Fassungen.datei(listOf(mkv, avi), null)?.id)
     gleich("Wahl fehlt: die erste vorhandene", "mkv", Fassungen.datei(listOf(weg, mkv), "weg")?.id)
 
+    // Defekte Dateien (leer, gesperrt, kaputt) sind keine Fassung, kein
+    // Standard und nicht „playable" — auch wenn ein älterer Server sie vorn schickt.
+    val kaputt = datei("""{"id":"kaputt","partNo":1,"height":2160,"container":"mkv","defekt":"kaputt"}""")
+    gleich("defekt gelesen", "kaputt", kaputt.defekt)
+    gleich("ohne defekt: null", null, mkv.defekt)
+    pruefe("defekt nicht nutzbar", !kaputt.nutzbar && mkv.nutzbar)
+    gleich("Fassungen ohne defekte", listOf("mkv", "avi"), Fassungen.liste(listOf(kaputt, mkv, avi)).map { it.id })
+    pruefe("defekt + eine: nicht fragen", !Fassungen.mehrere(listOf(kaputt, avi)))
+    gleich("Standard überspringt defekte", "mkv", Fassungen.datei(listOf(kaputt, mkv), null)?.id)
+    gleich("defekte Wahl: Standard", "mkv", Fassungen.datei(listOf(kaputt, mkv), "kaputt")?.id)
+    gleich("playable ohne defekte", "avi",
+        ItemDetail.from(Json.parse("""{"item":{"id":"m","title":"M"},"files":[
+            {"id":"kaputt","partNo":1,"defekt":"leer"},{"id":"avi","partNo":1}]}""")).playable?.id)
+    gleich("Edition gelesen", "Director's Cut", datei("""{"id":"e","edition":"Director's Cut"}""").edition)
+
     val einzeln = Fassungen.teile(listOf(mkv, avi), avi)
     pruefe("Fassungen sind keine Teile", !einzeln.mehrere)
     gleich("eine Datei: Stelle wie gegeben", FilmTeile.Stelle(0, 0.0, 300.0), einzeln.stelle(300.0))
@@ -1229,6 +1255,83 @@ private fun fassungenTests() {
     gleich("nur Teil 2", listOf("b"), Fassungen.teile(listOf(b), b).dateien.map { it.id })
 }
 
+private fun wunschTests() {
+    val w = { j: String -> Wish.from(Json.parse(j)) }
+    gleich("neu gewünscht", "Wunsch an den Besitzer geschickt",
+        w("""{"id":"w","title":"Dune","state":"open","mine":true}""").rueckmeldung)
+    gleich("schon eigen", "Das hast du dir schon gewünscht",
+        w("""{"id":"w","title":"Dune","state":"open","mine":true,"vorhanden":true}""").rueckmeldung)
+    gleich("angeschlossen", "Schon gewünscht – du bist jetzt mit dabei",
+        w("""{"id":"w","title":"Dune","state":"open","mine":false,"dabei":true,"vorhanden":true}""").rueckmeldung)
+    gleich("eigener offener: löschen", WunschWeg.LOESCHEN, w("""{"id":"w","title":"D","state":"open","mine":true}""").wegArt)
+    gleich("eigener in Arbeit: nichts", null, w("""{"id":"w","title":"D","state":"working","mine":true}""").wegArt)
+    gleich("angeschlossen: austreten", WunschWeg.AUSTRETEN, w("""{"id":"w","title":"D","state":"working","dabei":true}""").wegArt)
+    gleich("fremder: nichts", null, w("""{"id":"w","title":"D","state":"open"}""").wegArt)
+}
+
+private fun specialTests() {
+    val sp = titel("""{"id":"e","title":"The Last Watch","kind":"episode","seasonNo":0,"episodeNo":1001}""")
+    pruefe("Special ab 1000 ohne Nummer", sp.specialOhneNummer)
+    gleich("Special: keine Nummer in der Liste", "", sp.folgenNummer)
+    gleich("Special: Kennung", "Special", Titelseite.folgenKennung(sp))
+    gleich("Special: Als Nächstes", "Serie · Special: The Last Watch", AmStueck.beschriftung(sp, "Serie"))
+    val echt = titel("""{"id":"e","title":"Pilot","kind":"episode","seasonNo":0,"episodeNo":2}""")
+    pruefe("echtes S00E02 hat eine Nummer", !echt.specialOhneNummer)
+    gleich("echtes S00E02: Nummer", "2", echt.folgenNummer)
+    gleich("echtes S00E02: Kennung", "Staffel 0, Folge 2", Titelseite.folgenKennung(echt))
+    pruefe("Staffel 1 Folge 1001 ist kein Special",
+        !titel("""{"id":"e","title":"X","kind":"episode","seasonNo":1,"episodeNo":1001}""").specialOhneNummer)
+    pruefe("special ohne Nummer gemeldet",
+        titel("""{"id":"e","title":"X","kind":"episode","seasonNo":0,"special":true}""").specialOhneNummer)
+}
+
+private fun qualitaetTests() {
+    gleich("Stufen bis 1080p", listOf("1080", "720", "480", "360"), Qualitaet.stufenFuer(1080).map { it.id })
+    gleich("Stufen 4K", 5, Qualitaet.stufenFuer(2160).size)
+    gleich("Stufen 400p", listOf("360"), Qualitaet.stufenFuer(400).map { it.id })
+    gleich("unbekannte Höhe wie 1080p", 4, Qualitaet.stufenFuer(null).size)
+    gleich("gemerkt und da", "720", Qualitaet.wirksam("720", 1080))
+    gleich("gemerkt, aber über der Quelle: Auto", "auto", Qualitaet.wirksam("1080", 400))
+    gleich("Original bleibt", "original", Qualitaet.wirksam("original", 400))
+    gleich("nichts gemerkt: Auto", "auto", Qualitaet.wirksam(null, 1080))
+    val basis = DeviceProfile.fallback
+    val p720 = Qualitaet.profil("720", 1080, basis)
+    gleich("720p: maxHeight", 720, p720.maxHeight)
+    gleich("720p: maxBitrate", "4000000", p720.query()["maxBitrate"])
+    gleich("Auto: Profil unverändert", basis, Qualitaet.profil("auto", 1080, basis))
+    gleich("Auto: keine Bitrate", null, basis.query()["maxBitrate"])
+    val orig = Qualitaet.profil("original", 1080, basis)
+    gleich("Original: Grenze aufgehoben", 4320, orig.maxHeight)
+    gleich("Original: keine Bitrate", null, orig.query()["maxBitrate"])
+    gleich("Name 1080", "1080p · 8 Mbit/s", Qualitaet.name("1080"))
+    gleich("Name 4K", "4K · 20 Mbit/s", Qualitaet.name("2160"))
+    gleich("Name Original", "Original", Qualitaet.name("original"))
+    gleich("Name Auto", "Auto", Qualitaet.name("auto"))
+
+    // Fassungsnamen wie im Player des Browsers.
+    val en = datei("""{"id":"en","partNo":1,"height":1080,"container":"mkv","sizeBytes":8000000000,
+        "tracks":[{"index":1,"kind":"audio","language":"en","channels":6}]}""")
+    val de = datei("""{"id":"de","partNo":1,"height":1080,"container":"mkv","sizeBytes":4000000000,
+        "tracks":[{"index":1,"kind":"audio","language":"de","channels":2}]}""")
+    val dc = datei("""{"id":"dc","partNo":1,"height":720,"container":"mp4","edition":"Director's Cut"}""")
+    gleich("Fassungsnamen", listOf("1080p · Englisch · MKV", "1080p · Deutsch · MKV", "720p · MP4 · Director's Cut"),
+        Fassungen.namen(listOf(en, de, dc)))
+    val zwilling = datei("""{"id":"z","partNo":1,"height":1080,"container":"mkv","sizeBytes":4000000000,
+        "tracks":[{"index":1,"kind":"audio","language":"en","channels":2}]}""")
+    gleich("gleiche Namen: mit Grösse", listOf("1080p · Englisch · MKV · 8 GB", "1080p · Englisch · MKV · 4 GB"),
+        Fassungen.namen(listOf(en, zwilling)))
+    gleich("ohne alles: Fassung N", listOf("Fassung 1"), Fassungen.namen(listOf(datei("""{"id":"x"}"""))))
+
+    // Ton und Untertitel nach Sprache in die neue Fassung übernehmen.
+    val alt = listOf(spur(1, "audio", "de"), spur(2, "audio", "en"), spur(3, "subtitle", "de"), spur(4, "subtitle", "en"))
+    val neu = listOf(spur(0, "audio", "en"), spur(5, "audio", "de"), spur(7, "subtitle", "en"), spur(8, "subtitle", "fr"))
+    gleich("Ton Englisch übernommen", 0, Spuren.uebernehmen(alt, Spuren.Wahl(2, null), neu, Spuren.Wahl(5, 8)).ton)
+    gleich("Untertitel aus bleibt aus", null, Spuren.uebernehmen(alt, Spuren.Wahl(2, null), neu, Spuren.Wahl(5, 8)).untertitel)
+    gleich("Untertitel Englisch übernommen", 7, Spuren.uebernehmen(alt, Spuren.Wahl(1, 4), neu, Spuren.Wahl(-1, null)).untertitel)
+    gleich("Untertitel-Sprache fehlt: Vorbelegung", 8, Spuren.uebernehmen(alt, Spuren.Wahl(1, 3), neu, Spuren.Wahl(-1, 8)).untertitel)
+    gleich("ohne Wahl: erste Tonspur zählt", 5, Spuren.uebernehmen(alt, Spuren.Wahl(-1, null), neu, Spuren.Wahl(-1, null)).ton)
+}
+
 private fun titelseiteTests() {
     val film = titel("""{"id":"m","title":"M","kind":"movie","year":2019,"ageYears":12,
         "runtimeMs":7080000,"genres":["Drama","Thriller","Krimi"],"imdbRating":7.8,"imdbVotes":12345,
@@ -1236,6 +1339,10 @@ private fun titelseiteTests() {
     gleich("Meta-Zeile wie im Browser",
         "2019 · ab 12 · 1 Std. 58 Min. · Drama · Thriller · Krimi · IMDb 7,8 (12’345)",
         Titelseite.metaZeile(film))
+    gleich("TMDb in der Meta-Zeile", "2019 · TMDb 75 %",
+        Titelseite.metaZeile(titel("""{"id":"t","title":"T","year":2019,"tmdbRating":75,"tmdbVotes":1200}""")))
+    gleich("TMDb-Stimmen gelesen", 1200, titel("""{"id":"t","title":"T","tmdbRating":75,"tmdbVotes":1200}""").tmdbVotes)
+    gleich("TMDb 0 zählt nicht", null, titel("""{"id":"t","title":"T","tmdbRating":0}""").tmdbRating)
     pruefe("Stand über einer Minute", Titelseite.hatStand(film))
     gleich("Weiter bei", "Weiter bei 1:12:04", Titelseite.abspielText(film))
     val frisch = titel("""{"id":"n","title":"N","resumeMs":30000}""")
@@ -1285,6 +1392,12 @@ private fun titelseiteTests() {
     gleich("Reihe: Knopf", "Weiter mit Teil 2", reihe.abspielText)
     gleich("Reihe: Unterzeile", "3 Filme · 1 gesehen · zusammengestellt nach TMDb", reihe.unterzeile)
     gleich("Reihe: eigenes Poster", "/api/v1/art/col_1/poster", reihe.poster)
+    gleich("Reihe aus NFO", "1 Film · aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)",
+        Reihe.from(Json.parse("""{"id":"r","name":"R","source":"nfo","anzahl":1}""")).unterzeile)
+    gleich("Reihe aus Emby", "1 Film · aus Emby oder Jellyfin übernommen",
+        Reihe.from(Json.parse("""{"id":"r","name":"R","source":"emby","anzahl":1}""")).unterzeile)
+    gleich("Reihe automatisch", "1 Film · von Lumen am Titel erkannt",
+        Reihe.from(Json.parse("""{"id":"r","name":"R","source":"auto","anzahl":1}""")).unterzeile)
     val c = ApiClient("http://nas:8097", "tok")
     c.medienSchluesselSetzen("k")
     gleich("Reihe: Bild mit Schlüssel", "http://nas:8097/api/v1/art/col_1/poster?key=k", c.reiheBildUrl(reihe))

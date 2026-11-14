@@ -162,6 +162,7 @@ struct DetailView: View {
             parts.append(text)
         }
         if let t = item.tomatenText { parts.append(t) }
+        if let t = item.tmdbText { parts.append(t) }
         return parts.joined(separator: " · ")
     }
 
@@ -663,7 +664,7 @@ struct EpisodeRow: View {
                 }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text("\(episode.episodeNo ?? 0). \(episode.title)")
+                    Text(episode.folgenListenName)
                         .font(.subheadline.weight(.medium))
                     if episode.isSeen {
                         Image(systemName: "checkmark").font(.caption2.weight(.bold))

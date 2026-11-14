@@ -865,14 +865,23 @@ public actor APIClient {
         return try await send("POST", "/wishes", body: Body(title: title, year: year))
     }
 
-    // MARK: - Wiedergabe
-
-    public func plan(fileId: String) async throws -> PlanResponse {
-        try await get("/stream/\(fileId)/plan", DeviceProfile.current.query())
+    /// Den eigenen offenen Wunsch löschen oder einen angeschlossenen
+    /// verlassen (204). Ist der eigene schon in Arbeit oder erledigt,
+    /// antwortet der Server mit 409 `nicht_offen` und einem Satz dazu.
+    public func wunschLoeschen(_ id: String) async throws {
+        _ = try await request("DELETE", "/wishes/\(id)")
     }
 
-    public func seekPoint(fileId: String, seconds: Double) async throws -> SeekPoint {
-        var q = DeviceProfile.current.query()
+    // MARK: - Wiedergabe
+
+    /// Der Plan für eine Datei. `profil` trägt die Grenzen der Stufe unter
+    /// „Qualität" (`Qualitaet.profil`); ohne gilt das Gerät, wie es ist.
+    public func plan(fileId: String, profil: DeviceProfile = .current) async throws -> PlanResponse {
+        try await get("/stream/\(fileId)/plan", profil.query())
+    }
+
+    public func seekPoint(fileId: String, seconds: Double, profil: DeviceProfile = .current) async throws -> SeekPoint {
+        var q = profil.query()
         q["t"] = String(Int(seconds))
         return try await get("/stream/\(fileId)/seek", q)
     }
@@ -891,8 +900,9 @@ public actor APIClient {
     /// im Strom —, darum geht es dann über HLS, das den Ton neu zusammen-
     /// setzt und nebenbei die Text-Untertitel als Spurgruppe mitbringt.
     public func streamURL(for file: MediaFile, plan: PlaybackPlan,
-                          startingAt seconds: Double = 0, spur: Int? = nil) -> URL {
-        var q = DeviceProfile.current.query()
+                          startingAt seconds: Double = 0, spur: Int? = nil,
+                          profil: DeviceProfile = .current) -> URL {
+        var q = profil.query()
         if let mit = mitSchluessel(q) { q = mit }
         if let spur, spur >= 0 { q["spur"] = String(spur) }
 

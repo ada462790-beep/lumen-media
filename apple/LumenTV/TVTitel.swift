@@ -142,6 +142,7 @@ struct TVDetailView: View {
             parts.append("IMDb " + rating.formatted(.number.precision(.fractionLength(1)).locale(.lumen)))
         }
         if let t = item.tomatenText { parts.append(t) }
+        if let t = item.tmdbText { parts.append(t) }
         return parts.joined(separator: " · ")
     }
 
@@ -455,7 +456,7 @@ struct TVFolgenKarte: View {
                     .overlay(alignment: .bottom) {
                         if folge.percent > 1 && !folge.isSeen { ProgressStripe(percent: folge.percent) }
                     }
-                Text("\(folge.episodeNo ?? 0). \(folge.title)")
+                Text(folge.folgenListenName)
                     .font(.body).lineLimit(1)
                     .frame(width: 400, alignment: .leading)
                 Text(unterzeile)
@@ -465,8 +466,8 @@ struct TVFolgenKarte: View {
         }
         .buttonStyle(.card)
         .accessibilityLabel(folge.isSeen
-                            ? "Folge \(folge.episodeNo ?? 0): \(folge.title), gesehen"
-                            : "Folge \(folge.episodeNo ?? 0): \(folge.title)")
+                            ? folge.folgeBarrierefrei + ", " + String(localized: "gesehen", bundle: .lumen, locale: .lumen)
+                            : folge.folgeBarrierefrei)
         .task(id: folge.id) {
             bild = await session.client.artworkURL(for: folge, wide: true)
         }

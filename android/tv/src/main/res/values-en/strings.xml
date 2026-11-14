@@ -86,7 +86,6 @@
     <string name="filmreihen_und_sammlungen">Franchises and Collections</string>
     <string name="bildschirmzeit">Screen Time</string>
     <string name="fingerabdruck_64_zeichen_aus_09">Fingerprint — 64 characters from 0–9 and a–f</string>
-    <string name="folge_x">Episode %1$s</string>
     <string name="folgen">EPISODES</string>
     <string name="folgen_2">Episodes</string>
     <string name="folgen_automatisch_weiter">Autoplay next episode</string>
@@ -188,7 +187,6 @@
     <string name="speichern">Save</string>
     <string name="staffel_als_gesehen">Season Watched</string>
     <string name="staffel_nicht_mehr_als_gesehen">Mark Season as Unwatched</string>
-    <string name="staffel_x">Season %1$s</string>
     <string name="standard">Default</string>
     <string name="startseite">Home</string>
     <string name="suche">Search</string>
@@ -227,8 +225,6 @@
     <string name="wiedergabe">Playback</string>
     <string name="wuensche">Requests</string>
     <string name="wuenschen">Request</string>
-    <string name="wunsch_an_den_besitzer_geschickt">Request sent to the owner.</string>
-    <string name="wunsch_geschickt">Request sent.</string>
     <string name="x_aus_x_nehmen">Remove “%1$s” from “%2$s”?</string>
     <string name="x_entfernen">Remove “%1$s”?</string>
     <string name="x_loeschen">Delete “%1$s”?</string>
@@ -250,4 +246,19 @@
         <item quantity="one">%1$d title in your library</item>
         <item quantity="other">%1$d titles in your library</item>
     </plurals>
+    <string name="nicht_mehr_wuenschen">Withdraw request</string>
+    <string name="nicht_mehr_wuenschen_frage">Withdraw request?</string>
+    <string name="wunsch_loeschen_frage">Delete request?</string>
+    <string name="wunsch_austreten_text">You will no longer be part of “%1$s”. The others’ request stays.</string>
+    <string name="wunsch_loeschen_text">“%1$s” will be removed from the list.</string>
+    <string name="neu_und_weitere">and %1$d more — see all under “Movies” and “TV Shows”, sorted by “Date Added”.</string>
+    <string name="pl_fassung">Version</string>
+    <string name="pl_qualitaet">Quality</string>
+    <string name="pl_standard">Default</string>
+    <string name="pl_fuer_alle">For everyone</string>
+    <string name="pl_ist_standard">This version is the default.</string>
+    <string name="pl_als_standard">Make this version the default</string>
+    <string name="pl_gilt_fuer_alle">Now applies to everyone</string>
+    <string name="pl_qualitaet_x">Quality: %1$s</string>
+    <string name="pl_fassung_x">Version: %1$s</string>
 </resources>

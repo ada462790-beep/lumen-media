@@ -52,7 +52,7 @@ import org.lumen.core.Item
  */
 
 /** Welches Feld offen ist. */
-enum class Spurfeld { TON, UNTERTITEL, FOLGEN }
+enum class Spurfeld { TON, UNTERTITEL, FOLGEN, QUALITAET }
 
 /** Ein Eintrag im Feld: Text, gewählt oder nicht, und was beim Tippen passiert. */
 data class Spureintrag(
@@ -119,6 +119,27 @@ fun TonSymbol(farbe: Color, modifier: Modifier = Modifier) {
     }
 }
 
+/** Das Symbol für „Qualität": ein Zahnrad mit acht Zähnen — wie im Browser. */
+@Composable
+fun ZahnradSymbol(farbe: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val s = size.minDimension
+        val mitte = Offset(size.width / 2, size.height / 2)
+        val strich = s * 0.1f
+        for (i in 0 until 8) {
+            val winkel = Math.toRadians(i * 45.0)
+            val innen = s * 0.3f
+            val aussen = s * 0.46f
+            drawLine(farbe,
+                Offset(mitte.x + innen * kotlin.math.cos(winkel).toFloat(), mitte.y + innen * kotlin.math.sin(winkel).toFloat()),
+                Offset(mitte.x + aussen * kotlin.math.cos(winkel).toFloat(), mitte.y + aussen * kotlin.math.sin(winkel).toFloat()),
+                strich * 1.4f, StrokeCap.Round)
+        }
+        drawCircle(farbe, radius = s * 0.3f, center = mitte, style = Stroke(width = strich))
+        drawCircle(farbe, radius = s * 0.1f, center = mitte, style = Stroke(width = strich * 0.8f))
+    }
+}
+
 /** Das Symbol für die Folgen: drei Zeilen, die unterste kürzer. */
 @Composable
 fun FolgenSymbol(farbe: Color, modifier: Modifier = Modifier) {
@@ -176,6 +197,7 @@ fun SpurKnopf(feld: Spurfeld, aktiv: Boolean, onClick: () -> Unit) {
             Spurfeld.UNTERTITEL -> SprechblaseSymbol(glyph, Modifier.size(22.dp))
             Spurfeld.TON -> TonSymbol(glyph, Modifier.size(22.dp))
             Spurfeld.FOLGEN -> FolgenSymbol(glyph, Modifier.size(22.dp))
+            Spurfeld.QUALITAET -> ZahnradSymbol(glyph, Modifier.size(22.dp))
         }
     }
 }
@@ -334,7 +356,7 @@ private fun FolgenZeile(f: Item, aktuell: Boolean, bild: String?, onClick: () ->
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${f.episodeNo ?: ""}", color = Lumen.label3, fontSize = 14.sp,
+                Text(f.folgenNummer, color = Lumen.label3, fontSize = 14.sp,
                      modifier = Modifier.width(22.dp))
                 Text(f.title, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                      fontWeight = if (aktuell) FontWeight.SemiBold else FontWeight.Normal,

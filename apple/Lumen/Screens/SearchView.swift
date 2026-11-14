@@ -32,6 +32,8 @@ struct SuchErgebnisse: View {
     /// Was gewünscht wurde — der Knopf wird danach zur Bestätigung.
     @State private var gewuenscht: String?
     @State private var wunschFehler: String?
+    /// Die Rückmeldung des Servers: neu, schon eigen oder angeschlossen.
+    @State private var wunschMeldung: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -107,8 +109,8 @@ struct SuchErgebnisse: View {
                 .font(.body)
             Text("Du kannst dir den Titel wünschen — der Besitzer sieht den Wunsch und sonst nichts.")
                 .font(.callout).foregroundStyle(Theme.label2)
-            if gewuenscht == eingabe {
-                Label("Wunsch an den Besitzer geschickt", systemImage: "checkmark.circle.fill")
+            if gewuenscht == eingabe, let wunschMeldung {
+                Label(wunschMeldung, systemImage: "checkmark.circle.fill")
                     .font(.callout.weight(.medium)).foregroundStyle(Theme.good)
             } else {
                 Button("„\(eingabe)“ wünschen") { Task { await wuenschen(eingabe) } }
@@ -125,7 +127,8 @@ struct SuchErgebnisse: View {
     private func wuenschen(_ titel: String) async {
         wunschFehler = nil
         do {
-            _ = try await session.client.wish(title: titel)
+            let w = try await session.client.wish(title: titel)
+            wunschMeldung = w.rueckmeldung
             gewuenscht = titel
         } catch {
             wunschFehler = Session.text(error)

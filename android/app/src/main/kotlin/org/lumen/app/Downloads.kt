@@ -292,8 +292,7 @@ fun DownloadKnopf(model: LumenViewModel, item: Item, onZuDenDownloads: () -> Uni
         val d = Heruntergeladen(
             itemId = item.id, fileId = datei.fileId, titel = item.title,
             unterzeile = if (item.kind == "episode")
-                listOfNotNull(item.seasonNo?.let { tx(R.string.staffel_x, it) }, item.episodeNo?.let { tx(R.string.folge_x, it) })
-                    .joinToString(", ")
+                Titelseite.folgenKennung(item)
             else item.jahresText ?: "",
             dateiname = datei.dateiname, groesse = datei.groesse, zustand = Heruntergeladen.LAEDT,
             dauer = item.runtimeSeconds, kontoId = ich, serverId = server)

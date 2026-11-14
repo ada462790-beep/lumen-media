@@ -84,6 +84,7 @@ public struct DownloadEintrag: Codable, Identifiable, Hashable, Sendable {
 
     /// „S1 F3 · Titel" bei Folgen, sonst der Titel.
     public var anzeige: String {
+        if item.specialOhneNummer, let kurz = item.folgenKurz { return kurz + " · " + item.title }
         if item.kind == "episode", let s = item.seasonNo, let e = item.episodeNo {
             return String(localized: "S\(s) F\(e) · \(item.title)", bundle: .lumenKit, locale: .lumen)
         }

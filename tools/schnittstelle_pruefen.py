@@ -101,6 +101,10 @@ ANGEKUENDIGT_PFADE = {
 ANGEKUENDIGT_FELDER = {
     # GET /hello: Vorgabe und Angebot der Sprachen; Arbeit „sprache".
     ("Hello", "sprache"), ("Hello", "sprachen"),
+    # Specials: die Apps erkennen „ohne eigene Nummer" an Staffel 0 ab
+    # Folge 1000 (store.SpecialOhneNummer); ein Feld „special" am Titel
+    # werten sie aus, sobald der Server es schickt.
+    ("Item", "special"),
 }
 
 
@@ -240,7 +244,8 @@ PAARE = {
     "Deutung": "Deutung",
     "Suchergebnis": None,
     # Neuigkeiten: die Einträge sind eine Struktur, die Antwort eine map.
-    "Neuigkeit": "Neuigkeit",
+    # Die API legt die Titel von „{n} neue Titel" dazu (profil.go: mitTiteln).
+    "Neuigkeit": ["Neuigkeit", "mitTiteln"],
     "Neuigkeiten": None,
     # Die Besetzung auf der Titelseite — im Server eine Struktur im Handler.
     "Mitwirkender": "person",

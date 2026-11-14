@@ -24,6 +24,8 @@ struct TVNeuigkeitenView: View {
     @Environment(Session.self) private var session
     @State private var daten: Neuigkeiten?
     @State private var error: String?
+    /// Welcher „{n} neue Titel"-Eintrag aufgeklappt ist.
+    @State private var auf: String?
 
     var body: some View {
         ScrollView {
@@ -84,6 +86,39 @@ struct TVNeuigkeitenView: View {
         if let itemId = n.itemId, !itemId.isEmpty {
             NavigationLink { TVDetailView(itemId: itemId) } label: { inhalt }
                 .buttonStyle(.card)
+        } else if n.klappbar {
+            // „{n} neue Titel": OK klappt die Titel mit Poster auf — wie im
+            // Browser. Mit der Fernbedienung nach unten in die Poster, nach
+            // rechts durch die Titel; OK öffnet die Titelseite.
+            Button {
+                withAnimation { auf = auf == n.id ? nil : n.id }
+            } label: {
+                HStack(spacing: 0) {
+                    inhalt
+                    Image(systemName: auf == n.id ? "chevron.up" : "chevron.down")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(Theme.label2)
+                        .padding(.trailing, 24)
+                }
+            }
+            .buttonStyle(.card)
+            if auf == n.id {
+                VStack(alignment: .leading, spacing: 14) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 40) {
+                            ForEach(n.titelListe ?? []) { t in
+                                TVCard(item: t, menu: { EmptyView() })
+                            }
+                        }
+                        .padding(.vertical, 30)
+                        .padding(.horizontal, 10)
+                    }
+                    if n.weitere > 0 {
+                        Text("und \(n.weitere) weitere — alle unter „Filme“ und „Serien“, sortiert nach „Hinzugefügt“.")
+                            .font(.callout).foregroundStyle(Theme.label2)
+                    }
+                }
+            }
         } else {
             // Ohne Ziel trotzdem erreichbar, damit der Fokus nicht springt.
             Button {} label: { inhalt }
@@ -114,6 +149,8 @@ struct TVWuenscheView: View {
     @State private var geladen = false
     @State private var meldung: String?
     @State private var fehler: String?
+    /// Löschen oder austreten: erst nach einer Rückfrage.
+    @State private var weg: Wish?
 
     private var sauber: String { titel.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -146,9 +183,13 @@ struct TVWuenscheView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
                         ForEach(wuensche) { w in
-                            // Ein Knopf ohne Wirkung, damit sich die Liste
-                            // mit der Fernbedienung durchblättern lässt.
-                            Button {} label: { zeile(w) }
+                            // Mit OK: den eigenen offenen Wunsch löschen oder
+                            // einen angeschlossenen verlassen. Sonst ein Knopf
+                            // ohne Wirkung, damit sich die Liste mit der
+                            // Fernbedienung durchblättern lässt.
+                            Button {
+                                if w.wegArt != nil { weg = w }
+                            } label: { zeile(w) }
                                 .buttonStyle(.card)
                         }
                     }
@@ -159,6 +200,28 @@ struct TVWuenscheView: View {
             .padding(.bottom, 60)
         }
         .onAppear { Task { await load() } }
+        .confirmationDialog(wegTitel, isPresented: Binding(
+            get: { weg != nil },
+            set: { if !$0 { weg = nil } }), titleVisibility: .visible, presenting: weg) { w in
+            if w.wegArt == .austreten {
+                Button("Nicht mehr wünschen") { Task { await loeschen(w) } }
+            } else {
+                Button("Löschen", role: .destructive) { Task { await loeschen(w) } }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { w in
+            if w.wegArt == .austreten {
+                Text("Du bist dann bei „\(w.title)“ nicht mehr dabei. Der Wunsch der anderen bleibt.")
+            } else {
+                Text("„\(w.title)“ verschwindet aus der Liste.")
+            }
+        }
+    }
+
+    private var wegTitel: String {
+        weg?.wegArt == .austreten
+            ? String(localized: "Nicht mehr wünschen?", bundle: .lumen, locale: .lumen)
+            : String(localized: "Wunsch löschen?", bundle: .lumen, locale: .lumen)
     }
 
     private func zeile(_ w: Wish) -> some View {
@@ -168,6 +231,11 @@ struct TVWuenscheView: View {
                 Text("von \(w.by)" + (w.mine ? " (du)" : "")).font(.callout).foregroundStyle(Theme.label2)
             }
             Spacer(minLength: 12)
+            if let art = w.wegArt {
+                Text(art == .austreten ? String(localized: "Nicht mehr wünschen", bundle: .lumen, locale: .lumen)
+                                       : String(localized: "Löschen", bundle: .lumen, locale: .lumen))
+                    .font(.callout).foregroundStyle(Theme.label2)
+            }
             Text(w.stateLabel)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(farbe(w.state))
@@ -189,8 +257,25 @@ struct TVWuenscheView: View {
     }
 
     private func load() async {
-        wuensche = (try? await session.client.wishes()) ?? []
+        do {
+            wuensche = try await session.client.wishes()
+        } catch {
+            fehler = Session.text(error)
+        }
         geladen = true
+    }
+
+    /// `DELETE /wishes/{id}` — bei 409 `nicht_offen` sagt der Satz des
+    /// Servers, warum es nicht geht.
+    private func loeschen(_ w: Wish) async {
+        fehler = nil
+        meldung = nil
+        do {
+            try await session.client.wunschLoeschen(w.id)
+        } catch {
+            fehler = Session.text(error)
+        }
+        await load()
     }
 
     private func senden() async {
@@ -199,9 +284,10 @@ struct TVWuenscheView: View {
         fehler = nil
         meldung = nil
         do {
-            _ = try await session.client.wish(title: t)
+            let w = try await session.client.wish(title: t)
             titel = ""
-            meldung = String(localized: "Wunsch an den Besitzer geschickt", bundle: .lumen, locale: .lumen)
+            // Neu, schon eigen oder angeschlossen — wie im Browser.
+            meldung = w.rueckmeldung
         } catch {
             fehler = Session.text(error)
         }

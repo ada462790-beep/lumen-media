@@ -308,6 +308,14 @@ struct PlayerView: View {
                     oeffne(.ton)
                 }
             }
+            // „Qualität" wie im Browser: Fassungen und Stufen fürs Umwandeln.
+            // Offline spielt die Datei, wie sie ist.
+            if !playback.spieltOffline {
+                symbol("gearshape", hilfe: String(localized: "Qualität", bundle: .lumen, locale: .lumen),
+                       aktiv: playback.stufeWirksam != Qualitaet.auto) {
+                    oeffne(.qualitaet)
+                }
+            }
         }
     }
 
@@ -531,7 +539,7 @@ struct UntertitelText: View {
 /// rechts am gewählten, und der gewählte Eintrag als heller Balken mit
 /// dunkler Schrift.
 struct SpurenFeld: View {
-    enum Art: Equatable { case ton, untertitel, vorspann, folgen }
+    enum Art: Equatable { case ton, untertitel, vorspann, folgen, qualitaet }
 
     let art: Art
     let playback: Playback
@@ -566,6 +574,8 @@ struct SpurenFeld: View {
                 }
             case .vorspann:
                 vorspann
+            case .qualitaet:
+                qualitaet
             case .folgen:
                 // Steht in einem eigenen Feld (`FolgenFeld`).
                 EmptyView()
@@ -582,6 +592,60 @@ struct SpurenFeld: View {
                 .strokeBorder(Color.white.opacity(0.08))
         )
         .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 8)
+    }
+
+    /// „Qualität" wie im Browser (qualitaetPanel): oben die Fassungen des
+    /// Titels, darunter die Stufen fürs Umwandeln, für die Verwaltung
+    /// „Diese Fassung als Standard nehmen".
+    @ViewBuilder
+    private var qualitaet: some View {
+        let fassungen = playback.fassungen
+        let standard = playback.standardId ?? fassungen.first?.id
+        if fassungen.count > 1 {
+            let namen = Fassungen.namen(fassungen)
+            ueberschrift(String(localized: "Fassung", bundle: .lumen, locale: .lumen))
+            ForEach(Array(fassungen.enumerated()), id: \.element.id) { i, f in
+                zeile(f.id == standard ? namen[i] + " · " + String(localized: "Standard", bundle: .lumen, locale: .lumen) : namen[i],
+                      gewaehlt: playback.fassungId == f.id) {
+                    schliessen()
+                    Task { await playback.waehleFassung(f.id) }
+                }
+            }
+        }
+        let quelle = playback.file?.height
+        let jetzt = playback.stufeWirksam
+        ueberschrift(String(localized: "Qualität", bundle: .lumen, locale: .lumen))
+        zeile(Qualitaet.name(Qualitaet.original) + (Fassungen.aufloesung(quelle).map { " · " + $0 } ?? ""),
+              gewaehlt: jetzt == Qualitaet.original) {
+            schliessen()
+            Task { await playback.waehleQualitaet(Qualitaet.original) }
+        }
+        ForEach(Qualitaet.stufen(fuer: quelle)) { st in
+            zeile(Qualitaet.name(st.id), gewaehlt: jetzt == st.id) {
+                schliessen()
+                Task { await playback.waehleQualitaet(st.id) }
+            }
+        }
+        zeile(Qualitaet.name(Qualitaet.auto), gewaehlt: jetzt == Qualitaet.auto) {
+            schliessen()
+            Task { await playback.waehleQualitaet(Qualitaet.auto) }
+        }
+        if istAdmin, fassungen.count > 1 {
+            ueberschrift(String(localized: "Für alle", bundle: .lumen, locale: .lumen))
+            if playback.fassungId == standard {
+                hinweis(String(localized: "Diese Fassung ist der Standard.", bundle: .lumen, locale: .lumen))
+            } else {
+                zeile(String(localized: "Diese Fassung als Standard nehmen", bundle: .lumen, locale: .lumen), gewaehlt: false) {
+                    schliessen()
+                    Task {
+                        await verwaltet {
+                            try await playback.fassungAlsStandard()
+                            return String(localized: "Gilt jetzt für alle", bundle: .lumen, locale: .lumen)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Der Vorspann einer Serie, für alle: zwei Schritte — Beginn merken,
@@ -780,7 +844,7 @@ struct FolgenZeile: View {
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text("\(folge.episodeNo ?? 0)").monospacedDigit().opacity(0.6)
+                        Text(folge.folgenNummer).monospacedDigit().opacity(0.6)
                         Text(folge.title).lineLimit(1)
                         if folge.isSeen {
                             Image(systemName: "checkmark").font(.caption2.weight(.bold))
@@ -802,7 +866,7 @@ struct FolgenZeile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "Folge \(folge.episodeNo ?? 0): \(folge.title)", bundle: .lumen, locale: .lumen)
+        .accessibilityLabel(folge.folgeBarrierefrei
                             + (folge.isSeen ? ", " + String(localized: "gesehen", bundle: .lumen, locale: .lumen) : "")
                             + (aktuell ? ", " + String(localized: "läuft", bundle: .lumen, locale: .lumen) : ""))
         .task(id: folge.id) {

@@ -186,6 +186,11 @@ data class Item(
     val genres: List<String>,
     /** Rotten Tomatoes: Anteil guter Kritiken in Prozent, wenn bekannt. */
     val rottenTomatoes: Int? = null,
+    /** TMDb: Nutzerwertung in Prozent (0–100) und wie viele abgestimmt haben. */
+    val tmdbRating: Int? = null,
+    val tmdbVotes: Int? = null,
+    /** Der Server kann ein Special als solches kennzeichnen (siehe [specialOhneNummer]). */
+    val special: Boolean = false,
     // Was dem angemeldeten Profil gehört — und nur ihm.
     val progress: Double,
     val finished: Boolean,
@@ -227,6 +232,19 @@ data class Item(
     // Das Herz: nur das eigene, wie die Merkliste.
     val favorite: Boolean = false,
 ) {
+    /**
+     * Ein Special ohne eigene Nummer („S08E00 - The Last Watch"): Der Server
+     * zählt es ab 1000 in Staffel 0 (store.SpecialOhneNummer) — die Nummer
+     * ist selbst vergeben, angezeigt wird „Special" statt „Folge 1001".
+     * Echte S00Exx (unter 1000) behalten ihre Nummer. Wie im Browser.
+     */
+    val specialOhneNummer: Boolean
+        get() = kind == "episode" && (seasonNo ?: 0) == 0 &&
+            (episodeNo?.let { it >= SPECIAL_OHNE_NUMMER_AB } ?: special)
+
+    /** Die Nummer einer Folge in Listen — leer bei Specials ohne Nummer. */
+    val folgenNummer: String get() = if (specialOhneNummer) "" else episodeNo?.toString() ?: ""
+
     /**
      * Das Jahr, wie es überall unter einem Titel steht — bei Serien der
      * Zeitraum: „seit 2014" für eine, die noch läuft, „2014–2020" für eine
@@ -288,6 +306,9 @@ data class Item(
         }.joinToString(" · ")
 
     companion object {
+        /** Ab dieser Nummer ist eine Folge in Staffel 0 ein Special ohne eigene Nummer. */
+        const val SPECIAL_OHNE_NUMMER_AB = 1000
+
         fun from(j: JsonValue?) = Item(
             id = j.requiredText("id"),
             libraryId = j["libraryId"].text ?: "",
@@ -304,6 +325,9 @@ data class Item(
             imdbRating = j["imdbRating"].double,
             imdbVotes = j["imdbVotes"].int,
             rottenTomatoes = j["rottenTomatoes"].int,
+            tmdbRating = j["tmdbRating"].int?.takeIf { it > 0 },
+            tmdbVotes = j["tmdbVotes"].int,
+            special = j["special"].bool ?: false,
             genres = j["genres"].strings(),
             progress = j["progress"].double ?: 0.0,
             finished = j["finished"].bool ?: false,
@@ -359,8 +383,18 @@ data class MediaFile(
     val partNo: Int = 1,
     // Die Fassung, die der Besitzer für den Titel als Standard gewählt hat.
     val preferred: Boolean = false,
+    // Defekt: Der Server konnte die Datei nicht ausmessen — „leer",
+    // „gesperrt" oder „kaputt". Sie lässt sich nicht abspielen (422
+    // datei_defekt) und wird darum weder als Fassung noch als Standard
+    // angeboten. Ein älterer Server schickt das Feld nicht.
+    val defekt: String? = null,
+    // Die Edition aus dem Dateinamen („Director's Cut") — für den Namen
+    // der Fassung im Player.
+    val edition: String? = null,
 ) {
     val durationSeconds: Double get() = durationMs / 1000.0
+    /** Ob die Datei abspielbar ist: vorhanden und nicht defekt. */
+    val nutzbar: Boolean get() = !missing && defekt == null
     val fileName: String get() = path.substringAfterLast('/').substringAfterLast('\\')
 
     companion object {
@@ -380,6 +414,8 @@ data class MediaFile(
             chapters = j["chapters"].list.map { Chapter.from(it) },
             partNo = j["partNo"].int?.takeIf { it > 0 } ?: 1,
             preferred = j["preferred"].bool ?: false,
+            defekt = j["defekt"].text?.takeIf { it.isNotBlank() },
+            edition = j["edition"].text?.takeIf { it.isNotBlank() },
         )
     }
 }
@@ -492,7 +528,9 @@ data class ItemDetail(
     val jeDatei: Map<String, VorspannDatei> = emptyMap(),
 ) {
     /** Die Datei, die sich abspielen lässt — fehlende übersprungen. */
-    val playable: MediaFile? get() = files.firstOrNull { !it.missing }
+    // Was „Ansehen" spielt: die erste Fassung (Teil 1, vorhanden, nicht
+    // defekt), sonst irgendeine abspielbare Datei — wie im Browser.
+    val playable: MediaFile? get() = files.firstOrNull { it.nutzbar && it.partNo == 1 } ?: files.firstOrNull { it.nutzbar }
 
     /**
      * Vorspann und Abspann der Datei, die wirklich läuft: aus [jeDatei],
@@ -768,7 +806,13 @@ data class Reihe(
         get() = buildList {
             add(anzahlText)
             if (gesehen > 0) add(Texte.t(Tx.N_GESEHEN, gesehen))
-            add(if (source == "tmdb") Texte.t(Tx.REIHE_TMDB) else Texte.t(Tx.REIHE_LUMEN))
+            // Woher die Reihe stammt — wie im Browser (app.js, reiheHerkunft).
+            add(when (source) {
+                "tmdb" -> Texte.t(Tx.REIHE_TMDB)
+                "nfo" -> Texte.t(Tx.REIHE_NFO)
+                "emby" -> Texte.t(Tx.REIHE_EMBY)
+                else -> Texte.t(Tx.REIHE_LUMEN)
+            })
         }.joinToString(" · ")
 
     companion object {
@@ -1099,7 +1143,17 @@ data class Neuigkeit(
     val text: String,
     val at: String,
     val anzahl: Int,
+    // Bei „{n} neue Titel" die Titel selbst (jüngste zuerst, höchstens so
+    // viele, wie der Server mitschickt) — damit die Zeile aufklappen kann,
+    // statt zur Startseite zu springen. Ein älterer Server schickt nichts.
+    val titelListe: List<Item> = emptyList(),
 ) {
+    /** Ob die Zeile aufklappt (kein einzelner Titel, aber eine Liste) — wie im Browser. */
+    val klappbar: Boolean get() = itemId == null && titelListe.isNotEmpty()
+
+    /** Wie viele neue Titel nicht in der Liste stehen („und 4 weitere …"). */
+    val weitere: Int get() = maxOf(0, anzahl - titelListe.size)
+
     companion object {
         fun from(j: JsonValue?) = Neuigkeit(
             art = j["art"].text ?: "neu",
@@ -1108,6 +1162,7 @@ data class Neuigkeit(
             text = j["text"].text ?: "",
             at = j["at"].text ?: "",
             anzahl = j["anzahl"].int ?: 0,
+            titelListe = j["titelListe"].list.mapNotNull { runCatching { Item.from(it) }.getOrNull() },
         )
     }
 }
@@ -1160,7 +1215,32 @@ data class Wish(
     val year: Int?,
     val state: String,
     val mine: Boolean,
+    // Dieses Profil hat sich einem fremden Wunsch angeschlossen; von wem
+    // er ist, steht dann nicht da.
+    val dabei: Boolean = false,
+    // Nur in der Antwort aufs Wünschen: den Wunsch gab es schon (eigen
+    // oder angeschlossen) — es ist kein neuer entstanden.
+    val vorhanden: Boolean = false,
 ) {
+    /**
+     * Was nach dem Wünschen gemeldet wird — wie im Browser (app.js,
+     * wunschVerhalten.gewuenscht): angeschlossen, schon eigen oder neu.
+     */
+    val rueckmeldung: String
+        get() = when {
+            dabei -> Texte.t(Tx.WUNSCH_SCHON_DABEI)
+            vorhanden -> Texte.t(Tx.WUNSCH_SCHON_EIGEN)
+            else -> Texte.t(Tx.WUNSCH_GESCHICKT)
+        }
+
+    /** Was sich mit dem Wunsch tun lässt: den eigenen offenen löschen, einen angeschlossenen verlassen. */
+    val wegArt: WunschWeg?
+        get() = when {
+            dabei -> WunschWeg.AUSTRETEN
+            mine && state == "open" -> WunschWeg.LOESCHEN
+            else -> null
+        }
+
     val stateLabel: String
         get() = when (state) {
             "open" -> Texte.t(Tx.WUNSCH_OFFEN)
@@ -1185,6 +1265,11 @@ data class Wish(
             year = j["year"].int,
             state = j["state"].text ?: "open",
             mine = j["mine"].bool ?: false,
+            dabei = j["dabei"].bool ?: false,
+            vorhanden = j["vorhanden"].bool ?: false,
         )
     }
 }
+
+/** Löschen (eigener offener Wunsch) oder austreten (angeschlossen) — beides `DELETE /wishes/{id}`. */
+enum class WunschWeg { LOESCHEN, AUSTRETEN }

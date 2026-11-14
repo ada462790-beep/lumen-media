@@ -26,18 +26,33 @@ public struct DeviceProfile: Sendable {
     public let audio: [String]
     public let maxHeight: Int
     public let hdr: Bool
+    /// Obergrenze für die Bitrate, in Bit/s — gesetzt von der Stufe unter
+    /// „Qualität" im Player (`Qualitaet.profil`). 0: keine eigene Grenze.
+    /// `var` mit Vorgabe, damit der gewöhnliche Initialisierer sie nicht verlangt.
+    public var maxBitrate: Int = 0
 
     public static let current: DeviceProfile = .detect()
 
     /// Die Abfrageparameter, die jeder Wiedergabe-Anfrage beiliegen.
     public func query() -> [String: String] {
-        [
+        var q: [String: String] = [
             "codecs": codecs.joined(separator: ","),
             "containers": containers.joined(separator: ","),
             "audio": audio.joined(separator: ","),
             "maxHeight": String(maxHeight),
             "hdr": hdr ? "1" : "0",
         ]
+        if maxBitrate > 0 { q["maxBitrate"] = String(maxBitrate) }
+        return q
+    }
+
+    /// Dasselbe Gerät mit anderen Grenzen für Höhe und Bitrate — für die
+    /// Stufen unter „Qualität".
+    public func mitGrenzen(maxHeight: Int, maxBitrate: Int) -> DeviceProfile {
+        var p = DeviceProfile(name: name, kind: kind, codecs: codecs, containers: containers,
+                              audio: audio, maxHeight: maxHeight, hdr: hdr)
+        p.maxBitrate = maxBitrate
+        return p
     }
 
     /// AVPlayer spielt MP4 und MOV unmittelbar ab. MKV kann es nicht —

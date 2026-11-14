@@ -236,8 +236,8 @@ class ApiClient(
      *
      * Klappt das Holen nicht, nimmt die Wiedergabe den Bildschlüssel.
      */
-    fun wiedergabeVorbereiten(fileId: String): PlaybackPlan {
-        val p = plan(fileId)
+    fun wiedergabeVorbereiten(fileId: String, profil: DeviceProfile = DeviceProfile.current): PlaybackPlan {
+        val p = plan(fileId, profil)
         wiedergabeSchluesselErneuern()
         return p
     }
@@ -1017,6 +1017,22 @@ class ApiClient(
         Wish.from(parseOrThrow(
             send("POST", "/wishes", body = JsonWriter.obj("title" to title, "year" to year)),
             "/wishes"))
+
+    /**
+     * Den eigenen offenen Wunsch löschen oder einen angeschlossenen
+     * verlassen (204). Ist der eigene schon in Arbeit oder erledigt,
+     * antwortet der Server mit 409 `nicht_offen` und einem Satz dazu.
+     */
+    fun wunschLoeschen(id: String) { send("DELETE", "/wishes/${enc(id)}") }
+
+    /**
+     * Verwaltung: diese Fassung (Datei) für alle zum Standard des Titels
+     * machen (204). Ohne entsperrte Verwaltung antwortet der Server mit
+     * 403 oder 404.
+     */
+    fun fassungAlsStandard(itemId: String, fileId: String) {
+        send("PUT", "/admin/items/${enc(itemId)}/fassung", body = JsonWriter.obj("fileId" to fileId))
+    }
 
     // ---------------------------------------------------------- Wiedergabe
 

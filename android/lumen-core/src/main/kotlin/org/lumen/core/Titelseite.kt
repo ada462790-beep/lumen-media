@@ -39,9 +39,23 @@ object Titelseite {
             add("IMDb " + komma(note) + stimmen)
         }
         item.rottenTomatoes?.let { add(tomaten(it)) }
+        // TMDb neben IMDb und Rotten Tomatoes, wie im Browser (wertungsReihe).
+        item.tmdbRating?.let { add(Texte.t(Tx.TMDB_WERTUNG, it)) }
         // Bei einer Serie der eigene Stand — nur der eigene.
         item.serienStand?.let { add(it) }
     }.joinToString(" · ")
+
+    /**
+     * „Staffel 1, Folge 2" — bei einem Special ohne eigene Nummer schlicht
+     * „Special" (wie im Browser). Für Player, Downloads und „Als Nächstes".
+     */
+    fun folgenKennung(folge: Item): String {
+        if (folge.specialOhneNummer) return Texte.t(Tx.SPECIAL)
+        return listOfNotNull(
+            folge.seasonNo?.let { Texte.t(Tx.STAFFEL_N, it) },
+            folge.episodeNo?.let { Texte.t(Tx.FOLGE_N, it) },
+        ).joinToString(", ")
+    }
 
     /** Ob es lohnt, „Weiter bei …" und „Von vorn" anzubieten. */
     fun hatStand(item: Item): Boolean = item.resumeSeconds > WEITER_AB_SEKUNDEN

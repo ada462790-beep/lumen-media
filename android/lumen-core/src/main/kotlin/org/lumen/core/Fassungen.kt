@@ -25,9 +25,9 @@ package org.lumen.core
  */
 object Fassungen {
 
-    /** Die Fassungen: jede vorhandene Datei, die als Teil 1 gilt — in der Reihenfolge des Servers. */
+    /** Die Fassungen: jede vorhandene, nicht defekte Datei, die als Teil 1 gilt — in der Reihenfolge des Servers. */
     fun liste(dateien: List<MediaFile>): List<MediaFile> =
-        dateien.filter { !it.missing && it.partNo == 1 }
+        dateien.filter { it.nutzbar && it.partNo == 1 }
 
     /** Ob „Ansehen" erst nach der Qualität fragen muss. */
     fun mehrere(dateien: List<MediaFile>): Boolean = liste(dateien).size > 1
@@ -64,13 +64,38 @@ object Fassungen {
     ).joinToString(" · ")
 
     /**
+     * Die Fassungen beschriftet wie im Player des Browsers (app.js,
+     * fassungNamen): Auflösung, Sprache der ersten Tonspur, Format und
+     * gegebenenfalls die Edition — „1080p · Englisch · MKV". Zwei gleich
+     * beschriftete unterscheidet die Grösse; ohne alles „Fassung 2".
+     */
+    fun namen(fassungen: List<MediaFile>): List<String> {
+        val namen = fassungen.map { f ->
+            val ton = f.tracks.firstOrNull { it.isAudio }
+            val sprache = ton?.language?.takeIf { it.isNotBlank() && it != "und" }?.let { Spuren.sprache(it) }
+            listOfNotNull(
+                aufloesung(f.height),
+                sprache,
+                f.container?.takeIf { it.isNotBlank() }?.uppercase(),
+                f.edition,
+            ).joinToString(" · ")
+        }
+        return namen.mapIndexed { i, n ->
+            val doppelt = n.isNotEmpty() && namen.count { it == n } > 1
+            val mitGroesse = if (doppelt) listOfNotNull(n, groesse(fassungen[i].sizeBytes)).joinToString(" · ") else n
+            mitGroesse.ifEmpty { Texte.t(Tx.FASSUNG_N, i + 1) }
+        }
+    }
+
+    /**
      * Welche Datei spielt: die gewählte, solange es sie noch gibt — sonst
      * die erste vorhandene, wie bisher. Eine Kennung aus einer älteren
      * Auswahl, die inzwischen fehlt, soll nicht ins Leere führen.
      */
     fun datei(dateien: List<MediaFile>, gewaehlt: String?): MediaFile? =
-        gewaehlt?.let { id -> dateien.firstOrNull { it.id == id && !it.missing } }
-            ?: dateien.firstOrNull { !it.missing }
+        gewaehlt?.let { id -> dateien.firstOrNull { it.id == id && it.nutzbar } }
+            ?: dateien.firstOrNull { it.nutzbar && it.partNo == 1 }
+            ?: dateien.firstOrNull { it.nutzbar }
 
     /**
      * Die Teile, die zu [erste] gehören: Teil 1 ist die gewählte Datei
@@ -82,7 +107,7 @@ object Fassungen {
         var nr = 1
         while (true) {
             val t = if (nr == 1 && erste.partNo == 1) erste
-                    else dateien.firstOrNull { !it.missing && it.partNo == nr }
+                    else dateien.firstOrNull { it.nutzbar && it.partNo == nr }
             if (t == null) break
             liste.add(t)
             nr++

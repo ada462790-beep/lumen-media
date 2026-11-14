@@ -25,14 +25,18 @@ data class DeviceProfile(
     val audio: List<String>,
     val maxHeight: Int,
     val hdr: Boolean,
+    // Obergrenze für die Bitrate, in Bit/s — gesetzt von der Stufe unter
+    // „Qualität" im Player ([Qualitaet.profil]). 0: keine eigene Grenze.
+    val maxBitrate: Int = 0,
 ) {
-    fun query(): Map<String, String> = mapOf(
-        "codecs" to codecs.joinToString(","),
-        "containers" to containers.joinToString(","),
-        "audio" to audio.joinToString(","),
-        "maxHeight" to maxHeight.toString(),
-        "hdr" to if (hdr) "1" else "0",
-    )
+    fun query(): Map<String, String> = buildMap {
+        put("codecs", codecs.joinToString(","))
+        put("containers", containers.joinToString(","))
+        put("audio", audio.joinToString(","))
+        put("maxHeight", maxHeight.toString())
+        put("hdr", if (hdr) "1" else "0")
+        if (maxBitrate > 0) put("maxBitrate", maxBitrate.toString())
+    }
 
     companion object {
         /** Was praktisch jedes Android-Gerät seit Jahren kann. */
