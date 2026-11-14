@@ -29,14 +29,22 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"lumen/internal/ablage"
 	"lumen/internal/lokal"
 	"lumen/internal/meta"
 	"lumen/internal/store"
+)
+
+// freigabenStand zählt die Fassungen, in denen meta.AgeYears mehr
+// Kennzeichen lesen lernte. Steigt er, rechnet der nächste Durchlauf die
+// Altersgrenzen einmal nach (store.FreigabenNachrechnen).
+const (
+	freigabenStand       = "1"
+	einstellungFreigaben = "nachtrag.freigaben"
 )
 
 // lokalLauf gilt für einen Durchlauf über eine Bibliothek.
@@ -55,8 +63,16 @@ type lokalLauf struct {
 func (s *Scanner) lokalLauf(ctx context.Context, lib store.Library) *lokalLauf {
 	// Kennzeichen, die eine ältere Fassung nicht lesen konnte („DE-18"),
 	// bekommen jetzt ihre Grenze — ohne dass die NFO sich ändern muss.
-	if n, err := s.st.FreigabenNachrechnen(ctx, meta.AgeYears); err == nil && n > 0 {
-		s.st.Log(ctx, "info", "scan", fmt.Sprintf("Altersfreigabe bei %d Titeln nachgetragen", n))
+	// Einmal je Fassung des Lesens (freigabenStand), nicht bei jedem
+	// Durchlauf jeder Bibliothek: Neue Titel bekommen ihre Grenze ohnehin
+	// beim Übernehmen der NFO oder von TMDb.
+	if s.st.Setting(ctx, einstellungFreigaben, "") != freigabenStand {
+		if n, err := s.st.FreigabenNachrechnen(ctx, meta.AgeYears); err == nil {
+			_ = s.st.SetSetting(ctx, einstellungFreigaben, freigabenStand)
+			if n > 0 {
+				s.st.Log(ctx, "info", "scan", fmt.Sprintf("Altersfreigabe bei %d Titeln nachgetragen", n))
+			}
+		}
 	}
 	bereit := meta.QuelleBereit(ctx, s.st)
 	if !bereit {
@@ -391,7 +407,7 @@ func (l *lokalLauf) alteCastBilderWeg(ctx context.Context, id string) {
 	}
 	alle, _ := filepath.Glob(filepath.Join(l.s.BilderOrdner, id+"-cast*"))
 	for _, pfad := range alle {
-		if n := filepath.Base(pfad); !behalten[n] && !strings.Contains(n, ".teil") {
+		if n := filepath.Base(pfad); !behalten[n] && !strings.Contains(n, ablage.Endung) {
 			_ = os.Remove(pfad)
 		}
 	}
@@ -440,20 +456,7 @@ func kopieren(von, nach string) error {
 		return err
 	}
 	defer q.Close()
-	tmp := nach + ".teil"
-	z, err := os.Create(tmp)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(z, io.LimitReader(q, 20<<20))
-	if cerr := z.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return os.Rename(tmp, nach)
+	return ablage.Einmal(nach, func() error { return ablage.Schreiben(nach, q, 20<<20) })
 }
 
 // serienOrdnerZu: der Ordner einer Serie — über dem Staffelordner, sonst

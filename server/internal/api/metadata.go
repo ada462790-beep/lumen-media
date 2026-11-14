@@ -205,6 +205,13 @@ func (s *Server) metadatenNachholen(ctx context.Context, lib string, grenze int)
 			break
 		}
 		rest -= res.Matched + res.Unmatched
+		// Zwischen zwei Häppchen kurz Luft: Ein Durchlauf, der auf die
+		// Arbeitssperre wartet, und die Bedienung kommen dran. Ohne die
+		// Pause lief ein grosser Rückstand eine halbe Stunde am Stück.
+		select {
+		case <-ctx.Done():
+		case <-time.After(haeppchenPause):
+		}
 	}
 	// Mit den Metadaten kommen die TMDb-Reihen; die selbst erkannten
 	// rücken danach zurecht.
@@ -214,6 +221,9 @@ func (s *Server) metadatenNachholen(ctx context.Context, lib string, grenze int)
 		s.st.Log(ctx, "info", "wuensche", fmt.Sprintf("%d Wunsch/Wünsche von selbst erfüllt", n))
 	}
 }
+
+// haeppchenPause: Luft zwischen zwei Häppchen von metadatenNachholen.
+const haeppchenPause = 300 * time.Millisecond
 
 // metadatenImHintergrund: wie metadatenNachholen ohne Grenze, aber nur
 // einmal gleichzeitig.

@@ -889,6 +889,12 @@ async function fetchFor(view) {
     }
     case 'detail': {
       const d = await api.item(S.id);
+      // Technik-Zeile und Herunterladen brauchen nur die Datei — gleich
+      // mit losschicken, nicht erst nach den Folgen (eine Anfrage nach der
+      // anderen kostete auf einer langsamen NAS jedes Mal eine Runde).
+      const f = (d.files || []).find(x => !x.missing);
+      const planUnterwegs = f ? api.plan(f.id).catch(() => null) : null;
+      const ladenUnterwegs = f ? api.downloadInfo(S.id).catch(() => null) : null;
       // Bei einer Serie gleich die Folgen der ersten Staffel dazu — die
       // Seite soll nicht mit einer leeren Liste aufgehen.
       // Die Reihenfolge kommt vom Server, auf allen Geräten gleich:
@@ -906,10 +912,9 @@ async function fetchFor(view) {
         d.episodes = await api.children(wahl.id).catch(() => []);
       }
       // Ob dieses Gerät die Datei direkt abspielt — für die Technik-Zeile.
-      const f = (d.files || []).find(x => !x.missing);
-      if (f) d.plan = (await api.plan(f.id).catch(() => null))?.plan || null;
+      if (f) d.plan = (await planUnterwegs)?.plan || null;
       // Herunterladen nur zeigen, wenn das Profil es darf.
-      if (f) d.download = await api.downloadInfo(S.id).catch(() => null);
+      if (f) d.download = await ladenUnterwegs;
       return d;
     }
     case 'wishes':    return { wishes: await api.wishes() };
@@ -940,8 +945,11 @@ async function fetchFor(view) {
     case 'adminWishes': return api.adminWishes();
     case 'sessions':  return api.adminSessions();
     case 'logs':      return { lines: await api.adminLog(S.logFilter) };
-    case 'cleanup':   return { ...await api.adminCleanup(),
-                                 reihen: await api.adminCollections().catch(() => []) };
+    case 'cleanup': {
+      // Beide zugleich, nicht nacheinander.
+      const [c, reihen] = await Promise.all([api.adminCleanup(), api.adminCollections().catch(() => [])]);
+      return { ...c, reihen };
+    }
     case 'accounts':  { const [accounts, libraries, einladungen] = await Promise.all([api.adminAccounts(), api.adminLibraries().catch(() => []), api.adminInvites().catch(() => [])]); return { accounts, libraries, einladungen }; }
     case 'metadata':  return api.adminMetadata();
     default:          return null;

@@ -264,7 +264,7 @@ func (r *Resolver) doppelfolgeErgaenzen(ctx context.Context, src string, staffel
 	}
 	titel, inhalt := []string{e.Title}, []string{e.Overview}
 	for n := von + 1; n <= bis; n++ {
-		x, err := r.tmdb.Episode(ctx, src, staffel, n)
+		x, err := r.tmdb.FolgeAusStaffel(ctx, src, staffel, n)
 		if err != nil {
 			continue
 		}

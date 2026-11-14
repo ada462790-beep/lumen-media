@@ -403,7 +403,7 @@ func (s *Server) Handler() http.Handler {
 	s.routenFunktionen(mux)
 
 	// JSON und Text gepackt, wo der Client es versteht (kompression.go).
-	return kompression(s.withCommonHeaders(mux))
+	return kompression(s.withCommonHeaders(vorrang(mux)))
 }
 
 // ---------------------------------------------------------------- Anmeldung

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"lumen/internal/lokal"
 	"lumen/internal/store"
@@ -220,19 +221,40 @@ func (r *Resolver) nachholen(ctx context.Context) {
 // schluesselPruefen fragt TMDb vor einem Durchgang einmal, ob der Schlüssel
 // gilt. Lehnt TMDb ihn ab, steht das einmal im Protokoll — nicht einmal
 // je Titel —, und die Titel mit vollständiger NFO gelten als erkannt.
+//
+// Angenommen gilt für eine Weile (schluesselGilt): Ein langer Durchgang
+// kommt in Häppchen zu 50, und jedes fragte sonst TMDb aufs Neue.
+// Lehnt TMDb den Schlüssel mittendrin ab, merkt das der Durchgang selbst
+// (ErrTMDbSchluessel bei der nächsten Anfrage).
 func (r *Resolver) schluesselPruefen(ctx context.Context) error {
-	err := r.TMDbPruefen(ctx)
-	if errors.Is(err, ErrTMDbSchluessel) {
-		r.schluesselFehlt(ctx)
-		return err
+	r.standMu.Lock()
+	frisch := !r.schluesselOK.IsZero() && time.Since(r.schluesselOK) < schluesselGilt
+	r.standMu.Unlock()
+	if !frisch {
+		err := r.TMDbPruefen(ctx)
+		if errors.Is(err, ErrTMDbSchluessel) {
+			r.schluesselFehlt(ctx)
+			return err
+		}
+		r.standMu.Lock()
+		r.schluesselOK = time.Now()
+		r.standMu.Unlock()
 	}
 	SchluesselAngenommen(ctx, r.st)
 	r.nachholen(ctx)
 	return nil
 }
 
+// schluesselGilt: so lange gilt eine erfolgreiche Prüfung des Schlüssels.
+const schluesselGilt = 10 * time.Minute
+
 // schluesselFehlt: TMDb hat den Schlüssel abgelehnt.
-func (r *Resolver) schluesselFehlt(ctx context.Context) { SchluesselAbgelehntMerken(ctx, r.st) }
+func (r *Resolver) schluesselFehlt(ctx context.Context) {
+	r.standMu.Lock()
+	r.schluesselOK = time.Time{}
+	r.standMu.Unlock()
+	SchluesselAbgelehntMerken(ctx, r.st)
+}
 
 // SchluesselAbgelehntMerken: Eine Anfrage ausserhalb eines Durchgangs
 // (Umzug, Zuweisen) bekam ein 401. Einmal ins Protokoll, Titel mit
