@@ -39,6 +39,12 @@ func (s *Server) nfoZusatz(ctx context.Context, it *store.Item, body map[string]
 	if json.Unmarshal([]byte(roh.Daten), &n) != nil {
 		return
 	}
+	// Stammt die Note aus einer NFO ohne Quelle, ist sie keine IMDb-Note —
+	// die App zeigt sie dann neutral („★ 7,4" statt „IMDb ★ 7,4"). Hat
+	// OMDb sie inzwischen ersetzt, ist sie es wieder.
+	if n.BewertungQuelle == "andere" && n.Bewertung > 0 && it.IMDbRating == n.Bewertung {
+		body["bewertungQuelle"] = "nfo"
+	}
 	a := nfoAngaben{Tagline: n.Tagline, Regie: n.Regie, Drehbuch: n.Drehbuch,
 		Studios: n.Studios, Tags: n.Tags, Laender: n.Laender}
 	if a.Tagline == "" && len(a.Regie)+len(a.Drehbuch)+len(a.Studios)+len(a.Tags)+len(a.Laender) == 0 {

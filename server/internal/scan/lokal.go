@@ -223,7 +223,9 @@ func (l *lokalLauf) nfo(ctx context.Context, id, pfad string) {
 		return
 	}
 	alt, hatte := st.LokaleNFOZu(ctx, id)
-	if hatte && alt.Pfad == pfad && alt.MTime == info.ModTime().Unix() {
+	// Unverändert — ausser die Daten stammen aus der Zeit vor der Quelle
+	// der Bewertung (lokal.NFO.BewertungQuelle): dann einmal neu lesen.
+	if hatte && alt.Pfad == pfad && alt.MTime == info.ModTime().Unix() && strings.Contains(alt.Daten, `"bewertungQuelle"`) {
 		return
 	}
 	n, err := lokal.LeseNFO(pfad)

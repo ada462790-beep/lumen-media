@@ -205,5 +205,13 @@
  "{n} doppelte Wünsche zusammengeführt": {
   "one": "{n} doppelter Wunsch zusammengeführt",
   "other": "{n} doppelte Wünsche zusammengeführt"
+ },
+ "mindestens {n} Videos": {
+  "one": "mindestens {n} Video",
+  "other": "mindestens {n} Videos"
+ },
+ "Hier und in den Unterordnern liegen mindestens {n} Videodateien.": {
+  "one": "Hier und in den Unterordnern liegt mindestens eine Videodatei.",
+  "other": "Hier und in den Unterordnern liegen mindestens {n} Videodateien."
  }
 }

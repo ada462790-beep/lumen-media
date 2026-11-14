@@ -139,6 +139,17 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 		job.MitEinbrennen, job.Einbrennen = true, bp.wahl.einbrennen.Index
 	}
 
+	if s.stromSenden(w, r, job, sess, m, start, bp.mode, scheitern) {
+		endGrund = stream.GrundBeendet
+	}
+}
+
+// stromSenden startet FFmpeg (mit Rückfall von der Hardware bis zur
+// Software), schreibt die Kopfzeilen und liefert den Strom aus. true, wenn
+// er bis zum Ende kam. Gemeinsam für Filme (browserStream) und Extras.
+func (s *Server) stromSenden(w http.ResponseWriter, r *http.Request, job stream.RemuxJob, sess *stream.Session,
+	m *melder, start float64, mode string, scheitern func(http.ResponseWriter, int, string, ...any)) bool {
+	var err error
 	// Mit Hardware kann der Start an einer bestimmten Datei scheitern (ein
 	// Codec, den der Videoteil nicht kennt). Kommt dann gar nichts, wird es
 	// eine Stufe einfacher noch einmal versucht — bis Software.
@@ -153,7 +164,7 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 			s.st.Log(r.Context(), "error", "stream", "Browser-Strom gescheitert")
 			s.log.Debug("browser-strom", "err", stream.Bereinigt(err.Error()))
 			scheitern(w, http.StatusInternalServerError, "wiedergabe lässt sich nicht vorbereiten")
-			return
+			return false
 		}
 		verf, stufe := stream.RemuxVerfahren(body)
 		buf := make([]byte, 64*1024)
@@ -176,7 +187,7 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 				s.log.Debug("browser-strom", "err", stream.Bereinigt(msg))
 				scheitern(w, http.StatusInternalServerError, "wiedergabe lässt sich nicht vorbereiten")
 			}
-			return
+			return false
 		}
 		// Nur in die Fehlersuche: der Zeitpunkt hinge an einer Wiedergabe.
 		// Was die Hardware kann, zeigt die Verwaltung unter „Umwandeln".
@@ -195,17 +206,17 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 	// Wo der Strom im Film steht. Die Oberfläche rechnet das auf die
 	// angezeigte Zeit auf — sonst stünde sie nach jedem Sprung daneben.
 	w.Header().Set("X-Lumen-Start", strconv.FormatFloat(start, 'f', 3, 64))
-	w.Header().Set("X-Lumen-Mode", bp.mode)
+	w.Header().Set("X-Lumen-Mode", mode)
 	w.WriteHeader(http.StatusOK)
 
 	flusher, _ := w.(http.Flusher)
 	// Ohne „Herunterladen" nicht schneller als etwa die doppelte Bitrate —
 	// ein reines Umpacken liefe sonst mit Plattentempo durch.
 	if sess.Drossel.Nehmen(r.Context(), len(erstes)) != nil {
-		return
+		return false
 	}
 	if _, werr := w.Write(erstes); werr != nil {
-		return
+		return false
 	}
 	buf := make([]byte, 64*1024)
 	idle := time.Now()
@@ -213,20 +224,20 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
-			return
+			return false
 		case <-s.live.Stopped(sess.ID):
 			// Der Besitzer hat beendet.
-			return
+			return false
 		default:
 		}
 
 		n, err := body.Read(buf)
 		if n > 0 {
 			if sess.Drossel.Nehmen(r.Context(), n) != nil {
-				return
+				return false
 			}
 			if _, werr := w.Write(buf[:n]); werr != nil {
-				return // Browser ist weg
+				return false // Browser ist weg
 			}
 			if flusher != nil {
 				flusher.Flush()
@@ -235,17 +246,16 @@ func (s *Server) browserStream(w http.ResponseWriter, r *http.Request) {
 			m.melden()
 		}
 		if err == io.EOF {
-			endGrund = stream.GrundBeendet
-			return
+			return true
 		}
 		if err != nil {
 			s.st.Log(r.Context(), "warn", "stream", "Strom abgebrochen")
 			s.log.Debug("strom abgebrochen", "err", stream.Bereinigt(err.Error()))
-			return
+			return false
 		}
 		if time.Since(idle) > 60*time.Second {
 			s.st.Log(r.Context(), "warn", "stream", "Strom lieferte eine Minute nichts")
-			return
+			return false
 		}
 	}
 }
@@ -268,8 +278,14 @@ type browserWahl struct {
 }
 
 func (s *Server) browserPlan(r *http.Request, f *store.MediaFile, caps stream.Device) browserWahl {
+	return s.browserPlanMit(r, f, caps, s.spurWahlFuer(r.Context(), f, r, true))
+}
+
+// browserPlanMit: wie browserPlan, mit schon gewählten Spuren — für
+// Extras, die nicht in der Datenbank stehen (extras.go).
+func (s *Server) browserPlanMit(r *http.Request, f *store.MediaFile, caps stream.Device, wahl spurWahl) browserWahl {
 	b := browserWahl{webm: stream.WebM(caps)}
-	b.wahl = s.spurWahlFuer(r.Context(), f, r, true)
+	b.wahl = wahl
 	info := s.dateiInfoFuer(f, b.wahl)
 	b.plan = stream.Decide(info, caps, bitrateLimit(r, s))
 	b.details, _ = s.ff.Feinmessung(r.Context(), f.Path)

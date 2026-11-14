@@ -44,12 +44,18 @@ type NFO struct {
 	Freigabe     string   `json:"freigabe,omitempty"`
 	Bewertung    float64  `json:"bewertung,omitempty"`
 	Stimmen      int      `json:"stimmen,omitempty"`
-	LaufzeitMin  int      `json:"laufzeitMin,omitempty"`
-	Staffel      int      `json:"staffel,omitempty"`
-	Folge        int      `json:"folge,omitempty"`
-	TMDb         string   `json:"tmdb,omitempty"`
-	IMDb         string   `json:"imdb,omitempty"`
-	TVDb         string   `json:"tvdb,omitempty"`
+	// BewertungQuelle: woher die Bewertung stammt — „imdb", wenn die NFO
+	// es sagt (<ratings><rating name="imdb">), sonst „andere" (ein
+	// schlichtes <rating> ohne Quelle, „themoviedb" …). Leer bei NFOs, die
+	// vor diesem Feld gelesen wurden; der nächste Durchlauf liest sie neu.
+	// Ohne Auslassen: Am fehlenden Schlüssel erkennt der Scanner alte Daten.
+	BewertungQuelle string `json:"bewertungQuelle"`
+	LaufzeitMin     int    `json:"laufzeitMin,omitempty"`
+	Staffel         int    `json:"staffel,omitempty"`
+	Folge           int    `json:"folge,omitempty"`
+	TMDb            string `json:"tmdb,omitempty"`
+	IMDb            string `json:"imdb,omitempty"`
+	TVDb            string `json:"tvdb,omitempty"`
 
 	// Was Emby, Jellyfin und Kodi ausserdem schreiben. Lumen zeigt es auf
 	// der Titelseite wie die Angaben von TMDb.
@@ -280,9 +286,12 @@ func NFOAus(daten []byte) (*NFO, error) {
 		n.Freigabe = freigabe(r.MPAA)
 	}
 	n.Bewertung, n.Stimmen = zahl(r.Rating), ganz(r.Votes)
+	n.BewertungQuelle = "andere"
 	for _, b := range r.Ratings.Rating {
 		// Die IMDb-Note zuerst, sonst die als Vorgabe markierte.
-		if strings.EqualFold(b.Name, "imdb") || (n.Bewertung == 0 && b.Default == "true") {
+		if strings.EqualFold(b.Name, "imdb") && zahl(b.Value) > 0 {
+			n.Bewertung, n.Stimmen, n.BewertungQuelle = zahl(b.Value), ganz(b.Votes), "imdb"
+		} else if n.Bewertung == 0 && b.Default == "true" {
 			n.Bewertung, n.Stimmen = zahl(b.Value), ganz(b.Votes)
 		}
 	}
@@ -301,6 +310,9 @@ func NFOAus(daten []byte) (*NFO, error) {
 	}
 	if n.Bewertung < 0 || n.Bewertung > 10 {
 		n.Bewertung, n.Stimmen = 0, 0
+	}
+	if n.Bewertung == 0 {
+		n.BewertungQuelle = ""
 	}
 	n.LaufzeitMin = ganz(r.Runtime)
 	n.Staffel, n.Folge = ganz(r.Season), ganz(r.Episode)

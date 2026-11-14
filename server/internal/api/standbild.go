@@ -121,7 +121,8 @@ func (s *Server) standbildDatei(ctx context.Context, it *store.Item) (*store.Med
 		return nil, err
 	}
 	for i := range dateien {
-		if !dateien[i].Missing {
+		// Eine defekte Datei gibt kein Bild — FFmpeg gar nicht erst fragen.
+		if !dateien[i].Missing && dateien[i].Defekt == "" {
 			return &dateien[i], nil
 		}
 	}
@@ -380,8 +381,11 @@ func (s *Server) standbildMachen(it *store.Item) (string, error) {
 }
 
 // standbildSenden liefert das Bild aus — 503, solange es noch entsteht
-// (die Web-App fragt dann später noch einmal), oder 404, dann bleibt in
-// der App der Titel stehen, wie bisher.
+// (die Web-App fragt dann später noch einmal). Lässt sich keins machen
+// (Datei defekt, keine Folge), kommt ein durchsichtiger Punkt
+// (standbildErsatz): Die App erkennt ihn und lässt den Titel stehen.
+// Vorher kam 404 — für den Browser ein Fehler wie 503, also fragte die
+// App zehnmal nach, und die Konsole füllte sich mit 404.
 func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *store.Item) {
 	pfad, warte, err := s.standbild(r.Context(), it)
 	if err != nil {
@@ -391,7 +395,7 @@ func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *sto
 			fail(w, http.StatusServiceUnavailable, "kein bild")
 			return
 		}
-		fail(w, http.StatusNotFound, "kein bild")
+		standbildErsatz(w)
 		return
 	}
 	f, err := os.Open(pfad)
@@ -409,4 +413,24 @@ func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *sto
 	bildAufbewahren(w, it.ID+":"+string(vermerk), info)
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeContent(w, r, "standbild.jpg", info.ModTime(), f)
+}
+
+// leerPNG: ein durchsichtiges Bild von 1×1 Punkt.
+var leerPNG = []byte{
+	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+	0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+	0x42, 0x60, 0x82,
+}
+
+// standbildErsatz: „kein Bild" ohne Fehler — der durchsichtige Punkt,
+// gekennzeichnet mit X-Lumen-Ersatz. Eine Stunde gemerkt: Ändert sich die
+// Datei, kommt das Bild mit dem nächsten Durchlauf ohnehin neu.
+func standbildErsatz(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("X-Lumen-Ersatz", "1")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(leerPNG)
 }

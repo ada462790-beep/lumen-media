@@ -534,6 +534,9 @@ type view struct {
 	// NaechsteFolge: in „Weiterschauen" die Folge nach der zuletzt
 	// gesehenen — noch nicht angefangen.
 	NaechsteFolge bool `json:"naechsteFolge,omitempty"`
+	// Special: eine Folge mit selbst vergebener Nummer (aus „S01E00",
+	// item_zusatz.special). Die Apps zeigen sie als „Special" ohne Nummer.
+	Special bool `json:"special,omitempty"`
 }
 
 // neuSeit: so lange gilt ein Titel als „neu".
@@ -588,6 +591,7 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 	}
 	zuSerie, _ := s.st.SerienZuFolgen(r.Context(), folgen)
 	bisFolge := s.st.BisFolgen(r.Context(), folgen)
+	specials := s.st.Specials(r.Context(), folgen)
 	staende, err := s.st.SerienStaende(r.Context(), acc.ID, serien)
 	if err != nil {
 		return nil, err
@@ -637,6 +641,7 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 			}
 		}
 		v.EpisodeNoEnd = bisFolge[it.ID]
+		v.Special = specials[it.ID]
 		// Ein Bild aus der Datei nur, wo das passende fehlt. Bei Folgen ist
 		// das „Poster" das Standbild von TMDb (oder das eigene -thumb.jpg) —
 		// es ist schon breit; einen Hintergrund haben Folgen nie. Vorher

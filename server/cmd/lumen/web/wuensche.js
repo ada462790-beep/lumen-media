@@ -185,11 +185,22 @@ export function wunschFeldEinrichten(wurzel, { gewuenscht, ansehen, fehler }) {
       stand(form).liste = [];
       await gewuenscht(w, !!(v?.schonGewuenscht || w?.dabei));
     } catch (err) {
-      fehler(err.message);
+      if (err.schonDa?.itemId) schonDaZeigen(form, err.schonDa);
+      else fehler(err.message);
     } finally {
       delete form.dataset.laeuft;
       form.removeAttribute('aria-busy');
     }
+  }
+
+  /* Steht der Titel schon in der Bibliothek, sagt das Feld es gleich
+     darunter — mit einem Knopf zur Titelseite statt eines Wunschs. */
+  function schonDaZeigen(form, da) {
+    form.querySelector('.wunsch-schon-da')?.remove();
+    const name = da.jahr ? `${da.titel} (${da.jahr})` : da.titel;
+    form.insertAdjacentHTML('beforeend', `<p class="wunsch-schon-da" role="status">
+      <span>${escH(tr('Schon da: {titel}', { titel: name }))}</span>
+      <button type="button" class="btn btn-pill btn-pill--fill wunsch-ansehen" data-wunsch-ansehen="${escH(da.itemId)}">${escH(tr('Ansehen'))}</button></p>`);
   }
 
   function waehlen(form, schluessel) {
@@ -204,6 +215,7 @@ export function wunschFeldEinrichten(wurzel, { gewuenscht, ansehen, fehler }) {
     if (!(feld instanceof HTMLInputElement) || !feld.matches('[data-wunschfeld] input[role="combobox"]')) return;
     const form = feld.form, st = stand(form);
     clearTimeout(st.timer);
+    form.querySelector('.wunsch-schon-da')?.remove();
     // Die Zeile „Nur den Namen" folgt dem Tippen sofort, die Vorschläge
     // nach einer kurzen Pause.
     if (st.liste.length || feld.value.trim()) zeichnen(form); else zu(form);

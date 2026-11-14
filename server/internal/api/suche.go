@@ -10,6 +10,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"lumen/internal/store"
@@ -111,6 +112,7 @@ func (s *Server) suche(w http.ResponseWriter, r *http.Request) {
 		if its, err := s.st.Query(r.Context(), fq); err == nil && len(its) > 0 {
 			if v, err := s.decorate(r, its); err == nil {
 				folgen = v
+				folgenOrdnen(folgen)
 			}
 		}
 	}
@@ -214,4 +216,30 @@ func (s *Server) reihenUndSammlungenSuchen(r *http.Request, eingabe string) ([]r
 		}
 	}
 	return reihen, sammlungen
+}
+
+// folgenOrdnen: Die Treffer unter „Folgen" stehen nach Serie, Staffel und
+// Folge — gewählt werden sie nach Güte (die zwölf besten), gezeigt in der
+// Reihenfolge, in der man sie schaut. Specials (Staffel 0) nach den
+// Staffeln.
+func folgenOrdnen(folgen []view) {
+	staffel := func(n int) int {
+		if n == 0 {
+			return 1 << 20
+		}
+		return n
+	}
+	sort.SliceStable(folgen, func(i, j int) bool {
+		a, b := folgen[i], folgen[j]
+		if sa, sb := strings.ToLower(store.NFC(a.SeriesTitle)), strings.ToLower(store.NFC(b.SeriesTitle)); sa != sb {
+			return sa < sb
+		}
+		if a.SeriesID != b.SeriesID {
+			return a.SeriesID < b.SeriesID
+		}
+		if sa, sb := staffel(a.SeasonNo), staffel(b.SeasonNo); sa != sb {
+			return sa < sb
+		}
+		return a.EpisodeNo < b.EpisodeNo
+	})
 }

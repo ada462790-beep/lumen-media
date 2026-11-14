@@ -34,13 +34,13 @@ func TestNFOAus(t *testing.T) {
   <genre>Drama</genre><genre>Krieg</genre>
   <premiered>1981-09-17</premiered>
 </movie>`, NFO{Art: "movie", Titel: "Das Boot", Originaltitel: "Das Boot", Jahr: 1981, Premiere: "1981-09-17",
-			Inhalt: "U 96 läuft aus.", Genres: []string{"Drama", "Krieg"}, Freigabe: "FSK 12", Bewertung: 8.4,
+			Inhalt: "U 96 läuft aus.", Genres: []string{"Drama", "Krieg"}, Freigabe: "FSK 12", Bewertung: 8.4, BewertungQuelle: "imdb",
 			Stimmen: 250000, LaufzeitMin: 149, TMDb: "387", IMDb: "tt0082096"}},
 		{"alte Kodi-Datei mit id und rating", `<movie><title>Alien</title><year>1979</year>
 <rating>8.5</rating><votes>900</votes><id>tt0078748</id><tmdbid>348</tmdbid><plot>Im All.</plot>
 <genre>Horror / Science-Fiction</genre><mpaa>Rated R</mpaa></movie>`,
 			NFO{Art: "movie", Titel: "Alien", Jahr: 1979, Inhalt: "Im All.", Genres: []string{"Horror", "Science-Fiction"},
-				Freigabe: "R", Bewertung: 8.5, Stimmen: 900, TMDb: "348", IMDb: "tt0078748"}},
+				Freigabe: "R", Bewertung: 8.5, Stimmen: 900, BewertungQuelle: "andere", TMDb: "348", IMDb: "tt0078748"}},
 		{"Serie mit TVDb in id", `<tvshow><title>Heimat</title><year>1984</year><plot>Hunsrück.</plot><id>78999</id></tvshow>`,
 			NFO{Art: "tvshow", Titel: "Heimat", Jahr: 1984, Inhalt: "Hunsrück.", TVDb: "78999"}},
 		{"Folge", `<episodedetails><title>Fernweh</title><season>1</season><episode>3</episode>

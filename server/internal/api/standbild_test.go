@@ -81,7 +81,8 @@ func TestStandbildAlsErsatzFuersPoster(t *testing.T) {
 }
 
 // Wo sich kein Bild machen lässt — etwa weil die Datei kaputt ist —,
-// kommt ein sauberes 404, und die App zeigt weiter den Titel.
+// kommt ohne Fehler der durchsichtige Ersatz (X-Lumen-Ersatz), und die
+// App zeigt weiter den Titel. Ein 404 liess die App zehnmal nachfragen.
 func TestStandbildAusKaputterDatei(t *testing.T) {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ohne FFmpeg kein Standbild")
@@ -89,8 +90,8 @@ func TestStandbildAusKaputterDatei(t *testing.T) {
 	h := newHarness(t)
 	itemID, _ := h.film("Kaputt", 1) // nur Nullbytes, kein Video
 	resp, raw := h.do("GET", "/api/v1/art/"+itemID+"/frame", "", h.tok)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("erwartet 404, bekommen %d %s", resp.StatusCode, raw)
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("X-Lumen-Ersatz") != "1" || resp.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("erwartet Ersatzbild, bekommen %d %v %q", resp.StatusCode, resp.Header, raw)
 	}
 }
 

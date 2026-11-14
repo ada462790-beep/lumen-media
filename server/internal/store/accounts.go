@@ -774,6 +774,9 @@ type OffeneEinladung struct {
 	Kinderprofil bool      `json:"kinderprofil"`
 	Bibliotheken int       `json:"bibliotheken"`
 	Von          string    `json:"von"`
+	// Altersgrenze: bei einem Kinderprofil die Grenze, mit der es angelegt
+	// wird (aus den Vorgaben) — sonst fehlt sie.
+	Altersgrenze *int `json:"altersgrenze,omitempty"`
 }
 
 func einladungsKennung(code string) string {
@@ -807,15 +810,23 @@ func (s *Store) OffeneEinladungen(ctx context.Context, accountID string, alle bo
 		var preset struct {
 			Libraries    []string `json:"libraries"`
 			Kinderprofil bool     `json:"kinderprofil"`
+			Limits       *struct {
+				MaxAge *int `json:"maxAge"`
+			} `json:"limits"`
 		}
 		_ = json.Unmarshal([]byte(presetRaw), &preset)
 		ende := code
 		if len(ende) > 4 {
 			ende = ende[len(ende)-4:]
 		}
-		out = append(out, OffeneEinladung{Kennung: einladungsKennung(code), Ende: ende,
+		e := OffeneEinladung{Kennung: einladungsKennung(code), Ende: ende,
 			ExpiresAt: time.Unix(ablauf, 0), Kinderprofil: preset.Kinderprofil,
-			Bibliotheken: len(preset.Libraries), Von: von})
+			Bibliotheken: len(preset.Libraries), Von: von}
+		if preset.Kinderprofil && preset.Limits != nil && preset.Limits.MaxAge != nil && *preset.Limits.MaxAge >= 0 {
+			alter := *preset.Limits.MaxAge
+			e.Altersgrenze = &alter
+		}
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }

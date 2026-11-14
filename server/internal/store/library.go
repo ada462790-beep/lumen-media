@@ -481,8 +481,11 @@ func bedingung(q Query) (where []string, args []any, ok bool) {
 	// Titel, von denen länger als die Frist keine Datei mehr abspielbar
 	// ist (gelöscht, umbenannt, defekt), sehen die Leute nicht mehr; der
 	// Besitzer findet sie unter Aufräumen (scan_aufraeumen.go).
+	// Ist eine Datei da, aber defekt (leer, kaputt, gesperrt), kommt sie
+	// über Nacht nicht wieder: Solche Titel verschwinden sofort — sonst
+	// stand „Ansehen" da und der Player blieb schwarz.
 	if q.Freigabe {
-		where = append(where, `(i.fehlt_seit IS NULL OR i.fehlt_seit > ?)`)
+		where = append(where, `(i.fehlt_seit IS NULL OR (i.fehlt_seit > ? AND NOT `+nurDefekt+`))`)
 		args = append(args, time.Now().Add(-FehlendFrist).Unix())
 	}
 	kinds := q.Kinds
