@@ -152,6 +152,11 @@ func (s *Server) adminTitelZuweisen(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	// Von Hand zugewiesen: Die Dateien dieses Films gehören zusammen, auch
+	// wenn sie verschieden heissen — der Scanner trennt sie nicht wieder.
+	if it.Kind == "movie" {
+		_ = s.st.ZuordnungSperren(r.Context(), it.ID)
+	}
 	s.metadatenImHintergrund(it.LibraryID)
 	s.ReihenBilden(r.Context())
 	neu, _ := s.st.Item(r.Context(), it.ID)

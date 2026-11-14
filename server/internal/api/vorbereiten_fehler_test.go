@@ -8,10 +8,25 @@
 package api
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+// vorbereitenVergessen: was sich der Arbeitsspeicher gemerkt hat, wie
+// nach einem Neustart.
+func vorbereitenVergessen(fileID string) {
+	hg.mu.Lock()
+	for k := range hg.fehl {
+		if strings.HasPrefix(k, fileID+".") {
+			delete(hg.fehl, k)
+		}
+	}
+	hg.mu.Unlock()
+}
 
 // Eine kaputte Datei („Invalid data found") wird beim Vorbereiten einmal
 // versucht und einmal gemeldet — auch über einen Neustart hinweg (vorher
@@ -35,9 +50,7 @@ func TestKaputteDateiWirdNurEinmalVorbereitet(t *testing.T) {
 		return n
 	}
 	neustart := func() {
-		hg.mu.Lock()
-		delete(hg.fehl, fileID)
-		hg.mu.Unlock()
+		vorbereitenVergessen(fileID)
 	}
 	h.api.dateiVorbereiten(t.Context(), fileID)
 	if n := meldungen(); n != 1 {
@@ -72,5 +85,77 @@ func TestKaputteDateiWirdNurEinmalVorbereitet(t *testing.T) {
 		if id == fileID {
 			t.Fatal("defekte Datei in der Liste des Hintergrunds")
 		}
+	}
+}
+
+// Nur eindeutige Formatfehler merkt Lumen sich dauerhaft; ein
+// vorübergehender Fehler (Platte voll, FFmpeg beendet, Laufwerk weg)
+// ruht 24 Stunden. Vorschaubilder und Untertitel merken sich ihr
+// Scheitern getrennt.
+func TestVorbereitenFehlerDauerhaftOderVoruebergehend(t *testing.T) {
+	h := newHarness(t)
+	_, fileID := h.film("Heat", 1)
+	f, err := h.st.File(t.Context(), fileID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	altern := func(art string) {
+		t.Helper()
+		vorbereitenVergessen(fileID)
+		alt := time.Now().Add(-25 * time.Hour)
+		if err := os.Chtimes(filepath.Join(h.api.vorbereitenFehlerOrdner(), fileID+"."+art), alt, alt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for meldung, dauerhaft := range map[string]bool{
+		"ffmpeg: Invalid data found when processing input": true,
+		"moov atom not found":                              true,
+		"ffmpeg: No space left on device":                  false,
+		"signal: killed":                                   false,
+		"open /media/film.mkv: no such file or directory":  false,
+	} {
+		if istFormatFehler(meldung) != dauerhaft {
+			t.Errorf("istFormatFehler(%q) = %v", meldung, !dauerhaft)
+		}
+	}
+
+	h.api.vorbereitenGescheitertMerken(f, artTrickplay, false)
+	if !h.api.vorbereitenGescheitert(f, artTrickplay) {
+		t.Fatal("vorübergehender Fehler nicht gemerkt")
+	}
+	if h.api.vorbereitenGescheitert(f, artUntertitel) {
+		t.Fatal("Vorschaubilder sperren die Untertitel")
+	}
+	altern(artTrickplay)
+	if h.api.vorbereitenGescheitert(f, artTrickplay) {
+		t.Fatal("vorübergehender Fehler nach 25 Stunden noch gesperrt")
+	}
+
+	h.api.vorbereitenGescheitertMerken(f, artUntertitel, true)
+	altern(artUntertitel)
+	if !h.api.vorbereitenGescheitert(f, artUntertitel) {
+		t.Fatal("dauerhafter Fehler vergessen")
+	}
+	// Datei geändert: auch der dauerhafte Vermerk gilt nicht mehr.
+	f.SizeBytes++
+	if h.api.vorbereitenGescheitert(f, artUntertitel) {
+		t.Fatal("geänderte Datei bleibt gesperrt")
+	}
+	f.SizeBytes--
+
+	// Vermerk einer älteren Fassung (ohne Art): nur noch eine Pause.
+	vorbereitenVergessen(fileID)
+	_ = os.Remove(filepath.Join(h.api.vorbereitenFehlerOrdner(), fileID+"."+artTrickplay))
+	altPfad := filepath.Join(h.api.vorbereitenFehlerOrdner(), fileID)
+	if err := os.WriteFile(altPfad, []byte(dateiKennung(f)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !h.api.vorbereitenGescheitert(f, artTrickplay) {
+		t.Fatal("frischer alter Vermerk gilt nicht")
+	}
+	alt := time.Now().Add(-25 * time.Hour)
+	_ = os.Chtimes(altPfad, alt, alt)
+	if h.api.vorbereitenGescheitert(f, artTrickplay) {
+		t.Fatal("alter Vermerk sperrt für immer")
 	}
 }

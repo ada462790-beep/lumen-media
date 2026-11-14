@@ -8,6 +8,7 @@
 package ablage
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -85,5 +86,44 @@ func TestEinmalJeSchluessel(t *testing.T) {
 	if n := aufrufe.Load(); n < 1 || n > 2 {
 		// Höchstens zwei: Ein Nachzügler darf nach dem Ende neu anfangen.
 		t.Fatalf("fn lief %d-mal", n)
+	}
+}
+
+// Bricht der erste Aufruf ab (seine Anfrage ist weg), bekommt der
+// Wartende nicht „context canceled", sondern versucht es selbst.
+func TestEinmalWartenderUebernimmtAbbruchNicht(t *testing.T) {
+	los := make(chan struct{})
+	erster := make(chan error, 1)
+	go func() {
+		erster <- Einmal("ziel-abbruch", func() error {
+			<-los
+			return context.Canceled
+		})
+	}()
+	// Warten, bis der erste läuft.
+	for {
+		einmalMu.Lock()
+		_, ok := laufend["ziel-abbruch"]
+		einmalMu.Unlock()
+		if ok {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	zweiter := make(chan error, 1)
+	var selbst atomic.Bool
+	go func() {
+		zweiter <- Einmal("ziel-abbruch", func() error {
+			selbst.Store(true)
+			return nil
+		})
+	}()
+	time.Sleep(20 * time.Millisecond) // der zweite wartet jetzt
+	close(los)
+	if err := <-erster; !errors.Is(err, context.Canceled) {
+		t.Fatalf("erster: %v", err)
+	}
+	if err := <-zweiter; err != nil || !selbst.Load() {
+		t.Fatalf("zweiter: err=%v selbst=%v", err, selbst.Load())
 	}
 }

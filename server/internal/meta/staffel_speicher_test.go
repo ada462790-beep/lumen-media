@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // Viele Folgen derselben Staffel kosten eine Anfrage bei TMDb, nicht eine
@@ -69,5 +70,65 @@ func TestFolgenStaffelweise(t *testing.T) {
 	// Unbekannte Staffel: Einzelanfrage sagt „nicht gefunden".
 	if _, err := tm.FolgeAusStaffel(ctx, "5", 7, 1); err == nil {
 		t.Fatal("unbekannte Staffel sollte einen Fehler geben")
+	}
+}
+
+// Ein Fehler bei der Staffel-Anfrage („TMDb bremst", Server-Fehler) gilt
+// nur Sekunden, nicht 15 Minuten wie eine geholte Staffel.
+func TestStaffelFehlerGiltNurKurz(t *testing.T) {
+	var kaputt atomic.Bool
+	var staffel atomic.Int32
+	kaputt.Store(true)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/tv/5/season/1" {
+			staffel.Add(1)
+			if kaputt.Load() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"episodes": []map[string]any{
+				{"episode_number": 1, "name": "Eins"}}})
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	tm := NewTMDb("k", "de-DE", "CH")
+	tm.BaseURL, tm.ImageURL = srv.URL, srv.URL+"/bild"
+	ctx := context.Background()
+	if _, err := tm.staffelHolen(ctx, "5", 1); err == nil {
+		t.Fatal("kein Fehler")
+	}
+	// Gleich danach: derselbe Fehler, keine zweite Anfrage.
+	if _, err := tm.staffelHolen(ctx, "5", 1); err == nil || staffel.Load() != 1 {
+		t.Fatalf("sofort: err=%v, %d Anfragen", err, staffel.Load())
+	}
+	kaputt.Store(false)
+	// Nach staffelFehlerHaltbar (hier: zurückgestellt) wird neu gefragt.
+	tm.staffelMu.Lock()
+	tm.staffelDaten["5/1"].geholt = time.Now().Add(-staffelFehlerHaltbar - time.Second)
+	tm.staffelMu.Unlock()
+	if c, err := tm.FolgeAusStaffel(ctx, "5", 1, 1); err != nil || c.Title != "Eins" {
+		t.Fatalf("nach der Pause: %+v %v", c, err)
+	}
+	// Eine geholte Staffel gilt weiter lange.
+	tm.staffelMu.Lock()
+	tm.staffelDaten["5/1"].geholt = time.Now().Add(-time.Minute)
+	tm.staffelMu.Unlock()
+	n := staffel.Load()
+	if _, err := tm.FolgeAusStaffel(ctx, "5", 1, 1); err != nil || staffel.Load() != n {
+		t.Fatalf("geholte Staffel neu gefragt: %v", err)
+	}
+}
+
+// Derselbe Fehler bei vielen Titeln steht einmal im Protokoll.
+func TestFehlerSammlerZaehlt(t *testing.T) {
+	f := fehlerSammler{}
+	e := context.DeadlineExceeded
+	if !f.erstesMal(e) || f.erstesMal(e) || f.erstesMal(e) {
+		t.Fatal("erstesMal zählt falsch")
+	}
+	if f[e.Error()] != 3 {
+		t.Fatalf("gezählt: %d", f[e.Error()])
 	}
 }

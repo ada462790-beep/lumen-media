@@ -218,24 +218,36 @@ func (s *Store) serieUeberfuehren(ctx context.Context, alt, neu string, konten [
 		// Folgen, die in der Staffel von neu fehlen. Liegt eine Folge in
 		// beiden vor, wandern die Dateien von alt zur Folge von neu — als
 		// weitere Fassung. Bei leeren Doppeln tut das alles nichts.
+		//
+		// Staffel 0 (Specials) und Folge 0 stehen als NULL in der Datenbank
+		// (nullInt in UpsertItem). Ein „=" oder „NOT IN" mit NULL ist nie
+		// wahr — die Specials blieben bei alt und verschwanden mit ihm,
+		// samt den Haken daran. Darum wird hier überall mit COALESCE(…,0)
+		// verglichen.
 		for _, q := range []string{
 			`UPDATE item SET parent_id = ?2
 			  WHERE kind = 'season' AND parent_id = ?1
-			    AND season_no NOT IN (SELECT season_no FROM item WHERE kind = 'season' AND parent_id = ?2)`,
+			    AND NOT EXISTS (SELECT 1 FROM item nst WHERE nst.kind = 'season' AND nst.parent_id = ?2
+			                       AND COALESCE(nst.season_no,0) = COALESCE(item.season_no,0))`,
 			`UPDATE item SET parent_id = (SELECT nst.id FROM item nst, item ast
 			                               WHERE ast.id = item.parent_id AND nst.parent_id = ?2
-			                                 AND nst.kind = 'season' AND nst.season_no = ast.season_no)
+			                                 AND nst.kind = 'season'
+			                                 AND COALESCE(nst.season_no,0) = COALESCE(ast.season_no,0))
 			  WHERE kind = 'episode'
 			    AND parent_id IN (SELECT id FROM item WHERE kind = 'season' AND parent_id = ?1)
 			    AND NOT EXISTS (SELECT 1 FROM item ne, item nst, item ast
 			                     WHERE ast.id = item.parent_id AND nst.parent_id = ?2
-			                       AND nst.kind = 'season' AND nst.season_no = ast.season_no
-			                       AND ne.parent_id = nst.id AND ne.episode_no = item.episode_no)`,
+			                       AND nst.kind = 'season'
+			                       AND COALESCE(nst.season_no,0) = COALESCE(ast.season_no,0)
+			                       AND ne.parent_id = nst.id
+			                       AND COALESCE(ne.episode_no,0) = COALESCE(item.episode_no,0))`,
 			`UPDATE media_file SET item_id = COALESCE((
 			     SELECT ne.id FROM item ae, item ast, item nst, item ne
 			      WHERE ae.id = media_file.item_id AND ast.id = ae.parent_id
-			        AND nst.parent_id = ?2 AND nst.kind = 'season' AND nst.season_no = ast.season_no
-			        AND ne.parent_id = nst.id AND ne.episode_no = ae.episode_no LIMIT 1), item_id)
+			        AND nst.parent_id = ?2 AND nst.kind = 'season'
+			        AND COALESCE(nst.season_no,0) = COALESCE(ast.season_no,0)
+			        AND ne.parent_id = nst.id
+			        AND COALESCE(ne.episode_no,0) = COALESCE(ae.episode_no,0) LIMIT 1), item_id)
 			  WHERE item_id IN (SELECT ae.id FROM item ae JOIN item ast ON ast.id = ae.parent_id
 			                     WHERE ast.parent_id = ?1 AND ae.kind = 'episode')`,
 		} {
@@ -250,8 +262,10 @@ func (s *Store) serieUeberfuehren(ctx context.Context, alt, neu string, konten [
 		rows, err := t.QueryContext(ctx,
 			`SELECT ae.id, ne.id FROM item ae
 			   JOIN item ast ON ast.id = ae.parent_id AND ast.parent_id = ?
-			   JOIN item nst ON nst.parent_id = ? AND nst.season_no = ast.season_no
-			   JOIN item ne ON ne.parent_id = nst.id AND ne.episode_no = ae.episode_no
+			   JOIN item nst ON nst.parent_id = ? AND nst.kind = 'season'
+			                AND COALESCE(nst.season_no,0) = COALESCE(ast.season_no,0)
+			   JOIN item ne ON ne.parent_id = nst.id
+			               AND COALESCE(ne.episode_no,0) = COALESCE(ae.episode_no,0)
 			  WHERE ae.kind = 'episode' AND ne.kind = 'episode'`, alt, neu)
 		if err != nil {
 			return err

@@ -319,7 +319,7 @@ func (s *Store) MetadatenVonHand(ctx context.Context, itemID string, h Handbearb
 			}
 			var belegt int
 			_ = t.QueryRowContext(ctx, `SELECT 1 FROM item WHERE parent_id = ? AND kind = 'episode'
-			                             AND episode_no = ? AND id != ?`, it.ParentID, *h.EpisodeNo, itemID).Scan(&belegt)
+			                             AND COALESCE(episode_no,0) = ? AND id != ?`, it.ParentID, *h.EpisodeNo, itemID).Scan(&belegt)
 			if belegt == 1 {
 				return ErrNummerBelegt
 			}
@@ -369,14 +369,16 @@ func staffelNummer(ctx context.Context, t *sql.Tx, it *Item, nr int) error {
 	}
 	var belegt int
 	_ = t.QueryRowContext(ctx, `SELECT 1 FROM item WHERE parent_id = ? AND kind = 'season'
-	                             AND season_no = ? AND id != ?`, it.ParentID, nr, it.ID).Scan(&belegt)
+	                             AND COALESCE(season_no,0) = ? AND id != ?`, it.ParentID, nr, it.ID).Scan(&belegt)
 	if belegt == 1 {
 		return ErrNummerBelegt
 	}
-	if _, err := t.ExecContext(ctx, `UPDATE item SET season_no = ? WHERE id = ?`, nr, it.ID); err != nil {
+	// Staffel 0 steht wie überall als NULL (nullInt), sonst fände der
+	// Vergleich mit COALESCE sie zwar, eine „=“-Abfrage aber nicht.
+	if _, err := t.ExecContext(ctx, `UPDATE item SET season_no = ? WHERE id = ?`, nullInt(nr), it.ID); err != nil {
 		return err
 	}
-	_, err := t.ExecContext(ctx, `UPDATE item SET season_no = ? WHERE parent_id = ? AND kind = 'episode'`, nr, it.ID)
+	_, err := t.ExecContext(ctx, `UPDATE item SET season_no = ? WHERE parent_id = ? AND kind = 'episode'`, nullInt(nr), it.ID)
 	return err
 }
 
@@ -460,4 +462,30 @@ func (s *Store) GesperrteFolgeZuPfad(ctx context.Context, path, seriesID string)
 		      OR EXISTS (SELECT 1 FROM feld_sperre x WHERE x.item_id = st.id AND x.feld = 'seasonNo'))`,
 		path, seriesID).Scan(&id)
 	return id
+}
+
+// FeldZuordnung ist eine Sperre ohne eigenes Feld: Jemand hat von Hand
+// bestätigt, dass die Dateien dieses Films zusammengehören (Kennung
+// eingegeben, eine Fassung als Standard gewählt). Der Scanner trennt
+// dann keine Datei mehr ab, nur weil sie anders heisst („Chihiros Reise
+// ins Zauberland" neben „Spirited Away"). Von Hand abtrennen geht
+// weiterhin. Sie steht nicht in SperrFelder — die Oberfläche zeigt sie
+// nicht als Schloss an einem Feld.
+const FeldZuordnung = "zuordnung"
+
+// ZuordnungSperren merkt, dass die Dateien von itemID von Hand bestätigt
+// zusammengehören.
+func (s *Store) ZuordnungSperren(ctx context.Context, itemID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO feld_sperre (item_id, feld) VALUES (?, ?)`, itemID, FeldZuordnung)
+	return err
+}
+
+// ZuordnungGesperrt sagt, ob die Dateien von itemID von Hand bestätigt
+// zusammengehören.
+func (s *Store) ZuordnungGesperrt(ctx context.Context, itemID string) bool {
+	var n int
+	_ = s.db.QueryRowContext(ctx,
+		`SELECT 1 FROM feld_sperre WHERE item_id = ? AND feld = ?`, itemID, FeldZuordnung).Scan(&n)
+	return n == 1
 }

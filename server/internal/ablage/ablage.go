@@ -19,6 +19,7 @@
 package ablage
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -76,26 +77,44 @@ func Schreiben(ziel string, quelle io.Reader, grenze int64) error {
 // gleichzeitig aus. Wer während eines laufenden Aufrufs mit demselben
 // Schlüssel kommt, wartet und bekommt dessen Ergebnis — statt dasselbe
 // Bild ein zweites Mal herunterzuladen.
+//
+// Endet der laufende Aufruf, weil sein Kontext abgebrochen wurde (die
+// Anfrage, die ihn auslöste, ist weg), übernimmt der Wartende das nicht:
+// Er versucht es selbst, mit seinem eigenen fn und damit seinem eigenen
+// Kontext. Vorher bekamen alle Wartenden „context canceled", obwohl ihre
+// eigene Anfrage noch lief.
 func Einmal(schluessel string, fn func() error) error {
-	einmalMu.Lock()
-	if l, ok := laufend[schluessel]; ok {
+	for {
+		einmalMu.Lock()
+		if l, ok := laufend[schluessel]; ok {
+			einmalMu.Unlock()
+			l.wg.Wait()
+			if abgebrochen(l.err) {
+				continue
+			}
+			return l.err
+		}
+		l := &lauf{}
+		l.wg.Add(1)
+		laufend[schluessel] = l
 		einmalMu.Unlock()
-		l.wg.Wait()
+
+		func() {
+			defer func() {
+				einmalMu.Lock()
+				delete(laufend, schluessel)
+				einmalMu.Unlock()
+				l.wg.Done()
+			}()
+			l.err = fn()
+		}()
 		return l.err
 	}
-	l := &lauf{}
-	l.wg.Add(1)
-	laufend[schluessel] = l
-	einmalMu.Unlock()
+}
 
-	defer func() {
-		einmalMu.Lock()
-		delete(laufend, schluessel)
-		einmalMu.Unlock()
-		l.wg.Done()
-	}()
-	l.err = fn()
-	return l.err
+// abgebrochen: Endete ein Aufruf nur, weil sein Kontext zu Ende war?
+func abgebrochen(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 type lauf struct {

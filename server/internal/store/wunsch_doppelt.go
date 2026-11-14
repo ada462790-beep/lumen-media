@@ -44,7 +44,13 @@ type offenerWunschZeile struct {
 }
 
 func (s *Store) offeneWuensche(ctx context.Context) ([]offenerWunschZeile, error) {
-	rows, err := s.db.QueryContext(ctx,
+	return offeneWuenscheIn(ctx, s.db)
+}
+
+// offeneWuenscheIn liest über q — die Datenbank oder eine laufende
+// Transaktion (WunschAnlegen).
+func offeneWuenscheIn(ctx context.Context, q abfrager) ([]offenerWunschZeile, error) {
+	rows, err := q.QueryContext(ctx,
 		`SELECT id, account_id, title, COALESCE(year,0), COALESCE(art,''), COALESCE(tmdb_id,''), COALESCE(imdb_id,'')
 		   FROM wish WHERE state IN ('open','working') ORDER BY created_at, rowid`)
 	if err != nil {
@@ -86,8 +92,8 @@ func gleicherWunsch(z offenerWunschZeile, d WunschDaten) bool {
 
 // gleicherOffenerWunsch sucht einen offenen Wunsch, der derselbe ist —
 // von wem auch immer, eigene zuerst.
-func (s *Store) gleicherOffenerWunsch(ctx context.Context, accountID string, d WunschDaten) (id, owner string, err error) {
-	alle, err := s.offeneWuensche(ctx)
+func gleicherOffenerWunsch(ctx context.Context, q abfrager, accountID string, d WunschDaten) (id, owner string, err error) {
+	alle, err := offeneWuenscheIn(ctx, q)
 	if err != nil {
 		return "", "", err
 	}
@@ -103,11 +109,11 @@ func (s *Store) gleicherOffenerWunsch(ctx context.Context, accountID string, d W
 
 // wunschKennungErgaenzen trägt fehlende Kennungen und das Poster nach;
 // was der Wunsch schon hat, bleibt.
-func (s *Store) wunschKennungErgaenzen(ctx context.Context, id string, d WunschDaten) error {
+func wunschKennungErgaenzen(ctx context.Context, t *sql.Tx, id string, d WunschDaten) error {
 	if !d.mitKennung() && d.PosterPfad == "" {
 		return nil
 	}
-	_, err := s.db.ExecContext(ctx,
+	_, err := t.ExecContext(ctx,
 		`UPDATE wish SET art = COALESCE(art, ?), tmdb_id = COALESCE(tmdb_id, ?), imdb_id = COALESCE(imdb_id, ?),
 		                 originaltitel = COALESCE(originaltitel, ?), poster = COALESCE(poster, ?)
 		  WHERE id = ?`,
@@ -116,7 +122,8 @@ func (s *Store) wunschKennungErgaenzen(ctx context.Context, id string, d WunschD
 }
 
 // WunschLoeschen löscht einen Wunsch samt allen, die sich angeschlossen
-// haben.
+// haben. Nur für den Fall, dass niemand ihn mehr haben soll — wer einen
+// Wunsch für einzelne Konten zurücknimmt, nimmt WunschAbgeben.
 func (s *Store) WunschLoeschen(ctx context.Context, id string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM wish WHERE id = ?`, id)
 	if err != nil {
@@ -126,6 +133,79 @@ func (s *Store) WunschLoeschen(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// WunschTeilnehmer: wem der Wunsch gehört und wer sich angeschlossen hat
+// (in der Reihenfolge des Anschliessens).
+func (s *Store) WunschTeilnehmer(ctx context.Context, id string) (owner string, dabei []string, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT account_id FROM wish WHERE id = ?`, id).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil, ErrNotFound
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT account_id FROM wish_dabei WHERE wish_id = ? AND account_id <> ? ORDER BY rowid`, id, owner)
+	if err != nil {
+		return "", nil, err
+	}
+	defer rows.Close()
+	dabei, err = collectStrings(rows)
+	return owner, dabei, err
+}
+
+// WunschAbgeben nimmt den Wunsch für die Konten in weg zurück. Bleibt
+// jemand übrig, der sich angeschlossen hat, geht der Wunsch an die
+// Person, die sich zuerst angeschlossen hat — wie beim Löschen eines
+// Kontos (DeleteAccount). Vorher nahm das Löschen durch die Person, die
+// ihn angelegt hatte, alle Angeschlossenen mit (ON DELETE CASCADE). Erst
+// wenn niemand übrig bleibt, verschwindet der Wunsch. geloescht sagt, ob
+// er ganz weg ist.
+func (s *Store) WunschAbgeben(ctx context.Context, id string, weg []string) (geloescht bool, err error) {
+	err = s.tx(ctx, func(t *sql.Tx) error {
+		var owner string
+		err := t.QueryRowContext(ctx, `SELECT account_id FROM wish WHERE id = ?`, id).Scan(&owner)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		raus := map[string]bool{}
+		for _, a := range weg {
+			raus[a] = true
+			if _, err := t.ExecContext(ctx,
+				`DELETE FROM wish_dabei WHERE wish_id = ? AND account_id = ?`, id, a); err != nil {
+				return err
+			}
+		}
+		if !raus[owner] {
+			return nil
+		}
+		var nachfolger string
+		err = t.QueryRowContext(ctx,
+			`SELECT account_id FROM wish_dabei WHERE wish_id = ? AND account_id <> ? ORDER BY rowid LIMIT 1`,
+			id, owner).Scan(&nachfolger)
+		if errors.Is(err, sql.ErrNoRows) {
+			geloescht = true
+			_, err = t.ExecContext(ctx, `DELETE FROM wish WHERE id = ?`, id)
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		// Die Notiz der Verwaltung galt der bisherigen Person; nur der
+		// allgemeine Stand bleibt (wie in DeleteAccount).
+		if _, err := t.ExecContext(ctx,
+			`UPDATE wish SET account_id = ?, note = CASE WHEN note = ? THEN note ELSE NULL END WHERE id = ?`,
+			nachfolger, WunschNotizErfuellt, id); err != nil {
+			return err
+		}
+		_, err = t.ExecContext(ctx, `DELETE FROM wish_dabei WHERE wish_id = ? AND account_id = ?`, id, nachfolger)
+		return err
+	})
+	return geloescht, err
 }
 
 // WunschZustand: wem der Wunsch gehört, wie er steht und ob sich das

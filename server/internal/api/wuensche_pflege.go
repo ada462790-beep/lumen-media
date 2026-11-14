@@ -41,7 +41,9 @@ func (s *Server) wunschLoeschen(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case owner == acc.ID && state == "open":
-		err = s.st.WunschLoeschen(r.Context(), id)
+		// Haben sich andere angeschlossen, behalten sie den Wunsch: Er
+		// geht an die Person, die sich zuerst angeschlossen hat.
+		_, err = s.st.WunschAbgeben(r.Context(), id, []string{acc.ID})
 	case owner == acc.ID:
 		failCode(w, http.StatusConflict, "nicht_offen",
 			"Dieser Wunsch ist schon in Arbeit oder erledigt und lässt sich nicht mehr löschen.")
@@ -76,7 +78,26 @@ func (s *Server) adminWunschLoeschen(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "nicht gefunden")
 		return
 	}
-	if err := s.st.WunschLoeschen(r.Context(), id); err != nil {
+	// Gelöscht wird nur für die Konten im eigenen Bereich. Hängen
+	// Angeschlossene ausserhalb davon (ein auf einzelne Konten beschränkter
+	// Mitverwalter), behalten sie den Wunsch — er geht an die erste von
+	// ihnen. Wer alles verwaltet, löscht ihn ganz.
+	owner, dabei, err := s.st.WunschTeilnehmer(r.Context(), id)
+	if err != nil {
+		failErr(w, err)
+		return
+	}
+	acc := accountOf(r)
+	imBereich := func(k string) bool {
+		return acc.Besitzerrechte() || k == acc.ID || s.verwaltetKonto(r, k)
+	}
+	weg := []string{owner}
+	for _, k := range dabei {
+		if imBereich(k) {
+			weg = append(weg, k)
+		}
+	}
+	if _, err := s.st.WunschAbgeben(r.Context(), id, weg); err != nil {
 		failErr(w, err)
 		return
 	}

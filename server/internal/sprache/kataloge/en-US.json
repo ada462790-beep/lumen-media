@@ -324,5 +324,7 @@
   "Ein Update läuft schon.": "An update is already running.",
   "Neue Folgen von {serie}": "New episodes of {serie}",
   "die teile liegen in verschiedenen ordnern — erst in einen ordner legen": "The parts are in different folders — move them into one folder first.",
-  "Dieser Wunsch ist schon in Arbeit oder erledigt und lässt sich nicht mehr löschen.": "This request is already in progress or done and can no longer be deleted."
+  "Dieser Wunsch ist schon in Arbeit oder erledigt und lässt sich nicht mehr löschen.": "This request is already in progress or done and can no longer be deleted.",
+  "einrichten geht nicht vom rechner selbst aus — öffne lumen von einem anderen gerät im heimnetz oder setze LUMEN_HEIMNETZ=127.0.0.1": "Setup does not work from the server machine itself — open Lumen from another device on your home network or set LUMEN_HEIMNETZ=127.0.0.1.",
+  "kein freier name in .lumen-teile": "no free name in .lumen-teile"
 }

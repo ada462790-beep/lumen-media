@@ -100,8 +100,8 @@ func TestSpecialsBleibenInIhrerSerie(t *testing.T) {
 		t.Fatalf("%d Serien, erwartet 3", len(serien))
 	}
 	erwartet := map[string][]string{
-		"Game of Thrones": {"Specials|0x1|The Last Watch", "Staffel 8|8x1|Winterfell", "Staffel 8|8x2|A Knight"},
-		"Knight Rider":    {"Specials|0x1|Special", "Staffel 1|1x1|Knight of the Living Dead"},
+		"Game of Thrones": {"Specials|0x1000|The Last Watch", "Staffel 8|8x1|Winterfell", "Staffel 8|8x2|A Knight"},
+		"Knight Rider":    {"Specials|0x1000|Special", "Staffel 1|1x1|Knight of the Living Dead"},
 		"Inside Man":      {"Staffel 1|1x1|Folge 1", "Staffel 1|1x2|Folge 2"},
 	}
 	for _, s := range serien {

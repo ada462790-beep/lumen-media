@@ -159,6 +159,10 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 	}()
 
 	res := &Result{}
+	// Derselbe Fehler bei vielen Titeln („TMDb bremst" für jede Folge
+	// einer Staffel) steht einmal im Protokoll, dazu am Ende, wie oft.
+	fehler := fehlerSammler{}
+	defer fehler.zusammenfassen(ctx, r.st)
 	for i := 0; i < len(pending); i++ { // wächst unterwegs (Folgen frisch zugeordneter Serien)
 		if ctx.Err() != nil {
 			return res, ctx.Err()
@@ -183,8 +187,10 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 			res.Unmatched++
 		case err != nil:
 			res.Failed++
-			r.st.Log(ctx, "warn", "metadaten",
-				fmt.Sprintf("%s: %v", pending[i].Title, err))
+			if fehler.erstesMal(err) {
+				r.st.Log(ctx, "warn", "metadaten",
+					fmt.Sprintf("%s: %v", pending[i].Title, err))
+			}
 		default:
 			res.Matched++
 		}
@@ -889,12 +895,14 @@ func (r *Resolver) titelNachholen(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	fehler := fehlerSammler{}
+	defer fehler.zusammenfassen(ctx, r.st)
 	holen := func(ctx context.Context, liste []store.Item) {
 		for i := range liste {
 			if ctx.Err() != nil {
 				return
 			}
-			if err := r.resolveOne(ctx, &liste[i]); err != nil && err != errUnmatched {
+			if err := r.resolveOne(ctx, &liste[i]); err != nil && err != errUnmatched && fehler.erstesMal(err) {
 				// Ohne Titel: Das Protokoll verrät nicht, was in der
 				// Mediathek steht (DATENSCHUTZ.md).
 				r.st.Log(ctx, "warn", "metadaten", fmt.Sprintf("ein Titel liess sich nicht nachladen: %v", err))
@@ -1002,10 +1010,22 @@ func (r *Resolver) SerienFreigabenNachholen(ctx context.Context, n int) int {
 	return fertig
 }
 
-// posterVersucht: Titel, für die das Nachholen schon einmal lief und TMDb
-// kein Poster kannte (oder es wieder scheiterte) — bis zum nächsten Start
-// nicht noch einmal.
-var posterVersucht sync.Map
+// posterVersucht: Titel, für die das Nachholen schon lief (Kennung →
+// Zeitpunkt). Kannte TMDb kein Poster oder scheiterte es wieder, kommt
+// der Titel erst nach posterPause noch einmal dran. posterAb: hinter
+// welcher Kennung die nächste Runde weitersucht — reihum, damit alle
+// drankommen und nicht immer dieselben ersten.
+var (
+	posterVersucht sync.Map
+	posterMu       sync.Mutex
+	posterAb       string
+)
+
+const posterPause = 24 * time.Hour
+
+// posterHappen: so viele Titel liest eine Runde über n hinaus (für die,
+// die gerade Pause haben). Eine Variable, damit der Test klein bleibt.
+var posterHappen = 200
 
 // PosterNachholen holt Poster und Hintergrund für zugeordnete Titel, deren
 // Download scheiterte (store.TitelOhnePoster). Höchstens n auf einmal;
@@ -1014,18 +1034,31 @@ func (r *Resolver) PosterNachholen(ctx context.Context, n int) int {
 	if !r.Ready() || r.tmdb == nil {
 		return 0
 	}
-	titel, err := r.st.TitelOhnePoster(ctx, n+200)
+	posterMu.Lock()
+	ab := posterAb
+	posterMu.Unlock()
+	happen := posterHappen
+	titel, err := r.st.TitelOhnePosterAb(ctx, ab, n+happen)
 	if err != nil {
 		return 0
 	}
+	if len(titel) < n+happen && ab != "" {
+		// Am Ende angekommen: vorne weiter.
+		if vorne, err := r.st.TitelOhnePosterAb(ctx, "", n+happen); err == nil {
+			titel = append(titel, vorne...)
+		}
+	}
 	fertig, gefragt := 0, 0
+	weiterAb := ab
 	for _, it := range titel {
 		if ctx.Err() != nil || gefragt >= n {
 			break
 		}
-		if _, schon := posterVersucht.LoadOrStore(it.ID, true); schon {
+		weiterAb = it.ID
+		if wann, schon := posterVersucht.Load(it.ID); schon && time.Since(wann.(time.Time)) < posterPause {
 			continue
 		}
+		posterVersucht.Store(it.ID, time.Now())
 		src, err := r.st.SourceID(ctx, it.ID, "tmdb")
 		if err != nil || src == "" {
 			continue
@@ -1045,6 +1078,12 @@ func (r *Resolver) PosterNachholen(ctx context.Context, n int) int {
 			fertig++
 		}
 	}
+	// Die nächste Runde sucht hinter dem zuletzt angesehenen Titel weiter
+	// (am Ende geht es oben vorne weiter) — auch wenn diese Runde nur
+	// Titel in der Pause sah; sonst blieb sie an ihnen hängen.
+	posterMu.Lock()
+	posterAb = weiterAb
+	posterMu.Unlock()
 	if fertig > 0 {
 		r.st.Log(ctx, "info", "metadaten", fmt.Sprintf("%d fehlende Poster nachgeholt", fertig))
 	}
@@ -1130,4 +1169,24 @@ func (r *Resolver) SerienWertungenNachholen(ctx context.Context, n int) int {
 		}
 	}
 	return fertig
+}
+
+// fehlerSammler zählt gleiche Fehler eines Durchgangs. Ins Protokoll
+// kommt jeder Fehler einmal; wie oft er noch vorkam, steht am Ende in
+// einer Zeile — statt einer Zeile je Folge.
+type fehlerSammler map[string]int
+
+// erstesMal zählt err und sagt, ob er in diesem Durchgang neu ist.
+func (f fehlerSammler) erstesMal(err error) bool {
+	k := err.Error()
+	f[k]++
+	return f[k] == 1
+}
+
+func (f fehlerSammler) zusammenfassen(ctx context.Context, st *store.Store) {
+	for k, n := range f {
+		if n > 1 {
+			st.Log(ctx, "warn", "metadaten", fmt.Sprintf("%d weitere Titel: %s", n-1, k))
+		}
+	}
 }

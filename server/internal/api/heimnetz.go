@@ -92,7 +92,17 @@ type netzSicht struct {
 	// Adressen des NAS auch Dienste des NAS selbst, etwa sein Reverse-Proxy.
 	hostNetz bool
 	// bruecke: Lumen läuft im Container mit eigenem Netz (Bridge-Betrieb).
+	// Nur dann ist 127.0.0.1 sicher Lumen selbst (Gesundheitsprüfung);
+	// im Netz des Rechners und ohne Container (nativ) kann es jeder Dienst
+	// auf dem Rechner sein, etwa ein Reverse-Proxy.
 	bruecke bool
+	// heimPraefixe: die On-Link-Präfixe der globalen IPv6-Adressen eigener
+	// Schnittstellen (keine Container-Brücken), etwa 2a02:…:9a00::/64.
+	// Geräte im Heimnetz haben mit IPv6 meist nur solche Adressen — sie
+	// sind nicht „privat", aber zu Hause. Nur im Netz des Rechners bzw.
+	// ohne Container bekannt; im Bridge-Betrieb sieht Lumen das Heimnetz
+	// nicht.
+	heimPraefixe []*net.IPNet
 }
 
 var netze netzStand
@@ -163,9 +173,16 @@ func heimnetzPruefen(ip net.IP) (bool, string) {
 	// Reverse-Proxy, der Anfragen aus dem Internet ohne X-Forwarded-For
 	// weiterreicht. Das bleibt unterwegs, ausser die Adresse steht einzeln
 	// in LUMEN_HEIMNETZ.
+	//
+	// Ohne Container (Lumen nativ als Dienst) gilt dasselbe wie im Netz
+	// des Rechners: Ein Reverse-Proxy auf demselben Rechner (nginx gibt
+	// ohne eigene Zeile kein X-Forwarded-For mit) reichte sonst Anfragen
+	// aus dem Internet als „zu Hause" durch — mit Profilliste und
+	// Einrichten. Wer auf dem Rechner selbst einrichten will, öffnet Lumen
+	// von einem anderen Gerät im Heimnetz oder setzt LUMEN_HEIMNETZ=127.0.0.1.
 	selbst := ip.IsLoopback() || sicht.eigene[ip.String()]
 	if selbst {
-		if ip.IsLoopback() && !sicht.hostNetz {
+		if ip.IsLoopback() && sicht.bruecke {
 			return true, grundLumenSelbst
 		}
 		if festgelegt && einzelnFestgelegt(heim, ip) {
@@ -181,11 +198,20 @@ func heimnetzPruefen(ip net.IP) (bool, string) {
 		}
 		return false, grundNichtFestgelegt
 	}
-	if !(ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
-		return false, grundOeffentlich
-	}
 	if gateways[ip.String()] {
 		return false, grundGateway
+	}
+	if !(ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
+		// Globale IPv6 aus einem Präfix, das direkt an einer eigenen
+		// Schnittstelle hängt: ein Gerät im selben Netz.
+		if ip.To4() == nil {
+			for _, n := range sicht.heimPraefixe {
+				if n.Contains(ip) {
+					return true, grundPrivat
+				}
+			}
+		}
+		return false, grundOeffentlich
 	}
 	for _, n := range sicht.containerNetze {
 		if n.Contains(ip) {
@@ -221,38 +247,92 @@ func containerSchnittstelle(name string) bool {
 // eigeneSicht liest die Schnittstellen. Sieht Lumen im Container Brücken
 // wie docker0, läuft es im Netz des Rechners — im eigenen Container-Netz
 // gibt es nur lo und eth0.
+//
+// Im Bridge-Betrieb hängt eth0 als virtuelles Kabel (veth) am Netz des
+// Containers. Wer aus diesem Netz kommt, ist ein anderer Container auf
+// demselben Rechner (etwa ein Reverse-Proxy im selben Compose-Netz) —
+// vorher zählte er als zu Hause. Hängt der Container dagegen mit
+// macvlan/ipvlan direkt im Heimnetz, ist eth0 das Heimnetz und bleibt es.
 func eigeneSicht() netzSicht {
-	s := netzSicht{eigene: map[string]bool{}}
 	ifs, err := net.Interfaces()
 	if err != nil {
-		return s
+		return netzSicht{eigene: map[string]bool{}}
 	}
-	containerBruecken := false
+	var liste []schnittstelle
 	for _, ifc := range ifs {
-		istContainer := containerSchnittstelle(ifc.Name)
-		if istContainer {
-			containerBruecken = true
-		}
 		addrs, err := ifc.Addrs()
 		if err != nil {
 			continue
 		}
+		x := schnittstelle{name: ifc.Name}
 		for _, a := range addrs {
-			n, ok := a.(*net.IPNet)
-			if !ok || n.IP.IsLoopback() {
-				continue
-			}
-			s.eigene[n.IP.String()] = true
-			if istContainer && !n.IP.IsLinkLocalUnicast() {
-				s.containerNetze = append(s.containerNetze, &net.IPNet{IP: n.IP.Mask(n.Mask), Mask: n.Mask})
+			if n, ok := a.(*net.IPNet); ok {
+				x.netze = append(x.netze, n)
 			}
 		}
+		liste = append(liste, x)
 	}
-	if imContainer() {
+	return sichtAus(liste, imContainer(), schnittstellenArten())
+}
+
+// schnittstelle: Name und Adressen (mit Netzmaske) einer Schnittstelle.
+type schnittstelle struct {
+	name  string
+	netze []*net.IPNet
+}
+
+// sichtAus baut die Sicht aus den Schnittstellen; arten aus
+// schnittstellenArten (nil = unbekannt).
+func sichtAus(liste []schnittstelle, container bool, arten map[string]string) netzSicht {
+	s := netzSicht{eigene: map[string]bool{}}
+	containerBruecken := false
+	for _, x := range liste {
+		if containerSchnittstelle(x.name) {
+			containerBruecken = true
+		}
+	}
+	if container {
 		s.hostNetz = containerBruecken
 		s.bruecke = !containerBruecken
 	}
+	for _, x := range liste {
+		istContainer := containerSchnittstelle(x.name)
+		// Im Bridge-Betrieb ist das eigene Netz ein Container-Netz — ausser
+		// die Schnittstelle hängt direkt im Heimnetz (macvlan, ipvlan).
+		// Ist die Art unbekannt, gilt lieber „Container-Netz": zu streng
+		// heisst Anmelden mit PIN, zu locker Profilliste im Internet.
+		eigenesContainerNetz := s.bruecke && x.name != "lo" && !direktImHeimnetz(arten[x.name])
+		for _, n := range x.netze {
+			if n.IP.IsLoopback() {
+				continue
+			}
+			s.eigene[n.IP.String()] = true
+			if (istContainer || eigenesContainerNetz) && !n.IP.IsLinkLocalUnicast() {
+				s.containerNetze = append(s.containerNetze, &net.IPNet{IP: n.IP.Mask(n.Mask), Mask: n.Mask})
+				continue
+			}
+			// IPv6-Präfixe des Heimnetzes: nur global, nur ein echtes
+			// On-Link-Präfix (/48 bis /128) — nie ::/0 oder ein ganzer
+			// Provider-Block —, und nicht im Bridge-Betrieb.
+			if !s.bruecke && !istContainer && n.IP.To4() == nil && n.IP.IsGlobalUnicast() &&
+				!n.IP.IsPrivate() {
+				if eins, bits := n.Mask.Size(); bits == 128 && eins >= 48 && eins < 128 {
+					s.heimPraefixe = append(s.heimPraefixe, &net.IPNet{IP: n.IP.Mask(n.Mask), Mask: n.Mask})
+				}
+			}
+		}
+	}
 	return s
+}
+
+// direktImHeimnetz: Schnittstellenarten, mit denen ein Container eine
+// eigene Adresse im echten Netz hat.
+func direktImHeimnetz(art string) bool {
+	switch art {
+	case "macvlan", "macvtap", "ipvlan", "ipvtap":
+		return true
+	}
+	return false
 }
 
 // eigeneGateways sammelt die Gateway-Adressen der eigenen Netze: die

@@ -794,28 +794,63 @@ func (s *Scanner) ordnerZusammenlegen(ctx context.Context, lib store.Library, or
 	if err != nil || len(ids) < 2 {
 		return
 	}
-	je := map[string]string{} // tmdb → ältester Eintrag
+	type eintrag struct {
+		id, titel string
+		dauer     []int64
+	}
+	je := map[string][]eintrag{} // tmdb → Einträge, ältester zuerst
 	for _, id := range ids {
 		k, _ := s.st.SourceID(ctx, id, "tmdb")
 		if k == "" {
 			continue
 		}
+		e := eintrag{id: id, titel: s.titelDerDateien(ctx, lib, id)}
+		if dateien, err := s.st.FilesFor(ctx, id); err == nil {
+			for _, f := range dateien {
+				e.dauer = append(e.dauer, f.DurationMS)
+			}
+		}
 		// Gleiche Kennung genügt nicht: Eine falsche NFO oder ein falscher
 		// Treffer gibt zwei Filmen dieselbe. Zusammengelegt wird nur, was
-		// auch nach den Dateinamen derselbe Film ist.
-		titel := s.titelDerDateien(ctx, lib, id)
-		if titel == "" {
-			continue
-		}
-		k += "\x00" + titel
-		if ziel, ok := je[k]; ok {
-			if err := s.st.FilmZusammenlegen(ctx, ziel, id); err == nil {
+		// auch nach den Dateinamen derselbe Film ist — oder gleich lang
+		// (±2 %): „Chihiros Reise ins Zauberland" und „Spirited Away" mit
+		// derselben Kennung sind zwei Sprachfassungen eines Films.
+		zusammen := false
+		for _, ziel := range je[k] {
+			if !gleicherFilm(ziel.titel, ziel.dauer, e.titel, e.dauer) {
+				continue
+			}
+			if err := s.st.FilmZusammenlegen(ctx, ziel.id, id); err == nil {
 				s.st.Log(ctx, "info", "scan", "zwei Einträge desselben Films zusammengelegt (gleicher Ordner, gleiche Kennung)")
 			}
-			continue
+			zusammen = true
+			break
 		}
-		je[k] = id
+		if !zusammen {
+			je[k] = append(je[k], e)
+		}
 	}
+}
+
+// gleicherFilm: Zwei Einträge mit derselben Kennung sind derselbe Film,
+// wenn ihre Dateien gleich heissen (titelSchluessel) oder gleich lang
+// sind (±2 %) — ausser die Namen tragen verschiedene Zahlen („Teil 1" und
+// „Teil 2").
+func gleicherFilm(titelA string, dauerA []int64, titelB string, dauerB []int64) bool {
+	if titelA != "" && titelA == titelB {
+		return true
+	}
+	if za, zb := zahlenIn(titelA), zahlenIn(titelB); za != "" && zb != "" && za != zb {
+		return false
+	}
+	for _, a := range dauerA {
+		for _, b := range dauerB {
+			if laufzeitGleich(a, b) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------- Serien
@@ -947,19 +982,58 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 			bekannt[e.ID] = e
 		}
 	}
+	//
+	// Specials ohne eigene Nummer („S08E00", „Specials/Pilot.mkv") zählen
+	// ab store.SpecialOhneNummer: Mit der nächsten freien Nummer der
+	// Staffel 0 kollidierten sie mit einer später dazukommenden echten
+	// Datei S00E02, und die wurde eine Fassung des falschen Specials.
+	// Steht ein Special noch aus einer älteren Fassung im alten Bereich,
+	// bekommt die Folge selbst eine neue Nummer (umnummern) — sie behält
+	// ihre Kennung, Haken und Merkliste bleiben daran.
+	type umnummer struct {
+		hit int
+		e   store.Item
+	}
+	var umnummern []umnummer
 	for i := range hits {
 		g := &hits[i].guess
 		if g.EpisodeNo != 0 || g.EpisodeTo != 0 {
 			continue
 		}
-		if e, ok := bekannt[s.itemZuPfad(ctx, hits[i].path)]; ok && e.Kind == "episode" &&
-			e.SeasonNo == g.SeasonNo && e.EpisodeNo > 0 {
-			g.EpisodeNo = e.EpisodeNo
+		if g.SeasonNo == 0 {
+			g.Special = true
 		}
+		e, ok := bekannt[s.itemZuPfad(ctx, hits[i].path)]
+		if !ok || e.Kind != "episode" || e.SeasonNo != g.SeasonNo || e.EpisodeNo <= 0 {
+			continue
+		}
+		if g.SeasonNo == 0 && e.EpisodeNo < store.SpecialOhneNummer {
+			umnummern = append(umnummern, umnummer{i, e})
+			continue
+		}
+		g.EpisodeNo = e.EpisodeNo
 	}
 	for _, h := range hits {
 		if h.guess.EpisodeNo > hoechste[h.guess.SeasonNo] {
 			hoechste[h.guess.SeasonNo] = h.guess.EpisodeNo
+		}
+	}
+	if hoechste[0] < store.SpecialOhneNummer-1 {
+		hoechste[0] = store.SpecialOhneNummer - 1
+	}
+	for _, u := range umnummern {
+		hoechste[0]++
+		nr := hoechste[0]
+		if err := s.st.FolgeUmnummern(ctx, u.e.ID, nr); err != nil {
+			return added, unmatched, err
+		}
+		hits[u.hit].guess.EpisodeNo = nr
+		if st, ok := seasons[0]; ok {
+			for k := range folgen[st.ID] {
+				if folgen[st.ID][k].ID == u.e.ID {
+					folgen[st.ID][k].EpisodeNo = nr
+				}
+			}
 		}
 	}
 	for i := range hits {
@@ -1154,41 +1228,70 @@ func (s *Scanner) titelDerDateien(ctx context.Context, lib store.Library, itemID
 	return titel
 }
 
-// DateienVerschieden: Sind die Dateien nach ihrem eigenen Namen
-// verschiedene Filme? Für die Seite Aufräumen — dort heisst das „falsch
-// zugeordnet", nicht „Fassungen". Teile eines Films (CD1/CD2, Teil 1/2
-// derselben Basis) heissen gleich.
-func (s *Scanner) DateienVerschieden(lib store.Library, pfade []string) bool {
-	erster := ""
-	for _, p := range pfade {
-		k := s.dateiSchluessel(lib, p)
-		if k == "" {
+// DateienVerschieden: Sind die Dateien eines Eintrags nach ihrem eigenen
+// Namen verschiedene Filme? Für die Seite Aufräumen — dort heisst das
+// „falsch zugeordnet", nicht „Fassungen". Es gilt dieselbe Regel wie beim
+// Durchlauf (abtrennen): Was der Scanner zusammenlässt — Sprachfassungen
+// mit gleicher Laufzeit, von Hand bestätigte Zuordnungen —, zeigt das
+// Aufräumen nicht als „verschieden".
+func (s *Scanner) DateienVerschieden(ctx context.Context, lib store.Library, it *store.Item, dateien []store.MediaFile) bool {
+	if it == nil || len(dateien) < 2 || s.vonHandBestaetigt(ctx, it) {
+		return false
+	}
+	for _, f := range dateien {
+		rel, err := filepath.Rel(lib.Path, f.Path)
+		if err != nil {
 			continue
 		}
-		if erster == "" {
-			erster = k
-		} else if k != erster {
+		if s.abtrennenNoetig(lib, it, dateien, f.Path, s.dateiTitel(f.Path, splitDirs(rel), lib.Kind)) {
 			return true
 		}
 	}
 	return false
 }
 
+// vonHandBestaetigt: Hat jemand die Zuordnung dieses Films von Hand
+// bestätigt (Kennung eingegeben, eine Fassung gewählt)? Dann trennt der
+// Scanner nichts davon ab (store.FeldZuordnung).
+func (s *Scanner) vonHandBestaetigt(ctx context.Context, it *store.Item) bool {
+	return it.MatchState == "manual" || s.st.ZuordnungGesperrt(ctx, it.ID)
+}
+
 // gehoertNichtDazu: Hängen an einem Film Dateien, die nach ihrem Namen
 // verschiedene Filme sind, und ist diese Datei nicht die, deren Name zum
-// Titel des Eintrags passt? Dann wird sie abgetrennt. Welche bleibt: die
-// mit dem Namen, der dem Titel (oder Originaltitel) des Eintrags am
-// ähnlichsten ist (gemeinsame Wörter); bei Gleichstand die mit dem
-// kleinsten Pfad — damit die Entscheidung bei jedem Durchlauf gleich
-// ausfällt.
+// Titel des Eintrags passt? Dann wird sie abgetrennt (abtrennenNoetig).
 func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *store.Item, path, title string) bool {
+	if s.vonHandBestaetigt(ctx, it) {
+		return false
+	}
 	dateien, err := s.st.FilesFor(ctx, it.ID)
 	if err != nil || len(dateien) < 2 {
 		return false
 	}
+	return s.abtrennenNoetig(lib, it, dateien, path, title)
+}
+
+// abtrennenNoetig entscheidet für die Datei path (Titel nach ihrem Namen:
+// title) unter den Dateien eines Eintrags. Welche bleibt: die mit dem
+// Namen, der dem Titel (oder Originaltitel) des Eintrags am ähnlichsten
+// ist (gemeinsame Wörter); bei Gleichstand die mit dem kleinsten Pfad —
+// damit die Entscheidung bei jedem Durchlauf gleich ausfällt.
+//
+// Abgetrennt wird nicht, wenn die Laufzeit (±2 %) zu der Datei passt, die
+// bleibt: Das ist dieselbe Fassung unter anderem Namen — „Chihiros Reise
+// ins Zauberland" und „Spirited Away", „Das Leben der Anderen" und „The
+// Lives of Others". Ausnahme: Beide Namen tragen Zahlen, und die sind
+// verschieden („Teil 1"/„Teil 2" eines Zweiteilers sind oft gleich lang).
+func (s *Scanner) abtrennenNoetig(lib store.Library, it *store.Item, dateien []store.MediaFile, path, title string) bool {
+	if len(dateien) < 2 {
+		return false
+	}
+	dateien = append([]store.MediaFile(nil), dateien...)
 	sort.Slice(dateien, func(i, j int) bool { return dateien[i].Path < dateien[j].Path })
 	eigen := titelSchluessel(title)
 	titelZu := map[string]string{} // Schlüssel → Titel, wie gelesen
+	dauer := map[string][]int64{}  // Schlüssel → Laufzeiten der Dateien
+	var eigeneDauer int64
 	reihe := []string{}
 	for _, f := range dateien {
 		t := title
@@ -1198,6 +1301,8 @@ func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *s
 				continue
 			}
 			t = s.dateiTitel(f.Path, splitDirs(rel), lib.Kind)
+		} else {
+			eigeneDauer = f.DurationMS
 		}
 		k := titelSchluessel(t)
 		if k == "" {
@@ -1206,6 +1311,9 @@ func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *s
 		if _, ok := titelZu[k]; !ok {
 			titelZu[k] = t
 			reihe = append(reihe, k)
+		}
+		if f.Path != path {
+			dauer[k] = append(dauer[k], f.DurationMS)
 		}
 	}
 	if len(reihe) < 2 || titelZu[eigen] == "" {
@@ -1223,9 +1331,24 @@ func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *s
 	if eigen == haupt {
 		return false
 	}
-	// „Teil 1" und „Teil 2", „Dune" und „Dune 2": verschiedene Zahlen im
-	// Namen sind verschiedene Filme — auch wenn beide gut zum Titel passen.
-	if zahlenIn(titelZu[eigen]) != zahlenIn(titelZu[haupt]) {
+	ze, zh := zahlenIn(titelZu[eigen]), zahlenIn(titelZu[haupt])
+	// „Teil 1" und „Teil 2", „Dune: Part One" und „Part Two": verschiedene
+	// Zahlen im Namen sind verschiedene Filme — auch bei gleicher Laufzeit
+	// und auch wenn beide gut zum Titel passen.
+	if ze != "" && zh != "" && ze != zh {
+		return true
+	}
+	// Gleich lang wie die Datei, die bleibt: dieselbe Fassung in einer
+	// anderen Sprache oder unter einem Szene-Namen.
+	for _, d := range dauer[haupt] {
+		if laufzeitGleich(eigeneDauer, d) {
+			return false
+		}
+	}
+	// „Dune" neben „Dune 2": Zahl nur auf einer Seite und keine passende
+	// Laufzeit — verschiedene Filme. („Dune" neben „Dune - Part One" mit
+	// gleicher Laufzeit blieb oben zusammen.)
+	if ze != zh {
 		return true
 	}
 	// Passt der eigene Name selbst gut zum Titel des Eintrags (etwa ein
@@ -1234,15 +1357,60 @@ func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *s
 	return punkte(eigen) < 0.5
 }
 
+// laufzeitGleich: beide Laufzeiten bekannt und höchstens 2 % auseinander.
+func laufzeitGleich(a, b int64) bool {
+	if a <= 0 || b <= 0 {
+		return false
+	}
+	d := a - b
+	if d < 0 {
+		d = -d
+	}
+	return d*50 <= max(a, b)
+}
+
 // zahlenIn: die Zahlen in einem Titel, in Reihenfolge — „Teil 2 (2016)"
-// ergibt „2 2016".
+// ergibt „2 2016". Zahlwörter hinter „Part", „Teil", „Chapter",
+// „Kapitel", „Volume" („Dune: Part One", „Teil zwei") und römische Zahlen
+// ab II („Star Trek II", „Rocky IV") zählen als Zahl. Ein einzelnes „I",
+// „V" oder „X" nicht — „I, Robot", „V wie Vendetta", „X-Men".
 func zahlenIn(s string) string {
 	var out []string
-	for _, w := range strings.FieldsFunc(s, func(r rune) bool { return r < '0' || r > '9' }) {
-		out = append(out, strings.TrimLeft(w, "0"))
+	woerter := strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r <= 127
+	})
+	for i, w := range woerter {
+		// Ziffern, auch mitten im Wort („part2", „cd1").
+		for _, z := range strings.FieldsFunc(w, func(r rune) bool { return r < '0' || r > '9' }) {
+			out = append(out, strings.TrimLeft(z, "0"))
+		}
+		if n, ok := roemisch[w]; ok && n > 1 && w != "v" && w != "x" {
+			out = append(out, strconv.Itoa(n))
+			continue
+		}
+		if i == 0 || !zahlVorwort[woerter[i-1]] {
+			continue
+		}
+		if n, ok := zahlWort[w]; ok {
+			out = append(out, strconv.Itoa(n))
+		} else if n, ok := roemisch[w]; ok && n <= 1 {
+			out = append(out, strconv.Itoa(n)) // „Part I"
+		}
 	}
 	return strings.Join(out, " ")
 }
+
+var zahlVorwort = map[string]bool{"part": true, "teil": true, "chapter": true,
+	"kapitel": true, "volume": true, "vol": true, "episode": true}
+
+var zahlWort = map[string]int{
+	"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+	"eins": 1, "zwei": 2, "drei": 3, "vier": 4, "fuenf": 5, "fünf": 5, "sechs": 6, "sieben": 7, "acht": 8, "neun": 9, "zehn": 10,
+	"i": 1, "v": 5, "x": 10,
+}
+
+var roemisch = map[string]int{"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6,
+	"vii": 7, "viii": 8, "ix": 9, "x": 10}
 
 // wortAehnlich: Anteil gemeinsamer Wörter zweier Titel (0 bis 1).
 func wortAehnlich(a, b string) float64 {

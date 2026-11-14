@@ -77,45 +77,56 @@ func (d WunschDaten) mitKennung() bool { return d.TMDbID != "" || d.IMDbID != ""
 // Gibt es schon einen offenen mit derselben Kennung, entsteht kein
 // zweiter: Der eigene kommt zurück, der von jemand anderem bekommt dieses
 // Profil dazu.
+//
+// Suchen und Anlegen laufen in einer Transaktion (_txlock=immediate):
+// Wünschten zwei Profile denselben Titel im selben Augenblick, fanden
+// vorher beide keinen und legten beide einen an — ein Doppel, das erst
+// die Verwaltung wieder zusammenführen musste.
 func (s *Store) WunschAnlegen(ctx context.Context, accountID string, d WunschDaten) (*Wish, error) {
 	d.Titel = strings.TrimSpace(d.Titel)
 	if d.Titel == "" {
 		return nil, errors.New("titel fehlt")
 	}
-	// Derselbe Wunsch, offen, von wem auch immer (wunsch_doppelt.go): über
-	// die Kennung, sonst über Titel und Jahr.
-	id, owner, err := s.gleicherOffenerWunsch(ctx, accountID, d)
-	if err != nil {
-		return nil, err
-	}
-	if id != "" {
-		if owner != accountID {
-			if _, err := s.db.ExecContext(ctx,
-				`INSERT OR IGNORE INTO wish_dabei (wish_id, account_id) VALUES (?, ?)`, id, accountID); err != nil {
-				return nil, err
+	var id string
+	vorhanden := false
+	err := s.tx(ctx, func(t *sql.Tx) error {
+		// Derselbe Wunsch, offen, von wem auch immer (wunsch_doppelt.go):
+		// über die Kennung, sonst über Titel und Jahr.
+		gleich, owner, err := gleicherOffenerWunsch(ctx, t, accountID, d)
+		if err != nil {
+			return err
+		}
+		if gleich != "" {
+			id, vorhanden = gleich, true
+			if owner != accountID {
+				if _, err := t.ExecContext(ctx,
+					`INSERT OR IGNORE INTO wish_dabei (wish_id, account_id) VALUES (?, ?)`, id, accountID); err != nil {
+					return err
+				}
 			}
+			// Kommt jetzt eine Kennung mit, bekommt der alte Wunsch sie.
+			return wunschKennungErgaenzen(ctx, t, id, d)
 		}
-		// Kommt jetzt eine Kennung mit, bekommt der alte Wunsch sie.
-		if err := s.wunschKennungErgaenzen(ctx, id, d); err != nil {
-			return nil, err
+		// Nur der Tag: Wann genau sich jemand etwas gewünscht hat, geht die
+		// Verwaltung nichts an. Die Reihenfolge hält die Zeilennummer.
+		tag := heute()
+		id = newID("w")
+		if _, err := t.ExecContext(ctx,
+			`INSERT INTO wish (id, account_id, title, year, state, created_at, updated_at)
+			 VALUES (?,?,?,?,'open',?,?)`,
+			id, accountID, d.Titel, nullInt(d.Jahr), tag, tag); err != nil {
+			return err
 		}
-		w, err := s.wunschFuer(ctx, accountID, id)
-		if err == nil {
-			w.Vorhanden = true
-		}
-		return w, err
-	}
-	w, err := s.CreateWish(ctx, accountID, d.Titel, d.Jahr)
+		return wunschKennungErgaenzen(ctx, t, id, d)
+	})
 	if err != nil {
 		return nil, err
 	}
-	if !d.mitKennung() {
-		return w, nil
+	w, err := s.wunschFuer(ctx, accountID, id)
+	if err == nil && vorhanden {
+		w.Vorhanden = true
 	}
-	if err := s.wunschKennungErgaenzen(ctx, w.ID, d); err != nil {
-		return nil, err
-	}
-	return s.wunschFuer(ctx, accountID, w.ID)
+	return w, err
 }
 
 // wunschFuer: ein Wunsch so, wie ihn dieses Profil in seiner Liste sieht.

@@ -183,14 +183,45 @@ func dateiKennung(f *store.MediaFile) string {
 	return fmt.Sprintf("%s:%d:%d", f.ID, f.SizeBytes, f.MTime)
 }
 
+// Was vorbereitet wird; jede Art merkt sich ihr Scheitern für sich —
+// scheitern die Untertitel, kommen die Vorschaubilder trotzdem dran.
+const (
+	artTrickplay  = "trickplay"
+	artUntertitel = "untertitel"
+)
+
+// vorbereitenPause: so lange ruht eine Datei nach einem vorübergehenden
+// Fehler (Platte voll, FFmpeg beendet, Laufwerk weg).
+const vorbereitenPause = 24 * time.Hour
+
+// formatFehler: Meldungen von FFmpeg, die sagen, dass die Datei selbst
+// kaputt oder unlesbar ist. Nur dann merkt Lumen sich das dauerhaft (bis
+// sich die Datei ändert). Alles andere — „No space left on device",
+// „Killed", ein verschwundenes Laufwerk — kann morgen schon gehen.
+var formatFehler = []string{
+	"invalid data found",
+	"moov atom not found",
+	"could not find codec parameters",
+	"does not contain any stream",
+	"invalid nal unit",
+	"unknown format",
+	"no decoder",
+	"decoder not found",
+	"unsupported codec",
+}
+
+func istFormatFehler(meldung string) bool {
+	m := strings.ToLower(meldung)
+	for _, f := range formatFehler {
+		if strings.Contains(m, f) {
+			return true
+		}
+	}
+	return false
+}
+
 // dateiVorbereiten macht, was für eine Datei noch fehlt.
 func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
-	hg.mu.Lock()
-	if wann, ok := hg.fehl[fileID]; ok && time.Since(wann) < 24*time.Hour {
-		hg.mu.Unlock()
-		return
-	}
-	hg.mu.Unlock()
 	f, err := s.st.File(ctx, fileID)
 	if err != nil || f.Missing || f.DurationMS <= 0 || f.Defekt != "" {
 		return
@@ -201,55 +232,87 @@ func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
 	// Ging es mit genau dieser Fassung der Datei schon einmal nicht
 	// („Invalid data found"), nicht wieder versuchen — auch nicht nach
 	// einem Neustart. Erst wenn sich Grösse oder Änderungszeit ändern.
-	if s.vorbereitenGescheitert(f) {
-		return
-	}
+	// Ein vorübergehender Fehler ruht nur vorbereitenPause lang.
 	var fehler []string
-	if s.trickplayAn(ctx) && !trickplayFertig(s.trickplayOrdner(fileID), f) {
+	gescheitert := func(art, was string, err error) {
+		fehler = append(fehler, was+": "+stream.Bereinigt(err.Error()))
+		s.vorbereitenGescheitertMerken(f, art, istFormatFehler(err.Error()))
+	}
+	if s.trickplayAn(ctx) && !trickplayFertig(s.trickplayOrdner(fileID), f) &&
+		!s.vorbereitenGescheitert(f, artTrickplay) {
 		d, _ := s.ff.Feinmessung(ctx, f.Path)
 		if _, err := s.ff.TrickplayErzeugenMit(ctx, f.Path, f.DurationMS, d, s.trickplayOrdner(fileID),
 			stream.TrickplayOptionen{Kennung: dateiKennung(f), Warten: s.aufRuheWarten}); err != nil {
 			if ctx.Err() == nil {
-				fehler = append(fehler, "Vorschaubilder: "+stream.Bereinigt(err.Error()))
+				gescheitert(artTrickplay, "Vorschaubilder", err)
 			}
 		} else {
 			zeitlosAlles(s.trickplayOrdner(fileID))
 			zeitlos(s.trickplayWurzel())
 		}
 	}
-	if s.untertitelVorbereitenAn(ctx) {
+	if s.untertitelVorbereitenAn(ctx) && !s.vorbereitenGescheitert(f, artUntertitel) {
 		if err := s.untertitelVorbereiten(ctx, f); err != nil && ctx.Err() == nil {
-			fehler = append(fehler, "Untertitel: "+stream.Bereinigt(err.Error()))
+			gescheitert(artUntertitel, "Untertitel", err)
 		}
 	}
 	if len(fehler) > 0 {
-		hg.mu.Lock()
-		hg.fehl[fileID] = time.Now()
-		hg.mu.Unlock()
-		s.vorbereitenGescheitertMerken(f)
 		// Ins Protokoll: dass es nicht ging, nicht bei welchem Film.
 		s.st.Log(ctx, "warn", "vorbereiten", "Eine Datei liess sich nicht vorbereiten — "+strings.Join(fehler, "; "))
 	}
 }
 
-// vorbereitenFehlerOrdner: je Datei, bei der das Vorbereiten scheiterte,
-// eine kleine Datei mit der Kennung der Fassung (dateiKennung). Im
-// Arbeitsspeicher allein (hg.fehl) ging das Wissen mit jedem Neustart
-// verloren, und dieselben kaputten Dateien standen wieder im Protokoll.
+// vorbereitenFehlerOrdner: je Datei und Art, bei der das Vorbereiten
+// scheiterte, eine kleine Datei „<datei>.<art>" mit der Kennung der
+// Fassung (dateiKennung) und ob der Fehler dauerhaft ist. Im
+// Arbeitsspeicher allein ging das Wissen mit jedem Neustart verloren, und
+// dieselben kaputten Dateien standen wieder im Protokoll.
 func (s *Server) vorbereitenFehlerOrdner() string {
 	return filepath.Join(s.dataDir, "vorbereiten-fehler")
 }
 
-func (s *Server) vorbereitenGescheitert(f *store.MediaFile) bool {
-	b, err := os.ReadFile(filepath.Join(s.vorbereitenFehlerOrdner(), f.ID))
-	return err == nil && strings.TrimSpace(string(b)) == dateiKennung(f)
+func (s *Server) vorbereitenGescheitert(f *store.MediaFile, art string) bool {
+	hg.mu.Lock()
+	wann, ok := hg.fehl[f.ID+"."+art]
+	hg.mu.Unlock()
+	if ok && time.Since(wann) < vorbereitenPause {
+		return true
+	}
+	pfad := filepath.Join(s.vorbereitenFehlerOrdner(), f.ID+"."+art)
+	b, err := os.ReadFile(pfad)
+	if err != nil {
+		// Vermerk einer älteren Fassung („<datei>" ohne Art, ohne
+		// Unterscheidung): Er kann von einem vorübergehenden Fehler
+		// stammen — darum nur noch als Pause.
+		pfad = filepath.Join(s.vorbereitenFehlerOrdner(), f.ID)
+		if b, err = os.ReadFile(pfad); err != nil {
+			return false
+		}
+	}
+	teile := strings.Fields(string(b))
+	if len(teile) == 0 || teile[0] != dateiKennung(f) {
+		return false
+	}
+	if len(teile) > 1 && teile[1] == "dauerhaft" {
+		return true
+	}
+	info, err := os.Stat(pfad)
+	return err == nil && time.Since(info.ModTime()) < vorbereitenPause
 }
 
-func (s *Server) vorbereitenGescheitertMerken(f *store.MediaFile) {
+func (s *Server) vorbereitenGescheitertMerken(f *store.MediaFile, art string, dauerhaft bool) {
+	hg.mu.Lock()
+	hg.fehl[f.ID+"."+art] = time.Now()
+	hg.mu.Unlock()
 	if err := os.MkdirAll(s.vorbereitenFehlerOrdner(), 0o700); err != nil {
 		return
 	}
-	_ = os.WriteFile(filepath.Join(s.vorbereitenFehlerOrdner(), f.ID), []byte(dateiKennung(f)), 0o600)
+	wie := "voruebergehend"
+	if dauerhaft {
+		wie = "dauerhaft"
+	}
+	_ = os.WriteFile(filepath.Join(s.vorbereitenFehlerOrdner(), f.ID+"."+art),
+		[]byte(dateiKennung(f)+" "+wie), 0o600)
 }
 
 func zeitlosAlles(ordner string) {
@@ -331,10 +394,7 @@ func (s *Server) trickplay(w http.ResponseWriter, r *http.Request) {
 		streamFehler(w, http.StatusNotFound, "keine_vorschaubilder", "für diese datei gibt es keine vorschaubilder")
 		return
 	}
-	hg.mu.Lock()
-	wann, gescheitert := hg.fehl[f.ID]
-	hg.mu.Unlock()
-	if gescheitert && time.Since(wann) < 24*time.Hour {
+	if s.vorbereitenGescheitert(f, artTrickplay) {
 		streamFehler(w, http.StatusNotFound, "keine_vorschaubilder", "für diese datei gibt es keine vorschaubilder")
 		return
 	}
@@ -491,7 +551,8 @@ func (s *Server) vorratAufraeumen(ctx context.Context) {
 	// Vermerke über gescheitertes Vorbereiten zu verschwundenen Dateien.
 	if eintraege, err := os.ReadDir(s.vorbereitenFehlerOrdner()); err == nil {
 		for _, e := range eintraege {
-			if !s.st.DateiGibtEs(ctx, e.Name()) {
+			datei, _, _ := strings.Cut(e.Name(), ".")
+			if !s.st.DateiGibtEs(ctx, datei) {
 				_ = os.Remove(filepath.Join(s.vorbereitenFehlerOrdner(), e.Name()))
 			}
 		}

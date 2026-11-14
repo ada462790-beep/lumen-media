@@ -85,7 +85,14 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 	}
 	// Besitzer wird nur, wer zu Hause vor dem Server sitzt — nicht, wer
 	// ihn zufällig zuerst von aussen erreicht.
-	if vonAussen(r) {
+	if h := herkunftVon(r); !h.ZuHause {
+		// Auf dem Rechner selbst (127.0.0.1 ohne Container, Netz des
+		// Rechners) kann auch ein Reverse-Proxy sitzen — der Satz sagt,
+		// wie es trotzdem geht (heimnetz.go).
+		if h.Grund == grundRechnerSelbst {
+			fail(w, http.StatusForbidden, "einrichten geht nicht vom rechner selbst aus — öffne lumen von einem anderen gerät im heimnetz oder setze LUMEN_HEIMNETZ=127.0.0.1")
+			return
+		}
 		fail(w, http.StatusForbidden, "einrichten geht nur zu hause, nicht von unterwegs")
 		return
 	}
@@ -1960,11 +1967,7 @@ func (s *Server) doppelEinordnen(ctx context.Context, dups []store.Duplicate) {
 		if !ok {
 			continue
 		}
-		pfade := make([]string, 0, len(dups[i].Files))
-		for _, f := range dups[i].Files {
-			pfade = append(pfade, f.Path)
-		}
-		if s.scanner.DateienVerschieden(lib, pfade) {
+		if s.scanner.DateienVerschieden(ctx, lib, it, dups[i].Files) {
 			dups[i].Art = "verschieden"
 		}
 	}

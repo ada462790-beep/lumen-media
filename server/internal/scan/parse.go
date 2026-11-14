@@ -169,8 +169,11 @@ var (
 	// „Film - Teil 2" mit Bindestrich davor — die Schreibweise der Dateiteile.
 	reTeilMitStrich = regexp.MustCompile(`(?i)^(.*?)[\s._]+-[\s._]+(?:part|teil|pt)[\s._-]*(\d{1,2})[\s._-]*$`)
 	// VIDEO_TS: „VTS_01_2.VOB" ist der zweite Teil des ersten Titelsatzes.
-	reVTS     = regexp.MustCompile(`(?i)^vts_(\d{2})_(\d{1,2})$`)
-	reEdition = regexp.MustCompile(`(?i)\b(director'?s[\s._-]?cut|extended(?:[\s._-]cut)?|unrated|theatrical|remastered|uncut|final[\s._-]cut|special[\s._-]edition)\b`)
+	reVTS = regexp.MustCompile(`(?i)^vts_(\d{2})_(\d{1,2})$`)
+	// „Avatar.Extended.Collectors.Edition.2009": Sammler-, Jubiläums- und
+	// Ultimate-Ausgaben sind Fassungen, nicht Teil des Titels — sonst hiess
+	// die Datei „Avatar Collectors Edition" und wurde abgetrennt.
+	reEdition = regexp.MustCompile(`(?i)\b((?:extended[\s._-])?collector'?s[\s._-]edition|director'?s[\s._-]?cut|extended(?:[\s._-]cut)?|unrated|theatrical|remastered|uncut|final[\s._-]cut|special[\s._-]edition|limited[\s._-]edition|ultimate[\s._-](?:cut|edition)|anniversary[\s._-]edition)\b`)
 	reQuality = regexp.MustCompile(`(?i)\b(2160p|1080p|720p|480p|4k|uhd)\b`)
 	reHDR     = regexp.MustCompile(`(?i)\b(hdr10\+|hdr10|hdr|dolby[\s._-]?vision|dv)\b`)
 	reLang    = regexp.MustCompile(`(?i)\b(german|deutsch|english|multi|dl|ger|eng)\b`)
@@ -1188,6 +1191,8 @@ func isWordChar(b byte) bool {
 func tidyEdition(s string) string {
 	s = strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(strings.ToLower(s))
 	switch {
+	case strings.Contains(s, "collector"):
+		return "Collector's Edition"
 	case strings.HasPrefix(s, "director"):
 		return "Director's Cut"
 	case strings.HasPrefix(s, "extended"):

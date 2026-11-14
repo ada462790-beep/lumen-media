@@ -34,6 +34,28 @@ import (
 // eine Serie dauert Sekunden bis Minuten; neue Folgen kommen beim nächsten.
 const staffelHaltbar = 15 * time.Minute
 
+// staffelFehlerHaltbar: so lange gilt eine gescheiterte Staffel-Anfrage
+// („TMDb bremst", kein Netz). Gerade lang genug, dass die Folgen, die im
+// selben Augenblick auf dieselbe Staffel warten, nicht alle neu fragen —
+// vorher galt der Fehler 15 Minuten, und jede Folge der Staffel blieb so
+// lange „ausstehend", auch wenn TMDb längst wieder antwortete. „Nicht
+// gefunden" ist eine Antwort und gilt wie eine geholte Staffel.
+const staffelFehlerHaltbar = 10 * time.Second
+
+// gueltig: Ist der Eintrag noch zu gebrauchen? Solange die Anfrage läuft
+// (fertig offen), ja.
+func (e *staffelFolgen) gueltig() bool {
+	select {
+	case <-e.fertig:
+	default:
+		return time.Since(e.geholt) < staffelHaltbar
+	}
+	if e.err != nil && !strings.Contains(e.err.Error(), "nicht gefunden") {
+		return time.Since(e.geholt) < staffelFehlerHaltbar
+	}
+	return time.Since(e.geholt) < staffelHaltbar
+}
+
 type staffelFolgen struct {
 	geholt time.Time
 	fertig chan struct{} // zu, sobald folgen/err feststehen
@@ -49,7 +71,7 @@ func (t *TMDb) staffelHolen(ctx context.Context, seriesID string, staffel int) (
 	if t.staffelDaten == nil {
 		t.staffelDaten = map[string]*staffelFolgen{}
 	}
-	if e, ok := t.staffelDaten[schluessel]; ok && time.Since(e.geholt) < staffelHaltbar {
+	if e, ok := t.staffelDaten[schluessel]; ok && e.gueltig() {
 		t.staffelMu.Unlock()
 		select {
 		case <-e.fertig:
@@ -60,7 +82,7 @@ func (t *TMDb) staffelHolen(ctx context.Context, seriesID string, staffel int) (
 	}
 	// Abgelaufene Einträge wegräumen, damit der Speicher nicht wächst.
 	for k, e := range t.staffelDaten {
-		if time.Since(e.geholt) >= staffelHaltbar {
+		if !e.gueltig() {
 			delete(t.staffelDaten, k)
 		}
 	}

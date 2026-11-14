@@ -150,12 +150,13 @@ var fehlerCodes = map[string]string{
 	"datei nicht lesbar":                                "datei_nicht_lesbar",
 	"dieser server ist schon eingerichtet":              "schon_eingerichtet",
 	"einrichten geht nur zu hause, nicht von unterwegs": "nur_zu_hause",
-	"Unbekannte Sprache.":                               "unbekannte_sprache",
-	"herunterladen ist für dein profil aus":             "herunterladen_aus",
-	"umwandeln ist für dein profil aus":                 "umwandeln_aus",
-	"diese wiedergabe läuft nicht mehr":                 "wiedergabe_beendet",
-	"datenbank antwortet nicht":                         "datenbank",
-	"die Verwaltung ist gesperrt":                       "verwaltung_gesperrt",
+	"einrichten geht nicht vom rechner selbst aus — öffne lumen von einem anderen gerät im heimnetz oder setze LUMEN_HEIMNETZ=127.0.0.1": "nur_zu_hause",
+	"Unbekannte Sprache.":                   "unbekannte_sprache",
+	"herunterladen ist für dein profil aus": "herunterladen_aus",
+	"umwandeln ist für dein profil aus":     "umwandeln_aus",
+	"diese wiedergabe läuft nicht mehr":     "wiedergabe_beendet",
+	"datenbank antwortet nicht":             "datenbank",
+	"die Verwaltung ist gesperrt":           "verwaltung_gesperrt",
 }
 
 // einrichtungsSprache: bei der Einrichtung gewählt. Setzt die Sprache

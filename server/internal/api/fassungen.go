@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"lumen/internal/scan"
 	"lumen/internal/store"
@@ -223,10 +224,34 @@ func (s *Server) teileZusammenfuehren(ctx context.Context, it *store.Item, teile
 	if err := os.MkdirAll(beiseite, 0o755); err != nil {
 		return fmt.Errorf("ordner für die teile anlegen: %w", err)
 	}
-	for _, f := range teile {
-		if err := os.Rename(f.Path, beiseiteName(beiseite, filepath.Dir(ziel), f.Path)); err != nil {
-			return fmt.Errorf("teil beiseitelegen: %w", err)
+	// Scheitert das bei einem Teil, kommt alles zurück, wie es war: die
+	// schon verschobenen Teile an ihren Platz, die neue Datei weg (sie
+	// lässt sich jederzeit neu erzeugen). Sonst lag der Film halb doppelt
+	// da — neue Datei und ein Teil noch am alten Ort.
+	verschoben := map[string]string{} // alt → beiseite
+	zurueck := func(grund error) error {
+		var offen []string
+		for alt, neu := range verschoben {
+			if err := os.Rename(neu, alt); err != nil {
+				offen = append(offen, filepath.Base(alt))
+			}
 		}
+		if len(offen) > 0 {
+			// Die neue Datei bleibt dann liegen: Sie ist der ganze Film.
+			return fmt.Errorf("teil beiseitelegen: %w — %d teile liegen schon in .lumen-teile, die neue datei ist fertig", grund, len(offen))
+		}
+		_ = os.Remove(ziel)
+		return fmt.Errorf("teil beiseitelegen: %w — zurückgerollt, nichts verändert", grund)
+	}
+	for _, f := range teile {
+		wohin, err := beiseiteName(beiseite, filepath.Dir(ziel), f.Path)
+		if err == nil {
+			err = os.Rename(f.Path, wohin)
+		}
+		if err != nil {
+			return zurueck(err)
+		}
+		verschoben[f.Path] = wohin
 	}
 	// Die neue Datei an den Titel hängen, die Teile austragen — gleich
 	// ausgemessen, damit sie sofort eine Laufzeit hat (Vorschaubilder,
@@ -295,19 +320,49 @@ func teileOrdner(teile []store.MediaFile) (string, error) {
 // beiseiteName: der Name eines Teils im Ordner „.lumen-teile". Aus einem
 // Unterordner („CD2/Film.avi") wird „CD2 - Film.avi"; gibt es den Namen
 // schon, kommt eine Nummer dazu — überschrieben wird nie etwas.
-func beiseiteName(beiseite, filmOrdner, pfad string) string {
+//
+// Weitergezählt wird nur, solange der Name frei ist (ErrNotExist) oder
+// belegt. Jeder andere Fehler (zu lang, keine Rechte, Platte weg) kommt
+// zurück: Vorher zählte die Schleife dabei endlos weiter, das
+// Zusammenführen hing für immer und liess sich nicht neu starten. Ein zu
+// langer Name wird gekürzt, die Endung bleibt.
+func beiseiteName(beiseite, filmOrdner, pfad string) (string, error) {
 	name := filepath.Base(pfad)
 	if d := filepath.Dir(pfad); d != filmOrdner {
 		name = filepath.Base(d) + " - " + name
 	}
-	ziel := filepath.Join(beiseite, name)
 	endung := filepath.Ext(name)
-	for n := 2; ; n++ {
-		if _, err := os.Lstat(ziel); errors.Is(err, os.ErrNotExist) {
-			return ziel
+	stamm := aufBytesKuerzen(strings.TrimSuffix(name, endung), maxNamenBytes-len(endung)-len(" (1000)"))
+	ziel := filepath.Join(beiseite, stamm+endung)
+	for n := 2; n <= 1000; n++ {
+		_, err := os.Lstat(ziel)
+		if errors.Is(err, os.ErrNotExist) {
+			return ziel, nil
 		}
-		ziel = filepath.Join(beiseite, fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, endung), n, endung))
+		if err != nil {
+			return "", err
+		}
+		ziel = filepath.Join(beiseite, fmt.Sprintf("%s (%d)%s", stamm, n, endung))
 	}
+	return "", errors.New("kein freier name in .lumen-teile")
+}
+
+// maxNamenBytes: so lang darf ein Dateiname auf den üblichen
+// Dateisystemen sein (ext4, Btrfs, ZFS: 255 Bytes).
+const maxNamenBytes = 255
+
+// aufBytesKuerzen schneidet s auf höchstens n Bytes, ohne ein Zeichen zu teilen.
+func aufBytesKuerzen(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	if n < 1 {
+		return "teil"
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return strings.TrimSpace(s[:n])
 }
 
 // lastLineOf: die letzte nicht leere Zeile einer FFmpeg-Ausgabe — dort

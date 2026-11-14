@@ -1544,7 +1544,7 @@
  "Die Adresse steht nicht in LUMEN_HEIMNETZ.": "The address is not listed in LUMEN_HEIMNETZ.",
  "Die Anfrage kommt aus dem Container von Lumen selbst.": "The request comes from Lumen’s own container.",
  "Die Anfrage kommt aus einem anderen Container auf dem NAS, etwa einem Reverse-Proxy.": "The request comes from another container on the NAS, such as a reverse proxy.",
- "Die Anfrage kommt vom NAS selbst, etwa über seinen Reverse-Proxy. Das zählt nie als zu Hause.": "The request comes from the NAS itself, for example through its reverse proxy. That never counts as home.",
+ "Die Anfrage kommt vom Rechner, auf dem Lumen läuft – etwa über einen Reverse-Proxy. Das zählt nur als zu Hause, wenn die Adresse einzeln in LUMEN_HEIMNETZ steht.": "The request comes from the machine Lumen runs on – for example through a reverse proxy. It only counts as home if the address is listed on its own in LUMEN_HEIMNETZ.",
  "Die neue Vorlage steht in der README.md unter „Synology Schritt für Schritt“.": "The new template is in README.md under “Synology Schritt für Schritt”.",
  "Dieses Gerät erreicht Lumen über eine öffentliche IPv6-Adresse, und die gilt nie als zu Hause. Öffne Lumen im Heimnetz über die IPv4-Adresse des NAS, etwa http://192.168.1.20:8097.": "This device reaches Lumen through a public IPv6 address, which never counts as home. At home, open Lumen via the NAS’s IPv4 address, e.g. http://192.168.1.20:8097.",
  "Docker verdeckt die echten Adressen": "Docker hides the real addresses",
@@ -1598,5 +1598,8 @@
  "Über den Vermittler (Fernzugriff).": "Through the relay (remote access).",
  "„{titel}“ löschen": "Delete “{titel}”",
  "„{titel}“ verschwindet aus der Liste.": "“{titel}” will be removed from the list.",
- "„{titel}“ verschwindet für alle, die ihn sich gewünscht haben.": "“{titel}” will disappear for everyone who requested it."
+ "„{titel}“ verschwindet für alle, die ihn sich gewünscht haben.": "“{titel}” will disappear for everyone who requested it.",
+ "Special": "Special",
+ "Weiter mit dem Special": "Continue with the special",
+ "Special bearbeiten": "Edit special"
 }

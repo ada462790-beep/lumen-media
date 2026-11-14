@@ -55,7 +55,7 @@ export function staffelBearbeiten(staffelId) {
 export function folgeBearbeiten(folge) {
   return verwalten()
     ? `<button class="btn btn-round sm" style="width:30px;height:30px;flex:none;background:var(--fill);color:var(--label-2)" data-fk-bearbeiten="${escH(folge.id)}"
-        aria-label="${tr('Folge {episodeNo} bearbeiten', { episodeNo: escH(folge.episodeNo) })}" title="${tr('Bearbeiten')}">${U.svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>', 14, 1.8)}</button>` : '';
+        aria-label="${!folge.seasonNo && folge.episodeNo >= 1000 ? tr('Special bearbeiten') : tr('Folge {episodeNo} bearbeiten', { episodeNo: escH(folge.episodeNo) })}" title="${tr('Bearbeiten')}">${U.svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>', 14, 1.8)}</button>` : '';
 }
 
 /* Ich-Bereich: Umzug von Emby/Jellyfin. */

@@ -133,8 +133,15 @@ const S = {
 const esc = s => String(s ?? '').replace(/[\u202A-\u202E\u2066-\u2069]/g, '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Specials ohne eigene Nummer („S08E00 - The Last Watch") zählt der
+// Server ab 1000 in Staffel 0 (store.SpecialOhneNummer). Die Nummer ist
+// selbst vergeben — angezeigt wird „Special", nicht „Folge 1001".
+const ohneNummer = (s, f) => !s && f >= 1000;
+// Nummer einer Folge in Listen: leer bei Specials ohne eigene Nummer.
+const folgenNr = e => ohneNummer(e.seasonNo, e.episodeNo) ? ''
+  : e.episodeNoEnd > e.episodeNo ? `${e.episodeNo}–${e.episodeNoEnd}` : e.episodeNo;
 // Staffel und Folge kurz: „S1 F2" auf Deutsch, „S1 E2" auf Englisch.
-const sf = (s, f) => tr('S{s} F{f}', { s, f });
+const sf = (s, f) => ohneNummer(s, f) ? tr('Special') : tr('S{s} F{f}', { s, f });
 
 const svg = (d, s = 18, w = 1.8) =>
   `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1859,7 +1866,7 @@ function viewDetail() {
       </button>
       <div style="flex:1;min-width:0">
         <div class="t-body" style="display:flex;align-items:center;gap:8px">
-          <span class="c-2 tnum" style="flex:none">${e.episodeNoEnd > e.episodeNo ? `${e.episodeNo}–${e.episodeNoEnd}` : e.episodeNo}</span>
+          <span class="c-2 tnum" style="flex:none">${folgenNr(e)}</span>
           <span class="clamp-1">${esc(e.title)}</span>
           ${e.finished ? `<span class="c-2" style="flex:none;display:inline-flex" title="${tr('gesehen')}">${svg(I.check, 14, 2.6)}</span>` : ''}
         </div>
@@ -1895,7 +1902,10 @@ function viewDetail() {
     // Alles gesehen: nicht „Weiter mit S1 F1", sondern ehrlich von vorn.
     : d.item.finished && !(w.resumeMs > 0) ? tr('Nochmal ansehen')
     : w.resumeMs > 0 ? `${tr('Weiter bei')} ${clock(w.resumeMs / 1000)} · ${sf(w.seasonNo, w.episodeNo)}`
-    : (d.item.gesehen || 0) > 0 ? tr('Weiter mit S{seasonNo} F{episodeNo}', { seasonNo: w.seasonNo, episodeNo: w.episodeNo }) : tr('Ansehen');
+    : (d.item.gesehen || 0) > 0
+      ? (ohneNummer(w.seasonNo, w.episodeNo) ? tr('Weiter mit dem Special')
+        : tr('Weiter mit S{seasonNo} F{episodeNo}', { seasonNo: w.seasonNo, episodeNo: w.episodeNo }))
+      : tr('Ansehen');
 
   // Zu jeder Datei, was drin ist: Bild, Ton, Untertitel, Laufzeit,
   // Bitrate — wie bei Emby unter „Medieninfo".
@@ -2197,8 +2207,15 @@ function staffelLeisteEinrichten() {
   randHinweis(roll);
 }
 async function staffelZeigen(id) {
-  S.staffelWahl = { serie: S.id, staffel: id };
+  const serie = S.id;
+  S.staffelWahl = { serie, staffel: id };
+  const ansicht = S.view;
   const eps = await api.children(id).catch(() => []);
+  // Unterwegs kann sich viel ändern: eine andere Staffel gewählt (deren
+  // Antwort zuerst kam), ein anderer Titel oder eine andere Seite geöffnet.
+  // Dann gehören diese Folgen nicht mehr auf den Bildschirm — sonst stand
+  // Staffel 1 unter Staffel 2 oder die Folgen einer Serie in einem Film.
+  if (S.staffelWahl?.serie !== serie || S.staffelWahl?.staffel !== id || S.view !== ansicht || S.id !== serie) return;
   S.data = { ...S.data, episodes: eps, staffel: id };
   render();
   // Der Fokus bleibt auf dem gewählten Knopf (oder dem Auswahlfeld).
@@ -2594,7 +2611,7 @@ function folgenPanel(p) {
         ${e.progress > 1 && !e.finished ? `<span class="progress progress--onart"><i style="width:${e.progress}%"></i></span>` : ''}</span>
       <span style="flex:1;min-width:0">
         <span class="t-body" style="display:flex;gap:8px;align-items:center${aktuell ? ';font-weight:600' : ''}">
-          <span class="tnum" style="opacity:.6;width:18px;flex:none">${e.episodeNo}</span><span class="clamp-1">${esc(e.title)}</span>
+          <span class="tnum" style="opacity:.6;width:18px;flex:none">${folgenNr(e)}</span><span class="clamp-1">${esc(e.title)}</span>
           ${e.finished ? svg(I.check, 14, 2.6) : ''}</span>
         <span class="t-caption" style="display:block;opacity:.6;margin-top:2px">${aktuell ? tr('läuft') : mins(e.runtimeMs) || ''}</span></span>
     </button>`;
@@ -2990,7 +3007,8 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
       kind: it.kind, parentId: it.parentId || null,
       sub: S.warteschlange
         ? `${S.warteschlange.name} · ${tr('{nr} von {n}', { nr: S.warteschlange.i + 1, n: S.warteschlange.ids.length })}`
-        : it.kind === 'episode' ? [it.seriesTitle, tr('Staffel {seasonNo}, Folge {episodeNo}', { seasonNo: it.seasonNo, episodeNo: it.episodeNo })].filter(Boolean).join(' · ')
+        : it.kind === 'episode' ? [it.seriesTitle, ohneNummer(it.seasonNo, it.episodeNo) ? tr('Special')
+            : tr('Staffel {seasonNo}, Folge {episodeNo}', { seasonNo: it.seasonNo, episodeNo: it.episodeNo })].filter(Boolean).join(' · ')
         : teile.length > 1 ? tr('Teil {teil} von {n}', { teil: teil + 1, n: teile.length }) : '',
       teile: teile.length > 1 ? teile.map(t => t.id) : null, teil, vorher, gesamt,
       // Die gemessene Datei zählt, nicht die Laufzeit aus den Metadaten:
@@ -4525,7 +4543,7 @@ function netzGrund(g) {
     case 'festgelegt':      return tr('Die Adresse steht in LUMEN_HEIMNETZ.');
     case 'nichtFestgelegt': return tr('Die Adresse steht nicht in LUMEN_HEIMNETZ.');
     case 'lumenSelbst':     return tr('Die Anfrage kommt aus dem Container von Lumen selbst.');
-    case 'rechnerSelbst':   return tr('Die Anfrage kommt vom NAS selbst, etwa über seinen Reverse-Proxy. Das zählt nie als zu Hause.');
+    case 'rechnerSelbst':   return tr('Die Anfrage kommt vom Rechner, auf dem Lumen läuft – etwa über einen Reverse-Proxy. Das zählt nur als zu Hause, wenn die Adresse einzeln in LUMEN_HEIMNETZ steht.');
     case 'containerNetz':   return tr('Die Anfrage kommt aus einem anderen Container auf dem NAS, etwa einem Reverse-Proxy.');
     case 'gateway':         return tr('Die Adresse ist das Gateway eines eigenen Netzes. Dahinter kann jedes Gerät stecken, auch eines aus dem Internet.');
     case 'oeffentlich':     return tr('Keine Adresse aus dem Heimnetz.');

@@ -136,3 +136,22 @@ func (s *Store) SerienZuFolgen(ctx context.Context, episodeIDs []string) (map[st
 	}
 	return out, nil
 }
+
+// SpecialOhneNummer ist der Anfang des Bereichs, in dem Specials ohne
+// eigene Nummer gezählt werden („Game of Thrones - S08E00 - The Last
+// Watch", „Specials/Pilot.mkv"). Vorher bekamen sie die nächste freie
+// Nummer der Staffel 0 — kam später die echte Datei S00E02 dazu, wurde
+// sie eine zweite Fassung des falschen Specials. Ab 1000 kommt keine
+// echte Nummer in die Quere; die Oberfläche zeigt dort „Special" statt
+// einer Nummer.
+const SpecialOhneNummer = 1000
+
+// FolgeUmnummern gibt einer Folge eine andere Nummer, ohne sie zu
+// sperren — gebraucht, wenn der Durchlauf ein Special aus dem alten
+// Zählbereich in SpecialOhneNummer verschiebt. Die Folge behält ihre
+// Kennung und damit alles Persönliche daran.
+func (s *Store) FolgeUmnummern(ctx context.Context, id string, nr int) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE item SET episode_no = ? WHERE id = ? AND kind = 'episode'`, nullInt(nr), id)
+	return err
+}
