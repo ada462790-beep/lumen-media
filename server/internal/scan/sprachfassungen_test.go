@@ -12,7 +12,10 @@ import (
 // ältere Fassung oder eine NFO) an einen erkannten Eintrag und gibt jeder
 // Datei die Laufzeit aus dauer (0 = unbekannt). vorher läuft vor den
 // weiteren Durchläufen (etwa: von Hand bestätigen).
-func fassungenAnEinemFilm(t *testing.T, titel, orig string, dauer []int64, vorher func(st *store.Store, id string),
+//
+// sprachen: die Sprache der ersten Tonspur je Datei (nil oder "" = keine
+// Spuren gemessen) — wie ffprobe sie liefert.
+func fassungenAnEinemFilm(t *testing.T, titel, orig string, dauer []int64, sprachen []string, vorher func(st *store.Store, id string),
 	pfade ...string) (st *store.Store, lib *store.Library, root, id string) {
 	t.Helper()
 	root = t.TempDir()
@@ -38,6 +41,11 @@ func fassungenAnEinemFilm(t *testing.T, titel, orig string, dauer []int64, vorhe
 		if err := st.UpsertFile(ctx, &f); err != nil {
 			t.Fatal(err)
 		}
+		if i < len(sprachen) && sprachen[i] != "" {
+			if err := st.SpurenSetzen(ctx, f.ID, []store.Track{{Index: 1, Kind: "audio", Codec: "aac", Language: sprachen[i]}}, nil); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	it, _ := st.Item(ctx, id)
 	it.Title, it.OriginalTitle, it.MatchState = titel, orig, "matched"
@@ -57,7 +65,12 @@ func fassungenAnEinemFilm(t *testing.T, titel, orig string, dauer []int64, vorhe
 
 func bleibenZusammen(t *testing.T, titel, orig string, dauer []int64, vorher func(*store.Store, string), pfade ...string) {
 	t.Helper()
-	st, lib, root, id := fassungenAnEinemFilm(t, titel, orig, dauer, vorher, pfade...)
+	bleibenZusammenSpr(t, titel, orig, dauer, nil, vorher, pfade...)
+}
+
+func bleibenZusammenSpr(t *testing.T, titel, orig string, dauer []int64, sprachen []string, vorher func(*store.Store, string), pfade ...string) {
+	t.Helper()
+	st, lib, root, id := fassungenAnEinemFilm(t, titel, orig, dauer, sprachen, vorher, pfade...)
 	ctx := context.Background()
 	for _, p := range pfade {
 		if g := st.GemessenZuPfad(ctx, filepath.Join(root, p)); g == nil || g.Datei.ItemID != id {
@@ -75,7 +88,12 @@ func bleibenZusammen(t *testing.T, titel, orig string, dauer []int64, vorher fun
 
 func werdenGetrennt(t *testing.T, titel, orig string, dauer []int64, pfade ...string) {
 	t.Helper()
-	st, lib, root, _ := fassungenAnEinemFilm(t, titel, orig, dauer, nil, pfade...)
+	werdenGetrenntSpr(t, titel, orig, dauer, nil, pfade...)
+}
+
+func werdenGetrenntSpr(t *testing.T, titel, orig string, dauer []int64, sprachen []string, pfade ...string) {
+	t.Helper()
+	st, lib, root, _ := fassungenAnEinemFilm(t, titel, orig, dauer, sprachen, nil, pfade...)
 	ctx := context.Background()
 	a := st.GemessenZuPfad(ctx, filepath.Join(root, pfade[0]))
 	b := st.GemessenZuPfad(ctx, filepath.Join(root, pfade[1]))
@@ -86,20 +104,25 @@ func werdenGetrennt(t *testing.T, titel, orig string, dauer []int64, pfade ...st
 
 const zweiStunden = 7_200_000
 
-// Sprachfassungen mit gleicher Laufzeit (±2 %) bleiben ein Film.
+// Sprachfassungen mit gleicher Laufzeit bleiben ein Film. Seit v0.1.27
+// zählt die Laufzeit nur zusammen mit verschiedenen Tonsprachen (erste
+// Tonspur) — gleich lang allein hielt „007 - Octopussy" und „007 - Sag
+// niemals nie" zusammen. Darum tragen die Fälle hier ihre Sprachen.
 func TestSprachfassungenGleicherLaufzeitBleibenZusammen(t *testing.T) {
-	bleibenZusammen(t, "Chihiros Reise ins Zauberland", "千と千尋の神隠し",
-		[]int64{zweiStunden, zweiStunden + 60_000}, nil,
+	bleibenZusammenSpr(t, "Chihiros Reise ins Zauberland", "千と千尋の神隠し",
+		[]int64{zweiStunden, zweiStunden + 60_000}, []string{"de", "ja"}, nil,
 		"Chihiro (2001)/Chihiros Reise ins Zauberland (2001).mkv",
 		"Chihiro (2001)/Spirited Away (2001).mkv")
-	bleibenZusammen(t, "Das Leben der Anderen", "Das Leben der Anderen",
-		[]int64{zweiStunden, zweiStunden}, nil,
+	bleibenZusammenSpr(t, "Das Leben der Anderen", "Das Leben der Anderen",
+		[]int64{zweiStunden, zweiStunden}, []string{"de", "en"}, nil,
 		"Das Leben der Anderen (2006)/Das Leben der Anderen (2006).mkv",
 		"Das Leben der Anderen (2006)/The Lives of Others (2006).mkv")
 	// „Dune" neben „Dune - Part One": eine Seite ohne Zahl ist keine
-	// verschiedene Zahl — bei gleicher Laufzeit derselbe Film.
-	bleibenZusammen(t, "Dune: Part One", "Dune: Part One",
-		[]int64{zweiStunden, zweiStunden}, nil,
+	// verschiedene Zahl — als Sprachfassung derselbe Film. (In derselben
+	// Sprache wären es seit v0.1.27 zwei Einträge: „Dune" passt nicht gut
+	// genug zum Titel „Dune: Part One".)
+	bleibenZusammenSpr(t, "Dune: Part One", "Dune: Part One",
+		[]int64{zweiStunden, zweiStunden}, []string{"en", "de"}, nil,
 		"Dune (2021)/Dune - Part One (2021).mkv",
 		"Dune (2021)/Dune (2021).mkv")
 }
@@ -138,12 +161,16 @@ func TestVonHandBestaetigteZuordnungBleibt(t *testing.T) {
 // Verschiedene Zahlen bleiben verschiedene Filme — auch bei gleicher
 // Laufzeit (Zweiteiler sind oft gleich lang).
 func TestVerschiedeneZahlenTrotzGleicherLaufzeitGetrennt(t *testing.T) {
-	werdenGetrennt(t, "Die Pfeiler der Macht", "", []int64{zweiStunden, zweiStunden},
-		"_Die Pfeiler der Macht/Die Pfeiler der Macht - Teil 1 (2016).mkv",
-		"_Die Pfeiler der Macht/Die Pfeiler der Macht - Teil 2 (2016).mkv")
+	// Fortsetzungen mit verschiedenen Jahren. (Bis v0.1.26 stand hier „Die
+	// Pfeiler der Macht - Teil 1/2 (2016)": gleiches Jahr ist seither ein
+	// Film in zwei Teilen, siehe TestTeileMitGleichemJahrSindEinFilm.)
+	werdenGetrennt(t, "Zurück in die Zukunft II", "", []int64{zweiStunden, zweiStunden},
+		"_Zurück in die Zukunft/Zurück in die Zukunft - Teil 2 (1989).mkv",
+		"_Zurück in die Zukunft/Zurück in die Zukunft - Teil 3 (1990).mkv")
+	// Part Two kam 2024 — mit beiden „(2021)" wären es Teile eines Films.
 	werdenGetrennt(t, "Dune: Part One", "", []int64{zweiStunden, zweiStunden},
 		"_Dune/Dune - Part One (2021).mkv",
-		"_Dune/Dune - Part Two (2021).mkv")
+		"_Dune/Dune - Part Two (2024).mkv")
 	// Ohne passende Laufzeit trennt eine Zahl auf nur einer Seite.
 	werdenGetrennt(t, "Dune", "", []int64{zweiStunden, 9_900_000},
 		"_Dune/Dune (2021).mkv",
@@ -194,12 +221,15 @@ func TestOrdnerZusammenlegenBeiGleicherLaufzeit(t *testing.T) {
 	if len(filme) != 2 {
 		t.Fatalf("%d Filme nach dem Durchlauf, erwartet 2", len(filme))
 	}
-	for _, f := range filme {
+	// Zwei Sprachen (seit v0.1.27 Bedingung, wenn die Namen nicht zum
+	// Titel passen): deutsch und japanisch.
+	for i, f := range filme {
 		_ = st.SetSourceID(ctx, f.ID, "tmdb", "129")
 		dateien, _ := st.FilesFor(ctx, f.ID)
 		for _, d := range dateien {
 			d.DurationMS = zweiStunden
 			_ = st.UpsertFile(ctx, &d)
+			_ = st.SpurenSetzen(ctx, d.ID, []store.Track{{Index: 1, Kind: "audio", Language: []string{"de", "ja"}[i%2]}}, nil)
 		}
 	}
 	sc.ordnerZusammenlegen(ctx, *lib, filepath.Join(root, "Chihiro (2001)"))

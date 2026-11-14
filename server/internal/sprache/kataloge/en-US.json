@@ -341,5 +341,9 @@
   "umwandeln gescheitert: {grund}": "Conversion failed: {grund}",
   "zum auspacken von iso-dateien fehlt 7-zip (im docker-abbild von lumen ist es dabei)": "7-Zip is needed to unpack ISO files (it’s included in Lumen’s Docker image).",
   "zu wenig platz im medienordner: gebraucht {gb} GB, frei {frei} GB": "Not enough space in the media folder: {gb} GB needed, {frei} GB free.",
-  "zu wenig platz im datenordner von lumen: gebraucht {gb} GB, frei {frei} GB": "Not enough space in Lumen’s data folder: {gb} GB needed, {frei} GB free."
+  "zu wenig platz im datenordner von lumen: gebraucht {gb} GB, frei {frei} GB": "Not enough space in Lumen’s data folder: {gb} GB needed, {frei} GB free.",
+  "es braucht mindestens zwei dateien": "At least two files are needed.",
+  "teile gibt es nur bei filmen": "Only movies can have parts.",
+  "eine datei steht zweimal in der liste": "A file is listed twice.",
+  "die dateien gehören nicht zu filmen derselben bibliothek": "The files don’t belong to movies in the same library."
 }

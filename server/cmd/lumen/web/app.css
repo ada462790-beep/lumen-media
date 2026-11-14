@@ -994,4 +994,11 @@ svg.wertung-rt { margin-left:6px; color:#c58a4b }
 .auslass-fortschritt span { display:block; height:100%; background:var(--accent); transition:width .6s ease }
 .auslass-ok { color:#30d158 }
 .auslass-fehler { color:var(--rot, #ff6961) }
+/* Defekte Dateien: Pfad, daneben Grösse, Hinweis und „Trotzdem anspielen". */
+.auslass-pfad--datei { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px }
+.auslass-pfadtext { flex:1 1 280px; min-width:0 }
+.auslass-dateiinfo { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-family:inherit }
+.auslass-dateiinfo .btn, .auslass-dateiinfo .badge, .auslass-dateiinfo .t-caption { font-family:var(--font) }
+/* Fehlende Dateien: der ganze Pfad, umbrochen statt abgeschnitten. */
+.fehlend-pfad { font-size:.75rem; line-height:1.5; overflow-wrap:anywhere; word-break:break-all; margin-top:2px }
 @media (max-width: 600px) { .auslass-inhalt { padding-left:16px } .auslass-ort { display:none } }

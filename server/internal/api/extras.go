@@ -93,7 +93,6 @@ func (s *Server) extraPfad(r *http.Request, it *store.Item, nr string) string {
 // Umgepackt, wenn es reicht, sonst umgewandelt — mit denselben Grenzen
 // wie ein Film: Bildschirmzeit, Umwandeln erlaubt, Plätze frei.
 func (s *Server) extraStrom(w http.ResponseWriter, r *http.Request) {
-	acc, dev := accountOf(r), deviceOf(r)
 	it, err := s.visibleItem(r, r.PathValue("item"))
 	if err != nil {
 		failErr(w, err)
@@ -105,6 +104,15 @@ func (s *Server) extraStrom(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "Dieses Extra gibt es nicht.")
 		return
 	}
+	s.pfadStrom(w, r, it.ID, "extra:"+it.ID+":"+nr, pfad)
+}
+
+// pfadStrom spielt eine Datei für den Browser ab, die nicht als Fassung
+// läuft — ein Extra, oder unter Aufräumen eine einzelne Datei zum
+// Anspielen. Gemessen wird hier (auch gründlich, stream.Probe); einen
+// Stand speichert dabei niemand.
+func (s *Server) pfadStrom(w http.ResponseWriter, r *http.Request, itemID, kennung, pfad string) {
+	acc, dev := accountOf(r), deviceOf(r)
 	if s.bildschirmzeitGesperrt(w, r) {
 		return
 	}
@@ -123,7 +131,7 @@ func (s *Server) extraStrom(w http.ResponseWriter, r *http.Request) {
 		failW(w, http.StatusUnprocessableEntity, "die datei ist defekt und lässt sich nicht abspielen")
 		return
 	}
-	f := &store.MediaFile{ID: "extra:" + it.ID + ":" + nr, ItemID: it.ID, Path: pfad,
+	f := &store.MediaFile{ID: kennung, ItemID: itemID, Path: pfad,
 		Container: probe.Container, DurationMS: probe.DurationMS, Bitrate: probe.Bitrate,
 		Width: probe.Width, Height: probe.Height, VideoCodec: probe.VideoCodec, HDR: probe.HDR}
 	wahl := spurWahl{tonIndex: -1}

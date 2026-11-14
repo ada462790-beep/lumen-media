@@ -707,6 +707,7 @@ func (t *Transcoder) args(j Job, grenzen []float64, von, bis int, dir string, st
 		}
 		a = append(a, "-t", strconv.FormatFloat(dauer, 'f', 3, 64))
 	}
+	a = append(a, Eingang(j.SourcePath)...)
 	a = append(a, "-i", j.SourcePath)
 
 	if j.Kopie() {

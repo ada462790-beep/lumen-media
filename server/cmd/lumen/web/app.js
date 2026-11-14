@@ -2284,7 +2284,9 @@ function extrasAbschnitt(it, extras) {
 /* Erst die Datei selbst (lässt sich spulen); kann der Browser sie nicht
    abspielen — oder kommt nur Ton (videoWidth 0) —, holt das Fenster sie
    umgepackt bzw. umgewandelt vom Server, wie beim Film. */
-function extraAbspielen(url, titel) {
+/* strom: gleich diesen umgewandelten Strom nehmen (Aufräumen › Anspielen,
+   ohne Stand — wie ein Extra), statt erst die Datei selbst zu versuchen. */
+function extraAbspielen(url, titel, { strom = '' } = {}) {
   document.getElementById('extra-fenster')?.remove();
   const d = document.createElement('dialog');
   d.id = 'extra-fenster';
@@ -2293,7 +2295,7 @@ function extraAbspielen(url, titel) {
   d.innerHTML = `<div class="extra-kopf">
       <span class="t-body clamp-1" style="flex:1">${esc(titel)}</span>
       <button class="btn btn-round sm" data-extra-zu aria-label="${tr('Schliessen')}">${svg(I.x, 16, 2.2)}</button></div>
-    <video controls autoplay playsinline src="${esc(url)}${tokenSuffix(url)}"></video>
+    <video controls autoplay playsinline src="${strom ? esc(strom) : esc(url) + tokenSuffix(url)}"></video>
     <p class="t-caption extra-hinweis" data-extra-hinweis hidden role="status"></p>`;
   document.body.appendChild(d);
   const v = d.querySelector('video');
@@ -2301,15 +2303,16 @@ function extraAbspielen(url, titel) {
     const el = d.querySelector('[data-extra-hinweis]');
     el.hidden = !text; el.textContent = text || ''; el.classList.toggle('extra-hinweis--fehler', fehler);
   };
-  let umgewandelt = false;
+  let umgewandelt = !!strom;
+  const stromURL = () => strom || api.extraStromURL(url);
   const umwandeln = async () => {
     if (!d.isConnected) return;
     if (umgewandelt) {
       // Auch der Strom scheiterte: den Grund vom Server holen.
       const ab = new AbortController();
-      let text = tr('Dieses Extra lässt sich nicht abspielen.');
+      let text = strom ? tr('Diese Datei lässt sich nicht abspielen.') : tr('Dieses Extra lässt sich nicht abspielen.');
       try {
-        const r = await fetch(api.extraStromURL(url), { signal: ab.signal });
+        const r = await fetch(stromURL(), { signal: ab.signal });
         if (!r.ok) { const b = await r.json().catch(() => ({})); if (b.error) text = b.error.charAt(0).toUpperCase() + b.error.slice(1) + '.'; }
       } catch {}
       ab.abort();
@@ -2318,7 +2321,7 @@ function extraAbspielen(url, titel) {
     umgewandelt = true;
     hinweis(tr('Wird für den Browser vorbereitet …'));
     try { await api.medienSchluessel(); } catch {}
-    v.src = api.extraStromURL(url);
+    v.src = stromURL();
     v.load();
     v.play().catch(() => {});
   };
@@ -5751,6 +5754,11 @@ function viewCleanup() {
   const nurTeile = (d.duplicates || []).filter(x => x.files.length > 1 && istTeile(x));
   const fassungen = (d.duplicates || []).filter(x => x.files.length > 1 &&
     (x.art === 'verschieden' || x.art === 'identisch'));
+  // ▶ Anspielen: genau diese Datei, ohne Stand (wie ein Extra) — damit man
+  // sieht, was drin ist, bevor man etwas abtrennt oder zusammenfügt.
+  const knopfKlein = 'class="btn btn-pill" style="height:28px;font-size:.75rem;flex:none;background:var(--fill)"';
+  const anspielKnopf = (f, text = tr('Anspielen')) => `<button ${knopfKlein} data-anspielen="${esc(f.id)}" data-anspielen-titel="${esc(f.path.split('/').pop())}"
+    title="${esc(tr('Spielt genau diese Datei ab, ohne den Stand zu speichern'))}"><span aria-hidden="true">▶</span> ${esc(text)}</button>`;
   const doppelZeile = x => {
     const teile = istTeile(x);
     const gleich = new Set(x.identisch || []);
@@ -5758,34 +5766,76 @@ function viewCleanup() {
       : x.art === 'verschieden' ? tr('· verschiedene Filme an einem Eintrag')
       : x.art === 'identisch' ? tr('· dieselbe Datei mehrfach')
       : tr('· {n} Fassungen', { n: x.files.length });
+    const ids = x.files.map(f => f.id).join(',');
     return `
     <div class="orow" style="height:auto;padding:14px 16px;display:block">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="t-body" style="flex:1 1 200px">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
           <span class="t-caption c-2"> ${art}</span></div>
         ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
+        ${teile ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(120,120,128,.2)" data-teile-trennen="${esc(x.itemId)}"
+          title="${esc(tr('Teil 1 bleibt, jeder weitere Teil wird ein eigener Film'))}">${tr('Sind verschiedene Filme')}</button>` : ''}
+        ${x.art === 'verschieden' ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:var(--fill)" data-als-teile="${esc(x.itemId)}" data-dateien="${esc(ids)}"
+          title="${esc(tr('Ein Film in Teilen: laufen nacheinander, der Scan trennt sie nicht wieder'))}">${tr('Als Teile zusammenfügen')}</button>` : ''}
       </div>
       ${x.files.map(f => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
         <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(f.path)}</span>
         <span class="t-caption c-2 tnum">${[teile ? tr('Teil {nr}', { nr: f.partNo }) : '', f.height ? f.height + 'p' : '', f.container ? f.container.toUpperCase() : '',
           groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
         ${gleich.has(f.id) ? `<span class="badge badge--rot">${tr('doppelt — eine kann weg')}</span>` : ''}
+        ${anspielKnopf(f)}
         ${teile || x.art === 'verschieden' ? '' : f.preferred
-          ? `<span class="badge badge--gruen">${tr('gewählt')}</span>`
-          : `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassung="${esc(x.itemId)}:${esc(f.id)}">${tr('Diese nehmen')}</button>`}
+          ? `<span class="badge badge--gruen" title="${esc(tr('Lumen spielt diese Datei zuerst ab'))}">${tr('Standard')}</span>`
+          : `<button ${knopfKlein} data-fassung="${esc(x.itemId)}:${esc(f.id)}"
+              title="${esc(tr('Lumen spielt diese Datei zuerst ab. Die anderen bleiben als Fassungen am Titel – nichts wird gelöscht oder abgetrennt.'))}">${tr('Als Standard')}</button>`}
         ${teile || x.art === 'identisch' ? '' : `<button class="btn btn-pill" style="height:28px;font-size:.75rem;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
           title="${tr('Ist ein anderer Film — als eigenen Titel führen')}">${tr('Abtrennen')}</button>`}
       </div>`).join('')}
     </div>`;
   };
+  // Teile eines Films, die als getrennte Filme dastehen (gleiche Basis,
+  // „Teil N", gleiches oder fehlendes Jahr, verschiedene Einträge).
+  const kandidaten = d.teileKandidaten || [];
+  const kandidatZeile = k => `
+    <div class="orow" style="height:auto;padding:14px 16px;display:block">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="t-body" style="flex:1 1 200px">${esc(k.title)}${k.year ? ` (${k.year})` : ''}
+          <span class="t-caption c-2"> ${tr('· {n} Einträge, vielleicht Teile eines Films', { n: new Set(k.files.map(f => f.itemId)).size })}</span></div>
+        <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-als-teile="${esc(k.itemId)}" data-dateien="${esc(k.files.map(f => f.id).join(','))}">${tr('Als Teile zusammenfügen')}</button>
+      </div>
+      ${k.files.map(f => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
+        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(f.path)}</span>
+        <span class="t-caption c-2 tnum">${[esc(f.titel), f.height ? f.height + 'p' : '', groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
+        ${anspielKnopf(f)}
+      </div>`).join('')}
+    </div>`;
+  const dupKandidaten = kandidaten.map(kandidatZeile).join('');
   const dup = nurTeile.map(doppelZeile).join('');
   const dupFassungen = fassungen.map(doppelZeile).join('');
 
-  const missing = (d.missing || []).map(f => `
-    <div class="orow">
-      <span style="color:#ff9f0a;display:flex;flex:none">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
-      <span class="mono c-2 clamp-1" style="flex:1">${esc(f.path)}</span>
-      ${voll() ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem;flex:none;background:rgba(120,120,128,.2)" data-fehlend-weg="${esc(f.id)}">${tr('Endgültig entfernen')}</button>` : ''}</div>`).join('');
+  // Fehlende Dateien: der ganze Pfad (umbrochen), wozu sie gehört
+  // („The Big Bang Theory · S01E05 – Titel"), und ob der Titel mit einer
+  // anderen Datei weiterhin da ist — dann trägt der nächste Durchlauf die
+  // alte Zeile selbst aus, „Endgültig entfernen" braucht es nicht.
+  const zwei = n => String(n).padStart(2, '0');
+  const fehlendWas = a => !a ? '' : a.kind === 'episode'
+    ? `${a.serie ? esc(a.serie) + ' · ' : ''}S${zwei(a.staffel || 0)}E${zwei(a.folge || 0)} – ${esc(a.titel)}`
+    : `${esc(a.titel)}${a.jahr ? ` (${a.jahr})` : ''}`;
+  const missing = (d.missing || []).map(f => {
+    const a = f.angabe || null;
+    const ersatz = !!a?.ersatz;
+    return `
+    <div class="orow" style="height:auto;padding:12px 16px;align-items:flex-start;gap:12px">
+      <span style="color:${ersatz ? 'var(--label-3)' : '#ff9f0a'};display:flex;flex:none;margin-top:2px">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
+      <div style="flex:1;min-width:0">
+        ${a ? `<div class="t-body">${fehlendWas(a)}</div>` : ''}
+        <div class="mono c-2 fehlend-pfad">${esc(f.path)}</div>
+        ${ersatz ? `<div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${a.kind === 'episode'
+          ? tr('Wurde vermutlich umbenannt – die Folge ist weiterhin da.')
+          : tr('Wurde vermutlich umbenannt – der Film ist weiterhin da.')} ${tr('Lumen trägt den alten Eintrag beim nächsten Durchlauf selbst aus; Stand und Haken bleiben.')}</div>` : ''}
+      </div>
+      ${voll() && !ersatz ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem;flex:none;background:rgba(120,120,128,.2)" data-fehlend-weg="${esc(f.id)}">${tr('Endgültig entfernen')}</button>` : ''}</div>`;
+  }).join('');
   const nFehlend = d.offen?.missing ?? (d.missing || []).length;
 
   // Nicht erkannt: wonach Lumen gesucht hat (Titel und Jahr aus dem
@@ -5841,16 +5891,28 @@ function viewCleanup() {
     verweis: [tr('Verweis auf einen Ordner'), tr('Einem Verweis (Symlink) zurück in die Bibliothek, in Lumens Datenordner oder auf einen schon gelesenen Ordner folgt Lumen nicht.')],
     defekt_leer: [tr('Leere Datei'), tr('Die Datei hat 0 Byte – vielleicht wird sie noch kopiert. Ist sie fertig, liest Lumen sie beim nächsten Durchlauf ein.')],
     defekt_gesperrt: [tr('Keine Leserechte'), tr('Lumen darf die Datei nicht öffnen (Rechte auf dem NAS prüfen). Sie wird nicht angeboten, bis sie lesbar ist.')],
-    defekt_kaputt: [tr('Defekte Datei'), tr('FFmpeg erkennt darin kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten.')],
+    defekt_kaputt: [tr('Defekte Datei'), tr('FFmpeg erkennt darin auch beim zweiten, gründlicheren Versuch kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten. „Trotzdem anspielen“ zeigt, was sich davon noch lesen lässt.')],
     scheibe: [tr('DVD- und Blu-ray-Ordner'), tr('Davon spielt Lumen nur einen Titel direkt ab – ohne Menü, Kapitel und Sprachangaben. „In MKV umwandeln“ legt den Hauptfilm als eine Datei in den Ordner.')],
   };
   // Jede Zeile klappt auf und nennt die Dateien (oder Ordner): der Name
   // hervorgehoben, davor der Ordner, lang umbrechend. Vorher sah man nur
   // „Defekte Datei · 3 Einträge", aber nicht, welche.
-  const pfadZeile = pfad => {
+  // Bei defekten Dateien dazu die Grösse — sehr kleine sind meist ein
+  // abgebrochener Download — und „Trotzdem anspielen".
+  const KLEIN = 5 * 1024 * 1024;
+  const pfadZeile = (pfad, datei = null, anspielbar = false) => {
     const i = pfad.replace(/\/+$/, '').lastIndexOf('/');
     const ordner = i >= 0 ? pfad.slice(0, i + 1) : '', name = i >= 0 ? pfad.slice(i + 1) : pfad;
-    return `<li class="auslass-pfad" title="${esc(pfad)}"><span class="auslass-ordner">${esc(ordner)}</span><span class="auslass-name">${esc(name)}</span></li>`;
+    const zeile = `<span class="auslass-ordner">${esc(ordner)}</span><span class="auslass-name">${esc(name)}</span>`;
+    if (!datei) return `<li class="auslass-pfad" title="${esc(pfad)}">${zeile}</li>`;
+    const klein = datei.sizeBytes > 0 && datei.sizeBytes < KLEIN;
+    return `<li class="auslass-pfad auslass-pfad--datei" title="${esc(pfad)}">
+      <span class="auslass-pfadtext">${zeile}</span>
+      <span class="auslass-dateiinfo">
+        <span class="t-caption c-2 tnum">${groesse(datei.sizeBytes)}</span>
+        ${klein ? `<span class="badge badge--rot">${tr('vermutlich abgebrochener Download')}</span>` : ''}
+        ${anspielbar ? anspielKnopf({ id: datei.fileId, path: pfad }, tr('Trotzdem anspielen')) : ''}
+      </span></li>`;
   };
   // ISO-Dateien und DVD-/Blu-ray-Ordner: „In MKV umwandeln" (scheibeTat).
   const scheibeZeile = (pfad, grund, fertig) => {
@@ -5870,7 +5932,7 @@ function viewCleanup() {
       </summary>
       <div class="auslass-inhalt">
         ${grund ? `<p class="t-caption c-2 auslass-grund">${esc(grund)}</p>` : ''}
-        <ul class="auslass-pfade">${(a.pfade || []).map(p => scheibeZeile(p, a.grund, d.umgewandelt) || pfadZeile(p)).join('')}</ul>
+        <ul class="auslass-pfade">${(a.pfade || []).map((p, i) => scheibeZeile(p, a.grund, d.umgewandelt) || pfadZeile(p, (a.dateien || [])[i] || null, a.grund === 'defekt_kaputt')).join('')}</ul>
         ${a.anzahl > (a.pfade || []).length ? `<p class="t-caption c-2" style="margin:8px 0 0">${tr('… und {n} weitere (gezeigt werden die ersten {m}).', { n: a.anzahl - (a.pfade || []).length, m: (a.pfade || []).length })}</p>` : ''}
       </div>
     </details>`;
@@ -5898,7 +5960,11 @@ function viewCleanup() {
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Im Browser laufen die Teile nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.')}</p></section>` : ''}
     ${dupFassungen ? `<section style="margin-top:22px"><div class="section-h">${tr('Doppelt oder falsch zugeordnet · {n}', { n: fassungen.length })}</div>
       <div class="group group--inset">${dupFassungen}</div>
-      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“.')}</p></section>` : ''}
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab, oder füge sie als Teile eines Films zusammen. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“.')}
+        ${tr('„Als Standard“ legt nur fest, welche Datei Lumen zuerst abspielt; die anderen bleiben am Titel. „Anspielen“ zeigt genau diese Datei, ohne den Stand zu speichern.')}</p></section>` : ''}
+    ${dupKandidaten ? `<section style="margin-top:22px"><div class="section-h">${tr('Vielleicht Teile eines Films · {n}', { n: kandidaten.length })}</div>
+      <div class="group group--inset">${dupKandidaten}</div>
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Gleicher Name mit „Teil 1“, „Teil 2“ im selben Ordner, aber als eigene Filme geführt – meist, weil das Jahr nur bei einem steht. Zusammengefügt laufen die Teile nacheinander, und der Scan trennt sie nicht wieder. Fortsetzungen mit verschiedenen Jahren stehen hier nicht.')}</p></section>` : ''}
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>
@@ -5923,7 +5989,7 @@ function viewCleanup() {
           <button class="btn btn-pill btn-pill--fill" style="flex:none" data-reihe-zurueck="${esc(r.id)}">${tr('Wiederherstellen')}</button>
         </div>`).join('')}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Lumen bildet sie nicht wieder, bis du sie zurückholst.')}</p></section>` : ''}
-    ${!dup && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length && !schluesselHinweis ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
+    ${!dup && !dupFassungen && !dupKandidaten && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length && !schluesselHinweis ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
     <div style="height:40px"></div></div>`);
 }
 
@@ -6737,9 +6803,25 @@ app.addEventListener('click', async e => {
     toast(tr('Wiedergabe beendet'));
     return load();
   }
+  if ((n = hit('data-anspielen'))) {
+    try { await api.medienSchluessel(); } catch {}
+    return extraAbspielen('', n.dataset.anspielenTitel || '', { strom: api.anspielenURL(n.dataset.anspielen) });
+  }
+  if ((n = hit('data-als-teile'))) {
+    const ids = (n.dataset.dateien || '').split(',').filter(Boolean);
+    try { await api.call(`/admin/items/${encodeURIComponent(n.dataset.alsTeile)}/als-teile`, { method: 'POST', body: { fileIds: ids } }); toast(tr('Als Teile eines Films zusammengefügt')); }
+    catch (err) { toast(err.message); }
+    return load();
+  }
+  if ((n = hit('data-teile-trennen'))) {
+    if (!(await rueckfrage({ titel: tr('Sind das verschiedene Filme?'), text: tr('Teil 1 bleibt an diesem Eintrag, jeder weitere Teil wird ein eigener Film. Der Scan legt sie danach nicht wieder zusammen.'), ja: tr('Trennen') }))) return;
+    try { await api.call(`/admin/items/${encodeURIComponent(n.dataset.teileTrennen)}/teile-trennen`, { method: 'POST' }); toast(tr('Als verschiedene Filme geführt')); }
+    catch (err) { toast(err.message); }
+    return load();
+  }
   if ((n = hit('data-fassung'))) {
     const [item, datei] = n.dataset.fassung.split(':');
-    try { await api.call(`/admin/items/${encodeURIComponent(item)}/fassung`, { method: 'PUT', body: { fileId: datei } }); toast(tr('Fassung gewählt')); }
+    try { await api.call(`/admin/items/${encodeURIComponent(item)}/fassung`, { method: 'PUT', body: { fileId: datei } }); toast(tr('Als Standard gesetzt')); }
     catch (err) { toast(err.message); }
     return load();
   }

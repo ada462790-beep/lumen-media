@@ -485,6 +485,15 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		res.Missing -= umgezogen
 		res.Added -= titelWeg
 		res.Renamed = umgezogen
+		// Fehlt eine Datei, deren Folge oder Film noch eine andere hat,
+		// wurde sie umbenannt oder ersetzt — auch wenn das nicht in diesem
+		// Durchlauf geschah oder die Grösse nicht passt. Die alte Zeile
+		// geht; Stand und Haken hängen am Titel (fehlendeMitErsatz).
+		if n := s.fehlendeMitErsatz(ctx, lib); n > 0 {
+			s.st.Log(ctx, "info", "scan", fmt.Sprintf(
+				"%s: %d fehlende Dateien ausgetragen — ihr Titel ist mit einer anderen Datei da (umbenannt oder ersetzt)", lib.Name, n))
+			res.Missing = max(0, res.Missing-n)
+		}
 	}
 	// Welche Titel keine abspielbare Datei mehr haben (fehlt_seit): Nach
 	// der Frist blendet die Mediathek sie aus.
@@ -682,6 +691,21 @@ func (s *Scanner) upsertMovie(ctx context.Context, lib store.Library, g Guess,
 func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g Guess,
 	path string, size, mtime int64, ordnerEigen bool, gemessen *store.MediaFile) (added bool, itemID string, err error) {
 
+	// Von Hand entschieden (Aufräumen): „Sind verschiedene Filme" — die
+	// Datei bleibt ein eigener Film mit „Teil 2" im Titel; „Als Teile
+	// zusammenfügen" — die Teilnummer von Hand gilt.
+	bekannt := s.itemZuPfad(ctx, path)
+	if bekannt != "" {
+		if g.TitelMitTeil != "" && s.st.SperreGesetzt(ctx, bekannt, store.FeldEinzeln) {
+			g.Title, g.PartNo, g.TitelMitTeil = g.TitelMitTeil, 1, ""
+		}
+		if s.st.SperreGesetzt(ctx, bekannt, store.FeldTeile) {
+			if alt := s.gemessen(ctx, path); alt != nil && alt.Datei.PartNo > 0 {
+				g.PartNo = alt.Datei.PartNo
+			}
+		}
+	}
+
 	// „pulp fiction" aus einem kleingeschriebenen Dateinamen wird „Pulp
 	// Fiction" — bis die Metadaten den richtigen Namen bringen.
 	title := huebsch(g.Title)
@@ -689,17 +713,37 @@ func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g 
 		title = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	}
 
+	// Ein Teil eines Films (teileKlaeren): Er gehört zum Eintrag, an dem
+	// der erste Teil hängt. Unter v0.1.26 waren „Die Pfeiler der Macht -
+	// Teil 1 (2016)" und „- Teil 2 (2016)" zwei Filme — dann kommt der
+	// zweite Eintrag (mit Stand und Merkliste) zum ersten.
+	teilZiel := ""
+	if g.TitelMitTeil != "" {
+		teilZiel = s.teilEintrag(ctx, lib, path, g, bekannt)
+		if teilZiel != "" && bekannt != "" && teilZiel != bekannt {
+			if s.nurTeileVon(ctx, lib, bekannt, title) {
+				if err := s.st.FilmZusammenlegen(ctx, teilZiel, bekannt); err == nil {
+					s.st.Log(ctx, "info", "scan", "Teile eines Films zu einem Eintrag zusammengelegt")
+				}
+			}
+			bekannt = teilZiel
+		}
+	}
+
 	// Kennt Lumen die Datei schon, bleibt sie bei ihrem Titel. Hat sich nur
 	// die Lesart des Namens geändert — etwa „ - " jetzt als Doppelpunkt —,
 	// wird der Titel nachgeführt, solange er nicht von TMDb stammt.
-	if id := s.itemZuPfad(ctx, path); id != "" {
+	if id := bekannt; id != "" {
 		alt, err := s.st.Item(ctx, id)
 		erkannt := err == nil && s.festerTitel(ctx, alt)
 		// Ein nie erkannter Titel, an dem Dateien verschiedener Filme
 		// hängen („Star Trek" mit Teil II, III und V, weil das Jahr vorne
 		// stand), wird aufgeteilt: Diese Datei sucht sich ihren eigenen
 		// Titel, statt den ganzen Eintrag umzubenennen.
-		if err == nil && !erkannt && g.Title != "" && alt.Title != title &&
+		// Von Hand zusammengefügt („Als Teile zusammenfügen", eine Fassung
+		// gewählt): Dann bleibt alles am Eintrag, und sein Name auch.
+		vonHand := err == nil && (s.vonHandBestaetigt(ctx, alt) || s.st.SperreGesetzt(ctx, alt.ID, store.FeldEinzeln))
+		if err == nil && !erkannt && !vonHand && g.Title != "" && alt.Title != title &&
 			!s.alleDateienSind(ctx, lib, alt.ID, title) {
 			err = errAufteilen
 		}
@@ -715,7 +759,7 @@ func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g 
 			err = errAufteilen
 		}
 		if err == nil && alt.LibraryID == lib.ID && alt.Kind == "movie" {
-			if !erkannt && g.Title != "" && alt.Title != title {
+			if !erkannt && !vonHand && g.Title != "" && alt.Title != title {
 				alt.Title = title
 				if g.Year > 0 {
 					alt.Year = g.Year
@@ -738,13 +782,18 @@ func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g 
 	}
 
 	var item *store.Item
+	if teilZiel != "" {
+		if it, err := s.st.Item(ctx, teilZiel); err == nil && it.LibraryID == lib.ID && it.Kind == "movie" {
+			item = it
+		}
+	}
 	// Gehört der Ordner einem Film allein (alle Videos darin heissen nach
 	// ihrem Namen gleich) und hängt dort schon eine Datei an einem Film,
 	// kommt diese dazu — als Fassung oder Teil. Nach dem Titel allein ging
 	// das schief, sobald die NFO der ersten Datei den Titel umbenannt
 	// hatte („The Matrix" → „Matrix"): Die zweite Fassung fand ihn nicht
 	// und wurde ein eigener Film.
-	if ordnerEigen {
+	if item == nil && ordnerEigen {
 		if ids, err := s.st.FilmeImOrdner(ctx, lib.ID, filepath.Dir(path)); err == nil && len(ids) > 0 {
 			if it, err := s.st.Item(ctx, ids[0]); err == nil {
 				item = it
@@ -787,6 +836,90 @@ func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g 
 	return added, item.ID, s.dateiSchreiben(ctx, s.st, f)
 }
 
+// fehlendeMitErsatz trägt fehlende Dateien aus, deren Titel eine andere,
+// vorhandene Datei hat (store.FehlendeMitErsatzAustragen). Damit eine
+// abgehängte Platte nicht als Umbenennung gilt, nur wenn der Ordner der
+// fehlenden Datei noch da ist oder beide Dateien im selben obersten
+// Ordner der Bibliothek liegen (dieselbe Serie, derselbe Filmordner).
+func (s *Scanner) fehlendeMitErsatz(ctx context.Context, lib store.Library) int {
+	oberster := func(p string) string {
+		rel, err := filepath.Rel(lib.Path, p)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return "\x00" + p
+		}
+		teile := strings.SplitN(filepath.ToSlash(rel), "/", 2)
+		if len(teile) < 2 {
+			return "" // direkt in der Bibliothek
+		}
+		return teile[0]
+	}
+	n, err := s.st.FehlendeMitErsatzAustragen(ctx, lib.ID, func(fehlt, da string) bool {
+		if info, err := os.Stat(filepath.Dir(fehlt)); err == nil && info.IsDir() {
+			return true
+		}
+		o := oberster(fehlt)
+		return o != "" && o == oberster(da)
+	})
+	if err != nil {
+		s.st.Log(ctx, "warn", "scan", "fehlende Dateien liessen sich nicht austragen: "+ohnePfad(err))
+	}
+	return n
+}
+
+// teilEintrag: der Eintrag, an dem der erste Teil dieses Films hängt — unter
+// den Dateien im selben Ordner mit derselben Basis und demselben Jahr
+// (teileKlaeren) die mit der kleinsten Teilnummer, diese Datei selbst
+// eingeschlossen (eigen: ihr Eintrag, "" wenn neu). Einträge, die jemand
+// als „verschiedene Filme" markiert hat, zählen nicht.
+func (s *Scanner) teilEintrag(ctx context.Context, lib store.Library, path string, g Guess, eigen string) string {
+	rel, err := filepath.Rel(lib.Path, path)
+	if err != nil {
+		return ""
+	}
+	dirs := splitDirs(rel)
+	bester, besterTeil := eigen, g.PartNo
+	if eigen == "" {
+		besterTeil = 1 << 30
+	}
+	eintraege, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		return ""
+	}
+	schluessel := titelSchluessel(g.Title)
+	for _, e := range eintraege {
+		p := filepath.Join(filepath.Dir(path), e.Name())
+		if p == path || !e.Type().IsRegular() || !IsVideo(e.Name()) || IsJunkFile(e.Name()) {
+			continue
+		}
+		x := teileKlaeren(ParseFuer(p, dirs, lib.Kind), p, dirs, lib.Kind, nil)
+		if x.TitelMitTeil == "" || titelSchluessel(x.Title) != schluessel || x.Year != g.Year || x.PartNo == g.PartNo {
+			continue
+		}
+		id := s.itemZuPfad(ctx, p)
+		if id == "" || s.st.SperreGesetzt(ctx, id, store.FeldEinzeln) {
+			continue
+		}
+		if x.PartNo < besterTeil {
+			bester, besterTeil = id, x.PartNo
+		}
+	}
+	if bester == "" || s.st.SperreGesetzt(ctx, bester, store.FeldEinzeln) {
+		return ""
+	}
+	return bester
+}
+
+// nurTeileVon: Heissen alle Dateien des Eintrags nach ihrem Namen wie
+// dieser Film (title)? Dann darf der ganze Eintrag in den des ersten Teils
+// aufgehen; sonst wandert nur die eine Datei.
+func (s *Scanner) nurTeileVon(ctx context.Context, lib store.Library, itemID, title string) bool {
+	it, err := s.st.Item(ctx, itemID)
+	if err != nil || it.Kind != "movie" || it.LibraryID != lib.ID || s.st.SperreGesetzt(ctx, itemID, store.FeldEinzeln) {
+		return false
+	}
+	return s.alleDateienSind(ctx, lib, itemID, title)
+}
+
 // ordnerZusammenlegen heilt, was ältere Fassungen in einem Ordner, der
 // einem Film allein gehört, zerlegt haben: zwei Einträge mit derselben
 // TMDb-Kennung (aus der NFO) werden einer — der ältere bleibt, Stand und
@@ -798,8 +931,10 @@ func (s *Scanner) ordnerZusammenlegen(ctx context.Context, lib store.Library, or
 		return
 	}
 	type eintrag struct {
-		id, titel string
-		dauer     []int64
+		id, titel  string
+		name, orig string // Titel und Originaltitel des Eintrags
+		dateiTitel []string
+		dateien    []store.MediaFile
 	}
 	je := map[string][]eintrag{} // tmdb → Einträge, ältester zuerst
 	for _, id := range ids {
@@ -808,19 +943,25 @@ func (s *Scanner) ordnerZusammenlegen(ctx context.Context, lib store.Library, or
 			continue
 		}
 		e := eintrag{id: id, titel: s.titelDerDateien(ctx, lib, id)}
+		if it, err := s.st.Item(ctx, id); err == nil {
+			e.name, e.orig = it.Title, it.OriginalTitle
+		}
 		if dateien, err := s.st.FilesFor(ctx, id); err == nil {
+			e.dateien = s.mitSpuren(ctx, dateien)
 			for _, f := range dateien {
-				e.dauer = append(e.dauer, f.DurationMS)
+				if rel, err := filepath.Rel(lib.Path, f.Path); err == nil {
+					e.dateiTitel = append(e.dateiTitel, s.dateiTitel(f.Path, splitDirs(rel), lib.Kind))
+				}
 			}
 		}
 		// Gleiche Kennung genügt nicht: Eine falsche NFO oder ein falscher
 		// Treffer gibt zwei Filmen dieselbe. Zusammengelegt wird nur, was
-		// auch nach den Dateinamen derselbe Film ist — oder gleich lang
-		// (±2 %): „Chihiros Reise ins Zauberland" und „Spirited Away" mit
-		// derselben Kennung sind zwei Sprachfassungen eines Films.
+		// nach denselben Regeln wie beim Abtrennen derselbe Film ist
+		// (gleicherFilm).
 		zusammen := false
 		for _, ziel := range je[k] {
-			if !gleicherFilm(ziel.titel, ziel.dauer, e.titel, e.dauer) {
+			if !gleicherFilm(ziel.titel, e.titel, ziel.dateien, e.dateien,
+				ziel.dateiTitel, e.dateiTitel, []string{ziel.name, ziel.orig}, []string{e.name, e.orig}) {
 				continue
 			}
 			if err := s.st.FilmZusammenlegen(ctx, ziel.id, id); err == nil {
@@ -836,19 +977,49 @@ func (s *Scanner) ordnerZusammenlegen(ctx context.Context, lib store.Library, or
 }
 
 // gleicherFilm: Zwei Einträge mit derselben Kennung sind derselbe Film,
-// wenn ihre Dateien gleich heissen (titelSchluessel) oder gleich lang
-// sind (±2 %) — ausser die Namen tragen verschiedene Zahlen („Teil 1" und
-// „Teil 2").
-func gleicherFilm(titelA string, dauerA []int64, titelB string, dauerB []int64) bool {
+// wenn ihre Dateien gleich heissen (titelSchluessel), wenn die Namen jeder
+// Seite zum Titel oder Originaltitel der anderen passen, oder wenn es eine
+// Sprachfassung ist (andere Tonsprache, Laufzeit ±5 %) — ausser die Namen
+// tragen verschiedene Zahlen („Teil 1" und „Teil 2"). Dieselbe Regel wie
+// abtrennenNoetig.
+func gleicherFilm(titelA, titelB string, dateienA, dateienB []store.MediaFile,
+	namenA, namenB []string, titelVonA, titelVonB []string) bool {
 	if titelA != "" && titelA == titelB {
 		return true
 	}
-	if za, zb := zahlenIn(titelA), zahlenIn(titelB); za != "" && zb != "" && za != zb {
+	za, zb := "", ""
+	if len(namenA) > 0 {
+		za = zahlenIn(namenA[0])
+	}
+	if len(namenB) > 0 {
+		zb = zahlenIn(namenB[0])
+	}
+	if za != "" && zb != "" && za != zb {
 		return false
 	}
-	for _, a := range dauerA {
-		for _, b := range dauerB {
-			if laufzeitGleich(a, b) {
+	passt := func(namen, titel []string) bool {
+		if len(namen) == 0 {
+			return false
+		}
+		for _, n := range namen {
+			gut := false
+			for _, t := range titel {
+				if t != "" && titelNah(n, t) >= 0.5 {
+					gut = true
+				}
+			}
+			if !gut {
+				return false
+			}
+		}
+		return true
+	}
+	if passt(namenA, titelVonB) && passt(namenB, titelVonA) {
+		return true
+	}
+	for _, a := range dateienA {
+		for _, b := range dateienB {
+			if sprachfassung(a, b) {
 				return true
 			}
 		}
@@ -1241,6 +1412,7 @@ func (s *Scanner) DateienVerschieden(ctx context.Context, lib store.Library, it 
 	if it == nil || len(dateien) < 2 || s.vonHandBestaetigt(ctx, it) {
 		return false
 	}
+	dateien = s.mitSpuren(ctx, dateien)
 	for _, f := range dateien {
 		rel, err := filepath.Rel(lib.Path, f.Path)
 		if err != nil {
@@ -1271,7 +1443,7 @@ func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *s
 	if err != nil || len(dateien) < 2 {
 		return false
 	}
-	return s.abtrennenNoetig(lib, it, dateien, path, title)
+	return s.abtrennenNoetig(lib, it, s.mitSpuren(ctx, dateien), path, title)
 }
 
 // abtrennenNoetig entscheidet für die Datei path (Titel nach ihrem Namen:
@@ -1280,11 +1452,23 @@ func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *s
 // ist (gemeinsame Wörter); bei Gleichstand die mit dem kleinsten Pfad —
 // damit die Entscheidung bei jedem Durchlauf gleich ausfällt.
 //
-// Abgetrennt wird nicht, wenn die Laufzeit (±2 %) zu der Datei passt, die
-// bleibt: Das ist dieselbe Fassung unter anderem Namen — „Chihiros Reise
-// ins Zauberland" und „Spirited Away", „Das Leben der Anderen" und „The
-// Lives of Others". Ausnahme: Beide Namen tragen Zahlen, und die sind
-// verschieden („Teil 1"/„Teil 2" eines Zweiteilers sind oft gleich lang).
+// Verschieden benannte Dateien sind nur dann Fassungen desselben Films,
+// wenn
+//
+//   - ihr Name selbst zum Titel oder Originaltitel passt („Sag niemals
+//     nie" und „Never Say Never Again"), oder
+//   - sie eine andere Tonsprache haben (die erste Tonspur, wie gemessen)
+//     und die Laufzeit passt (±5 %, wegen der PAL-Beschleunigung) —
+//     „Chihiros Reise ins Zauberland" (deutsch) und „Spirited Away"
+//     (englisch).
+//
+// Gleiche Sprache und verschiedene Titel sind verschiedene Filme, auch
+// wenn sie gleich lang sind: „007 - Octopussy" und „007 - Sag niemals
+// nie" (beide 1983, beide gut zwei Stunden) standen als ein Film da.
+// Zahlen, die in beiden Namen vorkommen („007", das Jahr), zählen dabei
+// nicht als Ähnlichkeit. Verschiedene Zahlen („Teil 1"/„Teil 2") sind
+// immer verschiedene Filme — die Teile eines Films erkennt schon
+// teileKlaeren, dann heissen beide Dateien gleich.
 func (s *Scanner) abtrennenNoetig(lib store.Library, it *store.Item, dateien []store.MediaFile, path, title string) bool {
 	if len(dateien) < 2 {
 		return false
@@ -1292,9 +1476,9 @@ func (s *Scanner) abtrennenNoetig(lib store.Library, it *store.Item, dateien []s
 	dateien = append([]store.MediaFile(nil), dateien...)
 	sort.Slice(dateien, func(i, j int) bool { return dateien[i].Path < dateien[j].Path })
 	eigen := titelSchluessel(title)
-	titelZu := map[string]string{} // Schlüssel → Titel, wie gelesen
-	dauer := map[string][]int64{}  // Schlüssel → Laufzeiten der Dateien
-	var eigeneDauer int64
+	titelZu := map[string]string{}           // Schlüssel → Titel, wie gelesen
+	andere := map[string][]store.MediaFile{} // Schlüssel → die übrigen Dateien
+	var selbst store.MediaFile
 	reihe := []string{}
 	for _, f := range dateien {
 		t := title
@@ -1305,7 +1489,7 @@ func (s *Scanner) abtrennenNoetig(lib store.Library, it *store.Item, dateien []s
 			}
 			t = s.dateiTitel(f.Path, splitDirs(rel), lib.Kind)
 		} else {
-			eigeneDauer = f.DurationMS
+			selbst = f
 		}
 		k := titelSchluessel(t)
 		if k == "" {
@@ -1316,14 +1500,14 @@ func (s *Scanner) abtrennenNoetig(lib store.Library, it *store.Item, dateien []s
 			reihe = append(reihe, k)
 		}
 		if f.Path != path {
-			dauer[k] = append(dauer[k], f.DurationMS)
+			andere[k] = append(andere[k], f)
 		}
 	}
 	if len(reihe) < 2 || titelZu[eigen] == "" {
 		return false
 	}
 	punkte := func(k string) float64 {
-		return max(wortAehnlich(titelZu[k], it.Title), wortAehnlich(titelZu[k], it.OriginalTitle))
+		return max(titelNah(titelZu[k], it.Title), titelNah(titelZu[k], it.OriginalTitle))
 	}
 	haupt := reihe[0]
 	for _, k := range reihe[1:] {
@@ -1341,23 +1525,66 @@ func (s *Scanner) abtrennenNoetig(lib store.Library, it *store.Item, dateien []s
 	if ze != "" && zh != "" && ze != zh {
 		return true
 	}
-	// Gleich lang wie die Datei, die bleibt: dieselbe Fassung in einer
-	// anderen Sprache oder unter einem Szene-Namen.
-	for _, d := range dauer[haupt] {
-		if laufzeitGleich(eigeneDauer, d) {
+	// Eine andere Sprache, gleich lang: dieselbe Fassung, synchronisiert.
+	for _, d := range andere[haupt] {
+		if sprachfassung(selbst, d) {
 			return false
 		}
 	}
-	// „Dune" neben „Dune 2": Zahl nur auf einer Seite und keine passende
-	// Laufzeit — verschiedene Filme. („Dune" neben „Dune - Part One" mit
-	// gleicher Laufzeit blieb oben zusammen.)
+	// „Dune" neben „Dune 2": Zahl nur auf einer Seite und keine
+	// Sprachfassung — verschiedene Filme.
 	if ze != zh {
 		return true
 	}
-	// Passt der eigene Name selbst gut zum Titel des Eintrags (etwa ein
-	// deutscher und ein englischer Dateiname derselben Fassung), bleibt
-	// die Datei: lieber eine Fassung zu viel als ein Film auseinandergerissen.
+	// Passt der eigene Name selbst gut zum Titel oder Originaltitel des
+	// Eintrags (ein deutscher und ein englischer Dateiname, ein Szene-Name
+	// mit Ausgabe), bleibt die Datei.
 	return punkte(eigen) < 0.5
+}
+
+// sprachfassung: Zwei Dateien sind dieselbe Fassung in verschiedenen
+// Sprachen — die erste Tonspur hat je eine bekannte, verschiedene
+// Sprache, und die Laufzeiten liegen höchstens 5 % auseinander (PAL
+// läuft mit 25 statt 23,976 Bildern und ist gut 4 % kürzer).
+func sprachfassung(a, b store.MediaFile) bool {
+	sa, sb := tonSprache(a), tonSprache(b)
+	return sa != "" && sb != "" && sa != sb && laufzeitNah(a.DurationMS, b.DurationMS)
+}
+
+// tonSprache: die Sprache der ersten Tonspur ("" = unbekannt oder nicht
+// gemessen).
+func tonSprache(f store.MediaFile) string {
+	erste := -1
+	sprache := ""
+	for _, t := range f.Spuren {
+		if t.Kind != "audio" || t.External || (erste >= 0 && t.Index >= erste) {
+			continue
+		}
+		erste, sprache = t.Index, strings.ToLower(strings.TrimSpace(t.Language))
+	}
+	if sprache == "und" || sprache == "unk" || sprache == "mis" || sprache == "zxx" {
+		return ""
+	}
+	if len(sprache) > 2 {
+		if k, ok := untertitelSprachen[sprache]; ok {
+			sprache = k
+		}
+	}
+	return sprache
+}
+
+// mitSpuren lädt die Spuren der Dateien nach, die noch keine dabeihaben
+// (FilesFor liest sie nicht mit) — für tonSprache.
+func (s *Scanner) mitSpuren(ctx context.Context, dateien []store.MediaFile) []store.MediaFile {
+	out := append([]store.MediaFile(nil), dateien...)
+	for i := range out {
+		if out[i].Spuren == nil && out[i].ID != "" {
+			if sp, err := s.st.Spuren(ctx, out[i].ID); err == nil {
+				out[i].Spuren = sp
+			}
+		}
+	}
+	return out
 }
 
 // laufzeitGleich: beide Laufzeiten bekannt und höchstens 2 % auseinander.
@@ -1370,6 +1597,35 @@ func laufzeitGleich(a, b int64) bool {
 		d = -d
 	}
 	return d*50 <= max(a, b)
+}
+
+// laufzeitNah: beide Laufzeiten bekannt und höchstens 5 % auseinander.
+func laufzeitNah(a, b int64) bool {
+	if a <= 0 || b <= 0 {
+		return false
+	}
+	d := a - b
+	if d < 0 {
+		d = -d
+	}
+	return d*20 <= max(a, b)
+}
+
+// titelNah: wie wortAehnlich, aber ohne reine Zahlen — „007" und „1983"
+// in beiden Namen machen „Octopussy" und „Sag niemals nie" nicht ähnlich.
+func titelNah(a, b string) float64 {
+	ohne := func(s string) string {
+		var w []string
+		for _, x := range strings.FieldsFunc(s, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') && r <= 127
+		}) {
+			if strings.Trim(x, "0123456789") != "" {
+				w = append(w, x)
+			}
+		}
+		return strings.Join(w, " ")
+	}
+	return wortAehnlich(ohne(a), ohne(b))
 }
 
 // zahlenIn: die Zahlen in einem Titel, in Reihenfolge — „Teil 2 (2016)"

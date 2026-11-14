@@ -444,6 +444,13 @@ export const api = {
     if (this.mediaKey) p.set('key', this.mediaKey);
     return `${url}/browser.mp4?${p}`;
   },
+  /* Genau eine Datei anspielen (Aufräumen): umgepackt oder umgewandelt,
+     ohne Stand (aufraeumen_teile.go). Nur für Verwalter. */
+  anspielenURL(fileId) {
+    const p = new URLSearchParams(browserCaps());
+    if (this.mediaKey) p.set('key', this.mediaKey);
+    return `/api/v1/stream/${encodeURIComponent(fileId)}/anspielen.mp4?${p}`;
+  },
   /* Warum der Strom dieses Players endete: laeuft, wiedergabe_abgelaufen,
      wiedergabe_beendet, wiedergabe_ersetzt, fehler (mit error), unbekannt. */
   browserGrund(fileId, lauf) {
