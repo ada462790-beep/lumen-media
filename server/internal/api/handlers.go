@@ -1806,6 +1806,7 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	s.doppelEinordnen(r.Context(), dups)
 	// Fehlende Dateien seitenweise (?fehlendAb=…): 1 000 fehlende Dateien
 	// waren 460 KB JSON und 9 000 Elemente auf der Seite.
 	missing, err := s.st.MissingFilesSeite(r.Context(), 200, qInt(r, "fehlendAb", 0))
@@ -1933,6 +1934,40 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 		// Ohne gültigen TMDb-Schlüssel sagt die Seite, warum Titel warten.
 		"schluessel": meta.SchluesselStand(r.Context(), s.st),
 		"vorgemerkt": meta.VorgemerktZahl(r.Context(), s.st)})
+}
+
+// doppelEinordnen: Filme mit mehreren Dateien, deren Dateinamen
+// verschiedene Filme sind, sind falsch zugeordnet (Art „verschieden") —
+// keine Fassungen. Das sieht nur, wer die Namen liest (der Scanner).
+func (s *Server) doppelEinordnen(ctx context.Context, dups []store.Duplicate) {
+	if s.scanner == nil || len(dups) == 0 {
+		return
+	}
+	libs, _ := s.st.Libraries(ctx)
+	nachID := map[string]store.Library{}
+	for _, l := range libs {
+		nachID[l.ID] = l
+	}
+	for i := range dups {
+		if dups[i].Art == "teile" {
+			continue
+		}
+		it, err := s.st.Item(ctx, dups[i].ItemID)
+		if err != nil {
+			continue
+		}
+		lib, ok := nachID[it.LibraryID]
+		if !ok {
+			continue
+		}
+		pfade := make([]string, 0, len(dups[i].Files))
+		for _, f := range dups[i].Files {
+			pfade = append(pfade, f.Path)
+		}
+		if s.scanner.DateienVerschieden(lib, pfade) {
+			dups[i].Art = "verschieden"
+		}
+	}
 }
 
 // zahlOder: die Gesamtzahl für den, der alles sieht, sonst die Länge der

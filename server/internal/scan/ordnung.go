@@ -80,14 +80,20 @@ func gruppenZusammenlegen(ep map[string][]episodeHit) {
 // wenn ihr Jahr mehr als eins daneben liegt (TMDb nennt manchmal das Jahr
 // der Ausstrahlung im Ursprungsland, der Ordner das hiesige) oder ihr
 // Land ein anderes ist.
+//
+// Ein Ordnerjahr, unter dem die Serie schon Folgen aufgenommen hat
+// (store.Zusatz.Jahre), passt immer: Dann hat TMDb zwei Gruppen mit
+// verschiedenen Jahren als dieselbe Serie erkannt, und der Hausmeister
+// hat sie zusammengeführt. Ohne diese Ausnahme legte jeder Durchlauf die
+// zweite Gruppe wieder als eigene Serie an („2 doppelte Serien
+// zusammengeführt" nach jedem Durchlauf).
 func (s *Scanner) passtZuSerie(ctx context.Context, it *store.Item, jahr int, land string) bool {
-	if jahr > 0 && it.Year > 0 && math.Abs(float64(it.Year-jahr)) > 1 {
+	z := s.st.ZusatzZu(ctx, it.ID)
+	if jahr > 0 && it.Year > 0 && math.Abs(float64(it.Year-jahr)) > 1 && !z.JahrBekannt(jahr) {
 		return false
 	}
-	if land != "" {
-		if l := s.st.ZusatzZu(ctx, it.ID).Land; l != "" && l != land {
-			return false
-		}
+	if land != "" && z.Land != "" && z.Land != land {
+		return false
 	}
 	return true
 }

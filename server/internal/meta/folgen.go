@@ -36,6 +36,7 @@ type StaffelInfo struct {
 type FolgeInfo struct {
 	Nr    int
 	Datum string
+	Name  string
 }
 
 // Die Staffeln einer Serie ändern sich selten; während eines Durchlaufs
@@ -80,6 +81,7 @@ func (t *TMDb) StaffelFolgen(ctx context.Context, seriesID string, staffel int) 
 		Episodes []struct {
 			Number  int    `json:"episode_number"`
 			AirDate string `json:"air_date"`
+			Name    string `json:"name"`
 		} `json:"episodes"`
 	}
 	path := fmt.Sprintf("/tv/%s/season/%d", url.PathEscape(seriesID), staffel)
@@ -88,7 +90,7 @@ func (t *TMDb) StaffelFolgen(ctx context.Context, seriesID string, staffel int) 
 	}
 	out := make([]FolgeInfo, 0, len(d.Episodes))
 	for _, e := range d.Episodes {
-		out = append(out, FolgeInfo{Nr: e.Number, Datum: e.AirDate})
+		out = append(out, FolgeInfo{Nr: e.Number, Datum: e.AirDate, Name: e.Name})
 	}
 	return out, nil
 }
@@ -198,6 +200,59 @@ func (r *Resolver) datumAufloesen(ctx context.Context, src, datum string) (*Cand
 		}
 	}
 	return nil, 0, 0, fmt.Errorf("bei TMDb nicht gefunden")
+}
+
+// specialAufloesen sucht ein Special („S08E00 - The Last Watch") in
+// Staffel 0 bei TMDb — nach dem Titel, denn die Nummer in Lumen hat der
+// Scanner vergeben. Ohne brauchbaren Titel („Special", leer) oder ohne
+// eindeutigen Treffer bleibt es beim Namen aus der Datei: lieber kein
+// Treffer als die Beschreibung einer anderen Sonderfolge.
+func (r *Resolver) specialAufloesen(ctx context.Context, src, titel string) (*Candidate, error) {
+	gesucht := folgenSchluessel(titel)
+	if len([]rune(gesucht)) < 4 || gesucht == "special" {
+		return nil, fmt.Errorf("bei TMDb nicht gefunden")
+	}
+	folgen, err := r.tmdb.StaffelFolgen(ctx, src, 0)
+	if err != nil {
+		return nil, err
+	}
+	treffer := -1
+	for _, f := range folgen {
+		k := folgenSchluessel(f.Name)
+		if k == "" {
+			continue
+		}
+		gleich := k == gesucht
+		// „Ein finsteres, grusliges Halloween-…-Special" gegen „Halloween
+		// Special": ein Name im anderen, wenn er lang genug ist.
+		if !gleich && len([]rune(k)) >= 8 && len([]rune(gesucht)) >= 8 {
+			gleich = strings.Contains(gesucht, k) || strings.Contains(k, gesucht)
+		}
+		if !gleich {
+			continue
+		}
+		if treffer >= 0 && treffer != f.Nr {
+			return nil, fmt.Errorf("bei TMDb nicht gefunden") // zwei passen — nicht raten
+		}
+		treffer = f.Nr
+	}
+	if treffer < 0 {
+		return nil, fmt.Errorf("bei TMDb nicht gefunden")
+	}
+	return r.tmdb.Episode(ctx, src, 0, treffer)
+}
+
+// folgenSchluessel macht Folgentitel vergleichbar: klein, ohne Akzente
+// und Satzzeichen.
+func folgenSchluessel(s string) string {
+	s = strings.ToLower(umlauteAufloesen(strings.TrimSpace(s)))
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // doppelfolgeErgaenzen holt zu einer Doppelfolge („S01E16E17") die

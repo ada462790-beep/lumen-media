@@ -49,6 +49,13 @@ func TestSuchvarianten(t *testing.T) {
 		gleich bool
 	}{
 		{"Avatar Extended Collector's Edition 3D", "Avatar", true},
+		// „Teil N" so, wie TMDb solche Filme nennt
+		{"Dune - Der Wüstenplanet - Teil 3", "Dune - Der Wüstenplanet 3", true},
+		{"Dune: Teil 2", "Dune: Part Two", true},
+		{"Kill Bill - Teil 2", "Kill Bill: Vol. 2", true},
+		{"Die Pfeiler der Macht: Teil 2", "Die Pfeiler der Macht 2", true},
+		{"Die Pfeiler der Macht: Teil 2", "Die Pfeiler der Macht", false},
+		{"Harry Potter und die Heiligtümer des Todes Part 2", "Harry Potter und die Heiligtümer des Todes: Teil 2", true},
 		{"Das Boot Director's Cut", "Das Boot", true},
 		{"Das Boot - Kinofassung", "Das Boot", true},
 		{"Blade Runner Final Cut", "Blade Runner", true},

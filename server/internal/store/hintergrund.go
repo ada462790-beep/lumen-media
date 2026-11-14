@@ -19,7 +19,7 @@ import "context"
 func (s *Store) VorhandeneDateien(ctx context.Context) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id FROM media_file
-		 WHERE missing_since IS NULL AND COALESCE(duration_ms,0) > 0
+		 WHERE missing_since IS NULL AND COALESCE(duration_ms,0) > 0 AND defekt IS NULL
 		 ORDER BY rowid DESC`)
 	if err != nil {
 		return nil, err

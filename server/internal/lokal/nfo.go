@@ -197,6 +197,9 @@ type roh struct {
 	} `xml:"set"`
 	Collection string `xml:"collection"`
 	TMDbColID  string `xml:"tmdbcolid"`
+	// <collectionnumber>: die TMDb-Kennung der Sammlung, wie Emby sie
+	// neben <set> schreibt.
+	SammlungNr string `xml:"collectionnumber"`
 	EpEnd      string `xml:"episodenumberend"`
 }
 
@@ -393,6 +396,9 @@ func (n *NFO) zusatzLesen(r *roh) {
 	n.ReiheTMDb = nurZahl(r.Set.ColID)
 	if n.ReiheTMDb == "" {
 		n.ReiheTMDb = nurZahl(r.TMDbColID)
+	}
+	if n.ReiheTMDb == "" {
+		n.ReiheTMDb = nurZahl(r.SammlungNr)
 	}
 	if n.Reihe == "" {
 		n.ReiheTMDb = ""

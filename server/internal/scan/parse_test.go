@@ -7,7 +7,11 @@
 
 package scan
 
-import "testing"
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 // Die Fälle hier stammen aus echten Sammlungen: so sehen Dateien aus, die
 // über Jahre von verschiedenen Quellen zusammengekommen sind.
@@ -255,9 +259,10 @@ func TestZuordnungAusEchterSammlung(t *testing.T) {
 		{"Apocalypse Now (1979) a.avi", nil, "movie", "Apocalypse Now", 1979, 0, 0},
 		{"(2014) Bibi und Tina - Voll verhext.avi", []string{"Bibi und Tina"}, "movie", "Bibi und Tina: Voll verhext", 2014, 0, 0},
 		{"Babylon A.D. (2008).mkv", nil, "movie", "Babylon A.D.", 2008, 0, 0},
-		// Release-Ordner, der auf „Special" endet, gehört zur Serie darüber
+		// Release-Ordner, der auf „Special" endet, gehört zur Serie darüber.
+		// S03E00 ist ein Special: Staffel 0, Nummer vergibt der Scanner.
 		{"solar.opposites.s03e00.german.dl.720p.web.h264-wvf.mkv", []string{"Solar Opposites", "Solar Opposites - Staffel 03",
-			"Solar.Opposites.S03E00 Ein finsteres, grusliges Halloween-Opposites-Solar-Special"}, "episode", "Solar Opposites", 0, 3, 0},
+			"Solar.Opposites.S03E00 Ein finsteres, grusliges Halloween-Opposites-Solar-Special"}, "episode", "Solar Opposites", 0, 0, 0},
 		// „German" im Titel
 		{"The German - S01E01.mkv", []string{"The German"}, "episode", "The German", 0, 1, 1},
 		{"The German - S01E01.mkv", nil, "episode", "The German", 0, 1, 1},
@@ -325,6 +330,34 @@ func TestFolgentitelOhneReleaseBrocken(t *testing.T) {
 		g := ParseFuer(pfad, []string{"Serien", "Show", "Season 01"}, "series")
 		if g.EpisodeTitle != want {
 			t.Errorf("%s: Folgentitel %q, erwartet %q", pfad, g.EpisodeTitle, want)
+		}
+	}
+}
+
+// Echte Fälle vom NAS: „S01E00" ist ein Special (Staffel 0, Titel aus dem
+// Namen), „SS01E01" ein Tippfehler für S01E01. Vorher wurde aus E00 die
+// nächste freie Folge der Staffel und aus „SS01E01" ein Folgentitel
+// „Inside Man: SS01E01" mit geratener Nummer.
+func TestSpecialsUndTippfehlerImFolgennamen(t *testing.T) {
+	cases := []struct {
+		pfad               string
+		titel, folgentitel string
+		staffel, folge     int
+		special            bool
+		aus                int
+	}{
+		{"Knight Rider 2008/Knight Rider 2008 - Staffel 01/Knight Rider 2008 - S01E00 -.avi", "Knight Rider", "", 0, 0, true, 1},
+		{"Game of Thrones/Game of Thrones - Staffel 08/Game of Thrones - S08E00 - The Last Watch.mkv", "Game of Thrones", "The Last Watch", 0, 0, true, 8},
+		{"Inside Man/Inside Man - Staffel 01/Inside Man - SS01E01.mkv", "Inside Man", "", 1, 1, false, 0},
+		{"Inside Man/Inside Man - Staffel 01/Inside Man - SS01E04.mkv", "Inside Man", "", 1, 4, false, 0},
+		{"Doctor Who/Specials/Doctor Who - S00E39.mkv", "Doctor Who", "", 0, 39, false, 0},
+	}
+	for _, c := range cases {
+		dirs := strings.Split(filepath.Dir(c.pfad), "/")
+		g := ParseFuer(c.pfad, dirs, "series")
+		if g.Kind != "episode" || g.Title != c.titel || g.EpisodeTitle != c.folgentitel || g.SeasonNo != c.staffel ||
+			g.EpisodeNo != c.folge || g.Special != c.special || g.SpecialAus != c.aus || !g.Confident {
+			t.Errorf("%s:\n  %+v", c.pfad, g)
 		}
 	}
 }

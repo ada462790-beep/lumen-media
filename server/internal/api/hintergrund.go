@@ -189,10 +189,16 @@ func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
 	}
 	hg.mu.Unlock()
 	f, err := s.st.File(ctx, fileID)
-	if err != nil || f.Missing || f.DurationMS <= 0 {
+	if err != nil || f.Missing || f.DurationMS <= 0 || f.Defekt != "" {
 		return
 	}
 	if _, err := os.Stat(f.Path); err != nil {
+		return
+	}
+	// Ging es mit genau dieser Fassung der Datei schon einmal nicht
+	// („Invalid data found"), nicht wieder versuchen — auch nicht nach
+	// einem Neustart. Erst wenn sich Grösse oder Änderungszeit ändern.
+	if s.vorbereitenGescheitert(f) {
 		return
 	}
 	var fehler []string
@@ -217,9 +223,30 @@ func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
 		hg.mu.Lock()
 		hg.fehl[fileID] = time.Now()
 		hg.mu.Unlock()
+		s.vorbereitenGescheitertMerken(f)
 		// Ins Protokoll: dass es nicht ging, nicht bei welchem Film.
 		s.st.Log(ctx, "warn", "vorbereiten", "Eine Datei liess sich nicht vorbereiten — "+strings.Join(fehler, "; "))
 	}
+}
+
+// vorbereitenFehlerOrdner: je Datei, bei der das Vorbereiten scheiterte,
+// eine kleine Datei mit der Kennung der Fassung (dateiKennung). Im
+// Arbeitsspeicher allein (hg.fehl) ging das Wissen mit jedem Neustart
+// verloren, und dieselben kaputten Dateien standen wieder im Protokoll.
+func (s *Server) vorbereitenFehlerOrdner() string {
+	return filepath.Join(s.dataDir, "vorbereiten-fehler")
+}
+
+func (s *Server) vorbereitenGescheitert(f *store.MediaFile) bool {
+	b, err := os.ReadFile(filepath.Join(s.vorbereitenFehlerOrdner(), f.ID))
+	return err == nil && strings.TrimSpace(string(b)) == dateiKennung(f)
+}
+
+func (s *Server) vorbereitenGescheitertMerken(f *store.MediaFile) {
+	if err := os.MkdirAll(s.vorbereitenFehlerOrdner(), 0o700); err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(s.vorbereitenFehlerOrdner(), f.ID), []byte(dateiKennung(f)), 0o600)
 }
 
 func zeitlosAlles(ordner string) {
@@ -433,6 +460,14 @@ func (s *Server) vorratAufraeumen(ctx context.Context) {
 			}
 			if !s.st.DateiGibtEs(ctx, name) {
 				_ = os.RemoveAll(filepath.Join(s.trickplayWurzel(), name))
+			}
+		}
+	}
+	// Vermerke über gescheitertes Vorbereiten zu verschwundenen Dateien.
+	if eintraege, err := os.ReadDir(s.vorbereitenFehlerOrdner()); err == nil {
+		for _, e := range eintraege {
+			if !s.st.DateiGibtEs(ctx, e.Name()) {
+				_ = os.Remove(filepath.Join(s.vorbereitenFehlerOrdner(), e.Name()))
 			}
 		}
 	}

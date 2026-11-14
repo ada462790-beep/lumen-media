@@ -65,6 +65,11 @@ func TestNFOZusatz(t *testing.T) {
 	if k.Reihe != "Der Herr der Ringe Filmreihe" || k.ReiheTMDb != "" {
 		t.Errorf("Kodi-Set %q/%q", k.Reihe, k.ReiheTMDb)
 	}
+	// Emby: <set><name> und die Kennung der Sammlung in <collectionnumber>.
+	e, _ := NFOAus([]byte(`<movie><title>Hulk</title><set><name>Hulk Filmreihe</name></set><collectionnumber>1059</collectionnumber></movie>`))
+	if e.Reihe != "Hulk Filmreihe" || e.ReiheTMDb != "1059" {
+		t.Errorf("Emby-Set %q/%q", e.Reihe, e.ReiheTMDb)
+	}
 	f, _ := NFOAus([]byte(`<episodedetails><title>Pilot</title><season>1</season><episode>1</episode><episodenumberend>2</episodenumberend></episodedetails>`))
 	if f.BisFolge != 2 {
 		t.Errorf("BisFolge %d", f.BisFolge)

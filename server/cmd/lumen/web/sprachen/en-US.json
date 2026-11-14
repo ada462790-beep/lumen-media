@@ -1266,7 +1266,7 @@
  "FFmpeg erkennt darin kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten.": "FFmpeg finds no video in it (incomplete download, damaged file). It isn’t offered.",
  "Noch nicht geprüft.": "Not checked yet.",
  "Ordner wie „Extras“, „Trailers“, „Featurettes“ liest Lumen nicht als Filme ein.": "Lumen doesn’t read folders like “Extras”, “Trailers”, “Featurettes” as movies.",
- "Seit dem letzten Neustart nicht mehr geprüft.": "Not checked since the last restart.",
+ "TMDb lieferte keinen sicheren Treffer. Mit „Suchen“ oder „ID eingeben“ zuordnen.": "TMDb returned no reliable match. Use “Search” or “Enter ID” to assign it.",
  "TMDb kennt keinen Titel mit diesem Namen.": "TMDb knows no title with this name.",
  "TMDb war nicht erreichbar — Lumen versucht es später noch einmal.": "TMDb couldn’t be reached — Lumen will try again later.",
  "Tipp: Eine Kennung im Ordner- oder Dateinamen, etwa „Matrix (1999) {imdb-tt0133093}“, ordnet beim nächsten Durchlauf ohne Suche zu.": "Tip: an ID in the folder or file name, such as “Matrix (1999) {imdb-tt0133093}”, matches on the next scan without searching.",
@@ -1367,7 +1367,6 @@
  "Aktion|Von vorn": "Restart",
  "Alles, was seither geändert wurde – neue Profile, Einladungen, Einstellungen, Bewertungen und wer wo im Film stand –, geht verloren. Lumen startet dafür neu; laufende Wiedergaben brechen ab.": "Everything changed since then – new profiles, invitations, settings, ratings and where everyone was in a film – will be lost. Lumen restarts to do this; anything playing will stop.",
  "Code aus der Authenticator-App": "Code from the authenticator app",
- "Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: Beim Film wählt man unter „Ansehen“, welche läuft. Gehört eine Datei zu einem anderen Film, trenne sie ab.": "The same film in several files, for example in two qualities. That’s fine: on the film, “Watch” lets you choose which one plays. If a file belongs to a different film, split it off.",
  "Die Sicherung von {wann} ist wiederhergestellt.": "The backup from {wann} has been restored.",
  "Eine zurückgezogene Einladung lässt sich nicht mehr einlösen.": "A revoked invitation can no longer be used.",
  "Einladung zurückgezogen": "Invitation revoked",
@@ -1377,7 +1376,6 @@
  "Lumen antwortet noch nicht. Lade die Seite gleich selbst neu.": "Lumen isn’t responding yet. Reload the page yourself in a moment.",
  "Lumen behält nur zwei Sicherungen. Die Sicherung von {davor} wird dabei gelöscht; die von {neueste} wird zur älteren. Willst du zu einem früheren Stand zurück, stelle ihn zuerst wieder her.": "Lumen keeps only two backups. The backup from {davor} will be deleted; the one from {neueste} becomes the older one. If you want to go back to an earlier state, restore it first.",
  "Lumen startet neu und nimmt die Sicherung von {wann}.": "Lumen is restarting with the backup from {wann}.",
- "Mehrere Fassungen · {n}": "Multiple Versions · {n}",
  "Offene Einladungen": "Open Invitations",
  "PIN der Verwaltungssperre": "Admin lock PIN",
  "Passwort der Verwaltungssperre": "Admin lock password",
@@ -1473,5 +1471,10 @@
  "Biografien, wo TMDB keine hat — Texte unter CC BY-SA 4.0, Quelle steht bei der Person": "Biographies where TMDB has none — text under CC BY-SA 4.0, source shown with the person",
  "Untertitel aus opensubtitles.com, wenn die Verwaltung einen Schlüssel hinterlegt hat": "Subtitles from opensubtitles.com, if an admin has added a key",
  "Umwandeln und Abspielen, unter der GPL — im Docker-Abbild aus den Paketen von Alpine Linux": "Transcoding and playback, under the GPL — in the Docker image from Alpine Linux packages",
- "Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.": "The full list with licenses is in THIRD_PARTY.md in the source code."
+ "Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.": "The full list with licenses is in THIRD_PARTY.md in the source code.",
+ "· verschiedene Filme an einem Eintrag": "· different films under one title",
+ "· dieselbe Datei mehrfach": "· the same file more than once",
+ "doppelt — eine kann weg": "duplicate — one can go",
+ "Doppelt oder falsch zugeordnet · {n}": "Duplicates or wrongly matched · {n}",
+ "„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie beim Film unter „Ansehen“.": "“The same file more than once”: same size and running time in two folders – one copy can go (Lumen never deletes files). “Different films”: the files are named after different films – split off the wrong one. Real versions (language, quality) are not listed here; you pick them on the film under “Watch”."
 }

@@ -331,7 +331,7 @@ func (s *Server) reihenBild(w http.ResponseWriter, r *http.Request) {
 	// für die Reihe selbst.
 	if !accountOf(r).IsAdmin {
 		items, err := s.sichtbar(r, x.ItemIDs)
-		if x.Hidden || err != nil || len(items) < reiheMindestens {
+		if x.Hidden || err != nil || len(items) < reiheMindestensFuer(x.Source) {
 			fail(w, http.StatusNotFound, "kein bild")
 			return
 		}

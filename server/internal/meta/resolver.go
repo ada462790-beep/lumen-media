@@ -417,6 +417,8 @@ func (r *Resolver) resolveEpisode(ctx context.Context, it *store.Item) error {
 	zusatz := r.st.ZusatzZu(ctx, it.ID)
 	var e *Candidate
 	switch {
+	case zusatz.Special:
+		e, err = r.specialAufloesen(ctx, src, it.Title)
 	case zusatz.Absolut:
 		e, _, _, err = r.absolutAufloesen(ctx, src, it.EpisodeNo)
 	case it.SeasonNo >= 1900 && len(it.Premiered) >= 10:

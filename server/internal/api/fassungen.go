@@ -13,6 +13,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -124,7 +125,11 @@ func (s *Server) adminTeileZusammenfuehren(w http.ResponseWriter, r *http.Reques
 		fail(w, http.StatusServiceUnavailable, "ohne FFmpeg geht das nicht")
 		return
 	}
-	ordner := filepath.Dir(teile[0].Path)
+	ordner, err := teileOrdner(teile)
+	if err != nil {
+		fail(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	name := it.Title
 	if it.Year > 0 {
 		name = fmt.Sprintf("%s (%d)", it.Title, it.Year)
@@ -159,9 +164,10 @@ func (s *Server) adminTeileZusammenfuehren(w http.ResponseWriter, r *http.Reques
 	s.begleitet(func(ctx context.Context) {
 		defer zusammenfuehrenLaeuft.Delete(it.ID)
 		if err := s.teileZusammenfuehren(ctx, it, teile, ziel); err != nil {
-			// Ins Protokoll ohne Pfad: Der verriete den Titel (Datenschutz).
-			s.st.Log(ctx, "error", "aufraeumen", "Zusammenführen gescheitert")
-			s.log.Debug("zusammenführen", "err", stream.Bereinigt(err.Error()))
+			// Ins Protokoll mit Grund, aber ohne Pfad: Der verriete den
+			// Titel (Datenschutz). Vorher stand nur „gescheitert" da, und
+			// warum, sah man nirgends.
+			s.st.Log(ctx, "error", "aufraeumen", "Zusammenführen gescheitert: "+stream.Bereinigt(err.Error()))
 			return
 		}
 		s.st.Log(ctx, "info", "aufraeumen", fmt.Sprintf("%d Teile zu einer Datei zusammengeführt", len(teile)))
@@ -190,23 +196,36 @@ func (s *Server) teileZusammenfuehren(ctx context.Context, it *store.Item, teile
 	tmp := ziel + ".teil"
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Hour)
 	defer cancel()
+	// -fflags +genpts: Alte AVI-Teile (XviD mit „packed bitstream") haben
+	// oft keine Zeitstempel, und Matroska verlangt welche („Can't write
+	// packet with unknown timestamp"). Nur Bild, Ton und Untertitel: Eine
+	// Daten- oder Zeitcode-Spur (MP4, AVI) nimmt Matroska nicht, und mit
+	// „-map 0" brach FFmpeg dann ab.
 	cmd := exec.CommandContext(ctx, s.ff.FFmpegPath, "-hide_banner", "-loglevel", "error", "-nostdin",
-		"-f", "concat", "-safe", "0", "-protocol_whitelist", "file", "-i", liste.Name(), "-map", "0", "-c", "copy", "-f", "matroska", "-y", tmp)
+		"-fflags", "+genpts", "-f", "concat", "-safe", "0", "-protocol_whitelist", "file", "-i", liste.Name(),
+		"-map", "0:v?", "-map", "0:a?", "-map", "0:s?", "-c", "copy", "-f", "matroska", "-y", tmp)
 	if out, err := stream.Niedrig(cmd, true); err != nil {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("ffmpeg: %s", strings.TrimSpace(string(out)))
+		meldung := strings.TrimSpace(string(out))
+		if meldung == "" {
+			meldung = err.Error()
+		}
+		return fmt.Errorf("ffmpeg: %s", lastLineOf(meldung))
 	}
 	if err := os.Rename(tmp, ziel); err != nil {
 		return err
 	}
-	// Die Teile beiseitelegen, nicht löschen.
+	// Die Teile beiseitelegen, nicht löschen. Liegen sie in eigenen
+	// Ordnern („CD1/Film.avi", „CD2/Film.avi"), heissen sie oft gleich —
+	// dann kommt der Ordner vor den Namen, sonst ersetzte der zweite Teil
+	// den ersten.
 	beiseite := filepath.Join(filepath.Dir(ziel), ".lumen-teile")
 	if err := os.MkdirAll(beiseite, 0o755); err != nil {
-		return err
+		return fmt.Errorf("ordner für die teile anlegen: %w", err)
 	}
 	for _, f := range teile {
-		if err := os.Rename(f.Path, filepath.Join(beiseite, filepath.Base(f.Path))); err != nil {
-			return err
+		if err := os.Rename(f.Path, beiseiteName(beiseite, filepath.Dir(ziel), f.Path)); err != nil {
+			return fmt.Errorf("teil beiseitelegen: %w", err)
 		}
 	}
 	// Die neue Datei an den Titel hängen, die Teile austragen — gleich
@@ -245,4 +264,60 @@ func (s *Server) teileZusammenfuehren(ctx context.Context, it *store.Item, teile
 		}
 	}
 	return nil
+}
+
+// teileOrdner: wohin die zusammengeführte Datei kommt. Liegen alle Teile
+// in einem Ordner, dorthin. Liegen sie in eigenen Ordnern unter einem
+// gemeinsamen („Doktor Schiwago (1965)/CD1/…", „…/CD2/…"), in den
+// Filmordner darüber — vorher landete der Film in „CD1", und der nächste
+// Durchlauf las ihn als Teil 1.
+func teileOrdner(teile []store.MediaFile) (string, error) {
+	ordner := filepath.Dir(teile[0].Path)
+	gleich := true
+	for _, f := range teile[1:] {
+		if filepath.Dir(f.Path) != ordner {
+			gleich = false
+			break
+		}
+	}
+	if gleich {
+		return ordner, nil
+	}
+	oben := filepath.Dir(ordner)
+	for _, f := range teile {
+		if filepath.Dir(filepath.Dir(f.Path)) != oben {
+			return "", errors.New("die teile liegen in verschiedenen ordnern — erst in einen ordner legen")
+		}
+	}
+	return oben, nil
+}
+
+// beiseiteName: der Name eines Teils im Ordner „.lumen-teile". Aus einem
+// Unterordner („CD2/Film.avi") wird „CD2 - Film.avi"; gibt es den Namen
+// schon, kommt eine Nummer dazu — überschrieben wird nie etwas.
+func beiseiteName(beiseite, filmOrdner, pfad string) string {
+	name := filepath.Base(pfad)
+	if d := filepath.Dir(pfad); d != filmOrdner {
+		name = filepath.Base(d) + " - " + name
+	}
+	ziel := filepath.Join(beiseite, name)
+	endung := filepath.Ext(name)
+	for n := 2; ; n++ {
+		if _, err := os.Lstat(ziel); errors.Is(err, os.ErrNotExist) {
+			return ziel
+		}
+		ziel = filepath.Join(beiseite, fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, endung), n, endung))
+	}
+}
+
+// lastLineOf: die letzte nicht leere Zeile einer FFmpeg-Ausgabe — dort
+// steht der Grund.
+func lastLineOf(s string) string {
+	zeilen := strings.Split(strings.TrimSpace(s), "\n")
+	for i := len(zeilen) - 1; i >= 0; i-- {
+		if z := strings.TrimSpace(zeilen[i]); z != "" {
+			return z
+		}
+	}
+	return s
 }

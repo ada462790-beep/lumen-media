@@ -62,7 +62,14 @@ var (
 	reRoemEnde     = regexp.MustCompile(`(?i)^(.*\s)(ii|iii|iv|v|vi|vii|viii|ix|x)(\s*(?::.*)?)$`)
 	reUndAnd       = regexp.MustCompile(`(?i)\s(?:und|and)\s`)
 	reZifferEnde   = regexp.MustCompile(`^(.*\s)([2-9]|10)(\s*(?::.*)?)$`)
+	// „Die Pfeiler der Macht: Teil 2", „Dune - Der Wüstenplanet - Teil 3",
+	// „Kill Bill Part 2": Bei TMDb heissen solche Filme „Kill Bill: Vol.
+	// 2", „Dune: Part Two" oder schlicht „… 2".
+	reTeilEnde = regexp.MustCompile(`(?i)^(.{2,}?)[\s:,.\-–]+(?:teil|part|pt\.?|vol\.?|volume)\s*(\d{1,2})$`)
 )
+
+var zahlEnglisch = map[string]string{"1": "One", "2": "Two", "3": "Three", "4": "Four", "5": "Five",
+	"6": "Six", "7": "Seven", "8": "Eight", "9": "Nine", "10": "Ten"}
 
 // Suchvarianten liefert die Schreibweisen eines Titels in der Reihenfolge,
 // in der gesucht wird — ohne doppelte, der Titel selbst zuerst.
@@ -112,6 +119,25 @@ func Suchvarianten(titel string) []Variante {
 	}
 	if u := umlauteAufloesen(basis); u != basis {
 		dazu(u, true)
+	}
+	if m := reTeilEnde.FindStringSubmatch(basis); m != nil {
+		vorne, n := strings.TrimSpace(m[1]), strings.TrimLeft(m[2], "0")
+		if n == "" {
+			n = "0"
+		}
+		dazu(vorne+" "+n, true)
+		dazu(vorne+": Teil "+n, true)
+		dazu(vorne+": Part "+n, true)
+		if w := zahlEnglisch[n]; w != "" {
+			dazu(vorne+": Part "+w, true)
+		}
+		dazu(vorne+": Vol. "+n, true)
+		if r := ziffernRoemisch[n]; r != "" {
+			dazu(vorne+" "+r, true)
+		}
+		// Nur der Name davor bringt Kandidaten (die ganze Reihe), zählt
+		// beim Bewerten aber nicht — sonst gewänne Teil 1 für Teil 2.
+		dazu(vorne, false)
 	}
 	if m := reUntertitel.FindStringSubmatch(basis); m != nil {
 		dazu(m[1], false)

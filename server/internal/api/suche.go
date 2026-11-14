@@ -183,7 +183,7 @@ func (s *Server) reihenUndSammlungenSuchen(r *http.Request, eingabe string) ([]r
 				continue
 			}
 			items, err := s.sichtbar(r, x.ItemIDs)
-			if err != nil || len(items) < reiheMindestens {
+			if err != nil || len(items) < reiheMindestensFuer(x.Source) {
 				continue
 			}
 			a := reiheAntwort{ID: x.ID, Name: x.Name, Overview: x.Overview, Source: x.Source,

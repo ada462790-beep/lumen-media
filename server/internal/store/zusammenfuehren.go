@@ -28,6 +28,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strconv"
 )
 
 // dateienDerSerie zählt die Dateien einer Serie sr — an der Serie selbst,
@@ -279,10 +280,43 @@ func (s *Store) serieUeberfuehren(ctx context.Context, alt, neu string, konten [
 			  WHERE id = ?1`, neu); err != nil {
 			return err
 		}
+		// Die Ordnerjahre von alt gehören jetzt zu neu (Zusatz.Jahre): Der
+		// nächste Durchlauf hängt die Folgen aus diesen Ordnern an neu,
+		// statt alt wieder anzulegen — sonst stand nach jedem Durchlauf
+		// „2 doppelte Serien zusammengeführt" im Protokoll, und die
+		// Folgen zogen jedes Mal hin und her.
+		if err := jahreUebernehmen(ctx, t, alt, neu); err != nil {
+			return err
+		}
 		// Staffeln und Folgen hängen per ON DELETE CASCADE an der Serie.
 		_, err = t.ExecContext(ctx, `DELETE FROM item WHERE id = ?`, alt)
 		return err
 	})
+}
+
+// jahreUebernehmen vereinigt die Ordnerjahre zweier Serien bei neu. Jahr
+// der Serie alt zählt mit: Eine Serie, die eine ältere Fassung ohne
+// Zusatz angelegt hat, kennt ihr Ordnerjahr nur als item.year (solange
+// sie nicht erkannt war).
+func jahreUebernehmen(ctx context.Context, t *sql.Tx, alt, neu string) error {
+	var jahreAlt, jahreNeu string
+	var jahrAlt int
+	_ = t.QueryRowContext(ctx, `SELECT COALESCE((SELECT jahre FROM item_zusatz WHERE item_id = ?), ''),
+	         COALESCE((SELECT jahre FROM item_zusatz WHERE item_id = ?), ''),
+	         COALESCE((SELECT year FROM item WHERE id = ?), 0)`, alt, neu, alt).
+		Scan(&jahreAlt, &jahreNeu, &jahrAlt)
+	dazu := jahreAlt
+	if jahrAlt > 0 {
+		dazu = JahreDazu(dazu, strconv.Itoa(jahrAlt))
+	}
+	alle := JahreDazu(jahreNeu, dazu)
+	if alle == jahreNeu {
+		return nil
+	}
+	_, err := t.ExecContext(ctx,
+		`INSERT INTO item_zusatz (item_id, jahre) VALUES (?, ?)
+		 ON CONFLICT (item_id) DO UPDATE SET jahre = excluded.jahre`, neu, alle)
+	return err
 }
 
 // FilmeOhneDatei entfernt Filme, an denen keine einzige Datei mehr hängt

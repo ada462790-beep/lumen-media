@@ -147,7 +147,11 @@ func Open(path string) (*Store, error) {
 // Stand 16: progress.stand, ein zufälliger Marker je Fortschritt, und die
 // Trigger, die ihn bei jeder Änderung neu setzen (fortschritt_stand.go,
 // fortschrittStandNachruesten) — nichts umzurechnen.
-const SchemaStand = 16
+// Stand 17: item_zusatz bekommt special und jahre (lokal.go,
+// zusatzNachruesten): Specials mit selbst vergebener Nummer und die
+// Ordnerjahre, unter denen eine Serie schon Folgen aufgenommen hat —
+// nichts umzurechnen.
+const SchemaStand = 17
 
 // umbauOffenEndung: die Marke neben der Datenbank, solange ein Umbau
 // nicht ganz durch ist (vorDemNachruesten).
@@ -310,6 +314,8 @@ func umbauen(db *sql.DB) error {
 	// umzurechnen.
 	// Stand 16: Marker am Fortschritt (fortschrittStandNachruesten); alte
 	// Zeilen bekommen ihn bei der nächsten Änderung.
+	// Stand 17: zwei Spalten an item_zusatz (zusatzNachruesten), nichts
+	// umzurechnen.
 	return nil
 }
 
@@ -736,6 +742,10 @@ func nachruesten(db *sql.DB) error {
 	}
 	// Marker am Fortschritt (fortschritt_stand.go, Stand 16).
 	if err := fortschrittStandNachruesten(db); err != nil {
+		return err
+	}
+	// Specials und Ordnerjahre an item_zusatz (lokal.go, Stand 17).
+	if err := zusatzNachruesten(db); err != nil {
 		return err
 	}
 	// Handbearbeitung, eigene Sammlungen, Untertitel (funktionen_schema.go).
