@@ -532,6 +532,9 @@ func (s *Server) wunschAnlegen(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "titel fehlt")
 		return
 	}
+	if s.wunschSchonDa(w, r, d) {
+		return
+	}
 	wish, err := s.st.WunschAnlegen(ctx, acc.ID, d)
 	if err != nil {
 		failErr(w, err)

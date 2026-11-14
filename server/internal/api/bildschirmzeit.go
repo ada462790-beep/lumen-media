@@ -53,8 +53,10 @@ import (
 )
 
 const (
-	// bzTakt: so oft sieht der Wächter nach.
-	bzTakt = 15 * time.Second
+	// bzTakt: so oft sieht der Wächter nach. Kurz, damit eine Grenze auf
+	// wenige Sekunden genau greift (bei 15 Sekunden und einer Minute
+	// Nachfrist lief eine Minute Bildschirmzeit fast zwei).
+	bzTakt = 3 * time.Second
 	// bzLuecke: so lange darf es zwischen zwei Meldungen still sein, und
 	// die Zeit dazwischen zählt trotzdem. Ein Gerät holt alle paar Sekunden
 	// ein Segment, ein direkter Strom meldet sich alle zehn Sekunden
@@ -64,9 +66,18 @@ const (
 	bzLuecke = 45 * time.Second
 	// bzWarnAbstand: so selten steht eine unlesbare Regel im Protokoll.
 	bzWarnAbstand = 10 * time.Minute
-	// bzNachfrist: so lange läuft eine Wiedergabe über das Ende hinaus —
-	// genug, damit eine Szene zu Ende gehen kann, ohne dass es sich lohnt.
-	bzNachfrist = time.Minute
+	// bzNachfrist: so lange läuft eine Wiedergabe über das Ende hinaus,
+	// dazu ein zufälliger Aufschlag bis bzNachfristZufall. Nur Sekunden:
+	// Die Grenze soll halten, was sie sagt. Wann es knapp wird, sagt die
+	// App vorher (bei zehn und bei zwei Minuten).
+	bzNachfrist = 2 * time.Second
+	// bzNachfristZufall: der grösste zufällige Aufschlag auf die Nachfrist.
+	bzNachfristZufall = 3 * time.Second
+	// bzOffenHoechstens: so viel Zeit seit der letzten gezählten Meldung
+	// rechnet der Wächter einer laufenden Wiedergabe vorab zu (bzMitOffen).
+	// Etwas mehr als der Abstand der Meldungen — was länger still ist,
+	// war vermutlich eine Pause.
+	bzOffenHoechstens = meldeAbstand + 2*time.Second
 )
 
 // bzWaechter hält, was der Wächter zwischen zwei Takten braucht. Alles
@@ -421,6 +432,10 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 	b.mu.Unlock()
 	for id := range laufend {
 		l, gilt := lage(id)
+		var offen time.Duration
+		if gilt {
+			offen = s.bzMitOffen(&l, id, echt)
+		}
 		b.mu.Lock()
 		// Liess sich die Datenbank kurz nicht lesen, endet nichts — nur
 		// eine unlesbare Regel sperrt auch, was schon läuft.
@@ -433,11 +448,10 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 		if !da {
 			seit = echt
 			b.ueberSeit[id] = echt
-			// Mit zufälligem Aufschlag (bis eine Minute): Stellt die
+			// Mit zufälligem Aufschlag (einige Sekunden): Stellt die
 			// Verwaltung die Zeit auf null, soll die Zahl der Wiedergaben
-			// nicht auf die Sekunde genau eine Minute später fallen — das
-			// verriete, dass genau dieses Kind gerade schaute.
-			b.ueberZufall[id] = time.Duration(mrand.Int64N(int64(time.Minute)))
+			// nicht auf die Sekunde genau nach der Nachfrist fallen.
+			b.ueberZufall[id] = time.Duration(mrand.Int64N(int64(bzNachfristZufall)))
 		}
 		frist := b.nachfrist
 		if frist > 0 {
@@ -447,8 +461,22 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 		if faellig {
 			delete(b.ueberSeit, id)
 			delete(b.ueberZufall, id)
+			// Was vorab zugerechnet wurde, zählt jetzt wirklich: Nach dem
+			// Ende meldet sich die Wiedergabe nicht mehr, und die Sekunden
+			// gingen verloren — das Kind hätte gleich noch einmal ein paar
+			// Sekunden gehabt.
+			if offen > 0 {
+				b.gezaehlt[id] = echt
+				if si := b.sitzung[id]; si != nil {
+					si.wand += offen.Seconds()
+					si.gezaehlt += offen.Seconds()
+				}
+			}
 		}
 		b.mu.Unlock()
+		if faellig && offen > 0 {
+			_ = s.st.BildschirmzeitZaehlen(ctx, id, l.tag, int(math.Ceil(offen.Seconds())))
+		}
 		if faellig {
 			// Bewusst kein Eintrag ins Protokoll: Die Verwaltung soll nicht
 			// ablesen können, bis wann ein Kind geschaut hat.
@@ -477,15 +505,47 @@ func (s *Server) bildschirmzeitTakt(ctx context.Context) {
 	}
 }
 
+// bzMitOffen rechnet einer laufenden Wiedergabe die Zeit seit der
+// letzten gezählten Meldung vorab zu (höchstens bzOffenHoechstens) und
+// beurteilt neu. Gezählt wird erst mit der nächsten Meldung — ohne das
+// griff die Grenze um bis zu einen Meldeabstand plus Takt zu spät.
+// Zurück kommt, was zugerechnet wurde (0: nichts).
+func (s *Server) bzMitOffen(l *bzLage, kontoID string, echt time.Time) time.Duration {
+	if l.fehler != nil || !l.urteil.Erlaubt {
+		return 0
+	}
+	b := &s.bz
+	b.mu.Lock()
+	bis := b.gezaehlt[kontoID]
+	b.mu.Unlock()
+	if bis.IsZero() {
+		return 0
+	}
+	offen := echt.Sub(bis)
+	if offen <= 0 {
+		return 0
+	}
+	offen = min(offen, bzOffenHoechstens)
+	l.genutzt += offen
+	l.urteil = l.regel.PruefenMit(l.jetzt, l.genutzt, l.geschenkt, l.verlaengertBis)
+	return offen
+}
+
 // ---------------------------------------------------------------- Kind
 
 // meineBildschirmzeit: GET /api/v1/me/bildschirmzeit — wie viel heute noch
 // geht. Für Profile ohne Bildschirmzeit nur {"aktiv": false}.
 func (s *Server) meineBildschirmzeit(w http.ResponseWriter, r *http.Request) {
-	l, gilt := s.bildschirmzeitLage(r.Context(), accountOf(r))
+	acc := accountOf(r)
+	l, gilt := s.bildschirmzeitLage(r.Context(), acc)
 	if !gilt {
 		ok(w, map[string]any{"aktiv": false})
 		return
+	}
+	// Läuft gerade etwas, zählt das noch nicht Gezählte mit — die App
+	// richtet danach aus, wann sie wieder fragt.
+	if s.live.KontenMitWiedergabe()[acc.ID] {
+		s.bzMitOffen(&l, acc.ID, time.Now())
 	}
 	if l.fehler != nil {
 		ok(w, map[string]any{"aktiv": true, "erlaubt": false, "genutztMinuten": 0,
@@ -506,6 +566,8 @@ func (s *Server) meineBildschirmzeit(w http.ResponseWriter, r *http.Request) {
 	}
 	if l.urteil.Erlaubt && l.urteil.Rest >= 0 {
 		out["restMinuten"] = int(math.Ceil(l.urteil.Rest.Minutes()))
+		// Auf die Sekunde: Danach plant die App die nächste Nachfrage.
+		out["restSekunden"] = int(math.Ceil(l.urteil.Rest.Seconds()))
 	}
 	if !l.urteil.Erlaubt {
 		out["meldung"] = bildschirmzeitText(w, l)

@@ -407,7 +407,6 @@
  "Leer lassen: Lumen sucht über die Datei und den Titel": "Leave empty: Lumen searches by file and title",
  "Leeren": "Clear",
  "Leg dir ein Profil an. Was du zu sehen bekommst, hat die Person festgelegt, die dich eingeladen hat.": "Create your profile. What you can see was decided by the person who invited you.",
- "Leg eine an — etwa „Weihnachtsfilme“ oder „Marvel in Reihenfolge“ — und füge auf der Seite eines Films „Zu Sammlung hinzufügen“ dazu.": "Create one — e.g. “Christmas Movies” or “Marvel in Order” — and use “Add to Collection” on a movie’s page.",
  "Lege eine Bibliothek an und zeige Lumen, wo deine Filme liegen.": "Create a library and show Lumen where your movies are.",
  "Lege unter Verwaltung › Bibliotheken einen Ordner an, dann erscheinen sie hier.": "Add a folder under Admin › Libraries and they’ll appear here.",
  "Legt an …": "Creating …",
@@ -528,7 +527,6 @@
  "Noch keine Sicherung.": "No backup yet.",
  "Noch keine Wünsche": "No Requests Yet",
  "Noch keine. Leg oben eine an, oder auf einer Titelseite mit „Zur Liste“.": "None yet. Create one above, or use “Add to List” on a title page.",
- "Noch leer. Auf der Seite eines Films oder einer Serie: „Zu Sammlung hinzufügen“.": "Still empty. On a movie or show page: “Add to Collection”.",
  "Noch leer. Auf einer Titelseite legst du mit „Zur Liste“ etwas hinein.": "Still empty. Use “Add to List” on a title page to add something.",
  "Noch nichts da": "Nothing Here Yet",
  "Noch nichts gemerkt": "Nothing on Your Watchlist",
@@ -1130,7 +1128,7 @@
   "one": "· {n} version",
   "other": "· {n} versions"
  },
- "· {n} Qualitäten": "· {n} versions",
+ "· {n} Qualitäten": "· {n} qualities",
  "· {n} Teile eines Films": "· {n} parts of one movie",
  "· {versuche}. Versuch": "· attempt {versuche}",
  "Ähnliche Titel": "Similar Titles",
@@ -1300,7 +1298,6 @@
  "Ausschnitt": "Clip",
  "Bitte den langen API Read Access Token eintragen": "Please enter the long API Read Access Token",
  "Diese Titel haben keine vollständige NFO-Datei. „ID eingeben“ speichert eine Kennung auch ohne Schlüssel.": "These titles have no complete NFO file. “Enter ID” saves an ID even without a key.",
- "Dieses Extra kann der Browser nicht direkt abspielen.": "The browser can't play this extra directly.",
  "Drehbuch": "Writers",
  "Entfallene Szene": "Deleted scene",
  "Extra": "Extra",
@@ -1601,5 +1598,23 @@
  "„{titel}“ verschwindet für alle, die ihn sich gewünscht haben.": "“{titel}” will disappear for everyone who requested it.",
  "Special": "Special",
  "Weiter mit dem Special": "Continue with the special",
- "Special bearbeiten": "Edit special"
+ "Special bearbeiten": "Edit special",
+ "Leg eine an — etwa „Weihnachtsfilme“ oder „Marvel in Reihenfolge“ — und füge Filme auf ihrer Seite unter „Zur Liste“ → „Zu Sammlung hinzufügen“ dazu.": "Create one — e.g. “Christmas Movies” or “Marvel in Order” — and add movies on their page under “Add to List” → “Add to Collection”.",
+ "Noch leer. Auf der Seite eines Films oder einer Serie: „Zur Liste“ → „Zu Sammlung hinzufügen“.": "Still empty. On a movie or show page: “Add to List” → “Add to Collection”.",
+ "Auf die Wunschliste gesetzt": "Added to the request list",
+ "Ausgeschaltet, sobald du speicherst.": "Turned off once you save.",
+ "Dieses Extra lässt sich nicht abspielen.": "This extra can’t be played.",
+ "Eingeschaltet — gilt, sobald du speicherst.": "Turned on — takes effect once you save.",
+ "Hier und in den Unterordnern liegen mindestens {n} Videodateien.": {
+  "one": "There is at least {n} video file here and in the subfolders.",
+  "other": "There are at least {n} video files here and in the subfolders."
+ },
+ "Schon da: {titel}": "Already here: {titel}",
+ "Wertung: {note} von 10": "Rating: {note} out of 10",
+ "Wird für den Browser vorbereitet …": "Preparing for the browser …",
+ "mindestens {n} Videos": {
+  "one": "at least {n} video",
+  "other": "at least {n} videos"
+ },
+ "· {n} Sprachen": "· {n} languages"
 }

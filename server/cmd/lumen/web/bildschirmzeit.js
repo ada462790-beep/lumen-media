@@ -116,6 +116,14 @@ export function bzBearbeiten(konto, nachher) {
   d.addEventListener('change', e => {
     const ganz = e.target.closest('[data-bz-ganz]');
     if (ganz) ganz.closest('fieldset').querySelector('.bz-zeiten').hidden = ganz.checked;
+    // Der Haken „einschalten" ändert den Stand gleich — sonst stand bis
+    // zum Speichern weiter „Ausgeschaltet" da.
+    if (e.target.name === 'aktiv') {
+      const stand = d.inhalt.querySelector('[data-bz-stand]');
+      if (stand) stand.textContent = e.target.checked
+        ? (b.regel?.aktiv ? standText(b) : tr('Eingeschaltet — gilt, sobald du speicherst.'))
+        : (b.regel?.aktiv ? tr('Ausgeschaltet, sobald du speicherst.') : standText(b));
+    }
   });
   d.addEventListener('click', async e => {
     const mehr = e.target.closest('[data-bz-mehr]');
@@ -186,17 +194,28 @@ export function bzIchZeile(s = stand) {
 let zeitgeber = null;
 let gewarnt = 0;
 export function bzBeimSchauen(laeuft, amEnde) {
-  clearInterval(zeitgeber);
+  clearTimeout(zeitgeber);
   gewarnt = 0;
   if (!stand?.aktiv) return;
+  /* Gefragt wird jede Minute — gegen Ende öfter: Der Server sagt die
+     Restzeit auf die Sekunde (restSekunden), und die App fragt gleich
+     danach wieder. Vorher fragte sie nur jede Minute, und ein weit
+     vorgeladener Film lief so bis zu einer Minute über die Grenze. */
+  const naechste = sek => {
+    clearTimeout(zeitgeber);
+    zeitgeber = setTimeout(pruefen, Math.min(60, Math.max(2, sek)) * 1000);
+  };
   const pruefen = async () => {
-    if (!laeuft()) { clearInterval(zeitgeber); return; }
+    if (!laeuft()) { clearTimeout(zeitgeber); return; }
     const s = await bzLaden();
+    if (!laeuft()) return;
     // Zeit um: Der Server hat die Wiedergabe schon beendet. Hat der
     // Browser aber weit vorgeladen, liefe der Film aus dem Puffer weiter —
     // darum hier anhalten und die Meldung zeigen.
-    if (s?.aktiv && !s.erlaubt && laeuft()) { clearInterval(zeitgeber); amEnde?.(s.meldung); return; }
+    if (s?.aktiv && !s.erlaubt) { clearTimeout(zeitgeber); amEnde?.(s.meldung); return; }
     const rest = s?.aktiv && s.erlaubt ? s.restMinuten : null;
+    const restSek = s?.aktiv && s.erlaubt && typeof s.restSekunden === 'number' ? s.restSekunden : null;
+    naechste(restSek == null ? 60 : restSek + 1);
     if (rest == null) return;
     // Bei zehn und bei zwei Minuten je einmal.
     const stufe = rest <= 2 ? 2 : rest <= 10 ? 1 : 0;
@@ -206,7 +225,6 @@ export function bzBeimSchauen(laeuft, amEnde) {
     }
   };
   pruefen();
-  zeitgeber = setInterval(pruefen, 60 * 1000);
 }
 
 /* Die Seite, wenn die Zeit um ist — über allem, mit einem Knopf zurück. */

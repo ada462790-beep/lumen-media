@@ -115,7 +115,7 @@ export function sammlungenSeite() {
     ${liste.length ? `<div id="reihen-gitter">${reihenGitter(liste, 'sammlungen', sammlungKarte)}</div>`
       : `<div class="group group--inset" style="max-width:620px"><p class="hint" style="padding:18px 16px;margin:0">
           ${tr('Noch keine Sammlungen.')} ${S.me?.account?.isAdmin
-            ? tr('Leg eine an — etwa „Weihnachtsfilme“ oder „Marvel in Reihenfolge“ — und füge auf der Seite eines Films „Zu Sammlung hinzufügen“ dazu.')
+            ? tr('Leg eine an — etwa „Weihnachtsfilme“ oder „Marvel in Reihenfolge“ — und füge Filme auf ihrer Seite unter „Zur Liste“ → „Zu Sammlung hinzufügen“ dazu.')
             : tr('Die Verwaltung kann hier Filme und Serien zusammenstellen, etwa „Weihnachtsfilme“.')}</p></div>`}
     <div style="height:40px"></div></div>`);
 }
@@ -160,7 +160,7 @@ export function sammlungSeite() {
     ${x.beschreibung ? `<p class="t-body c-2" style="max-width:640px;line-height:1.6;margin-top:18px;white-space:pre-line">${escH(x.beschreibung)}</p>` : ''}
     ${x.items.length ? `<div class="grid" style="margin-top:30px">${x.items.map(karte).join('')}</div>`
       : `<div class="group group--inset" style="max-width:620px;margin-top:26px"><p class="hint" style="padding:18px 16px;margin:0">
-          ${tr('Noch leer. Auf der Seite eines Films oder einer Serie: „Zu Sammlung hinzufügen“.')}</p></div>`}
+          ${tr('Noch leer. Auf der Seite eines Films oder einer Serie: „Zur Liste“ → „Zu Sammlung hinzufügen“.')}</p></div>`}
     <div style="height:40px"></div></div>`);
 }
 

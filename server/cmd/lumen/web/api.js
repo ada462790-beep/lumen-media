@@ -164,6 +164,8 @@ export const api = {
       if (body && typeof body.wiedergaben === 'number') err.wiedergaben = body.wiedergaben;
       if (res.status === 423 && body && body.sperre) err.sperre = body.sperre;
       if (body && body.code) err.code = body.code;
+      // „schon_da" (Wunsch nach etwas, das in der Bibliothek steht): welcher Titel.
+      if (body && body.code === 'schon_da') err.schonDa = { itemId: body.itemId || '', titel: body.titel || '', jahr: body.jahr || 0 };
       // Nach einem Zurücksetzen: womit das Profil geschützt wird (pin/password).
       if (body && typeof body.art === 'string' && !err.art) err.art = body.art;
       throw err;
@@ -434,6 +436,13 @@ export const api = {
     if (lauf) p.set('lauf', lauf);
     if (this.mediaKey) p.set('key', this.mediaKey);
     return `/api/v1/stream/${encodeURIComponent(fileId)}/browser.mp4?${p}`;
+  },
+  /* Ein Extra so, wie der Browser es abspielt (umgepackt oder umgewandelt,
+     extras.go). url ist die Adresse der Datei aus der Titelseite. */
+  extraStromURL(url) {
+    const p = new URLSearchParams(browserCaps());
+    if (this.mediaKey) p.set('key', this.mediaKey);
+    return `${url}/browser.mp4?${p}`;
   },
   /* Warum der Strom dieses Players endete: laeuft, wiedergabe_abgelaufen,
      wiedergabe_beendet, wiedergabe_ersetzt, fehler (mit error), unbekannt. */

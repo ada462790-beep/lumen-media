@@ -122,6 +122,9 @@ type ordnerEintrag struct {
 	Pfad  string `json:"pfad"`
 	Leer  bool   `json:"leer"`
 	Filme int    `json:"filme"`
+	// Mehr: die Zählung wurde abgeschnitten (Tiefe, Deckel) — es sind
+	// mindestens Filme, vielleicht mehr.
+	Mehr bool `json:"mehr,omitempty"`
 	// Gesperrt: der Ordner ist da, aber Lumen darf nicht hinein. Vorher
 	// stand dann einfach „keine Videos" — und niemand kam darauf, dass es
 	// an den Rechten lag.
@@ -269,7 +272,7 @@ func (s *Server) adminBrowse(w http.ResponseWriter, r *http.Request) {
 		voll := filepath.Join(pfad, e.Name())
 		eintrag := ordnerEintrag{Name: e.Name(), Pfad: voll}
 		if lesbar(voll) {
-			eintrag.Filme = videosDarin(voll)
+			eintrag.Filme, eintrag.Mehr = videosDarin(voll)
 		} else {
 			eintrag.Gesperrt = true
 		}
@@ -290,15 +293,17 @@ func (s *Server) adminBrowse(w http.ResponseWriter, r *http.Request) {
 	// Würde hier eigens gezählt, käme wegen der Tiefengrenze eine
 	// kleinere Zahl heraus als die Summe der Ordner daneben — und zwei
 	// Zahlen, die sich widersprechen, sind schlimmer als keine.
-	hier := videosDirekt(pfad)
+	hier, hierMehr := videosDirekt(pfad), false
 	for _, o := range ordner {
 		hier += o.Filme
+		hierMehr = hierMehr || o.Mehr
 	}
 	ok(w, map[string]any{
-		"pfad":   pfad,
-		"oben":   oben,
-		"ordner": ordner,
-		"hier":   hier,
+		"pfad":     pfad,
+		"oben":     oben,
+		"ordner":   ordner,
+		"hier":     hier,
+		"hierMehr": hierMehr,
 	})
 }
 
@@ -331,14 +336,18 @@ func videosDirekt(dir string) int {
 	return n
 }
 
-func videosDarin(dir string) int {
+func videosDarin(dir string) (int, bool) {
 	const maxFunde, maxOrdner, maxTiefe = 200, 400, 3
 
 	gefunden, besucht := 0, 0
+	// abgeschnitten: Es blieb etwas ungezählt — ein Ordner unter der
+	// Tiefengrenze oder ein Deckel. Dann ist die Zahl ein „mindestens".
+	abgeschnitten := false
 
 	var gehen func(string, int)
 	gehen = func(d string, tiefe int) {
 		if gefunden >= maxFunde || besucht >= maxOrdner {
+			abgeschnitten = true
 			return
 		}
 		besucht++
@@ -354,12 +363,15 @@ func videosDarin(dir string) int {
 			if e.IsDir() {
 				if tiefe < maxTiefe {
 					tiefer = append(tiefer, filepath.Join(d, e.Name()))
+				} else {
+					abgeschnitten = true
 				}
 				continue
 			}
 			if istVideo(e.Name()) {
 				gefunden++
 				if gefunden >= maxFunde {
+					abgeschnitten = true
 					return
 				}
 			}
@@ -369,7 +381,7 @@ func videosDarin(dir string) int {
 		}
 	}
 	gehen(dir, 1)
-	return gefunden
+	return gefunden, abgeschnitten
 }
 
 func istVideo(name string) bool {
@@ -404,7 +416,7 @@ func startpunkte(datenOrdner string) []ordnerEintrag {
 		gesehen[k] = true
 		e := ordnerEintrag{Name: k, Pfad: k, Freigabe: true}
 		if lesbar(k) {
-			e.Filme = videosDarin(k)
+			e.Filme, e.Mehr = videosDarin(k)
 		} else {
 			e.Gesperrt = true
 		}
@@ -421,7 +433,7 @@ func startpunkte(datenOrdner string) []ordnerEintrag {
 		gesehen[k] = true
 		e := ordnerEintrag{Name: k, Pfad: k}
 		if lesbar(k) {
-			e.Filme = videosDarin(k)
+			e.Filme, e.Mehr = videosDarin(k)
 		} else {
 			e.Gesperrt = true
 		}

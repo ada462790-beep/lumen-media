@@ -274,6 +274,18 @@ const spielbar = `(
 	            JOIN media_file f ON f.item_id = e.id
 	            WHERE st.parent_id = item.id AND f.missing_since IS NULL AND f.defekt IS NULL))`
 
+// nurDefekt: SQL-Bedingung für einen Titel ohne abspielbare Datei
+// (fehlt_seit gesetzt) — an ihm hängt eine vorhandene, aber defekte
+// Datei. Zusammen mit fehlt_seit heisst das: Was da ist, ist defekt.
+const nurDefekt = `(
+	   EXISTS (SELECT 1 FROM media_file f WHERE f.item_id = i.id
+	            AND f.missing_since IS NULL AND f.defekt IS NOT NULL)
+	OR EXISTS (SELECT 1 FROM item e JOIN media_file f ON f.item_id = e.id
+	            WHERE e.parent_id = i.id AND f.missing_since IS NULL AND f.defekt IS NOT NULL)
+	OR EXISTS (SELECT 1 FROM item st JOIN item e ON e.parent_id = st.id
+	            JOIN media_file f ON f.item_id = e.id
+	            WHERE st.parent_id = i.id AND f.missing_since IS NULL AND f.defekt IS NOT NULL))`
+
 // VerfuegbarkeitNachfuehren setzt fehlt_seit für die Filme und Serien
 // einer Bibliothek (leer = alle): ab jetzt, wenn keine Datei mehr
 // abspielbar ist, und zurück auf NULL, sobald wieder eine da ist.

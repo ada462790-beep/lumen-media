@@ -138,10 +138,15 @@ const esc = s => String(s ?? '').replace(/[\u202A-\u202E\u2066-\u2069]/g, '').re
 // selbst vergeben — angezeigt wird „Special", nicht „Folge 1001".
 const ohneNummer = (s, f) => !s && f >= 1000;
 // Nummer einer Folge in Listen: leer bei Specials ohne eigene Nummer.
-const folgenNr = e => ohneNummer(e.seasonNo, e.episodeNo) ? ''
+const folgenNr = e => (e.special || ohneNummer(e.seasonNo, e.episodeNo)) ? ''
   : e.episodeNoEnd > e.episodeNo ? `${e.episodeNo}–${e.episodeNoEnd}` : e.episodeNo;
 // Staffel und Folge kurz: „S1 F2" auf Deutsch, „S1 E2" auf Englisch.
 const sf = (s, f) => ohneNummer(s, f) ? tr('Special') : tr('S{s} F{f}', { s, f });
+/* Ein Special mit selbst vergebener Nummer (aus „S01E00" — item.special
+   vom Server, oder Staffel 0 ab Nummer 1000) heisst nur „Special". Echte
+   S00Exx-Folgen behalten ihre Nummer. */
+const istSpecial = it => !!it.special || ohneNummer(it.seasonNo, it.episodeNo);
+const sfVon = it => (istSpecial(it) ? tr('Special') : sf(it.seasonNo, it.episodeNo));
 
 const svg = (d, s = 18, w = 1.8) =>
   `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -417,7 +422,7 @@ function posterCard(it, hier = false) {
    darunter „S1 F2 · Folgentitel". Ohne Seriennamen stand dort nur
    „Pilot" — man wusste nicht, wovon. */
 function folgenName(it) {
-  return it.kind === 'episode' ? `${sf(it.seasonNo, it.episodeNo)} · ${it.title}` : it.title;
+  return it.kind === 'episode' ? (it.special && it.title === 'Special' ? tr('Special') : `${sfVon(it)} · ${it.title}`) : it.title;
 }
 function weiterText(it) {
   const sek = (it.resumeMs || 0) / 1000;
@@ -432,7 +437,7 @@ function wideCard(it) {
   const pct = it.progress || 0;
   const oben = it.kind === 'episode' && it.seriesTitle ? it.seriesTitle : it.title;
   const unten = it.kind === 'episode'
-    ? [it.seriesTitle ? folgenName(it) : sf(it.seasonNo, it.episodeNo), weiterText(it)].filter(Boolean).join(' · ')
+    ? [it.seriesTitle ? folgenName(it) : sfVon(it), weiterText(it)].filter(Boolean).join(' · ')
     : [weiterText(it) || jahre(it)].filter(Boolean).join(' · ');
   const zurSeite = it.kind === 'episode' && it.seriesId ? it.seriesId : it.id;
   return `<div class="widecard-huelle" style="position:relative">
@@ -1727,12 +1732,13 @@ function viewPerson() {
 }
 
 
-// Dateigrösse einheitlich: ab 1 GB mit einer Nachkommastelle, darunter MB.
+// Dateigrösse einheitlich: ab 1 GB mit einer Nachkommastelle, darunter
+// MB, unter 1 MB in KB — eine Datei von 50 KB hiess sonst „1 MB".
 function groesse(bytes) {
   if (!bytes) return '';
-  return bytes >= 1e9
-    ? (bytes / 1e9).toLocaleString(sprache(), { maximumFractionDigits: 1 }) + ' GB'
-    : Math.max(1, Math.round(bytes / 1e6)) + ' MB';
+  if (bytes >= 1e9) return (bytes / 1e9).toLocaleString(sprache(), { maximumFractionDigits: 1 }) + ' GB';
+  if (bytes >= 1e6) return Math.round(bytes / 1e6) + ' MB';
+  return Math.max(1, Math.round(bytes / 1e3)) + ' KB';
 }
 
 /* Auflösung als Klasse: Breitformat zählt nach der Breite — 1920×800 ist
@@ -1756,6 +1762,21 @@ function fassungTeile(f) {
   const ton = (f.tracks || []).find(t => t.kind === 'audio');
   const sprache = ton?.language && ton.language !== 'und' ? sprachName(ton.language) : '';
   return [aufloesungVon(f).name, sprache, (f.container || '').toUpperCase(), f.edition || ''].filter(Boolean);
+}
+/* Der Hinweis „· 2 Fassungen" auf „Ansehen": Unterscheiden sich die
+   Fassungen nur in der Tonsprache, heisst es „· 2 Sprachen", nur in der
+   Auflösung „· 2 Qualitäten" — sonst neutral. Vorher hiess eine deutsche
+   und eine englische Datei „2 Qualitäten". */
+function fassungenHinweis(fassungen) {
+  const n = fassungen.length;
+  const verschieden = wert => new Set(fassungen.map(wert)).size > 1;
+  const sprache = f => (f.tracks || []).find(t => t.kind === 'audio')?.language || '';
+  const aufloesung = f => aufloesungVon(f).name || '';
+  const sonst = f => [(f.container || '').toLowerCase(), f.edition || ''].join('|');
+  const s = verschieden(sprache), a = verschieden(aufloesung), x = verschieden(sonst);
+  if (s && !a && !x) return tr('· {n} Sprachen', { n });
+  if (a && !s && !x) return tr('· {n} Qualitäten', { n });
+  return tr('· {n} Fassungen', { n });
 }
 function fassungNamen(fassungen) {
   const namen = fassungen.map(f => fassungTeile(f).join(' · '));
@@ -1822,7 +1843,7 @@ function viewDetail() {
   // stehen eigens darüber (wertungsReihe), die Altersfreigabe bei den
   // Abzeichen — vorher suchte man die Note in einer langen grauen Zeile.
   const meta = [jahre(it), mins(it.runtimeMs), (it.genres || []).map(genreName).join(' · ')].filter(Boolean).join(' · ');
-  const wertungen = wertungsReihe(it, d.links);
+  const wertungen = wertungsReihe(it, d.links, d.bewertungQuelle === 'nfo');
 
   // Die Technik-Zeile: was die Datei kann — Auflösung, HDR, Ton,
   // Sprachen, Untertitel, und ob dieses Gerät sie direkt abspielt.
@@ -1867,7 +1888,7 @@ function viewDetail() {
       <div style="flex:1;min-width:0">
         <div class="t-body" style="display:flex;align-items:center;gap:8px">
           <span class="c-2 tnum" style="flex:none">${folgenNr(e)}</span>
-          <span class="clamp-1">${esc(e.title)}</span>
+          <span class="clamp-1">${esc(e.title === 'Special' && istSpecial(e) ? tr('Special') : e.title)}</span>
           ${e.finished ? `<span class="c-2" style="flex:none;display:inline-flex" title="${tr('gesehen')}">${svg(I.check, 14, 2.6)}</span>` : ''}
         </div>
         <div class="t-caption c-2">${[mins(e.runtimeMs), e.premiered ? new Date(e.premiered).toLocaleDateString(sprache()) : ''].filter(Boolean).join(' · ')}</div>
@@ -1901,9 +1922,9 @@ function viewDetail() {
   const serienKnopfText = !w ? tr('Ansehen')
     // Alles gesehen: nicht „Weiter mit S1 F1", sondern ehrlich von vorn.
     : d.item.finished && !(w.resumeMs > 0) ? tr('Nochmal ansehen')
-    : w.resumeMs > 0 ? `${tr('Weiter bei')} ${clock(w.resumeMs / 1000)} · ${sf(w.seasonNo, w.episodeNo)}`
+    : w.resumeMs > 0 ? `${tr('Weiter bei')} ${clock(w.resumeMs / 1000)} · ${sfVon(w)}`
     : (d.item.gesehen || 0) > 0
-      ? (ohneNummer(w.seasonNo, w.episodeNo) ? tr('Weiter mit dem Special')
+      ? (istSpecial(w) ? tr('Weiter mit dem Special')
         : tr('Weiter mit S{seasonNo} F{episodeNo}', { seasonNo: w.seasonNo, episodeNo: w.episodeNo }))
       : tr('Ansehen');
 
@@ -1979,7 +2000,7 @@ function viewDetail() {
             // Mehrere Qualitäten: der kleine Hinweis bleibt, gewählt wird im Player.
             ? `<button class="btn btn-primary" data-play="${it.id}" data-file="${esc(playable.id)}"${resumeSec > 60 ? '' : ' data-from="0"'}>
                 ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}${fassungen.length > 1
-                  ? `<span style="opacity:.6;font-weight:500;margin-left:2px">${tr('· {n} Qualitäten', { n: fassungen.length })}</span>` : ''}</button>` : ''}
+                  ? `<span style="opacity:.6;font-weight:500;margin-left:2px">${fassungenHinweis(fassungen)}</span>` : ''}</button>` : ''}
           ${it.kind === 'series' && (d.seasons || []).length ? `<button class="btn btn-primary" data-serie-play="${esc(it.id)}">
               ${PLAY(16)} ${esc(serienKnopfText)}</button>` : ''}
           ${'' /* Eine Hauptaktion (Ansehen), daneben runde Symbole mit kurzer
@@ -2006,7 +2027,7 @@ function viewDetail() {
             const dl = d.download?.erlaubt ? (d.download.dateien || []) : [];
             const datei = dl.find(x => x.fileId === playable?.id) || dl[0];
             if (!datei) return '';
-            const gb = datei.groesse ? `${(datei.groesse / 1e9).toLocaleString(sprache(), { maximumFractionDigits: 1 })} GB` : '';
+            const gb = groesse(datei.groesse);
             return `<a class="aktion" href="${esc(api.downloadURL(datei.fileId))}" download
               title="${esc(gb ? tr('Originaldatei herunterladen ({gb})', { gb }) : tr('Originaldatei herunterladen'))}">
               <span class="aktion-rund">${svg(I.laden, 18, 2)}</span><span class="aktion-text">${tr('Herunterladen')}</span></a>`;
@@ -2095,14 +2116,19 @@ function viewDetail() {
    Note, Stimmen klein), Rotten Tomatoes (Tomate ab 60 %, darunter der
    braune Klecks für „faul") und TMDb (kleines Logo, Prozent). Je ein Link
    auf die Seite des Titels, wenn Lumen die Kennung kennt. */
-function wertungsReihe(it, links = []) {
+/* neutral: die Note stammt aus einer NFO ohne Quelle (bewertungQuelle
+   „nfo") — dann ohne IMDb-Schriftzug und ohne Link, nur „★ 7,4". */
+function wertungsReihe(it, links = [], neutral = false) {
   const link = name => (links || []).find(l => l.name === name && /^https:\/\//.test(l.url))?.url || '';
   const zahl = (n, stellen = 1) => Number(n).toLocaleString(sprache(), { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
   const teil = (inhalt, url, label) => url
     ? `<a class="wertung" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(label)}">${inhalt}</a>`
     : `<span class="wertung" role="img" aria-label="${esc(label)}">${inhalt}</span>`;
   const teile = [];
-  if (it.imdbRating) {
+  if (it.imdbRating && neutral) {
+    teile.push(teil(`<span class="wertung-wert" aria-hidden="true"><span class="wertung-stern">★</span> ${zahl(it.imdbRating)}</span>`, '',
+      tr('Wertung: {note} von 10', { note: zahl(it.imdbRating) })));
+  } else if (it.imdbRating) {
     const stimmen = it.imdbVotes ? it.imdbVotes.toLocaleString(sprache()) : '';
     teile.push(teil(`<span class="wertung-imdb" aria-hidden="true">IMDb</span>
       <span class="wertung-wert" aria-hidden="true"><span class="wertung-stern">★</span> ${zahl(it.imdbRating)}</span>
@@ -2248,21 +2274,50 @@ function extrasAbschnitt(it, extras) {
         <span class="t-body clamp-1" style="flex:1;min-width:0">${esc(x.titel || art[x.art] || art.other)}</span>
         ${x.titel ? `<span class="t-caption c-2" style="flex:none">${esc(art[x.art] || art.other)}</span>` : ''}</button>`).join('')}</div></section>`;
 }
+/* Erst die Datei selbst (lässt sich spulen); kann der Browser sie nicht
+   abspielen — oder kommt nur Ton (videoWidth 0) —, holt das Fenster sie
+   umgepackt bzw. umgewandelt vom Server, wie beim Film. */
 function extraAbspielen(url, titel) {
   document.getElementById('extra-fenster')?.remove();
   const d = document.createElement('dialog');
   d.id = 'extra-fenster';
-  d.className = 'surface';
+  d.className = 'surface extra-fenster';
   d.setAttribute('aria-label', titel);
-  d.style.cssText = 'padding:0;border:0;border-radius:14px;max-width:min(960px,94vw);width:100%;background:#000;color:#fff';
-  d.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px">
+  d.innerHTML = `<div class="extra-kopf">
       <span class="t-body clamp-1" style="flex:1">${esc(titel)}</span>
       <button class="btn btn-round sm" data-extra-zu aria-label="${tr('Schliessen')}">${svg(I.x, 16, 2.2)}</button></div>
-    <video controls autoplay playsinline style="display:block;width:100%;max-height:78vh;background:#000" src="${esc(url)}${tokenSuffix(url)}"></video>
-    <p class="t-caption" data-extra-fehler hidden style="padding:10px 14px;margin:0;color:#ffb340">${tr('Dieses Extra kann der Browser nicht direkt abspielen.')}</p>`;
+    <video controls autoplay playsinline src="${esc(url)}${tokenSuffix(url)}"></video>
+    <p class="t-caption extra-hinweis" data-extra-hinweis hidden role="status"></p>`;
   document.body.appendChild(d);
   const v = d.querySelector('video');
-  v.addEventListener('error', () => { d.querySelector('[data-extra-fehler]').hidden = false; });
+  const hinweis = (text, fehler = false) => {
+    const el = d.querySelector('[data-extra-hinweis]');
+    el.hidden = !text; el.textContent = text || ''; el.classList.toggle('extra-hinweis--fehler', fehler);
+  };
+  let umgewandelt = false;
+  const umwandeln = async () => {
+    if (!d.isConnected) return;
+    if (umgewandelt) {
+      // Auch der Strom scheiterte: den Grund vom Server holen.
+      const ab = new AbortController();
+      let text = tr('Dieses Extra lässt sich nicht abspielen.');
+      try {
+        const r = await fetch(api.extraStromURL(url), { signal: ab.signal });
+        if (!r.ok) { const b = await r.json().catch(() => ({})); if (b.error) text = b.error.charAt(0).toUpperCase() + b.error.slice(1) + '.'; }
+      } catch {}
+      ab.abort();
+      return hinweis(text, true);
+    }
+    umgewandelt = true;
+    hinweis(tr('Wird für den Browser vorbereitet …'));
+    try { await api.medienSchluessel(); } catch {}
+    v.src = api.extraStromURL(url);
+    v.load();
+    v.play().catch(() => {});
+  };
+  v.addEventListener('error', () => { if (v.getAttribute('src')) umwandeln(); });
+  v.addEventListener('loadedmetadata', () => { if (!umgewandelt && v.videoWidth === 0) umwandeln(); });
+  v.addEventListener('playing', () => { if (umgewandelt) hinweis(''); });
   const zu = () => { v.pause(); v.removeAttribute('src'); v.load(); d.close(); d.remove(); };
   d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-extra-zu]')) zu(); });
   d.addEventListener('cancel', e => { e.preventDefault(); zu(); });
@@ -2338,35 +2393,50 @@ function spurenMerken(p, teil) {
   if (teil.ut !== undefined) merken('untertitel', teil.ut);
 }
 
+/* Untertitel nach der Sprache des Profils (der Oberfläche):
+   - Läuft der Ton in einer anderen Sprache, kommen Untertitel in der
+     Sprache des Profils, wenn es welche gibt — sonst keine; fremde
+     Untertitel schaltet Lumen nie von selbst ein.
+   - Läuft er in der Sprache des Profils, gibt es Untertitel nur, wenn
+     jemand sie in genau dieser Sprache gewählt hat (etwa für
+     Hörgeschädigte).
+   - „Aus" bleibt aus. Erzwungene in der Tonsprache laufen immer mit.
+   Was jemand für eine Serie gewählt hat, gilt dort weiter, wie gewählt.
+   Vorher galt die zuletzt gewählte Sprache überall: Wer einmal englische
+   Untertitel nahm, bekam sie bei jedem englischen Film — auch wo es
+   deutsche gab. */
 function spurenVorbelegen(p) {
   const serie = serienSpuren(p.seriesId) || {};
   const profil = S.me?.prefs || {};
-  const prefs = {
-    tonSprache: serie.ton ?? profil.tonSprache,
-    untertitel: serie.ut ?? profil.untertitel,
-  };
+  const tonWunsch = serie.ton ?? profil.tonSprache;
   const ton = tonspuren(p), text = textspuren(p), bild = bildspuren(p);
-  if (prefs.tonSprache) {
-    const t = ton.find(x => x.language === prefs.tonSprache);
+  if (tonWunsch) {
+    const t = ton.find(x => x.language === tonWunsch);
     if (t) p.spur = t.index;
   }
+  const aktuell = ton.find(x => x.index === p.spur) || ton[0];
+  const tonSprache = aktuell?.language && aktuell.language !== 'und' ? aktuell.language : '';
+  const eigen = sprache().slice(0, 2);
   // Text vor Bild: Text stellt der Browser selbst dar, Bild muss der
   // Server neu rechnen. Bild nur, wenn es die Sprache als Text nicht gibt.
-  if (prefs.untertitel && prefs.untertitel !== 'aus') {
-    const u = text.find(x => x.language === prefs.untertitel && !x.forced)
-      || text.find(x => x.language === prefs.untertitel)
-      || bild.find(x => x.language === prefs.untertitel && !x.forced)
-      || bild.find(x => x.language === prefs.untertitel);
-    if (u) p.untertitel = u.index;
-  } else {
-    // Erzwungene in der Tonsprache laufen mit — so hielt es der Server
-    // bisher von sich aus mit Bild-Untertiteln; jetzt sagt es die App
-    // ausdrücklich, damit die Spurwahl zeigt, was läuft.
-    const aktuell = ton.find(x => x.index === p.spur) || ton[0];
-    const passt = x => x.forced && aktuell && x.language && x.language === aktuell.language;
-    const erzwungen = text.find(passt) || bild.find(passt);
-    if (erzwungen) p.untertitel = erzwungen.index;
+  const finden = lang => text.find(x => x.language === lang && !x.forced)
+    || bild.find(x => x.language === lang && !x.forced)
+    || text.find(x => x.language === lang)
+    || bild.find(x => x.language === lang);
+  let u = null;
+  if (serie.ut !== undefined) {
+    if (serie.ut && serie.ut !== 'aus') u = finden(serie.ut);
+  } else if (profil.untertitel !== 'aus') {
+    if (tonSprache && tonSprache !== eigen) u = finden(eigen);
+    else if (profil.untertitel && profil.untertitel === (tonSprache || eigen)) u = finden(profil.untertitel);
   }
+  if (u) { p.untertitel = u.index; return; }
+  // Erzwungene in der Tonsprache laufen mit — so hielt es der Server
+  // bisher von sich aus mit Bild-Untertiteln; jetzt sagt es die App
+  // ausdrücklich, damit die Spurwahl zeigt, was läuft.
+  const passt = x => x.forced && aktuell && x.language && x.language === aktuell.language;
+  const erzwungen = text.find(passt) || bild.find(passt);
+  if (erzwungen) p.untertitel = erzwungen.index;
 }
 
 /* Kapitel, wie der Player sie anbietet: mindestens zwei, nach Beginn
@@ -2711,15 +2781,26 @@ async function untertitelHolen(p, idx) {
 async function untertitelAnwenden() {
   const p = S.playing, v = $('#v');
   if (!p || !v) return;
-  if (!p.textspur) { p.textspur = v.addTextTrack('subtitles', tr('Untertitel'), sprache().slice(0, 2)); }
-  const spur = p.textspur;
   // Jeder Aufruf bekommt eine Nummer; nur der jüngste darf Zeilen setzen.
   // Zwei überlappende Aufrufe (Start und gleich danach ein Sprung, bevor
   // die .vtt da war) legten sonst jede Zeile doppelt hin.
   const nr = p.utLauf = (p.utLauf || 0) + 1;
-  const leeren = () => { for (const c of [...(spur.cues || [])]) spur.removeCue(c); };
+  /* Leeren heisst: die alte Spur abschalten und eine frische nehmen.
+     Zeilen nur per removeCue zu entfernen genügte Chromium nicht — lief
+     der Strom nach einem Sprung gerade neu an, blieb die zuletzt
+     gezeigte Zeile stehen (activeCues leer, Bild nicht). Eine
+     abgeschaltete Spur zeichnet kein Browser mehr. */
+  const leeren = () => {
+    const alt = p.textspur;
+    if (alt && !(alt.cues && alt.cues.length)) return;
+    if (alt) { for (const c of [...alt.cues]) alt.removeCue(c); alt.mode = 'disabled'; }
+    p.textspur = v.addTextTrack('subtitles', tr('Untertitel'), sprache().slice(0, 2));
+    p.textspur.mode = 'hidden';
+    p.utLinie = undefined;
+  };
+  if (!p.textspur) leeren();
   // Aus, oder ein Bild-Untertitel — der steckt schon im Bild des Stroms.
-  if (p.untertitel == null || einbrennenVon(p) >= 0) { leeren(); spur.mode = 'disabled'; return; }
+  if (p.untertitel == null || einbrennenVon(p) >= 0) { leeren(); p.textspur.mode = 'disabled'; return; }
   const gewuenscht = p.untertitel;
   if (p.cuesFuer !== gewuenscht) {
     const text = await untertitelHolen(p, gewuenscht);
@@ -2730,6 +2811,7 @@ async function untertitelAnwenden() {
   if (S.playing !== p || p.untertitel !== gewuenscht || nr !== p.utLauf) return;
   // Erst jetzt, direkt vor dem Setzen, leeren — nach dem Warten.
   leeren();
+  const spur = p.textspur;
   for (const c of p.cues) {
     const von = c.von - p.offset, bis = c.bis - p.offset;
     if (bis <= 0) continue;
@@ -2992,7 +3074,12 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
     // Ist die Bildschirmzeit um, sagt es schon der Plan — dann gar nicht
     // erst den Player öffnen.
     const quellHoehe = aufloesungVon(file).hoehe;
-    const plan = await api.plan(file.id, qualitaetParameter(quellHoehe)).catch(e => { if (e?.code === 'bildschirmzeit') throw e; return null; });
+    // Eine defekte oder verschwundene Datei: gleich sagen, statt einen
+    // schwarzen Player zu öffnen.
+    const plan = await api.plan(file.id, qualitaetParameter(quellHoehe)).catch(e => {
+      if (e?.code === 'bildschirmzeit' || e?.code === 'datei_defekt' || e?.status === 410 || e?.status === 422) throw e;
+      return null;
+    });
     const dur = (file.durationMs || it.runtimeMs || 0) / 1000;
 
     let start = fromSec != null ? fromSec : (it.resumeMs ? it.resumeMs / 1000 : 0);
@@ -3007,7 +3094,7 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
       kind: it.kind, parentId: it.parentId || null,
       sub: S.warteschlange
         ? `${S.warteschlange.name} · ${tr('{nr} von {n}', { nr: S.warteschlange.i + 1, n: S.warteschlange.ids.length })}`
-        : it.kind === 'episode' ? [it.seriesTitle, ohneNummer(it.seasonNo, it.episodeNo) ? tr('Special')
+        : it.kind === 'episode' ? [it.seriesTitle, istSpecial(it) ? tr('Special')
             : tr('Staffel {seasonNo}, Folge {episodeNo}', { seasonNo: it.seasonNo, episodeNo: it.episodeNo })].filter(Boolean).join(' · ')
         : teile.length > 1 ? tr('Teil {teil} von {n}', { teil: teil + 1, n: teile.length }) : '',
       teile: teile.length > 1 ? teile.map(t => t.id) : null, teil, vorher, gesamt,
@@ -3077,7 +3164,8 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
   } catch (e) {
     S.playing = null;
     if (e?.code === 'bildschirmzeit') return bzSchluss(e.message);
-    toast(e.message || tr('Wiedergabe nicht möglich.'));
+    const m = e?.message || '';
+    toast(m ? m.charAt(0).toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? '' : '.') : tr('Wiedergabe nicht möglich.'));
   }
 }
 
@@ -3094,6 +3182,7 @@ async function openStream(atSec, { abspielen = false, anhalten = false } = {}) {
   const p = S.playing;
   if (!p) return;
   p.loading = true;
+  p.fehler = '';
   patchChrome();
 
   const v = $('#v');
@@ -3176,8 +3265,10 @@ async function stromAbgerissen(p, lief) {
       await stopPlayer();
       return bzSchluss(g.error);
     case 'fehler':
-      p.paused = true; patchChrome(); showChrome(true);
-      return toast(g.error ? g.error.charAt(0).toUpperCase() + g.error.slice(1) + '.' : tr('Wiedergabe nicht möglich.'));
+      p.paused = true;
+      p.fehler = g.error ? g.error.charAt(0).toUpperCase() + g.error.slice(1) + '.' : tr('Wiedergabe nicht möglich.');
+      patchChrome(); showChrome(true);
+      return;
   }
   // Abgelaufen, noch laufend (der Browser hat sich verschluckt) oder
   // unbekannt (Neustart des Servers): neu ansetzen. Aber nur einmal je
@@ -3261,6 +3352,14 @@ function patchChrome() {
   if (p.mode === 'transcode' && oben && !umw) oben.insertAdjacentHTML('beforeend', `<span class="badge pl-umw">${tr('Wird umgewandelt')}</span>`);
   else if (p.mode !== 'transcode' && umw) umw.remove();
   untertitelLage();
+  // Wie hoch die Leiste unten reicht: Am Handy bricht die Knopfzeile um,
+  // dann rücken „Als Nächstes", der Vorspann-Knopf und die Menüs mit
+  // (app.css, --pl-unten).
+  const pl = app.querySelector('.player'), unten = app.querySelector('.pl-bot');
+  if (pl && unten && p.ui) {
+    const h = Math.round(pl.getBoundingClientRect().bottom - unten.getBoundingClientRect().top);
+    if (h > 0 && pl.dataset.unten !== String(h)) { pl.dataset.unten = String(h); pl.style.setProperty('--pl-unten', h + 'px'); }
+  }
 
   const toggle = app.querySelector('[data-toggle]');
   if (toggle) {
@@ -3298,6 +3397,20 @@ function patchChrome() {
     app.querySelector('.player')?.appendChild(spin);
   } else if (!p.loading && spin) {
     spin.remove();
+  }
+  // Scheiterte der Strom (Datei defekt, keine Umwandlung erlaubt …), steht
+  // der Grund mitten im Bild — ein Hinweis unten verschwand nach Sekunden
+  // und liess ein schwarzes Bild zurück.
+  let fehler = app.querySelector('.pl-fehler');
+  if (p.fehler && !fehler) {
+    fehler = document.createElement('div');
+    fehler.className = 'pl-fehler';
+    fehler.setAttribute('role', 'alert');
+    fehler.innerHTML = `<p class="t-body">${esc(p.fehler)}</p>
+      <button class="btn btn-pill btn-pill--fill" data-pl-fehler-zu>${tr('Schliessen')}</button>`;
+    app.querySelector('.player')?.appendChild(fehler);
+  } else if (!p.fehler && fehler) {
+    fehler.remove();
   }
   patchPlayer();
 }
@@ -3835,7 +3948,7 @@ async function folgeDanach(folgeId, staffelId) {
 async function abspielbar(x) {
   if (x.kind === 'series') {
     const f = await ersteOffeneFolge(x.id).catch(() => null);
-    return f ? { id: f.id, title: `${x.title} · ${sf(f.seasonNo, f.episodeNo)}` } : null;
+    return f ? { id: f.id, title: `${x.title} · ${sfVon(f)}` } : null;
   }
   return { id: x.id, title: x.title };
 }
@@ -4250,6 +4363,9 @@ async function listenPanel(itemId) {
       <input name="name" placeholder="${tr('Neue Liste …')}" maxlength="80" aria-label="${tr('Neue Liste')}"
         style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:1rem">
       <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem">${tr('Anlegen')}</button></form>
+    ${S.me?.account?.isAdmin ? `<button class="row orow-link" style="width:100%;min-height:50px;text-align:left" data-fk-sammlung="${esc(itemId)}">
+        <span style="color:var(--label-2);display:flex">${svg(I.plus, 16, 2)}</span>
+        <span class="t-body" style="flex:1;color:var(--accent)">${tr('Zu Sammlung hinzufügen')}</span></button>` : ''}
   </div>`;
   document.querySelector('[data-zurliste]')?.setAttribute('aria-expanded', 'true');
 }
@@ -4278,7 +4394,11 @@ function viewWishes() {
       <div style="flex:1;min-width:140px">
         <div class="t-body wunsch-titel">${esc(w.title)}</div>
         ${wunschZusatz(w) ? `<div class="t-caption c-2">${wunschZusatz(w)}</div>` : ''}
-        <div class="t-caption c-2">${w.dabei ? tr('Du hast dich angeschlossen') : tr('von {name}', { name: esc(w.by) }) + (w.mine ? ' ' + tr('(du)') : '')}</div>
+        <div class="t-caption c-2">${w.dabei && !owner ? tr('Du hast dich angeschlossen') : tr('von {name}', { name: esc(w.by) }) + (w.mine ? ' ' + tr('(du)') : '')}${
+          /* Wer sich angeschlossen hat, sieht nur die Verwaltung — der
+             Server schickt „auch" nur ihr und nur für Profile, die sie
+             verwaltet (wuenscheImBereich). */
+          owner && w.auch?.length ? ' · ' + tr('auch: {namen}', { namen: esc(w.auch.join(', ')) }) : ''}</div>
       </div>
       <div class="wunsch-rechts">
       <span class="badge" style="border:0;background:${COL[w.state][0]};color:${COL[w.state][1]};flex:none">${NAME[w.state]}</span>
@@ -4824,12 +4944,20 @@ function bibListe(libs) {
 /* Der Ordnerwähler. Den Pfad blind eintippen ging oft daneben — ein
    Tippfehler sah hinterher aus wie eine leere Bibliothek. Hier wird
    angeklickt, was der Server wirklich sieht. */
+/* Wie viele Videos in einem Ordner liegen. Gezählt wird nur bis drei
+   Ebenen tief und mit Deckel (bibliothek.go) — wurde abgeschnitten
+   (mehr), ist die Zahl ein „mindestens". */
+function videosText(o) {
+  if (o.filme >= 200) return tr('{n} Videos', { n: '200+' });
+  return o.mehr ? tr('mindestens {n} Videos', { n: o.filme }) : tr('{n} Videos', { n: o.filme });
+}
+
 function bibWaehler() {
   const b = S.browse;
   if (!b) return '';
   const zeilen = (b.ordner || []).map(o => `
     <button type="button" class="orow orow-link" style="width:100%;text-align:left;height:auto;padding:11px 16px" data-into="${esc(o.pfad)}"
-      aria-label="${esc(o.name)}${o.freigabe ? ', ' + tr('für Lumen freigegeben') : ''}${o.gesperrt ? ', ' + tr('kein Zugriff') : o.filme ? ', ' + tr('{n} Videos', { n: o.filme >= 200 ? '200+' : o.filme }) : ''}">
+      aria-label="${esc(o.name)}${o.freigabe ? ', ' + tr('für Lumen freigegeben') : ''}${o.gesperrt ? ', ' + tr('kein Zugriff') : o.filme ? ', ' + videosText(o) : ''}">
       <span style="color:var(--label-2);display:flex;flex:none">
         ${svg('<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4L10 8h9.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>', 17)}</span>
       <span style="flex:1;min-width:0">
@@ -4838,7 +4966,9 @@ function bibWaehler() {
       ${o.gesperrt
         ? `<span class="t-caption" style="flex:none;color:#ffb340">${tr('kein Zugriff')}</span>`
         : o.filme
-        ? `<span class="badge" style="flex:none">${tr('{n} Videos', { n: o.filme >= 200 ? '200+' : o.filme })}</span>`
+        // Farbig: Das schlichte Abzeichen ist für dunkle Flächen gemacht
+        // und verschwand im hellen Wähler.
+        ? `<span class="badge badge--blau" style="flex:none">${videosText(o)}</span>`
         : `<span class="t-caption c-3" style="flex:none">${tr('keine Videos')}</span>`}
       <span style="color:var(--label-3);display:flex;flex:none">${svg(I.chev, 15)}</span>
     </button>`).join('');
@@ -4857,7 +4987,9 @@ function bibWaehler() {
     ${!b.pfad && b.imContainer ? `<p class="t-caption c-2" style="padding:10px 16px 12px;margin:0">
       ${tr('Lumen läuft in einem Container und sieht vom NAS nur die Ordner, die ihm freigegeben sind — in der docker-compose.yml unter „volumes“, etwa')} <span class="mono">/volume1/video:/volume1/video:ro</span>${tr('. Fehlt einer, dort eintragen und den Container neu starten.')}</p>` : ''}
     ${b.hier ? `<p class="t-caption c-2" style="padding:10px 16px 12px;margin:0">
-      ${b.hier >= 200 ? tr('Hier und in den Unterordnern liegen über 200 Videodateien.') : tr('Hier und in den Unterordnern liegen {n} Videodateien.', { n: b.hier })}</p>` : ''}
+      ${b.hier >= 200 ? tr('Hier und in den Unterordnern liegen über 200 Videodateien.')
+        : b.hierMehr ? tr('Hier und in den Unterordnern liegen mindestens {n} Videodateien.', { n: b.hier })
+        : tr('Hier und in den Unterordnern liegen {n} Videodateien.', { n: b.hier })}</p>` : ''}
   </div>`;
 }
 
@@ -5401,16 +5533,24 @@ function neustartAbwarten(text, danach) {
   try { sessionStorage.setItem('lumen.nachNeustart', danach); } catch {}
   const start = Date.now();
   let warWeg = false;
+  /* Neu gestartet ist er, wenn er einmal weg war — oder wenn seine
+     Laufzeit (uptimeMs) jünger ist als das Warten hier. Ein schneller
+     Neustart fiel sonst zwischen zwei Nachfragen, und das Fenster blieb
+     20 Sekunden stehen, obwohl Lumen nach drei wieder lief. Gefragt wird
+     alle halbe Sekunde. */
   const fragen = async () => {
-    let da = false;
-    try { const r = await fetch('/api/v1/hello', { cache: 'no-store' }); da = r.ok; } catch {}
+    let da = false, neu = false;
+    try {
+      const r = await fetch('/api/v1/hello', { cache: 'no-store' });
+      da = r.ok;
+      if (da) { const h = await r.json().catch(() => ({})); neu = typeof h.uptimeMs === 'number' && Date.now() - h.uptimeMs > start - 1000; }
+    } catch {}
     if (!da) warWeg = true;
-    // Erst wenn er einmal weg war (oder nach 20 s), gilt er als neu gestartet.
-    if (da && (warWeg || Date.now() - start > 20000)) return location.reload();
+    if (da && (warWeg || neu || Date.now() - start > 20000)) return location.reload();
     if (Date.now() - start > 120000) { el.remove(); return toast(tr('Lumen antwortet noch nicht. Lade die Seite gleich selbst neu.')); }
-    setTimeout(fragen, 1000);
+    setTimeout(fragen, 500);
   };
-  setTimeout(fragen, 1500);
+  setTimeout(fragen, 500);
 }
 try {
   const nachNeustart = sessionStorage.getItem('lumen.nachNeustart');
@@ -5792,7 +5932,7 @@ function offeneEinladungen(liste) {
   return `<section id="offene-einladungen" style="margin-top:22px"><h2 class="section-h" style="margin:0">${tr('Offene Einladungen')}</h2>
     <div class="group group--inset">${liste.map(e => `
       <div class="row" style="min-height:56px;gap:12px;flex-wrap:wrap">
-        <span style="flex:1;min-width:200px"><span class="t-body">${e.kinderprofil ? esc(T.kinderprofil) : tr('Erwachsenes Profil')}
+        <span style="flex:1;min-width:200px"><span class="t-body">${e.kinderprofil ? esc(e.altersgrenze != null ? tr(T.kinderprofilBis, { n: e.altersgrenze }) : T.kinderprofil) : tr('Erwachsenes Profil')}
           <span class="mono c-2" style="font-size:.8125rem">…${esc(e.ende)}</span></span>
           <span class="t-caption c-2" style="display:block">${tr('gilt bis {wann}', { wann: esc(datumZeit(e.expiresAt, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) })}
             · ${tr('{n} Bibliotheken', { n: e.bibliotheken })}${e.von ? ` · ${tr('von {name}', { name: esc(e.von) })}` : ''}</span></span>
@@ -5911,6 +6051,7 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-qualitaet'))) return qualitaetWaehlen(n.dataset.qualitaet);
   if ((n = hit('data-fassungwahl'))) return fassungWechseln(n.dataset.fassungwahl);
   if (hit('data-pl-standard')) return fassungAlsStandard();
+  if (hit('data-pl-fehler-zu')) return stopPlayer();
   if ((n = hit('data-untertitel'))) return untertitelWaehlen(n.dataset.untertitel);
   if (hit('data-intro-von')) { const p = S.playing; if (p) { p.introMarke = p.offset + p.current; patchChrome(); } return; }
   if (hit('data-intro-abbruch')) { const p = S.playing; if (p) { p.introMarke = null; patchChrome(); } return; }
@@ -6655,8 +6796,11 @@ function seekTo(sec) {
 // Ereignisse — vor denen hier, damit Enter in der Liste wählt statt abschickt.
 const wunschVerhalten = wunschFeldEinrichten(app, {
   async gewuenscht(w, dabei) {
+    // Der Besitzer schickt sich selbst nichts: Sein Wunsch steht einfach
+    // auf der Liste.
     toast(dabei ? tr('Schon gewünscht – du bist jetzt mit dabei')
-      : w?.vorhanden ? tr('Das hast du dir schon gewünscht') : tr('Wunsch an den Besitzer geschickt'));
+      : w?.vorhanden ? tr('Das hast du dir schon gewünscht')
+      : S.me?.account?.isOwner ? tr('Auf die Wunschliste gesetzt') : tr('Wunsch an den Besitzer geschickt'));
     if (S.view === 'wishes') await load();
   },
   ansehen: id => go('detail', { id }),
@@ -7711,6 +7855,12 @@ document.addEventListener('error', e => {
     return;
   }
   if (el.hasAttribute('data-weg')) el.remove();
+}, true);
+// „Kein Bild möglich" (Datei defekt) schickt der Server als
+// durchsichtigen Punkt statt als Fehler — dann bleibt der Titel stehen.
+document.addEventListener('load', e => {
+  const el = e.target;
+  if (el instanceof HTMLImageElement && (el.hasAttribute('data-nochmal') || el.hasAttribute('data-weg')) && el.naturalWidth <= 1 && el.naturalHeight <= 1) el.remove();
 }, true);
 document.addEventListener('click', e => {
   const el = e.target instanceof Element && e.target.closest('[data-auswahl]');

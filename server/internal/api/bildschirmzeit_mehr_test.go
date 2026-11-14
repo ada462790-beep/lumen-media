@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"lumen/internal/store"
+	"lumen/internal/stream"
 )
 
 // „Heute einmalig mehr" ausserhalb des Fensters verlängert das Fenster ab
@@ -111,5 +112,61 @@ func TestVerwaltungSiehtBildschirmzeitVerzoegert(t *testing.T) {
 	h.api.bz.mu.Unlock()
 	if jetzt := stand(); !strings.HasPrefix(jetzt, `"genutztMinuten":15`) {
 		t.Fatalf("Stand danach: %s", jetzt)
+	}
+}
+
+// Eine Minute heisst eine Minute: Was seit der letzten gezählten Meldung
+// lief, rechnet der Wächter einer laufenden Wiedergabe vorab zu — sonst
+// griff die Grenze erst einen Meldeabstand plus Takt zu spät. Länger
+// Stilles (eine Pause) rechnet er nur bis bzOffenHoechstens zu.
+func TestBildschirmzeitGreiftAufWenigeSekunden(t *testing.T) {
+	regel := store.Bildschirmzeit{Aktiv: true,
+		Schultage:  store.Tagesregel{Von: "07:00", Bis: "19:30", Minuten: 1},
+		Wochenende: store.Tagesregel{Von: "08:00", Bis: "20:30", Minuten: 1}}
+	k := neuesBzKind(t, regel)
+	h := k.h
+	ctx := t.Context()
+	acc, _ := h.st.Account(ctx, k.id)
+	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", 52)
+
+	setze := func(vor time.Duration) {
+		h.api.bz.mu.Lock()
+		h.api.bz.gezaehlt[k.id] = time.Now().Add(-vor)
+		h.api.bz.mu.Unlock()
+	}
+	setze(9 * time.Second)
+	l, _ := h.api.bildschirmzeitLage(ctx, acc)
+	if !l.urteil.Erlaubt {
+		t.Fatal("nach 52 gezählten Sekunden schon gesperrt")
+	}
+	h.api.bzMitOffen(&l, k.id, time.Now())
+	if l.urteil.Erlaubt {
+		t.Fatalf("52 s gezählt + 9 s offen sind über einer Minute, Urteil %+v", l.urteil)
+	}
+
+	// Lange still (Pause): höchstens bzOffenHoechstens zugerechnet.
+	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", -30)
+	setze(40 * time.Second)
+	l, _ = h.api.bildschirmzeitLage(ctx, acc)
+	h.api.bzMitOffen(&l, k.id, time.Now())
+	if !l.urteil.Erlaubt {
+		t.Fatalf("22 s gezählt + gedeckelte Pause gesperrt: %+v", l.urteil)
+	}
+
+	// Der Wächter beendet die laufende Wiedergabe gleich im nächsten Takt.
+	_ = h.st.BildschirmzeitZaehlen(ctx, k.id, "2026-11-09", 30)
+	sess := h.live.Start(&stream.Session{AccountID: k.id, DeviceName: "iPad", FileID: k.fileID, Mode: "transcode"})
+	setze(9 * time.Second)
+	h.api.bildschirmzeitTakt(ctx)
+	if h.live.Laeuft(sess.ID) {
+		t.Fatal("läuft über die Minute hinaus weiter")
+	}
+	// Danach ist die Zeit auch ohne laufende Wiedergabe um: Was vorab
+	// zugerechnet wurde, ist gezählt.
+	if l, _ := h.api.bildschirmzeitLage(ctx, acc); l.urteil.Erlaubt {
+		t.Fatalf("nach dem Ende wieder frei: genutzt %v", l.genutzt)
+	}
+	if bzTakt > 5*time.Second || bzNachfrist+bzNachfristZufall > 6*time.Second {
+		t.Fatalf("Takt %v, Nachfrist %v + %v: zu viel Überzug", bzTakt, bzNachfrist, bzNachfristZufall)
 	}
 }
