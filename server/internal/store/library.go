@@ -72,15 +72,18 @@ type Item struct {
 	EndYear    *int  `json:"endYear,omitempty"`
 	LaeuftNoch *bool `json:"laeuftNoch,omitempty"`
 	// Rotten Tomatoes: Anteil guter Kritiken in Prozent, wenn bekannt.
-	Tomaten    *int      `json:"rottenTomatoes,omitempty"`
-	RuntimeMS  int64     `json:"runtimeMs,omitempty"`
-	Premiered  string    `json:"premiered,omitempty"`
-	IMDbID     string    `json:"imdbId,omitempty"`
-	IMDbRating float64   `json:"imdbRating,omitempty"`
-	IMDbVotes  int       `json:"imdbVotes,omitempty"`
-	MatchState string    `json:"matchState"`
-	AddedAt    time.Time `json:"addedAt"`
-	Genres     []string  `json:"genres,omitempty"`
+	Tomaten    *int    `json:"rottenTomatoes,omitempty"`
+	RuntimeMS  int64   `json:"runtimeMs,omitempty"`
+	Premiered  string  `json:"premiered,omitempty"`
+	IMDbID     string  `json:"imdbId,omitempty"`
+	IMDbRating float64 `json:"imdbRating,omitempty"`
+	IMDbVotes  int     `json:"imdbVotes,omitempty"`
+	// TMDb: Note der Nutzer in Prozent (0–100) und Zahl der Stimmen.
+	TMDbProzent *int      `json:"tmdbRating,omitempty"`
+	TMDbStimmen int       `json:"tmdbVotes,omitempty"`
+	MatchState  string    `json:"matchState"`
+	AddedAt     time.Time `json:"addedAt"`
+	Genres      []string  `json:"genres,omitempty"`
 }
 
 // ---------------------------------------------------------------- Bibliotheken
@@ -264,19 +267,24 @@ const itemCols = `id, library_id, kind, COALESCE(parent_id,''), title, sort_titl
 	COALESCE(episode_no,0), COALESCE(overview,''), COALESCE(age_rating,''),
 	age_years, COALESCE(runtime_ms,0), COALESCE(premiered,''), COALESCE(imdb_id,''),
 	COALESCE(imdb_rating,0), COALESCE(imdb_votes,0), match_state, added_at,
-	end_year, laeuft_noch, rt_wertung, COALESCE(sort_eigen,''), COALESCE(sprache_original,'')`
+	end_year, laeuft_noch, rt_wertung, COALESCE(sort_eigen,''), COALESCE(sprache_original,''),
+	tmdb_wertung, COALESCE(tmdb_stimmen,0)`
 
 func scanItem(sc interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
-	var age, ende, laeuft, tomaten sql.NullInt64
+	var age, ende, laeuft, tomaten, tmdb sql.NullInt64
 	var added int64
 	err := sc.Scan(&it.ID, &it.LibraryID, &it.Kind, &it.ParentID, &it.Title, &it.SortTitle,
 		&it.OriginalTitle, &it.Year, &it.SeasonNo, &it.EpisodeNo, &it.Overview,
 		&it.AgeRating, &age, &it.RuntimeMS, &it.Premiered, &it.IMDbID,
 		&it.IMDbRating, &it.IMDbVotes, &it.MatchState, &added, &ende, &laeuft, &tomaten,
-		&it.SortEigen, &it.Sprache)
+		&it.SortEigen, &it.Sprache, &tmdb, &it.TMDbStimmen)
 	if err != nil {
 		return nil, err
+	}
+	if tmdb.Valid && tmdb.Int64 > 0 && tmdb.Int64 <= 100 {
+		v := int(tmdb.Int64)
+		it.TMDbProzent = &v
 	}
 	if ende.Valid && ende.Int64 > 0 {
 		v := int(ende.Int64)
@@ -1400,6 +1408,15 @@ func (s *Store) TomatenSetzen(ctx context.Context, id string, prozent int) error
 		prozent = -1
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE item SET rt_wertung = ? WHERE id = ?`, prozent, id)
+	return err
+}
+
+// TMDbWertungSetzen hält die Note der TMDb-Nutzer fest (Prozent, Stimmen).
+func (s *Store) TMDbWertungSetzen(ctx context.Context, id string, prozent, stimmen int) error {
+	if prozent <= 0 || prozent > 100 || stimmen <= 0 {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE item SET tmdb_wertung = ?, tmdb_stimmen = ? WHERE id = ?`, prozent, stimmen, id)
 	return err
 }
 

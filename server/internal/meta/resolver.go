@@ -334,6 +334,7 @@ func (r *Resolver) resolveMovie(ctx context.Context, it *store.Item) error {
 	if tomaten > -2 {
 		_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 	}
+	r.tmdbWertungMerken(ctx, it.ID, full)
 	// Für die Links auf der Titelseite (TMDb, Trakt).
 	_ = r.st.SetSourceID(ctx, it.ID, "tmdb", quelle)
 	// Die Reihe ist eine Zugabe. Scheitert sie, ist der Film trotzdem
@@ -384,6 +385,7 @@ func (r *Resolver) resolveSeries(ctx context.Context, it *store.Item) error {
 	if tomaten > -2 {
 		_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 	}
+	r.tmdbWertungMerken(ctx, it.ID, full)
 	// Die Kennung merken, damit die Folgen sie finden.
 	if err := r.st.SetSourceID(ctx, it.ID, "tmdb", quelle); err != nil {
 		return err
@@ -467,6 +469,15 @@ func (r *Resolver) markUnmatched(ctx context.Context, it *store.Item, m Match) e
 	// hat, steht in der Verwaltung unter „Aufräumen" (GrundZu).
 	_ = m
 	return errUnmatched
+}
+
+// tmdbWertungMerken hält die Note der TMDb-Nutzer in Prozent fest — nur,
+// wenn jemand abgestimmt hat (eine 0 ohne Stimmen ist keine Note).
+func (r *Resolver) tmdbWertungMerken(ctx context.Context, id string, c *Candidate) {
+	if c == nil || c.TMDbStimmen <= 0 || c.TMDbNote <= 0 {
+		return
+	}
+	_ = r.st.TMDbWertungSetzen(ctx, id, int(c.TMDbNote*10+0.5), c.TMDbStimmen)
 }
 
 // apply überträgt einen Treffer auf den Titel. Was die Quelle nicht weiss,
@@ -805,6 +816,7 @@ func (r *Resolver) zuweisen(ctx context.Context, it *store.Item, sourceID string
 		if tomaten > -2 {
 			_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 		}
+		r.tmdbWertungMerken(ctx, it.ID, full)
 		_ = r.st.SetSourceID(ctx, it.ID, "tmdb", sourceID)
 		if full.ReiheID != "" {
 			_ = r.st.TMDbReiheZuordnen(ctx, full.ReiheID, full.ReiheName, it.ID, it.Year)
@@ -830,6 +842,7 @@ func (r *Resolver) zuweisen(ctx context.Context, it *store.Item, sourceID string
 		if tomaten > -2 {
 			_ = r.st.TomatenSetzen(ctx, it.ID, tomaten)
 		}
+		r.tmdbWertungMerken(ctx, it.ID, gewaehlt)
 		if err := r.st.SetSourceID(ctx, it.ID, "tmdb", sourceID); err != nil {
 			return err
 		}

@@ -228,6 +228,21 @@ func (s *Server) neuigkeiten(w http.ResponseWriter, r *http.Request) {
 			liste[i].Text = tr(w, v.Text, werte...)
 		}
 	}
+	// „{n} neue Titel": die Titel mit Poster, damit die Zeile aufklappen
+	// kann (vorher führte ein Klick auf die Startseite).
+	type mitTiteln struct {
+		store.Neuigkeit
+		TitelListe []view `json:"titelListe,omitempty"`
+	}
+	aus := make([]mitTiteln, len(liste))
+	for i := range liste {
+		aus[i].Neuigkeit = liste[i]
+		if len(liste[i].Liste) > 0 {
+			if v, err := s.decorate(r, liste[i].Liste); err == nil {
+				aus[i].TitelListe = v
+			}
+		}
+	}
 	gelesen := s.neuigkeitenGelesen(r, acc.ID)
 	ungelesen := 0
 	for _, n := range liste {
@@ -235,7 +250,7 @@ func (s *Server) neuigkeiten(w http.ResponseWriter, r *http.Request) {
 			ungelesen++
 		}
 	}
-	ok(w, map[string]any{"eintraege": liste, "ungelesen": ungelesen, "gelesenBis": gelesen})
+	ok(w, map[string]any{"eintraege": aus, "ungelesen": ungelesen, "gelesenBis": gelesen})
 }
 
 func (s *Server) neuigkeitenGelesen(r *http.Request, accountID string) time.Time {

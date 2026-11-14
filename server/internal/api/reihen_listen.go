@@ -92,6 +92,20 @@ type reiheAntwort struct {
 	Poster   string `json:"poster,omitempty"`
 	Backdrop string `json:"backdrop,omitempty"`
 	Items    []view `json:"items"`
+	// ZuletztNeu: wann zuletzt ein Titel dazukam (Unix-Sekunden) — zum
+	// Sortieren nach „Zuletzt hinzugefügt".
+	ZuletztNeu int64 `json:"zuletztNeu,omitempty"`
+}
+
+// zuletztNeu: das jüngste Hinzufügen unter den Titeln.
+func zuletztNeu(items []view) int64 {
+	var j int64
+	for _, v := range items {
+		if t := v.AddedAt.Unix(); t > j {
+			j = t
+		}
+	}
+	return j
 }
 
 func reiheBilder(x *store.Reihe, a *reiheAntwort) {
@@ -156,6 +170,7 @@ func (s *Server) reihen(w http.ResponseWriter, r *http.Request) {
 					a.Items = append(a.Items, v)
 				}
 			}
+			a.ZuletztNeu = zuletztNeu(a.Items)
 			if a.Anzahl = len(a.Items); a.Anzahl < reiheMindestens {
 				continue
 			}
@@ -195,7 +210,7 @@ func (s *Server) reihe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a := reiheAntwort{ID: x.ID, Name: x.Name, Overview: x.Overview, Source: x.Source,
-		Hidden: x.Hidden, Anzahl: len(items), Items: items}
+		Hidden: x.Hidden, Anzahl: len(items), Items: items, ZuletztNeu: zuletztNeu(items)}
 	reiheBilder(x, &a)
 	ok(w, a)
 }

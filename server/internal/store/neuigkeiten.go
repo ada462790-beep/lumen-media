@@ -20,6 +20,9 @@ import (
 	"time"
 )
 
+// maxNeuTitel: so viele Titel trägt die Zeile „{n} neue Titel" mit.
+const maxNeuTitel = 60
+
 type Neuigkeit struct {
 	Art    string    `json:"art"` // folgen | reihe | neu
 	ItemID string    `json:"itemId,omitempty"`
@@ -27,6 +30,10 @@ type Neuigkeit struct {
 	Text   string    `json:"text"`
 	At     time.Time `json:"at"`
 	Anzahl int       `json:"anzahl,omitempty"`
+	// Titel: bei „{n} neue Titel" die Titel selbst (jüngste zuerst,
+	// höchstens maxNeuTitel) — damit die Zeile aufklappen kann. Die API
+	// reichert sie an (Poster) und gibt sie als „titelListe" aus.
+	Liste []Item `json:"-"`
 	// Vorlage: Titel und Text als Schlüssel für die Übersetzung (siehe
 	// internal/sprache) samt Werten. Der Speicher kennt keine Sprache;
 	// die API setzt daraus Titel und Text in der Sprache des Profils.
@@ -103,6 +110,7 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 	if err != nil {
 		return nil, err
 	}
+	gemeldet := map[string]bool{} // Serien, die schon eine Zeile „neue Folgen" haben
 	if len(serien) > 0 {
 		ids := make([]string, 0, len(serien))
 		for id := range serien {
@@ -147,6 +155,7 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 			if n > 1 {
 				text = strconv.Itoa(n) + " neue Folgen"
 			}
+			gemeldet[serie.ID] = true
 			out = append(out, Neuigkeit{Art: "folgen", ItemID: serie.ID, Titel: serie.Title, Text: text,
 				At: time.Unix(juengste, 0), Anzahl: n,
 				Vorlage: Vorlage{Text: "{n} neue Folgen", Werte: []any{"n", n}}})
@@ -226,33 +235,100 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 		}
 	}
 
-	// Neu dazugekommen, als eine Zeile.
+	// Neu dazugekommen, als eine Zeile. Sortiert wird nach zuletzt_neu —
+	// eine alte Serie mit neuen Folgen steht darum vorn, obwohl sie selbst
+	// längst da ist. Darum nicht beim ersten alten Titel aufhören (so
+	// fehlten vorher alle neuen Titel hinter einer solchen Serie), sondern
+	// jeden ansehen.
+	woche := time.Now().Add(-7 * 24 * time.Hour)
 	nq := q
-	nq.Sort, nq.Limit = "added", 200
+	nq.Sort, nq.Limit = "added", 500
 	alle, err := s.Query(ctx, nq)
 	if err != nil {
 		return nil, err
 	}
-	woche := time.Now().Add(-7 * 24 * time.Hour)
-	var n int
-	var juengste time.Time
-	var erster string
+	var neueTitel []Item
 	for _, it := range alle {
-		if it.AddedAt.Before(woche) {
-			break
-		}
-		n++
-		if it.AddedAt.After(juengste) {
-			juengste = it.AddedAt
-			erster = it.Title
+		if !it.AddedAt.Before(woche) {
+			neueTitel = append(neueTitel, it)
 		}
 	}
-	if n == 1 {
-		out = append(out, Neuigkeit{Art: "neu", Titel: erster, Text: "Neu dazugekommen", At: juengste, Anzahl: 1,
+	// Jüngste zuerst (die Abfrage sortiert nach zuletzt_neu, nicht nach
+	// dem Hinzufügen des Titels selbst).
+	for i := 1; i < len(neueTitel); i++ {
+		for j := i; j > 0 && neueTitel[j].AddedAt.After(neueTitel[j-1].AddedAt); j-- {
+			neueTitel[j], neueTitel[j-1] = neueTitel[j-1], neueTitel[j]
+		}
+	}
+	if n := len(neueTitel); n == 1 {
+		it := neueTitel[0]
+		out = append(out, Neuigkeit{Art: "neu", ItemID: it.ID, Titel: it.Title, Text: "Neu dazugekommen", At: it.AddedAt, Anzahl: 1,
 			Vorlage: Vorlage{Text: "Neu dazugekommen"}})
 	} else if n > 1 {
-		out = append(out, Neuigkeit{Art: "neu", Titel: strconv.Itoa(n) + " neue Titel", Text: "zuletzt: " + erster, At: juengste, Anzahl: n,
-			Vorlage: Vorlage{Titel: "{n} neue Titel", Text: "zuletzt: {titel}", Werte: []any{"n", n, "titel", erster}}})
+		erster := neueTitel[0]
+		liste := neueTitel
+		if len(liste) > maxNeuTitel {
+			liste = liste[:maxNeuTitel]
+		}
+		out = append(out, Neuigkeit{Art: "neu", Titel: strconv.Itoa(n) + " neue Titel", Text: "zuletzt: " + erster.Title, At: erster.AddedAt, Anzahl: n,
+			Liste:   liste,
+			Vorlage: Vorlage{Titel: "{n} neue Titel", Text: "zuletzt: {titel}", Werte: []any{"n", n, "titel", erster.Title}}})
+	}
+
+	// Neue Folgen von Serien, die schon länger da sind, auch wenn dieses
+	// Konto sie (noch) nicht schaut: „Neue Folgen von X". Vorher kamen 27
+	// neue Folgen an, und die Seite sagte nur „2 neue Titel".
+	neuSet := map[string]bool{}
+	for _, it := range neueTitel {
+		neuSet[it.ID] = true
+	}
+	frq, err := s.db.QueryContext(ctx,
+		`SELECT st.parent_id, count(*), max(e.added_at) FROM item e JOIN item st ON st.id = e.parent_id
+		  WHERE e.kind = 'episode' AND e.added_at >= ? GROUP BY st.parent_id`, woche.Unix())
+	if err != nil {
+		return nil, err
+	}
+	type folgenNeu struct {
+		n  int
+		at int64
+	}
+	frisch := map[string]folgenNeu{}
+	for frq.Next() {
+		var id string
+		var f folgenNeu
+		if err := frq.Scan(&id, &f.n, &f.at); err != nil {
+			frq.Close()
+			return nil, err
+		}
+		if !gemeldet[id] && !neuSet[id] {
+			frisch[id] = f
+		}
+	}
+	frq.Close()
+	if err := frq.Err(); err != nil {
+		return nil, err
+	}
+	if len(frisch) > 0 {
+		ids := make([]string, 0, len(frisch))
+		for id := range frisch {
+			ids = append(ids, id)
+		}
+		sq := q
+		sq.IDs, sq.Kinds, sq.Limit = ids, []string{"series"}, len(ids)
+		sichtbar, err := s.Query(ctx, sq)
+		if err != nil {
+			return nil, err
+		}
+		for _, serie := range sichtbar {
+			f := frisch[serie.ID]
+			text := "1 neue Folge"
+			if f.n > 1 {
+				text = strconv.Itoa(f.n) + " neue Folgen"
+			}
+			out = append(out, Neuigkeit{Art: "folgen", ItemID: serie.ID, Titel: "Neue Folgen von " + serie.Title, Text: text,
+				At: time.Unix(f.at, 0), Anzahl: f.n,
+				Vorlage: Vorlage{Titel: "Neue Folgen von {serie}", Text: "{n} neue Folgen", Werte: []any{"serie", serie.Title, "n", f.n}}})
+		}
 	}
 
 	// Jüngste zuerst.

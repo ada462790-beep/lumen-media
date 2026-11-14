@@ -216,7 +216,7 @@ func zusatzTexte() map[string]bool {
 var zusatzSchluessel = []string{
 	// Neuigkeiten (store.Vorlage, profil.go)
 	"{n} neue Folgen", "Neu in deiner Reihe „{reihe}“", "Dein Wunsch ist da", "Neu dazugekommen",
-	"{n} neue Titel", "zuletzt: {titel}", "Updates kommen nicht durch",
+	"{n} neue Titel", "zuletzt: {titel}", "Neue Folgen von {serie}", "Updates kommen nicht durch",
 	"GitHub nimmt das Token nicht mehr an — unter Verwaltung › Updates ein neues eintragen",
 	"Sicherung gescheitert", "Platz wird knapp", "Nur noch {gb} GB frei ({ort})", "Datenbank", "Umwandlung",
 	// Reihen der Startseite (handlers.go, add)

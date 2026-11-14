@@ -17,7 +17,8 @@ import { untertitelSuchen, untertitelVerwaltung, utStand, utStandLaden } from '.
 import { tr } from './sprache.js';
 
 export { U } from './fenster.js';
-export { sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reiter as reihenReiter } from './sammlungen.js';
+export { sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reiter as reihenReiter,
+  reihenWerkzeug, reihenGitter, reihenGitterZeichnen, reihenSucheSetzen, reihenSortierungSetzen } from './sammlungen.js';
 export { utStand, utStandLaden } from './untertitel.js';
 
 const verwalten = () => !!U.S?.me?.account?.isAdmin && amSchreibtisch();

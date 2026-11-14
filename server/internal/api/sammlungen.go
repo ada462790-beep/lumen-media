@@ -50,6 +50,8 @@ type sammlungAntwort struct {
 	Bild   string `json:"bild,omitempty"`
 	Anzahl int    `json:"anzahl"`
 	Items  []view `json:"items"`
+	// ZuletztNeu: wann zuletzt ein Titel dazukam (Unix-Sekunden).
+	ZuletztNeu int64 `json:"zuletztNeu,omitempty"`
 	// VonHand: die von Hand hinzugefügten Titel (nur für die Verwaltung)
 	// — der Rest kommt über die Regel und lässt sich nicht einzeln
 	// entfernen oder verschieben.
@@ -139,7 +141,7 @@ func erschienen(it store.Item) string {
 func (s *Server) sammlungAntwortBauen(r *http.Request, x *store.Sammlung, items []view, alle bool) sammlungAntwort {
 	a := sammlungAntwort{ID: x.ID, Name: x.Name, Beschreibung: x.Beschreibung,
 		Sortierung: x.Sortierung, Regel: x.Regel, AufStart: x.AufStart,
-		Anzahl: len(items), Items: items}
+		Anzahl: len(items), Items: items, ZuletztNeu: zuletztNeu(items)}
 	if x.Bild != "" {
 		// Unter /art/, damit Bilder-Tags es mit dem Medienschlüssel laden.
 		a.Bild = "/api/v1/art/" + x.ID + "/poster"
