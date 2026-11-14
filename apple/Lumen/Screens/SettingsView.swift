@@ -464,6 +464,12 @@ struct WishesView: View {
     @State private var wishes: [Wish] = []
     @State private var newTitle = ""
     @State private var loading = true
+    /// Was nach dem Wünschen gemeldet wird: neu, schon eigen, angeschlossen.
+    @State private var hinweis: String?
+    /// Fehler beim Laden, Wünschen oder Löschen — sichtbar statt verschluckt.
+    @State private var problem: String?
+    /// Löschen oder austreten: erst nach einer Rückfrage.
+    @State private var weg: Wish?
 
     var body: some View {
         List {
@@ -474,6 +480,10 @@ struct WishesView: View {
                         .onSubmit(send)
                     Button("Wünschen", action: send)
                         .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if let hinweis {
+                    Label(hinweis, systemImage: "checkmark.circle.fill")
+                        .font(.callout).foregroundStyle(Theme.good)
                 }
             } footer: {
                 Text("Der Besitzer sieht den Titel und wer ihn gewünscht hat — sonst nichts.")
@@ -488,8 +498,24 @@ struct WishesView: View {
                             .font(.caption.weight(.medium))
                             .foregroundStyle(color(for: wish.state))
                     }
-                    Text("von \(wish.by)" + (wish.mine ? " (du)" : ""))
-                        .font(.caption).foregroundStyle(Theme.label2)
+                    HStack {
+                        Text("von \(wish.by)" + (wish.mine ? " (du)" : ""))
+                            .font(.caption).foregroundStyle(Theme.label2)
+                        Spacer()
+                        // Den eigenen offenen Wunsch löschen, einen
+                        // angeschlossenen verlassen.
+                        if let art = wish.wegArt {
+                            Button {
+                                weg = wish
+                            } label: {
+                                Text(art == .austreten ? String(localized: "Nicht mehr wünschen", bundle: .lumen, locale: .lumen)
+                                                       : String(localized: "Löschen", bundle: .lumen, locale: .lumen))
+                                    .font(.caption.weight(.medium))
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(art == .austreten ? Theme.accent : Theme.bad)
+                        }
+                    }
                 }
                 .padding(.vertical, 3)
             }
@@ -500,8 +526,31 @@ struct WishesView: View {
             }
         }
         .navigationTitle("Wünsche")
+        .confirmationDialog(wegTitel, isPresented: Binding(
+            get: { weg != nil },
+            set: { if !$0 { weg = nil } }), titleVisibility: .visible, presenting: weg) { wish in
+            if wish.wegArt == .austreten {
+                Button("Nicht mehr wünschen") { Task { await loeschen(wish) } }
+            } else {
+                Button("Löschen", role: .destructive) { Task { await loeschen(wish) } }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { wish in
+            if wish.wegArt == .austreten {
+                Text("Du bist dann bei „\(wish.title)“ nicht mehr dabei. Der Wunsch der anderen bleibt.")
+            } else {
+                Text("„\(wish.title)“ verschwindet aus der Liste.")
+            }
+        }
+        .problemAlert($problem)
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private var wegTitel: String {
+        weg?.wegArt == .austreten
+            ? String(localized: "Nicht mehr wünschen?", bundle: .lumen, locale: .lumen)
+            : String(localized: "Wunsch löschen?", bundle: .lumen, locale: .lumen)
     }
 
     private func color(for state: String) -> Color {
@@ -514,7 +563,11 @@ struct WishesView: View {
     }
 
     private func load() async {
-        wishes = (try? await session.client.wishes()) ?? []
+        do {
+            wishes = try await session.client.wishes()
+        } catch {
+            problem = Session.text(error)
+        }
         loading = false
     }
 
@@ -522,9 +575,29 @@ struct WishesView: View {
         let title = newTitle.trimmingCharacters(in: .whitespaces)
         guard !title.isEmpty else { return }
         newTitle = ""
+        hinweis = nil
         Task {
-            _ = try? await session.client.wish(title: title)
+            do {
+                let w = try await session.client.wish(title: title)
+                hinweis = w.rueckmeldung
+            } catch {
+                // Sichtbar statt still verschluckt; der Titel bleibt im Feld.
+                newTitle = title
+                problem = Session.text(error)
+            }
             await load()
         }
+    }
+
+    /// `DELETE /wishes/{id}` — bei 409 `nicht_offen` sagt der Satz des
+    /// Servers, warum es nicht geht.
+    private func loeschen(_ wish: Wish) async {
+        hinweis = nil
+        do {
+            try await session.client.wunschLoeschen(wish.id)
+        } catch {
+            problem = Session.text(error)
+        }
+        await load()
     }
 }

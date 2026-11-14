@@ -10,7 +10,9 @@ package org.lumen.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +58,8 @@ fun NeuigkeitenScreen(
     var daten by remember { mutableStateOf<Neuigkeiten?>(null) }
     var loading by remember { mutableStateOf(true) }
     var reload by remember { mutableStateOf(0) }
+    // Welcher „{n} neue Titel"-Eintrag aufgeklappt ist.
+    var auf by remember { mutableStateOf<Int?>(null) }
     val error by model.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(reload) {
@@ -84,19 +89,41 @@ fun NeuigkeitenScreen(
                          color = Lumen.label2, fontSize = 15.sp)
                 }
             }
-            items(d.eintraege) { n ->
-                NeuigkeitZeile(n, d.istNeu(n)) {
+            itemsIndexed(d.eintraege) { i, n ->
+                val offen = n.klappbar && auf == i
+                NeuigkeitZeile(n, d.istNeu(n), offen) {
                     val id = n.itemId
-                    if (id != null) onOpen(id) else onHome()
+                    when {
+                        id != null -> onOpen(id)
+                        // „{n} neue Titel": aufklappen statt zur Startseite — wie im Browser.
+                        n.klappbar -> auf = if (offen) null else i
+                        else -> onHome()
+                    }
                 }
+                if (offen) NeueTitel(model, n, onOpen)
             }
         }
     }
     if (d == null) StateOverlay(loading, error, onRetry = { reload++ })
 }
 
+/** Die neuen Titel eines aufgeklappten Eintrags: Poster zum Öffnen, darunter, was fehlt. */
 @Composable
-private fun NeuigkeitZeile(n: Neuigkeit, neu: Boolean, onClick: () -> Unit) {
+private fun NeueTitel(model: LumenViewModel, n: Neuigkeit, onOpen: (String) -> Unit) {
+    Column(Modifier.padding(start = 4.dp, bottom = 12.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 6.dp)) {
+            items(n.titelListe, key = { it.id }) { t -> PosterCard(model, t, onOpen = { onOpen(it.id) }) }
+        }
+        if (n.weitere > 0) {
+            Text(tx(R.string.neu_und_weitere, n.weitere), color = Lumen.label2, fontSize = 13.sp,
+                 modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun NeuigkeitZeile(n: Neuigkeit, neu: Boolean, offen: Boolean, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -131,6 +158,8 @@ private fun NeuigkeitZeile(n: Neuigkeit, neu: Boolean, onClick: () -> Unit) {
             Box(Modifier.padding(horizontal = 8.dp).size(9.dp).clip(CircleShape)
                     .background(Color(0xFFFF453A)))
         }
-        Text("›", color = Lumen.label3, fontSize = 20.sp)
+        // Aufklappbar: der Pfeil zeigt nach unten, solange die Titel offen sind.
+        Text("›", color = Lumen.label3, fontSize = 20.sp,
+             modifier = if (n.klappbar) Modifier.rotate(if (offen) 270f else 90f) else Modifier)
     }
 }

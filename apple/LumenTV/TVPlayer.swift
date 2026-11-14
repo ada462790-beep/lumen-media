@@ -175,12 +175,75 @@ struct TVPlayerView: View {
                                    children: aktionen))
         }
 
+        // „Qualität" wie im Browser: Fassungen und Stufen fürs Umwandeln.
+        elemente.append(qualitaetMenue(playback))
+
         // Den Vorspann markieren gehört zur Verwaltung — die gibt es nur im
         // Browser und in der Mac-App; auf dem Fernseher ist das immer falsch.
         if session.verwaltungHier, playback.kannVorspannMarkieren {
             elemente.append(vorspannMenue(playback))
         }
         return elemente
+    }
+
+    /// „Qualität" (Zahnrad): oben die Fassungen des Titels, darunter die
+    /// Stufen fürs Umwandeln — Original, 1080p · 8 Mbit/s … und Auto —,
+    /// für die Verwaltung „Diese Fassung als Standard nehmen". Wie im
+    /// Browser (qualitaetPanel). Eine andere Fassung läuft an derselben
+    /// Stelle weiter, mit derselben Ton- und Untertitelsprache.
+    private func qualitaetMenue(_ playback: Playback) -> UIMenu {
+        var kinder: [UIMenuElement] = []
+        let fassungen = playback.fassungen
+        let standard = playback.standardId ?? fassungen.first?.id
+        if fassungen.count > 1 {
+            let namen = Fassungen.namen(fassungen)
+            let standardText = String(localized: "Standard", bundle: .lumen, locale: .lumen)
+            var aktionen: [UIMenuElement] = []
+            for (i, f) in fassungen.enumerated() {
+                let id = f.id
+                let titel = id == standard ? namen[i] + " · " + standardText : namen[i]
+                aktionen.append(UIAction(title: titel, state: playback.fassungId == id ? .on : .off) { _ in
+                    Task { await playback.waehleFassung(id) }
+                })
+            }
+            kinder.append(UIMenu(title: String(localized: "Fassung", bundle: .lumen, locale: .lumen),
+                                 options: .displayInline, children: aktionen))
+        }
+        let quelle = playback.file?.height
+        let jetzt = playback.stufeWirksam
+        var stufen: [UIMenuElement] = []
+        let herkunft = Fassungen.aufloesung(quelle).map { " · " + $0 } ?? ""
+        stufen.append(UIAction(title: Qualitaet.name(Qualitaet.original) + herkunft,
+                               state: jetzt == Qualitaet.original ? .on : .off) { _ in
+            Task { await playback.waehleQualitaet(Qualitaet.original) }
+        })
+        for st in Qualitaet.stufen(fuer: quelle) {
+            let id = st.id
+            stufen.append(UIAction(title: Qualitaet.name(id), state: jetzt == id ? .on : .off) { _ in
+                Task { await playback.waehleQualitaet(id) }
+            })
+        }
+        stufen.append(UIAction(title: Qualitaet.name(Qualitaet.auto),
+                               state: jetzt == Qualitaet.auto ? .on : .off) { _ in
+            Task { await playback.waehleQualitaet(Qualitaet.auto) }
+        })
+        kinder.append(UIMenu(title: String(localized: "Qualität", bundle: .lumen, locale: .lumen),
+                             options: .displayInline, children: stufen))
+        if session.verwaltungHier, fassungen.count > 1, playback.fassungId != standard {
+            kinder.append(UIMenu(title: String(localized: "Für alle", bundle: .lumen, locale: .lumen),
+                                 options: .displayInline, children: [
+                UIAction(title: String(localized: "Diese Fassung als Standard nehmen", bundle: .lumen, locale: .lumen)) { _ in
+                    Task {
+                        await verwaltet {
+                            try await playback.fassungAlsStandard()
+                            return String(localized: "Gilt jetzt für alle", bundle: .lumen, locale: .lumen)
+                        }
+                    }
+                },
+            ]))
+        }
+        return UIMenu(title: String(localized: "Qualität", bundle: .lumen, locale: .lumen),
+                      image: UIImage(systemName: "gearshape"), children: kinder)
     }
 
     /// „Folgen": je Staffel ein Menü mit ihren Folgen. Gesehene tragen
@@ -194,7 +257,7 @@ struct TVPlayerView: View {
                 let aktuell = f.id == laufend
                 var zusatz = aktuell ? String(localized: "läuft", bundle: .lumen, locale: .lumen) : (f.runtimeMs.map { Item.duration(ms: $0) } ?? "")
                 if !aktuell, !f.isSeen, f.percent > 1 { zusatz += (zusatz.isEmpty ? "" : " · ") + "\(Int(f.percent)) %" }
-                return UIAction(title: "\(f.episodeNo ?? 0). \(f.title)",
+                return UIAction(title: f.folgenListenName,
                                 subtitle: zusatz.isEmpty ? nil : zusatz,
                                 image: f.isSeen ? UIImage(systemName: "checkmark.circle") : nil,
                                 state: aktuell ? .on : .off) { _ in

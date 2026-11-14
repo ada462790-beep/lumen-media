@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import org.lumen.core.Wish
+import org.lumen.core.WunschWeg
 
 /**
  * Die Wünsche: was ich mir gewünscht habe, und wie es steht — dazu ein
@@ -45,6 +46,8 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
     var eingabe by remember { mutableStateOf("") }
     var hinweis by remember { mutableStateOf<String?>(null) }
     var reload by remember { mutableStateOf(0) }
+    // Löschen oder austreten: erst nach einer Rückfrage.
+    var weg by remember { mutableStateOf<Wish?>(null) }
     val error by model.error.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -57,7 +60,8 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
             val w = model.fetch { it.wish(t) }
             if (w != null) {
                 eingabe = ""
-                hinweis = tx(R.string.wunsch_geschickt)
+                // Neu, schon eigen oder angeschlossen — wie im Browser.
+                hinweis = w.rueckmeldung
                 reload++
             }
         }
@@ -105,13 +109,37 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
                 }
             }
             liste.isEmpty() -> item { Text(tx(R.string.noch_keine_wuensche), color = Lumen.label2) }
-            else -> items(liste, key = { it.id }) { w -> WunschZeile(w) }
+            else -> items(liste, key = { it.id }) { w -> WunschZeile(w) { weg = w } }
         }
+    }
+
+    weg?.let { w ->
+        val austreten = w.wegArt == WunschWeg.AUSTRETEN
+        AlertDialog(
+            onDismissRequest = { weg = null },
+            title = { Text(tx(if (austreten) R.string.nicht_mehr_wuenschen_frage else R.string.wunsch_loeschen_frage)) },
+            text = {
+                Text(if (austreten) tx(R.string.wunsch_austreten_text, w.title)
+                     else tx(R.string.wunsch_loeschen_text, w.title))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    weg = null
+                    hinweis = null
+                    // 409 nicht_offen: Der Satz des Servers steht dann als Fehler da.
+                    model.send(onDone = { reload++ }) { it.wunschLoeschen(w.id) }
+                }) {
+                    Text(tx(if (austreten) R.string.nicht_mehr_wuenschen else R.string.loeschen),
+                         color = if (austreten) Lumen.accent else Lumen.bad)
+                }
+            },
+            dismissButton = { TextButton(onClick = { weg = null }) { Text(tx(R.string.abbrechen)) } },
+            containerColor = Color(0xFF16161A))
     }
 }
 
 @Composable
-private fun WunschZeile(w: Wish) {
+private fun WunschZeile(w: Wish, onWeg: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(w.titelZeile, fontSize = 16.sp)
@@ -121,6 +149,13 @@ private fun WunschZeile(w: Wish) {
         Text(w.stateLabel, color = schrift, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
              modifier = Modifier.clip(CircleShape).background(grund)
                  .padding(horizontal = 10.dp, vertical = 4.dp))
+        // Den eigenen offenen Wunsch löschen, einen angeschlossenen verlassen.
+        w.wegArt?.let { art ->
+            TextButton(onClick = onWeg) {
+                Text(tx(if (art == WunschWeg.AUSTRETEN) R.string.nicht_mehr_wuenschen else R.string.loeschen),
+                     color = Lumen.label2, fontSize = 13.sp)
+            }
+        }
     }
 }
 

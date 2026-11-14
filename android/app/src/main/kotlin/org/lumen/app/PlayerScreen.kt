@@ -93,6 +93,12 @@ fun PlayerScreen(model: LumenViewModel, start: Abspielen, onClose: () -> Unit) {
     // erzwingt — wie im Browser, der dafür startPlayer neu aufruft.
     var teilAb by remember { mutableStateOf<Double?>(null) }
     var teilLauf by remember { mutableStateOf(0) }
+    // Unter „Qualität" mitten im Film eine andere Fassung gewählt: für
+    // welchen Titel welche Datei, und Ton und Untertitel der vorigen, um
+    // sie nach Sprache zu übernehmen. Ein frischer Player an derselben Stelle.
+    var fassungFuer by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var uebernahme by remember { mutableStateOf<Pair<List<Track>, Spuren.Wahl>?>(null) }
+    var startHinweis by remember { mutableStateOf<String?>(null) }
     // Eines pro Wiedergabe: es merkt sich, welche Titel eine Datei haben.
     val folge = remember { Abspielfolge(model.client) }
     val scope = rememberCoroutineScope()
@@ -101,6 +107,8 @@ fun PlayerScreen(model: LumenViewModel, start: Abspielen, onClose: () -> Unit) {
         naechstes = null
         startAb = null
         teilAb = null
+        uebernahme = null
+        startHinweis = null
         if (n.index >= 0) index = n.index
         aktuell = n.titel
     }
@@ -136,7 +144,10 @@ fun PlayerScreen(model: LumenViewModel, start: Abspielen, onClose: () -> Unit) {
                 abSekunden = teilAb ?: if (aktuell.id == start.titel.id) startAb else null,
                 // Die gewählte Fassung gilt nur für den Titel, für den sie
                 // gewählt wurde — auch über seine Teile hinweg.
-                dateiId = if (aktuell.id == start.titel.id) start.dateiId else null,
+                dateiId = fassungFuer?.takeIf { it.first == aktuell.id }?.second
+                    ?: if (aktuell.id == start.titel.id) start.dateiId else null,
+                uebernahme = uebernahme,
+                startHinweis = startHinweis,
                 // Oben im Bild: aus welcher Liste und der wievielte Titel —
                 // wie im Browser „Filmabend · 2 von 5".
                 unterzeile = if (start.liste.isNotEmpty() && index >= 0)
@@ -151,11 +162,20 @@ fun PlayerScreen(model: LumenViewModel, start: Abspielen, onClose: () -> Unit) {
                 },
                 // Noch ein Teil übrig: gleich weiter, ohne Countdown — es
                 // ist derselbe Film.
-                onNaechsterTeil = { ab -> teilAb = ab; teilLauf++ },
+                onNaechsterTeil = { ab -> teilAb = ab; uebernahme = null; startHinweis = null; teilLauf++ },
+                // Eine andere Fassung mitten im Film: an derselben Stelle weiter,
+                // mit derselben Ton- und Untertitelsprache — wie im Browser.
+                onFassung = { dateiId, ab, spuren, alteWahl, hinweis ->
+                    fassungFuer = aktuell.id to dateiId
+                    uebernahme = spuren to alteWahl
+                    startHinweis = hinweis
+                    teilAb = ab
+                    teilLauf++
+                },
                 onNaechstes = { naechstes?.let { weiter(it) } },
                 onAbbrechen = { abgelehntFuer = aktuell.id; naechstes = null },
                 // „Nächste Folge" oder eine Folge aus dem Folgen-Feld.
-                onWechsel = { neu -> naechstes = null; startAb = null; teilAb = null; aktuell = neu },
+                onWechsel = { neu -> naechstes = null; startAb = null; teilAb = null; uebernahme = null; startHinweis = null; aktuell = neu },
                 onClose = onClose,
             )
         }
@@ -163,7 +183,7 @@ fun PlayerScreen(model: LumenViewModel, start: Abspielen, onClose: () -> Unit) {
 }
 
 /** Welches Feld über dem Bild offen ist — oder keines. */
-private enum class Offen { TON, UNTERTITEL, FOLGEN }
+private enum class Offen { TON, UNTERTITEL, FOLGEN, QUALITAET }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -172,11 +192,14 @@ private fun Wiedergabe(
     item: Item,
     abSekunden: Double?,
     dateiId: String?,
+    uebernahme: Pair<List<Track>, Spuren.Wahl>?,
+    startHinweis: String?,
     unterzeile: String?,
     naechstes: AmStueck.Naechstes?,
     onAbspann: (Item) -> Unit,
     onEnded: (Item) -> Unit,
     onNaechsterTeil: (Double) -> Unit,
+    onFassung: (String, Double, List<Track>, Spuren.Wahl, String) -> Unit,
     onNaechstes: () -> Unit,
     onAbbrechen: () -> Unit,
     onWechsel: (Item) -> Unit,
@@ -207,6 +230,12 @@ private fun Wiedergabe(
     // Vorschaubilder fürs Spulen, und wo gerade gespult wird (null: gar nicht).
     var trickplay by remember { mutableStateOf<Trickplay?>(null) }
     var spultBei by remember { mutableStateOf<Long?>(null) }
+    // „Qualität": die Stufe für dieses Gerät (Original, 1080p · 8 Mbit/s …,
+    // Auto), die Fassungen des Titels, welche läuft und welche Standard ist.
+    var stufe by remember { mutableStateOf(Qualitaetswahl.lesen(context)) }
+    var fassungen by remember { mutableStateOf<List<MediaFile>>(emptyList()) }
+    var fassungId by remember { mutableStateOf<String?>(null) }
+    var standardId by remember { mutableStateOf<String?>(null) }
 
     // Ton und Untertitel: was gewählt ist, und ob das Feld dazu offen ist.
     var wahl by remember { mutableStateOf(Spuren.Wahl()) }
@@ -265,6 +294,9 @@ private fun Wiedergabe(
     // Datei noch nicht da war. Gelesen wird darum immer der aktuelle Stand.
     fun spuren(): List<Track> = datei?.tracks ?: emptyList()
 
+    /** Das Geräteprofil mit den Grenzen der gewählten Stufe — für Plan und Strom. */
+    fun profil(): DeviceProfile = Qualitaet.profil(stufe, datei?.height)
+
     /**
      * Das MediaItem: der Strom mit der gewünschten Tonspur, und die
      * fertigen Text-Untertitel seitlich dazu. Die gewählte Spur bekommt den
@@ -273,7 +305,7 @@ private fun Wiedergabe(
     fun mediaItem(): MediaItem? {
         val d = datei ?: return null
         val p = plan ?: return null
-        val adresse = model.client.streamUrl(d, p, wahl.ton)
+        val adresse = model.client.streamUrl(d, p, wahl.ton, profil())
         val untertitel = Spuren.text(d.tracks).filter { it.index in utBereit }.map { t ->
             MediaItem.SubtitleConfiguration.Builder(
                 android.net.Uri.parse(model.client.subtitleUrl(d.id, t.index)))
@@ -377,6 +409,71 @@ private fun Wiedergabe(
         }
     }
 
+    /**
+     * Eine andere Stufe: dieselbe Datei an derselben Stelle neu holen, mit
+     * den neuen Grenzen. Ton und Untertitel bleiben, wie sie sind.
+     */
+    fun qualitaetWaehlen(id: String) {
+        val vorher = profil()
+        stufe = id
+        Qualitaetswahl.merken(context, id)
+        offen = null
+        val d = datei ?: return
+        val neu = profil()
+        if (neu == vorher) return
+        scope.launch {
+            val pl = model.abfragen { it.wiedergabeVorbereiten(d.id, neu) }
+            val neuerPlan = pl.wert
+            if (neuerPlan == null) {
+                kurzHinweis = pl.fehler ?: tx(R.string.der_server_konnte_die_wiedergabe)
+            } else {
+                plan = neuerPlan
+                umgewandelt = !neuerPlan.direct
+                player?.let { p ->
+                    val spielte = p.playWhenReady
+                    laden(p, p.currentPosition)
+                    p.playWhenReady = spielte
+                }
+                kurzHinweis = tx(R.string.pl_qualitaet_x, Qualitaet.name(Qualitaet.wirksam(stufe, d.height)))
+            }
+            delay(2500)
+            kurzHinweis = null
+        }
+    }
+
+    /**
+     * Eine andere Fassung (Datei) desselben Titels: an derselben Stelle
+     * weiter, mit derselben Ton- und Untertitelsprache. Der Fortschritt
+     * gehört zum Titel, nicht zur Datei — er bleibt.
+     */
+    fun fassungWechseln(f: MediaFile) {
+        offen = null
+        if (f.id == fassungId) return
+        val p = player ?: return
+        val stelle = gesamtStelle(p.currentPosition / 1000.0)
+        val i = fassungen.indexOfFirst { it.id == f.id }
+        val name = Fassungen.namen(fassungen).getOrNull(i) ?: ""
+        standSichern()
+        onFassung(f.id, stelle, spuren(), wahl, tx(R.string.pl_fassung_x, name))
+    }
+
+    /** Verwaltung: die laufende Fassung für alle zum Standard machen. */
+    fun alsStandard() {
+        val id = fassungId ?: return
+        offen = null
+        scope.launch {
+            val r = model.abfragen { it.fassungAlsStandard(item.id, id) }
+            if (r.fehler == null) {
+                standardId = id
+                kurzHinweis = tx(R.string.pl_gilt_fuer_alle)
+            } else {
+                kurzHinweis = r.fehler
+            }
+            delay(2500)
+            kurzHinweis = null
+        }
+    }
+
     /** Den Stand sichern und zu einer anderen Folge wechseln. */
     fun wechseln(neu: Item) {
         if (neu.id == item.id) return
@@ -434,7 +531,7 @@ private fun Wiedergabe(
         // Mit dem Plan ein frischer Medienschlüssel: der Film läuft Stunden,
         // und der Abspieler lädt die ganze Zeit mit derselben Adresse nach.
         // Lehnt der Server ab (etwa: Bildschirmzeit um), steht sein Satz da.
-        val vorbereitet = model.abfragen { it.wiedergabeVorbereiten(f.id) }
+        val vorbereitet = model.abfragen { it.wiedergabeVorbereiten(f.id, Qualitaet.profil(stufe, f.height)) }
         val pl = vorbereitet.wert
         if (pl == null) {
             fehler = vorbereitet.fehler ?: tx(R.string.der_server_konnte_die_wiedergabe)
@@ -446,6 +543,9 @@ private fun Wiedergabe(
         teile = alle
         teil = stelle.teil
         vorher = stelle.vorher
+        fassungen = Fassungen.liste(d.files)
+        fassungId = erste.id
+        standardId = fassungen.firstOrNull()?.id
         // Der Vorspann liegt im ersten Teil; in Teil 2 wäre die Marke falsch.
         // Es gelten die Marken der Fassung, die wirklich läuft (jeDatei).
         val marken = d.marken(erste.id)
@@ -453,6 +553,15 @@ private fun Wiedergabe(
         abspannMs = marken.creditsMs
         umgewandelt = !pl.direct
         wahl = Spuren.vorbelegen(f.tracks, model.me?.prefs ?: emptyMap())
+        // Nach einem Fassungswechsel: Ton und Untertitel nach Sprache übernehmen.
+        uebernahme?.let { (alteSpuren, alteWahl) -> wahl = Spuren.uebernehmen(alteSpuren, alteWahl, f.tracks, wahl) }
+        startHinweis?.let { h ->
+            scope.launch {
+                kurzHinweis = h
+                delay(2500)
+                if (kurzHinweis == h) kurzHinweis = null
+            }
+        }
 
         // Ist die vorgewählte Untertitelspur schon fertig, kommt sie gleich
         // mit; sonst startet der Film ohne, und sie folgt, sobald sie da ist.
@@ -488,7 +597,7 @@ private fun Wiedergabe(
                             val stelle = p.currentPosition
                             val dateiJetzt = datei
                             scope.launch {
-                                val neuerPlan = dateiJetzt?.let { d -> model.abfragen { it.wiedergabeVorbereiten(d.id) }.wert }
+                                val neuerPlan = dateiJetzt?.let { d -> model.abfragen { it.wiedergabeVorbereiten(d.id, profil()) }.wert }
                                 if (neuerPlan != null) {
                                     plan = neuerPlan
                                     laden(p, stelle)
@@ -521,7 +630,7 @@ private fun Wiedergabe(
                             p.pause()
                             val dateiJetzt = datei
                             scope.launch {
-                                val grund = dateiJetzt?.let { d -> model.abfragen { it.plan(d.id) }.fehler }
+                                val grund = dateiJetzt?.let { d -> model.abfragen { it.plan(d.id, profil()) }.fehler }
                                 fehler = grund ?: tx(R.string.der_strom_ist_abgerissen_x, error.errorCodeName)
                             }
                             return
@@ -676,6 +785,35 @@ private fun Wiedergabe(
     /** Die Abschnitte des offenen Felds. */
     fun abschnitte(feld: Offen): List<Spurabschnitt> = when (feld) {
         Offen.FOLGEN -> emptyList()
+        // Wie im Browser (qualitaetPanel): oben die Fassungen, darunter die
+        // Stufen fürs Umwandeln, für Verwalter „Diese Fassung als Standard".
+        Offen.QUALITAET -> buildList {
+            val standard = standardId ?: fassungen.firstOrNull()?.id
+            if (fassungen.size > 1) {
+                val namen = Fassungen.namen(fassungen)
+                add(Spurabschnitt(tx(R.string.pl_fassung), fassungen.mapIndexed { i, f ->
+                    Spureintrag(if (f.id == standard) namen[i] + " · " + tx(R.string.pl_standard) else namen[i],
+                        gewaehlt = f.id == fassungId, onClick = { fassungWechseln(f) })
+                }))
+            }
+            val quelle = datei?.height
+            val jetzt = Qualitaet.wirksam(stufe, quelle)
+            add(Spurabschnitt(tx(R.string.pl_qualitaet), buildList {
+                val herkunft = Fassungen.aufloesung(quelle)
+                add(Spureintrag(Qualitaet.name(Qualitaet.ORIGINAL) + (herkunft?.let { " · $it" } ?: ""),
+                    gewaehlt = jetzt == Qualitaet.ORIGINAL, onClick = { qualitaetWaehlen(Qualitaet.ORIGINAL) }))
+                Qualitaet.stufenFuer(quelle).forEach { st ->
+                    add(Spureintrag(Qualitaet.name(st.id), gewaehlt = jetzt == st.id, onClick = { qualitaetWaehlen(st.id) }))
+                }
+                add(Spureintrag(Qualitaet.name(Qualitaet.AUTO), gewaehlt = jetzt == Qualitaet.AUTO,
+                    onClick = { qualitaetWaehlen(Qualitaet.AUTO) }))
+            }))
+            if (model.isAdmin && fassungen.size > 1) {
+                add(Spurabschnitt(tx(R.string.pl_fuer_alle), listOf(
+                    if (fassungId == standard) Spureintrag(tx(R.string.pl_ist_standard), gedaempft = true)
+                    else Spureintrag(tx(R.string.pl_als_standard), onClick = { alsStandard() }))))
+            }
+        }
         Offen.TON -> buildList {
             val ton = Spuren.ton(spuren())
             if (ton.size > 1) {
@@ -798,8 +936,7 @@ private fun Wiedergabe(
                      overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 // Bei einem Film in Teilen: „Teil 2 von 3".
                 val unten = unterzeile ?: teile?.beschriftung(teil) ?: if (istFolge)
-                    listOfNotNull(item.seasonNo?.let { tx(R.string.staffel_x, it) }, item.episodeNo?.let { tx(R.string.folge_x, it) })
-                        .joinToString(", ") else ""
+                    Titelseite.folgenKennung(item) else ""
                 if (unten.isNotEmpty()) Text(unten, fontSize = 12.sp, color = Lumen.label2)
             }
         }
@@ -821,7 +958,8 @@ private fun Wiedergabe(
         // es etwas zu wählen gibt (oder der Vorspann zu markieren ist).
         val zeigeTon = Spuren.ton(spuren()).size > 1
         val zeigeText = Spuren.text(spuren()).isNotEmpty()
-        if (p != null && (steuerungSichtbar || offen != null) && (zeigeTon || zeigeText || istFolge) &&
+        // „Qualität" (Zahnrad) gibt es immer: Stufen fürs Umwandeln, dazu die Fassungen.
+        if (p != null && (steuerungSichtbar || offen != null) &&
             naechstes == null && !imFenster) {
             Row(
                 Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 92.dp),
@@ -844,6 +982,9 @@ private fun Wiedergabe(
                     SpurKnopf(Spurfeld.TON, offen == Offen.TON) {
                         offen = if (offen == Offen.TON) null else Offen.TON
                     }
+                }
+                SpurKnopf(Spurfeld.QUALITAET, offen == Offen.QUALITAET) {
+                    offen = if (offen == Offen.QUALITAET) null else Offen.QUALITAET
                 }
             }
         }

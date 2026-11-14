@@ -24,10 +24,10 @@ import Foundation
 /// die Tests jeden Fall ohne Gerät nachstellen können.
 public enum Fassungen {
 
-    /// Die Fassungen: jede vorhandene Datei, die als Teil 1 gilt — in der
+    /// Die Fassungen: jede vorhandene, nicht defekte Datei, die als Teil 1 gilt — in der
     /// Reihenfolge des Servers.
     public static func liste(_ dateien: [MediaFile]) -> [MediaFile] {
-        dateien.filter { !$0.isMissing && $0.partNo <= 1 }
+        dateien.filter { $0.nutzbar && $0.partNo <= 1 }
     }
 
     /// Ob „Ansehen" erst nach der Qualität fragen muss.
@@ -66,14 +66,39 @@ public enum Fassungen {
         return teile.joined(separator: " · ")
     }
 
+    /// Die Fassungen beschriftet wie im Player des Browsers (app.js,
+    /// fassungNamen): Auflösung, Sprache der ersten Tonspur, Format und
+    /// gegebenenfalls die Edition — „1080p · Englisch · MKV". Zwei gleich
+    /// beschriftete unterscheidet die Grösse; ohne alles „Fassung 2".
+    public static func namen(_ fassungen: [MediaFile]) -> [String] {
+        let namen: [String] = fassungen.map { f in
+            var teile: [String] = []
+            if let a = aufloesung(f.height) { teile.append(a) }
+            if let ton = f.tonspuren.first, let code = ton.language, !code.isEmpty, code != "und" {
+                teile.append(Spuren.sprachName(code))
+            }
+            if let c = f.container, !c.isEmpty { teile.append(c.uppercased()) }
+            if let e = f.edition, !e.isEmpty { teile.append(e) }
+            return teile.joined(separator: " · ")
+        }
+        return namen.enumerated().map { i, n in
+            var name = n
+            if !n.isEmpty, namen.filter({ $0 == n }).count > 1, let g = groesse(fassungen[i].sizeBytes) {
+                name = n + " · " + g
+            }
+            let nummer: Int = i + 1
+            return name.isEmpty ? String(localized: "Fassung \(nummer)", bundle: .lumenKit, locale: .lumen) : name
+        }
+    }
+
     /// Welche Datei spielt: die gewählte, solange es sie noch gibt — sonst
     /// die erste vorhandene, wie bisher. Eine Kennung aus einer älteren
     /// Auswahl, die inzwischen fehlt, soll nicht ins Leere führen.
     public static func datei(_ dateien: [MediaFile], gewaehlt: String?) -> MediaFile? {
-        if let gewaehlt, let f = dateien.first(where: { $0.id == gewaehlt && !$0.isMissing }) {
+        if let gewaehlt, let f = dateien.first(where: { $0.id == gewaehlt && $0.nutzbar }) {
             return f
         }
-        return dateien.first { !$0.isMissing }
+        return dateien.first { $0.nutzbar && $0.partNo <= 1 } ?? dateien.first { $0.nutzbar }
     }
 
     /// Die Teile, die zu `erste` gehören: Teil 1 ist die gewählte Datei
@@ -85,7 +110,7 @@ public enum Fassungen {
         while true {
             let t: MediaFile? = nr == 1 && erste.partNo <= 1
                 ? erste
-                : dateien.first(where: { !$0.isMissing && max(1, $0.partNo) == nr })
+                : dateien.first(where: { $0.nutzbar && max(1, $0.partNo) == nr })
             guard let t else { break }
             liste.append(t)
             nr += 1

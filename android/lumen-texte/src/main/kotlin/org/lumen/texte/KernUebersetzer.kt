@@ -94,7 +94,10 @@ internal object KernUebersetzer : Uebersetzer {
         Tx.N_GESEHEN -> R.string.kern_n_gesehen
         Tx.REIHE_TMDB -> R.string.kern_reihe_tmdb
         Tx.REIHE_LUMEN -> R.string.kern_reihe_lumen
+        Tx.REIHE_NFO -> R.string.kern_reihe_nfo
+        Tx.REIHE_EMBY -> R.string.kern_reihe_emby
         Tx.TOMATEN -> R.string.kern_tomaten
+        Tx.TMDB_WERTUNG -> R.string.kern_tmdb_wertung
         Tx.DATEI_FEHLT -> R.string.kern_datei_fehlt
         Tx.GERAET_TV -> R.string.kern_geraet_tv
         Tx.GERAET_HANDY -> R.string.kern_geraet_handy
@@ -157,6 +160,14 @@ internal object KernUebersetzer : Uebersetzer {
         Tx.BZ_OHNE_GRENZE -> R.string.kern_bz_ohne_grenze
         Tx.BZ_GEBRAUCHT -> R.string.kern_bz_gebraucht
         Tx.BZ_FENSTER -> R.string.kern_bz_fenster
+        Tx.WUNSCH_SCHON_DABEI -> R.string.kern_wunsch_schon_dabei
+        Tx.WUNSCH_SCHON_EIGEN -> R.string.kern_wunsch_schon_eigen
+        Tx.WUNSCH_GESCHICKT -> R.string.kern_wunsch_geschickt
+        Tx.QUALITAET_ORIGINAL -> R.string.kern_qualitaet_original
+        Tx.QUALITAET_AUTO -> R.string.kern_qualitaet_auto
+        Tx.MBIT_S -> R.string.kern_mbit_s
+        Tx.FASSUNG_N -> R.string.kern_fassung_n
+        Tx.SPECIAL -> R.string.kern_special
     }
 
     private fun id(k: TxN): Int = when (k) {

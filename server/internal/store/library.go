@@ -733,6 +733,10 @@ func dateiEintragen(ctx context.Context, t *sql.Tx, f *MediaFile) error {
 	return nil
 }
 
+// FilesFor: die Dateien eines Titels nach Teil, dann die bevorzugte und die
+// mit der höchsten Auflösung vorn. Defekte Dateien (leer, gesperrt, kaputt)
+// stehen je Teil hinten — auch eine defekte bevorzugte —, damit die Apps,
+// die die erste Datei als Standard nehmen, nie mit einer defekten beginnen.
 func (s *Store) FilesFor(ctx context.Context, itemID string) ([]MediaFile, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, item_id, path, size_bytes, mtime, part_no, COALESCE(edition,''),
@@ -743,6 +747,7 @@ func (s *Store) FilesFor(ctx context.Context, itemID string) ([]MediaFile, error
 		        COALESCE(defekt,'')
 		   FROM media_file WHERE item_id = ?
 		  ORDER BY part_no,
+		           COALESCE(defekt,'') <> '',
 		           id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), '') DESC,
 		           COALESCE(height,0) DESC, size_bytes DESC`, itemID)
 	if err != nil {

@@ -17,6 +17,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -234,6 +236,8 @@ internal fun TvNeuigkeiten(
 ) {
     var daten by remember { mutableStateOf<Neuigkeiten?>(null) }
     var fehler by remember { mutableStateOf<String?>(null) }
+    // Welcher „{n} neue Titel"-Eintrag aufgeklappt ist.
+    var auf by remember { mutableStateOf<Int?>(null) }
     val scope = rememberCoroutineScope()
     val anfang = remember { FocusRequester() }
 
@@ -291,15 +295,34 @@ internal fun TvNeuigkeiten(
         }
         LazyColumn(Modifier.widthIn(max = 980.dp), contentPadding = PaddingValues(bottom = 48.dp)) {
             itemsIndexed(d.eintraege) { i, n ->
-                TvNeuigkeitZeile(n, d.istNeu(n),
-                    if (i == 0) Modifier.focusRequester(anfang) else Modifier) { oeffnen(n) }
+                val offen = n.klappbar && auf == i
+                TvNeuigkeitZeile(n, d.istNeu(n), offen,
+                    if (i == 0) Modifier.focusRequester(anfang) else Modifier) {
+                    // „{n} neue Titel": aufklappen statt zur Startseite — wie im Browser.
+                    if (n.klappbar) auf = if (offen) null else i else oeffnen(n)
+                }
+                if (offen) {
+                    // Mit der Fernbedienung: Pfeil nach unten in die Poster,
+                    // nach rechts durch die Titel, OK öffnet die Titelseite.
+                    Column(Modifier.padding(start = 20.dp, bottom = 12.dp)) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
+                            items(n.titelListe, key = { it.id }) { t ->
+                                TvCard(client, t, onFocus = {}, onClick = { onOpen(t) }, breite = 160.dp)
+                            }
+                        }
+                        if (n.weitere > 0) {
+                            Text(tx(R.string.neu_und_weitere, n.weitere), color = Tv.label2, fontSize = 16.sp)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TvNeuigkeitZeile(n: Neuigkeit, neu: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun TvNeuigkeitZeile(n: Neuigkeit, neu: Boolean, offen: Boolean, modifier: Modifier, onClick: () -> Unit) {
     var fokussiert by remember { mutableStateOf(false) }
     Row(
         modifier
@@ -328,6 +351,10 @@ private fun TvNeuigkeitZeile(n: Neuigkeit, neu: Boolean, modifier: Modifier, onC
         }
         if (neu) {
             Box(Modifier.padding(start = 12.dp).size(12.dp).clip(CircleShape).background(Color(0xFFFF453A)))
+        }
+        if (n.klappbar) {
+            Text(if (offen) "▴" else "▾", fontSize = 20.sp, color = hinten, // sprache: fest
+                 modifier = Modifier.padding(start = 14.dp))
         }
     }
 }

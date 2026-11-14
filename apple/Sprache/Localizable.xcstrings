@@ -480,9 +480,6 @@
         }
       }
     },
-    "%lld" : {
-      "shouldTranslate" : false
-    },
     "%lld Bibliotheken" : {
       "localizations" : {
         "de" : {
@@ -1694,9 +1691,6 @@
           }
         }
       }
-    },
-    "%lld. %@" : {
-      "shouldTranslate" : false
     },
     "1 Film" : {
       "localizations" : {
@@ -6650,62 +6644,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fingerprint (64 characters)"
-          }
-        }
-      }
-    },
-    "Folge %lld: %@" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Folge %lld: %@"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Folge %lld: %@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Episode %lld: %@"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Episode %lld: %@"
-          }
-        }
-      }
-    },
-    "Folge %lld: %@, gesehen" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Folge %lld: %@, gesehen"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Folge %lld: %@, gesehen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Episode %lld: %@, watched"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Episode %lld: %@, watched"
           }
         }
       }
@@ -17160,34 +17098,6 @@
         }
       }
     },
-    "Wunsch an den Besitzer geschickt" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wunsch an den Besitzer geschickt"
-          }
-        },
-        "de-AT" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wunsch an den Besitzer geschickt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Request sent to the owner"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Request sent to the owner"
-          }
-        }
-      }
-    },
     "Wähle zuerst im Hauptfenster ein Profil." : {
       "localizations" : {
         "de" : {
@@ -19951,6 +19861,566 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "… and Ends Here"
+          }
+        }
+      }
+    },
+    "Nicht mehr wünschen" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr wünschen"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr wünschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdraw request"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdraw request"
+          }
+        }
+      }
+    },
+    "Nicht mehr wünschen?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr wünschen?"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht mehr wünschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdraw request?"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdraw request?"
+          }
+        }
+      }
+    },
+    "Wunsch löschen?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wunsch löschen?"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wunsch löschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete request?"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete request?"
+          }
+        }
+      }
+    },
+    "Du bist dann bei „%@“ nicht mehr dabei. Der Wunsch der anderen bleibt." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du bist dann bei „%@“ nicht mehr dabei. Der Wunsch der anderen bleibt."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du bist dann bei „%@“ nicht mehr dabei. Der Wunsch der anderen bleibt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will no longer be part of “%@”. The others’ request stays."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You will no longer be part of ‘%@’. The others’ request stays."
+          }
+        }
+      }
+    },
+    "„%@“ verschwindet aus der Liste." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ verschwindet aus der Liste."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ verschwindet aus der Liste."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” will be removed from the list."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘%@’ will be removed from the list."
+          }
+        }
+      }
+    },
+    "und %lld weitere — alle unter „Filme“ und „Serien“, sortiert nach „Hinzugefügt“." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "und %lld weitere — alle unter „Filme“ und „Serien“, sortiert nach „Hinzugefügt“."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "und %lld weitere — alle unter „Filme“ und „Serien“, sortiert nach „Hinzugefügt“."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "and %lld more — see all under “Movies” and “TV Shows”, sorted by “Date Added”."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "and %lld more — see all under “Films” and “TV Programmes”, sorted by “Date Added”."
+          }
+        }
+      }
+    },
+    "Qualität" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualität"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualität"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quality"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quality"
+          }
+        }
+      }
+    },
+    "Für alle" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für alle"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für alle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For everyone"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For everyone"
+          }
+        }
+      }
+    },
+    "Diese Fassung ist der Standard." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Fassung ist der Standard."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Fassung ist der Standard."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version is the default."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version is the default."
+          }
+        }
+      }
+    },
+    "Diese Fassung als Standard nehmen" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Fassung als Standard nehmen"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Fassung als Standard nehmen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make this version the default"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make this version the default"
+          }
+        }
+      }
+    },
+    "Gilt jetzt für alle" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt jetzt für alle"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt jetzt für alle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now applies to everyone"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now applies to everyone"
+          }
+        }
+      }
+    },
+    "Doppelt oder falsch zugeordnet · %lld" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doppelt oder falsch zugeordnet · %lld"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doppelt oder falsch zugeordnet · %lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicates or wrongly matched · %lld"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicates or wrongly matched · %lld"
+          }
+        }
+      }
+    },
+    "„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Dieselbe Datei mehrfach“: gleiche Größe und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heißen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Dieselbe Datei mehrfach“: gleiche Größe und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heißen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“The same file more than once”: same size and running time in two folders – one copy can go (Lumen never deletes files). “Different movies”: the files are named after different movies – split off the wrong one. Real versions (language, quality) are not listed here; you pick them in the player under “Quality”."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘The same file more than once’: same size and running time in two folders – one copy can go (Lumen never deletes files). ‘Different films’: the files are named after different films – split off the wrong one. Real versions (language, quality) are not listed here; you pick them in the player under ‘Quality’."
+          }
+        }
+      }
+    },
+    "· verschiedene Filme an einem Eintrag" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· verschiedene Filme an einem Eintrag"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· verschiedene Filme an einem Eintrag"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· different movies under one title"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· different films under one title"
+          }
+        }
+      }
+    },
+    "· dieselbe Datei mehrfach" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· dieselbe Datei mehrfach"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· dieselbe Datei mehrfach"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· the same file more than once"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "· the same file more than once"
+          }
+        }
+      }
+    },
+    "doppelt — eine kann weg" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "doppelt — eine kann weg"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "doppelt — eine kann weg"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "duplicate — one can go"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "duplicate — one can go"
+          }
+        }
+      }
+    },
+    "gewählt" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gewählt"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gewählt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "selected"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "selected"
+          }
+        }
+      }
+    },
+    "Diese nehmen" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese nehmen"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese nehmen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use This One"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use This One"
+          }
+        }
+      }
+    },
+    "Abtrennen" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abtrennen"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abtrennen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Split Off"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Split Off"
+          }
+        }
+      }
+    },
+    "Ist ein anderer Film — als eigenen Titel führen" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ist ein anderer Film — als eigenen Titel führen"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ist ein anderer Film — als eigenen Titel führen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It’s a different movie — keep it as a separate title"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It’s a different film — keep it as a separate title"
           }
         }
       }

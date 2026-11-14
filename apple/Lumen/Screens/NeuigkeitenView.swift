@@ -76,6 +76,20 @@ struct NeuigkeitenView: View {
 
         if let itemId = n.itemId, !itemId.isEmpty {
             NavigationLink { DetailView(itemId: itemId) } label: { inhalt }
+        } else if n.klappbar {
+            // „{n} neue Titel": aufklappen und die Titel mit Poster zeigen —
+            // wie im Browser, statt ins Leere zu führen.
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 8) {
+                    RailInhalt(items: n.titelListe ?? [])
+                        .padding(.horizontal, -20)
+                    if n.weitere > 0 {
+                        Text("und \(n.weitere) weitere — alle unter „Filme“ und „Serien“, sortiert nach „Hinzugefügt“.")
+                            .font(.caption).foregroundStyle(Theme.label2)
+                    }
+                }
+                .padding(.vertical, 6)
+            } label: { inhalt }
         } else {
             inhalt
         }

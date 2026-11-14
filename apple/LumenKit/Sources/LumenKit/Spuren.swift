@@ -70,6 +70,33 @@ public enum Spuren {
     /// Untertitelspur in der gewünschten Sprache (`prefs.untertitel`,
     /// „aus" heisst aus). Will niemand Untertitel, laufen erzwungene
     /// Untertitel in der Sprache des Tons trotzdem mit — dafür sind sie da.
+    /// Die Wahl aus der vorigen Fassung auf die Spuren dieser übertragen —
+    /// nach Sprache (und Kanälen, Merkmalen), nicht nach Nummer. Wie im
+    /// Browser (app.js, spurenUebernehmen) und auf Android
+    /// (Spuren.uebernehmen): Gibt es die Sprache hier nicht, bleibt die
+    /// Vorbelegung. Untertitel „aus" (nil) bleibt aus.
+    public static func uebernehmen(alterTon: Track?, alterUntertitel: Track?, untertitelAus: Bool,
+                                   ton: [Track], text: [Track],
+                                   vorbelegt: (ton: Int?, untertitel: Int?)) -> (ton: Int?, untertitel: Int?) {
+        var tonIndex = vorbelegt.ton
+        if let alt = alterTon, let sprache = alt.language, !sprache.isEmpty {
+            let gleich = ton.first { $0.language == sprache && ($0.channels ?? 0) == (alt.channels ?? 0) }
+                ?? ton.first { $0.language == sprache }
+            if let gleich { tonIndex = gleich.index }
+        }
+        var untertitel = vorbelegt.untertitel
+        if untertitelAus {
+            untertitel = nil
+        } else if let u = alterUntertitel {
+            let passt: (Track) -> Bool = { ($0.language ?? "") == (u.language ?? "") && $0.isForced == u.isForced }
+            if let neu = text.first(where: { passt($0) && $0.isHearingImpaired == u.isHearingImpaired })
+                ?? text.first(where: passt) {
+                untertitel = neu.index
+            }
+        }
+        return (tonIndex, untertitel)
+    }
+
     public static func vorbelegung(ton: [Track], text: [Track],
                                    prefs: [String: String]) -> (ton: Int?, untertitel: Int?) {
         var tonIndex: Int?

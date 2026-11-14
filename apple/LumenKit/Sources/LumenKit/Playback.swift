@@ -59,6 +59,24 @@ public final class Playback {
     /// „Teil 2 von 3" — bei einer einzelnen Datei nil.
     public var teilBeschriftung: String? { teile?.beschriftung(teil) }
 
+    // MARK: Qualität und Fassung
+
+    /// Die Fassungen des Titels (Dateien von Teil 1), welche läuft und
+    /// welche der Standard ist — für „Qualität" im Player, wie im Browser.
+    public private(set) var fassungen: [MediaFile] = []
+    public private(set) var fassungId: String?
+    public private(set) var standardId: String?
+    /// Die Stufe unter „Qualität" für dieses Gerät: Original, eine der
+    /// `Qualitaet.stufen` oder Auto.
+    public private(set) var stufe: String = Qualitaet.gemerkt
+    /// Die Stufe, die für die laufende Datei wirklich gilt.
+    public var stufeWirksam: String { Qualitaet.wirksam(stufe, quellHoehe: file?.height) }
+    /// Das Geräteprofil mit den Grenzen der Stufe — für Plan und Strom.
+    private var profil: DeviceProfile { Qualitaet.profil(stufe, quellHoehe: file?.height) }
+    /// Ton und Untertitel der vorigen Fassung — nach einem Wechsel der
+    /// Fassung nach Sprache übernommen, dann vergessen.
+    @ObservationIgnored private var uebernahme: (ton: Track?, untertitel: Track?, aus: Bool)?
+
     /// Ob dies der letzte (oder einzige) Teil ist. Erst danach ist der Film
     /// gesehen, und erst dort beginnt der Abspann.
     public var letzterTeil: Bool { teile?.istLetzter(teil) ?? true }
@@ -186,6 +204,9 @@ public final class Playback {
         // AVPlayer an: Ton aus dem Nichts, und der Server wandelt weiter um.
         lauf &+= 1
         let meiner = lauf
+        // Ton und Untertitel einer vorigen Fassung gelten nur für diesen Start.
+        let uebernommen = uebernahme
+        uebernahme = nil
         await aufraeumen()
         guard gilt(meiner) else { return await verwerfen(meiner) }
         gewaehlteDatei = datei
@@ -213,8 +234,11 @@ public final class Playback {
             teile = alle
             teil = stelle.teil
             vorher = stelle.vorher
+            fassungen = Fassungen.liste(detail.files)
+            fassungId = erste.id
+            standardId = fassungen.first?.id
 
-            let planResponse = try await client.plan(fileId: file.id)
+            let planResponse = try await client.plan(fileId: file.id, profil: profil)
             guard gilt(meiner) else { return await verwerfen(meiner) }
             self.plan = planResponse.plan
 
@@ -224,7 +248,12 @@ public final class Playback {
             // Spuren und Vorbelegung nach den gemerkten Sprachen.
             tonspuren = file.tonspuren
             textspuren = file.textspuren
-            let vor = Spuren.vorbelegung(ton: tonspuren, text: textspuren, prefs: prefs)
+            var vor = Spuren.vorbelegung(ton: tonspuren, text: textspuren, prefs: prefs)
+            // Nach einem Fassungswechsel: Ton und Untertitel nach Sprache übernehmen.
+            if let alt = uebernommen {
+                vor = Spuren.uebernehmen(alterTon: alt.ton, alterUntertitel: alt.untertitel, untertitelAus: alt.aus,
+                                         ton: tonspuren, text: textspuren, vorbelegt: vor)
+            }
             tonspur = vor.ton == tonspuren.first?.index ? nil : vor.ton
             untertitelSpur = vor.untertitel
 
@@ -245,7 +274,7 @@ public final class Playback {
 
             try await schluesselFrisch()
             guard gilt(meiner) else { return await verwerfen(meiner) }
-            let url = await client.streamURL(for: file, plan: planResponse.plan, spur: tonspur)
+            let url = await client.streamURL(for: file, plan: planResponse.plan, spur: tonspur, profil: profil)
             guard gilt(meiner) else { return await verwerfen(meiner) }
             laeuftUeberHLS = APIClient.istHLS(url)
             try await play(url: url, from: start, lauf: meiner)
@@ -589,17 +618,21 @@ public final class Playback {
             // Nur diese Antwort hält auf — bei jedem anderen Fehler (Netz
             // kurz weg, Server beschäftigt) geht es wie früher mit dem
             // bisherigen Plan weiter.
+            // Kommt der Plan, gilt er — nach einem Wechsel der Stufe unter
+            // „Qualität" ist er ein anderer als vorher.
+            var aktuell = plan
             do {
-                _ = try await client.plan(fileId: file.id)
+                aktuell = try await client.plan(fileId: file.id, profil: profil).plan
             } catch let fehler as LumenError where fehler.code == APIClient.bildschirmzeit {
                 throw fehler
             } catch {
                 // weiter mit dem bisherigen Plan
             }
             guard gilt(meiner) else { return }
+            self.plan = aktuell
             try await schluesselFrisch()
             guard gilt(meiner) else { return }
-            let url = await client.streamURL(for: file, plan: plan, spur: tonspur)
+            let url = await client.streamURL(for: file, plan: aktuell, spur: tonspur, profil: profil)
             guard gilt(meiner) else { return }
             laeuftUeberHLS = APIClient.istHLS(url)
             try await play(url: url, from: stelle.isFinite ? stelle : 0, lauf: meiner)
@@ -647,6 +680,9 @@ public final class Playback {
     #endif
 
     private func spurenZuruecksetzen() {
+        fassungen = []
+        fassungId = nil
+        standardId = nil
         tonspuren = []
         textspuren = []
         tonspur = nil
@@ -676,6 +712,39 @@ public final class Playback {
         } catch {
             if await client.medienSchluessel == nil { throw error }
         }
+    }
+
+    // MARK: - Qualität und Fassung
+
+    /// Eine andere Stufe: dieselbe Datei an derselben Stelle neu holen, mit
+    /// den neuen Grenzen. Ton und Untertitel bleiben, wie sie sind. Die
+    /// Stufe gilt für dieses Gerät und wird gemerkt.
+    public func waehleQualitaet(_ id: String) async {
+        let bisher = profil.query()
+        stufe = id
+        Qualitaet.merken(id)
+        guard profil.query() != bisher else { return }
+        await neuOeffnen()
+    }
+
+    /// Eine andere Fassung (Datei) desselben Titels: an derselben Stelle
+    /// weiter, mit derselben Ton- und Untertitelsprache. Der Fortschritt
+    /// gehört zum Titel, nicht zur Datei — er bleibt.
+    public func waehleFassung(_ id: String) async {
+        guard id != fassungId, offline == nil, let item,
+              fassungen.contains(where: { $0.id == id }) else { return }
+        let stelle = vorher + currentTime
+        let ton = tonspuren.first { $0.index == tonspurAktiv }
+        let untertitel = textspuren.first { $0.index == untertitelSpur }
+        uebernahme = (ton: ton, untertitel: untertitel, aus: untertitelSpur == nil)
+        await start(item: item, from: stelle, datei: id)
+    }
+
+    /// Verwaltung: die laufende Fassung für alle zum Standard machen.
+    public func fassungAlsStandard() async throws {
+        guard let item, let fassungId else { return }
+        try await client.adminFassungWaehlen(itemId: item.id, fileId: fassungId)
+        standardId = fassungId
     }
 
     // MARK: - Ton und Untertitel

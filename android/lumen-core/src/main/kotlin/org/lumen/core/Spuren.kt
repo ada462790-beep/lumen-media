@@ -122,6 +122,32 @@ object Spuren {
 
     /** Welche Stelle unter den Tonspuren der Index hat — für Abspieler, die
      *  Spuren nur der Reihe nach kennen. -1, wenn es die Spur nicht gibt. */
+    /**
+     * Die Wahl aus der vorigen Fassung auf die Spuren dieser übertragen —
+     * nach Sprache (und Kanälen, Merkmalen), nicht nach Nummer. Wie im
+     * Browser (app.js, spurenUebernehmen): Gibt es die Sprache hier nicht,
+     * bleibt [vorbelegt]. Untertitel „aus" bleibt aus.
+     */
+    fun uebernehmen(alt: List<Track>, wahl: Wahl, neu: List<Track>, vorbelegt: Wahl): Wahl {
+        val altTon = ton(alt).let { t -> t.firstOrNull { it.index == wahl.ton } ?: if (wahl.ton < 0) t.firstOrNull() else null }
+        var tonIndex = vorbelegt.ton
+        altTon?.language?.takeIf { it.isNotBlank() }?.let { sprache ->
+            val kandidaten = ton(neu)
+            (kandidaten.firstOrNull { it.language == sprache && it.channels == altTon.channels }
+                ?: kandidaten.firstOrNull { it.language == sprache })?.let { tonIndex = it.index }
+        }
+        val untertitel: Int? = if (wahl.untertitel == null) null else {
+            val u = alt.firstOrNull { it.isSubtitle && it.index == wahl.untertitel }
+            if (u == null) vorbelegt.untertitel else {
+                val passt = { x: Track -> (x.language ?: "") == (u.language ?: "") && x.forced == u.forced }
+                val textSpuren = text(neu)
+                (textSpuren.firstOrNull { passt(it) && it.hearingImpaired == u.hearingImpaired }
+                    ?: textSpuren.firstOrNull(passt))?.index ?: vorbelegt.untertitel
+            }
+        }
+        return Wahl(tonIndex, untertitel)
+    }
+
     fun tonPosition(tracks: List<Track>, tonIndex: Int): Int =
         ton(tracks).indexOfFirst { it.index == tonIndex }
 

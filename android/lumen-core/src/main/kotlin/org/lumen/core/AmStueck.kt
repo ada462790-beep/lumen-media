@@ -126,10 +126,7 @@ object AmStueck {
     /** „Nordlicht · Staffel 1, Folge 2: Der Anfang" — oder schlicht der Filmtitel. */
     fun beschriftung(titel: Item, serie: String?): String {
         if (titel.kind != "episode") return titel.title
-        val nummer = buildList {
-            titel.seasonNo?.let { add(Texte.t(Tx.STAFFEL_N, it)) }
-            titel.episodeNo?.let { add(Texte.t(Tx.FOLGE_N, it)) }
-        }.joinToString(", ")
+        val nummer = Titelseite.folgenKennung(titel)
         val vorn = listOfNotNull(serie?.takeIf { it.isNotBlank() }, nummer.ifEmpty { null })
             .joinToString(" · ")
         return if (vorn.isEmpty()) titel.title else "$vorn: ${titel.title}"

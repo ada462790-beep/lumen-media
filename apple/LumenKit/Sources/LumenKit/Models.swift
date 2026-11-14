@@ -197,6 +197,9 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public let laeuftNoch: Bool?
     public let seasonNo: Int?
     public let episodeNo: Int?
+    /// Der Server kann ein Special als solches kennzeichnen. Specials ohne
+    /// eigene Nummer zählt er ab 1000 in Staffel 0 (store.SpecialOhneNummer).
+    public let special: Bool?
     public let overview: String?
     public let ageRating: String?
     public let ageYears: Int?
@@ -207,6 +210,9 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public let imdbVotes: Int?
     /// Rotten Tomatoes: Anteil guter Kritiken in Prozent, wenn bekannt.
     public let rottenTomatoes: Int?
+    /// TMDb: Nutzerwertung in Prozent (0–100) und wie viele abgestimmt haben.
+    public let tmdbRating: Int?
+    public let tmdbVotes: Int?
     public let matchState: String
     public let addedAt: Date
     public let genres: [String]?
@@ -253,6 +259,55 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public var tomatenText: String? {
         guard let p = rottenTomatoes else { return nil }
         return (p >= 60 ? "🍅" : "🟢") + " " + String(localized: "\(p) % Rotten Tomatoes", bundle: .lumenKit, locale: .lumen)
+    }
+
+    /// Ein Special ohne eigene Nummer („S08E00 - The Last Watch"): Der
+    /// Server zählt es ab 1000 in Staffel 0 — die Nummer ist selbst
+    /// vergeben, angezeigt wird „Special" statt „Folge 1001". Echte
+    /// S00Exx (unter 1000) behalten ihre Nummer. Wie im Browser (ohneNummer).
+    public var specialOhneNummer: Bool {
+        guard kind == "episode", (seasonNo ?? 0) == 0 else { return false }
+        if let e = episodeNo { return e >= Item.specialOhneNummerAb }
+        return special == true
+    }
+
+    /// Ab dieser Nummer ist eine Folge in Staffel 0 ein Special ohne eigene Nummer.
+    public static let specialOhneNummerAb = 1000
+
+    /// Die Nummer einer Folge in Listen — leer bei Specials ohne Nummer.
+    public var folgenNummer: String {
+        if specialOhneNummer { return "" }
+        return episodeNo.map(String.init) ?? ""
+    }
+
+    /// „3. Titel" in Folgenlisten, bei Specials ohne Nummer nur der Titel.
+    public var folgenListenName: String {
+        let nr = folgenNummer
+        return nr.isEmpty ? title : nr + ". " + title
+    }
+
+    /// „S1 F2" — oder „Special" bei Specials ohne eigene Nummer; nil ohne Nummern.
+    public var folgenKurz: String? {
+        guard kind == "episode" else { return nil }
+        if specialOhneNummer { return String(localized: "Special", bundle: .lumenKit, locale: .lumen) }
+        guard let staffel = seasonNo, let folge = episodeNo else { return nil }
+        let s: Int = staffel, e: Int = folge
+        return String(localized: "S\(s) F\(e)", bundle: .lumenKit, locale: .lumen)
+    }
+
+    /// „Folge 3: Titel" für VoiceOver, bei Specials ohne Nummer „Special: Titel".
+    public var folgeBarrierefrei: String {
+        if specialOhneNummer {
+            return String(localized: "Special", bundle: .lumenKit, locale: .lumen) + ": " + title
+        }
+        let n: Int = episodeNo ?? 0
+        return String(localized: "Folge \(n): \(title)", bundle: .lumenKit, locale: .lumen)
+    }
+
+    /// „TMDb 75 %" — neben IMDb und Rotten Tomatoes, wie im Browser.
+    public var tmdbText: String? {
+        guard let p = tmdbRating, p > 0 else { return nil }
+        return String(localized: "TMDb \(p) %", bundle: .lumenKit, locale: .lumen)
     }
 
     /// Das Abzeichen links oben: „Neu", „Neue Folge", „3 neue Folgen".
@@ -377,9 +432,18 @@ public struct MediaFile: Codable, Identifiable, Hashable, Sendable {
     /// Datei ausgemessen hat. Ein älterer Server schickt nichts davon.
     public let tracks: [Track]?
     public let chapters: [Chapter]?
+    /// Defekt: Der Server konnte die Datei nicht ausmessen — „leer",
+    /// „gesperrt" oder „kaputt". Sie lässt sich nicht abspielen (422
+    /// datei_defekt) und wird weder als Fassung noch als Standard
+    /// angeboten. Ein älterer Server schickt das Feld nicht. `var` mit
+    /// Vorgabe, damit es dekodiert wird und der Initialisierer es nicht verlangt.
+    public var defekt: String? = nil
 
     public var isMissing: Bool { missing == true }
     public var isPreferred: Bool { preferred == true }
+    /// Ob sich die Datei abspielen lässt: vorhanden und nicht defekt.
+    public var isDefekt: Bool { !(defekt ?? "").isEmpty }
+    public var nutzbar: Bool { !isMissing && !isDefekt }
 
     /// „1080p · MKV · 4,2 GB" — Auflösung, Format, Grösse. Für das
     /// Aufräumen, wo man Fassungen nebeneinander vergleicht; der Codec
@@ -513,8 +577,11 @@ public struct ItemDetail: Codable, Sendable {
     /// oben gelten für die erste vorhandene Datei.
     public let jeDatei: [String: VorspannDatei]?
 
-    /// Die Datei, die sich abspielen lässt — fehlende übersprungen.
-    public var playable: MediaFile? { files.first { !$0.isMissing } }
+    /// Die Datei, die „Ansehen" spielt: die erste Fassung (Teil 1,
+    /// vorhanden, nicht defekt), sonst irgendeine abspielbare — wie im Browser.
+    public var playable: MediaFile? {
+        files.first { $0.nutzbar && $0.partNo <= 1 } ?? files.first { $0.nutzbar }
+    }
 
     /// Vorspann und Abspann der Datei, die wirklich läuft: aus `jeDatei`,
     /// wenn der Server sie für diese Datei nennt, sonst die Angaben oben.
@@ -576,8 +643,18 @@ public struct Neuigkeit: Codable, Identifiable, Hashable, Sendable {
     public let text: String
     public let at: Date
     public let anzahl: Int?
+    /// Bei „{n} neue Titel" die Titel selbst (jüngste zuerst, höchstens so
+    /// viele, wie der Server mitschickt) — damit die Zeile aufklappen
+    /// kann, statt ins Leere zu führen. Ein älterer Server schickt nichts.
+    public let titelListe: [Item]?
 
     public var id: String { "\(art)-\(itemId ?? "")-\(at.timeIntervalSince1970)" } // sprache: fest
+
+    /// Ob die Zeile aufklappt: kein einzelner Titel, aber eine Liste — wie im Browser.
+    public var klappbar: Bool { (itemId ?? "").isEmpty && !(titelListe ?? []).isEmpty }
+
+    /// Wie viele neue Titel nicht in der Liste stehen („und 4 weitere …").
+    public var weitere: Int { max(0, (anzahl ?? 0) - (titelListe ?? []).count) }
 
     /// Ist sie jünger als das letzte Öffnen der Liste?
     public func istNeu(gelesenBis: Date?) -> Bool {
@@ -593,6 +670,35 @@ public struct Neuigkeit: Codable, Identifiable, Hashable, Sendable {
         default: "film"
         }
     }
+}
+
+extension Neuigkeit {
+    private enum CodingKeys: String, CodingKey {
+        case art, itemId, titel, text, at, anzahl, titelListe
+    }
+
+    /// Eigens geschrieben, damit ein Titel in `titelListe`, der sich nicht
+    /// lesen lässt, nur sich selbst kostet — nicht die ganze Liste der
+    /// Neuigkeiten. In einer Erweiterung, damit der gewöhnliche
+    /// Initialisierer bleibt.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let liste = try c.decodeIfPresent([NachsichtigerTitel].self, forKey: .titelListe)
+        self.init(
+            art: try c.decode(String.self, forKey: .art),
+            itemId: try c.decodeIfPresent(String.self, forKey: .itemId),
+            titel: try c.decode(String.self, forKey: .titel),
+            text: try c.decode(String.self, forKey: .text),
+            at: try c.decode(Date.self, forKey: .at),
+            anzahl: try c.decodeIfPresent(Int.self, forKey: .anzahl),
+            titelListe: liste?.compactMap(\.item))
+    }
+}
+
+/// Ein Titel, der beim Lesen nicht scheitert: unlesbar heisst `nil`.
+private struct NachsichtigerTitel: Decodable {
+    let item: Item?
+    init(from decoder: Decoder) throws { item = try? Item(from: decoder) }
 }
 
 /// Die Antwort auf GET /news.
@@ -1016,6 +1122,32 @@ public struct Wish: Codable, Identifiable, Hashable, Sendable {
     public let note: String?
     public let createdAt: Date
     public let mine: Bool
+    /// Dieses Profil hat sich einem fremden Wunsch angeschlossen; von wem
+    /// er ist, steht dann nicht da.
+    public let dabei: Bool?
+    /// Nur in der Antwort aufs Wünschen: den Wunsch gab es schon (eigen
+    /// oder angeschlossen) — es ist kein neuer entstanden.
+    public let vorhanden: Bool?
+
+    /// Was nach dem Wünschen gemeldet wird — wie im Browser (app.js,
+    /// wunschVerhalten.gewuenscht): angeschlossen, schon eigen oder neu.
+    public var rueckmeldung: String {
+        if dabei == true {
+            return String(localized: "Schon gewünscht – du bist jetzt mit dabei", bundle: .lumenKit, locale: .lumen)
+        }
+        if vorhanden == true {
+            return String(localized: "Das hast du dir schon gewünscht", bundle: .lumenKit, locale: .lumen)
+        }
+        return String(localized: "Wunsch an den Besitzer geschickt", bundle: .lumenKit, locale: .lumen)
+    }
+
+    /// Was sich mit dem Wunsch tun lässt: den eigenen offenen löschen,
+    /// einen angeschlossenen verlassen — beides `DELETE /wishes/{id}`.
+    public var wegArt: WunschWeg? {
+        if dabei == true { return .austreten }
+        if mine && state == "open" { return .loeschen }
+        return nil
+    }
 
     public var stateLabel: String {
         switch state {
@@ -1026,6 +1158,12 @@ public struct Wish: Codable, Identifiable, Hashable, Sendable {
         default: state
         }
     }
+}
+
+/// Löschen (eigener offener Wunsch) oder austreten (angeschlossen).
+public enum WunschWeg: Sendable, Hashable {
+    case loeschen
+    case austreten
 }
 
 // MARK: - Verwaltungssperre
@@ -1313,8 +1451,23 @@ public struct Duplikat: Codable, Identifiable, Hashable, Sendable {
     public let title: String
     public let year: Int?
     public let files: [MediaFile]
+    /// Was der Server darin sieht (store.Duplicate.Art): „teile" (a/b/c —
+    /// zusammenführen), „verschieden" (Dateien verschiedener Filme an
+    /// einem Eintrag — abtrennen), „identisch" (dieselbe Datei mehrfach —
+    /// eine kann weg) oder „fassungen" (kein Aufräumfall). Ein älterer
+    /// Server schickt nichts.
+    public let art: String?
+    /// Die Dateien, zu denen es im selben Eintrag eine gleiche Zwillingsdatei gibt.
+    public let identisch: [String]?
 
     public var id: String { itemId }
+
+    /// Dieselbe Datei mehrfach oder verschiedene Filme an einem Eintrag —
+    /// die Fälle unter „Doppelt oder falsch zugeordnet", wie im Browser.
+    public var doppeltOderFalsch: Bool { files.count > 1 && (art == "verschieden" || art == "identisch") }
+
+    /// Hat diese Datei eine gleiche Zwillingsdatei im selben Eintrag?
+    public func istDoppelt(_ f: MediaFile) -> Bool { (identisch ?? []).contains(f.id) }
 
     /// Die Dateien nach ihrer Teilnummer.
     public var dateienGeordnet: [MediaFile] {
@@ -1326,6 +1479,8 @@ public struct Duplikat: Codable, Identifiable, Hashable, Sendable {
     /// nur zusammenzuführen. Der Server prüft dasselbe noch einmal, bevor
     /// er etwas anfasst (fassungen.go: adminTeileZusammenfuehren).
     public var sindTeile: Bool {
+        // Sagt der Server, was es ist, gilt das.
+        if let art { return art == "teile" && files.count > 1 }
         let geordnet = dateienGeordnet
         guard geordnet.count > 1 else { return false }
         return geordnet.enumerated().allSatisfy { $0.element.partNo == $0.offset + 1 }

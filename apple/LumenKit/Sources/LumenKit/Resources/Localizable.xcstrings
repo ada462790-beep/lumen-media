@@ -4348,6 +4348,370 @@
           }
         }
       }
+    },
+    "aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "from the NFO files (collection from Emby, Jellyfin or Kodi)"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "from the NFO files (collection from Emby, Jellyfin or Kodi)"
+          }
+        }
+      }
+    },
+    "aus Emby oder Jellyfin übernommen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aus Emby oder Jellyfin übernommen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aus Emby oder Jellyfin übernommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "imported from Emby or Jellyfin"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "imported from Emby or Jellyfin"
+          }
+        }
+      }
+    },
+    "TMDb %lld %%": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb %lld %%"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb %lld %%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb %lld%%"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb %lld%%"
+          }
+        }
+      }
+    },
+    "Schon gewünscht – du bist jetzt mit dabei": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schon gewünscht – du bist jetzt mit dabei"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schon gewünscht – du bist jetzt mit dabei"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already wished for – you’ve been added"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already wished for – you’ve been added"
+          }
+        }
+      }
+    },
+    "Das hast du dir schon gewünscht": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das hast du dir schon gewünscht"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das hast du dir schon gewünscht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You already requested this"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You already requested this"
+          }
+        }
+      }
+    },
+    "Wunsch an den Besitzer geschickt": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wunsch an den Besitzer geschickt"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wunsch an den Besitzer geschickt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request sent to the owner"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request sent to the owner"
+          }
+        }
+      }
+    },
+    "Original": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original"
+          }
+        }
+      }
+    },
+    "Auto": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        }
+      }
+    },
+    "%lld Mbit/s": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Mbit/s"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Mbit/s"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Mbps"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Mbps"
+          }
+        }
+      }
+    },
+    "Fassung %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fassung %lld"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fassung %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %lld"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %lld"
+          }
+        }
+      }
+    },
+    "Special": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Special"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Special"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Special"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Special"
+          }
+        }
+      }
+    },
+    "Folge %lld: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folge %lld: %@"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folge %lld: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Episode %lld: %@"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Episode %lld: %@"
+          }
+        }
+      }
+    },
+    "S%lld F%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld F%lld"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld F%lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld E%lld"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S%lld E%lld"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

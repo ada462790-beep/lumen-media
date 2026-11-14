@@ -88,7 +88,6 @@
     <string name="filmreihen_und_sammlungen">Filmreihen und Sammlungen</string>
     <string name="bildschirmzeit">Bildschirmzeit</string>
     <string name="fingerabdruck_64_zeichen_aus_09">Fingerabdruck — 64 Zeichen aus 0–9 und a–f</string>
-    <string name="folge_x">Folge %1$s</string>
     <string name="folgen">FOLGEN</string>
     <string name="folgen_2">Folgen</string>
     <string name="folgen_automatisch_weiter">Folgen automatisch weiter</string>
@@ -190,7 +189,6 @@
     <string name="speichern">Speichern</string>
     <string name="staffel_als_gesehen">Staffel als gesehen</string>
     <string name="staffel_nicht_mehr_als_gesehen">Staffel nicht mehr als gesehen</string>
-    <string name="staffel_x">Staffel %1$s</string>
     <string name="standard">Standard</string>
     <string name="startseite">Startseite</string>
     <string name="suche">Suche</string>
@@ -229,8 +227,6 @@
     <string name="wiedergabe">Wiedergabe</string>
     <string name="wuensche">Wünsche</string>
     <string name="wuenschen">Wünschen</string>
-    <string name="wunsch_an_den_besitzer_geschickt">Wunsch an den Besitzer geschickt.</string>
-    <string name="wunsch_geschickt">Wunsch geschickt.</string>
     <string name="x_aus_x_nehmen">„%1$s“ aus „%2$s“ nehmen?</string>
     <string name="x_entfernen">„%1$s“ entfernen?</string>
     <string name="x_loeschen">„%1$s“ löschen?</string>
@@ -252,4 +248,19 @@
         <item quantity="one">%1$d Titel in deiner Mediathek</item>
         <item quantity="other">%1$d Titel in deiner Mediathek</item>
     </plurals>
+    <string name="nicht_mehr_wuenschen">Nicht mehr wünschen</string>
+    <string name="nicht_mehr_wuenschen_frage">Nicht mehr wünschen?</string>
+    <string name="wunsch_loeschen_frage">Wunsch löschen?</string>
+    <string name="wunsch_austreten_text">Du bist dann bei „%1$s“ nicht mehr dabei. Der Wunsch der anderen bleibt.</string>
+    <string name="wunsch_loeschen_text">„%1$s“ verschwindet aus der Liste.</string>
+    <string name="neu_und_weitere">und %1$d weitere — alle unter „Filme“ und „Serien“, sortiert nach „Hinzugefügt“.</string>
+    <string name="pl_fassung">Fassung</string>
+    <string name="pl_qualitaet">Qualität</string>
+    <string name="pl_standard">Standard</string>
+    <string name="pl_fuer_alle">Für alle</string>
+    <string name="pl_ist_standard">Diese Fassung ist der Standard.</string>
+    <string name="pl_als_standard">Diese Fassung als Standard nehmen</string>
+    <string name="pl_gilt_fuer_alle">Gilt jetzt für alle</string>
+    <string name="pl_qualitaet_x">Qualität: %1$s</string>
+    <string name="pl_fassung_x">Fassung: %1$s</string>
 </resources>

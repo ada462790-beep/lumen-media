@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -247,18 +248,21 @@ private fun Suchergebnisse(
 /** „Nichts gefunden" — mit dem Angebot, sich den Titel zu wünschen. */
 @Composable
 private fun Wuenschen(model: LumenViewModel, q: String) {
-    var geschickt by remember(q) { mutableStateOf(false) }
+    // Die Rückmeldung des Servers: neu, schon eigen oder angeschlossen.
+    var geschickt by remember(q) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     Column(Modifier.padding(top = 8.dp)) {
         Text(tx(R.string.nichts_gefunden_fuer_x, q), fontSize = 16.sp)
         Spacer(Modifier.height(6.dp))
         Text(tx(R.string.du_kannst_dir_den_titel),
              color = Lumen.label2, fontSize = 14.sp)
         Spacer(Modifier.height(14.dp))
-        if (geschickt) {
-            Text(tx(R.string.wunsch_an_den_besitzer_geschickt), color = Lumen.good, fontSize = 14.sp)
+        val meldung = geschickt
+        if (meldung != null) {
+            Text(meldung, color = Lumen.good, fontSize = 14.sp)
         } else {
             PrimaryButton(tx(R.string.x_wuenschen, q)) {
-                model.send(onDone = { geschickt = model.error.value == null }) { it.wish(q) }
+                scope.launch { geschickt = model.fetch { it.wish(q) }?.rueckmeldung }
             }
         }
     }

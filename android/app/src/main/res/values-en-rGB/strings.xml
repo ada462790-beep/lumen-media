@@ -31,4 +31,7 @@
     <string name="x_loeschen">Delete ‘%1$s’?</string>
     <string name="x_wuenschen">Request ‘%1$s’</string>
     <string name="zu_favoriten">Add to Favourites</string>
+    <string name="wunsch_austreten_text">You will no longer be part of ‘%1$s’. The others’ request stays.</string>
+    <string name="wunsch_loeschen_text">‘%1$s’ will be removed from the list.</string>
+    <string name="neu_und_weitere">and %1$d more — see all under “Films” and “TV Programmes”, sorted by “Date Added”.</string>
 </resources>

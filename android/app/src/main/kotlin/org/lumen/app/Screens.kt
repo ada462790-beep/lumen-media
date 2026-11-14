@@ -486,7 +486,7 @@ private fun EpisodeRow(model: LumenViewModel, episode: Item, onGesehen: () -> Un
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${episode.episodeNo ?: ""}", fontSize = 14.sp, color = Lumen.label3,
+                Text(episode.folgenNummer, fontSize = 14.sp, color = Lumen.label3,
                      modifier = Modifier.padding(end = 8.dp))
                 Text(episode.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                      modifier = Modifier.weight(1f, fill = false))

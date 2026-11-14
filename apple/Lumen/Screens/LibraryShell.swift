@@ -519,9 +519,7 @@ struct PosterCard: View {
     /// „4 von 10 Folgen" bei Serien mit Stand; sonst Jahr und Wertung.
     private var subtitle: String {
         if let stand = item.folgenStand { return stand }
-        if item.kind == "episode", let s = item.seasonNo, let e = item.episodeNo {
-            return "S\(s) F\(e)"
-        }
+        if let kurz = item.folgenKurz { return kurz }
         var parts: [String] = []
         if let jahr = item.jahresText { parts.append(jahr) }
         if let rating = item.imdbRating, rating > 0 {

@@ -119,6 +119,11 @@ public enum AmStueck {
     /// Was in „Als Nächstes" steht. Bei einer Folge aus einer Liste der
     /// Name der Serie, sonst der Name der Folge.
     public static func anzeige(_ ziel: Item, eintrag: Item?) -> String {
+        // Specials ohne eigene Nummer: „Special" statt „S0 F1001".
+        if ziel.specialOhneNummer, let kurz = ziel.folgenKurz {
+            if let eintrag, eintrag.kind == "series" { return eintrag.title + " · " + kurz }
+            return kurz + " · " + ziel.title
+        }
         guard ziel.kind == "episode", let s = ziel.seasonNo, let e = ziel.episodeNo else {
             return ziel.title
         }

@@ -123,10 +123,11 @@ struct AdminWuenscheView: View {
 
 // MARK: - Aufräumen
 
-/// Wie im Browser (app.js: viewCleanup): Filme in Teilen, fehlende Dateien,
-/// nicht erkannte Titel und aufgelöste Filmreihen. Fassungen — derselbe
-/// Film in zwei Qualitäten — stehen hier nicht mehr: die wählt man beim
-/// Film unter „Ansehen".
+/// Wie im Browser (app.js: viewCleanup): Filme in Teilen, dieselbe Datei
+/// mehrfach oder verschiedene Filme an einem Eintrag, fehlende Dateien,
+/// nicht erkannte Titel und aufgelöste Filmreihen. Echte Fassungen —
+/// derselbe Film in zwei Qualitäten — stehen hier nicht: die wählt man im
+/// Player unter „Qualität".
 struct AufraeumenView: View {
     @Environment(Session.self) private var session
     @State private var daten: Aufraeumen?
@@ -142,6 +143,8 @@ struct AufraeumenView: View {
     private var aufgeloest: [ReiheZeile] { reihen.filter(\.hidden) }
     /// Nur Filme in Teilen (a/b/c, CD1/CD2) — Teil 1, 2, 3 ohne Lücke.
     private var teile: [Duplikat] { (daten?.duplicates ?? []).filter(\.sindTeile) }
+    /// Dieselbe Datei mehrfach oder verschiedene Filme an einem Eintrag.
+    private var doppelt: [Duplikat] { (daten?.duplicates ?? []).filter(\.doppeltOderFalsch) }
 
     var body: some View {
         List {
@@ -158,6 +161,15 @@ struct AufraeumenView: View {
                         Text("Filme in Teilen · \(teile.count)")
                     } footer: {
                         Text("Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Die Teile laufen nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.")
+                    }
+                }
+                if !doppelt.isEmpty {
+                    Section {
+                        ForEach(doppelt) { x in doppeltZeile(x) }
+                    } header: {
+                        Text("Doppelt oder falsch zugeordnet · \(doppelt.count)")
+                    } footer: {
+                        Text("„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“.")
                     }
                 }
                 if let fehlt = d.missing, !fehlt.isEmpty {
@@ -270,6 +282,86 @@ struct AufraeumenView: View {
         .padding(.vertical, 4)
     }
 
+    /// Dieselbe Datei mehrfach oder verschiedene Filme an einem Eintrag —
+    /// wie im Browser (app.js, doppelZeile): je Datei Pfad und Format, bei
+    /// Zwillingen „doppelt — eine kann weg", dazu „Diese nehmen" (nicht bei
+    /// verschiedenen Filmen) und „Abtrennen" (nicht bei Zwillingen).
+    private func doppeltZeile(_ x: Duplikat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(x.title + ((x.year ?? 0) > 0 ? " (\(x.year ?? 0))" : "")).font(.headline)
+                Text(x.art == "verschieden"
+                     ? String(localized: "· verschiedene Filme an einem Eintrag", bundle: .lumen, locale: .lumen)
+                     : String(localized: "· dieselbe Datei mehrfach", bundle: .lumen, locale: .lumen))
+                    .font(.caption).foregroundStyle(Theme.label2)
+                Spacer()
+            }
+            ForEach(x.files) { f in
+                HStack(alignment: .center, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(f.path)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(Theme.label)
+                            .lineLimit(2).truncationMode(.middle)
+                            .textSelection(.enabled)
+                        Text(f.formatZeile)
+                            .font(.caption).foregroundStyle(Theme.label2)
+                    }
+                    Spacer(minLength: 8)
+                    if x.istDoppelt(f) {
+                        Text("doppelt — eine kann weg")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Theme.bad)
+                    }
+                    if x.art != "verschieden" {
+                        if f.isPreferred {
+                            Text("gewählt").font(.caption.weight(.medium)).foregroundStyle(Theme.good)
+                        } else {
+                            Button("Diese nehmen") { Task { await nehmen(x, f) } }
+                                .disabled(beschaeftigt != nil)
+                        }
+                    }
+                    if x.art != "identisch" {
+                        Button("Abtrennen") { Task { await abtrennen(f) } }
+                            .disabled(beschaeftigt != nil)
+                            .help(String(localized: "Ist ein anderer Film — als eigenen Titel führen", bundle: .lumen, locale: .lumen))
+                    }
+                }
+            }
+        }
+        .controlSize(.small)
+        .padding(.vertical, 4)
+    }
+
+    /// „Diese nehmen": die Datei für alle zum Standard des Titels machen.
+    private func nehmen(_ x: Duplikat, _ f: MediaFile) async {
+        beschaeftigt = x.itemId
+        defer { beschaeftigt = nil }
+        do {
+            try await session.verwaltet { try await session.client.adminFassungWaehlen(itemId: x.itemId, fileId: f.id) }
+            error = nil
+        } catch {
+            meldung = Session.text(error)
+            return
+        }
+        await load()
+    }
+
+    /// „Abtrennen": die Datei wird ein eigener Titel, mit dem Namen, den
+    /// ihr Dateiname hergibt.
+    private func abtrennen(_ f: MediaFile) async {
+        beschaeftigt = f.itemId
+        defer { beschaeftigt = nil }
+        do {
+            try await session.verwaltet { try await session.client.adminDateiAbtrennen(f.id) }
+            error = nil
+        } catch {
+            meldung = Session.text(error)
+            return
+        }
+        await load()
+    }
+
     /// „Teil 2 · 1080p · MKV · 4,2 GB", bei fehlender Datei mit „fehlt".
     private func dateiZeile(_ f: MediaFile) -> String {
         var teile = [String(localized: "Teil \(f.partNo)", bundle: .lumen, locale: .lumen)]
@@ -294,7 +386,7 @@ struct AufraeumenView: View {
 
     private var alleLeer: Bool {
         guard let d = daten else { return true }
-        return teile.isEmpty && (d.missing ?? []).isEmpty
+        return teile.isEmpty && doppelt.isEmpty && (d.missing ?? []).isEmpty
             && (d.unmatched ?? []).isEmpty && aufgeloest.isEmpty
     }
 
