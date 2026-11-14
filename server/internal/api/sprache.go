@@ -150,7 +150,7 @@ var fehlerCodes = map[string]string{
 	"datei nicht lesbar":                                "datei_nicht_lesbar",
 	"dieser server ist schon eingerichtet":              "schon_eingerichtet",
 	"einrichten geht nur zu hause, nicht von unterwegs": "nur_zu_hause",
-	"einrichten geht nicht vom rechner selbst aus — öffne lumen von einem anderen gerät im heimnetz oder setze LUMEN_HEIMNETZ=127.0.0.1": "nur_zu_hause",
+	"einrichten geht nicht vom Rechner selbst aus — öffne Lumen von einem anderen Gerät im Heimnetz oder setze LUMEN_HEIMNETZ=127.0.0.1": "nur_zu_hause",
 	"Unbekannte Sprache.":                   "unbekannte_sprache",
 	"herunterladen ist für dein profil aus": "herunterladen_aus",
 	"umwandeln ist für dein profil aus":     "umwandeln_aus",

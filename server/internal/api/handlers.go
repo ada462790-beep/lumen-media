@@ -90,7 +90,7 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		// Rechners) kann auch ein Reverse-Proxy sitzen — der Satz sagt,
 		// wie es trotzdem geht (heimnetz.go).
 		if h.Grund == grundRechnerSelbst {
-			fail(w, http.StatusForbidden, "einrichten geht nicht vom rechner selbst aus — öffne lumen von einem anderen gerät im heimnetz oder setze LUMEN_HEIMNETZ=127.0.0.1")
+			fail(w, http.StatusForbidden, "einrichten geht nicht vom Rechner selbst aus — öffne Lumen von einem anderen Gerät im Heimnetz oder setze LUMEN_HEIMNETZ=127.0.0.1")
 			return
 		}
 		fail(w, http.StatusForbidden, "einrichten geht nur zu hause, nicht von unterwegs")
