@@ -137,6 +137,13 @@ func run(o Optionen, log *slog.Logger) error {
 	if err := beschreibbar(dataDir); err != nil {
 		return err
 	}
+	// Fehlersuche: Transaktionen, die die Schreibsperre lange halten,
+	// mit ihrer Herkunft melden (store/messung.go).
+	if schalter(os.Getenv("LUMEN_DB_MESSEN")) {
+		store.LangeSperreMelden = func(d time.Duration, wo string) {
+			log.Info("lange schreibsperre", "dauer", d.Round(time.Millisecond), "wo", wo)
+		}
+	}
 	st, err := store.Open(filepath.Join(dataDir, "lumen.db"))
 	if err != nil {
 		return err

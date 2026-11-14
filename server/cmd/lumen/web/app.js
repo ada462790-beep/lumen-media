@@ -294,8 +294,15 @@ const clock = sec => {
 //
 // kind: 'poster' für Hochformat, 'wide' für Kopf- und Folgenbilder —
 // dort lieber der Hintergrund, sonst das Poster, sonst das Standbild.
-function artOf(it, kind = 'poster') {
-  const img = url => `<img class="art-img" src="${esc(url)}${tokenSuffix(url)}" alt="" loading="lazy">`;
+//
+// groesse: wie breit das Bild auf dem Bildschirm steht (das sizes-Attribut).
+// Der Browser wählt damit aus srcset die passende Breite, der Server
+// rechnet sie einmal herunter (bildgroesse.go) — statt eines Posters von
+// einem Megabyte für eine Kachel von 200 Punkten.
+function artOf(it, kind = 'poster', groesse = '') {
+  const hoch = kind === 'poster';
+  const sizes = groesse || (hoch ? '(max-width: 600px) 46vw, 230px' : '(max-width: 600px) 92vw, 420px');
+  const img = url => `<img class="art-img" ${bildQuellen(url, hoch && !(it.kind === 'episode' && url === it.poster), sizes)} alt="" loading="lazy">`;
   // 'quer': eine breite Karte. Das Querformat aus der Sammlung
   // („landscape.jpg", mit Schriftzug) passt dort besser als der
   // Hintergrund; ohne es gilt dasselbe wie bei 'wide'.
@@ -316,6 +323,19 @@ function artOf(it, kind = 'poster') {
   const titel = `<div class="art-none"><span>${esc(it.title)}</span></div>`;
   if (!it.frame) return titel;
   return titel + standbild(it, true);
+}
+// Die Breiten, die der Server liefert (bildgroesse.go). Hochformat bis
+// 780 Punkte, Querformat bis 1920. Bilder, die nicht vom Bilderweg kommen
+// (etwa Vorschläge von TMDb), bleiben wie sie sind.
+const BREITEN_HOCH = [185, 342, 500, 780], BREITEN_QUER = [500, 780, 1280, 1920];
+function bildMitBreite(url, b) {
+  const u = `${url}${url.includes('?') ? '&' : '?'}w=${b}`;
+  return u + tokenSuffix(u);
+}
+function bildQuellen(url, hoch, sizes) {
+  if (!url.startsWith('/api/v1/art/')) return `src="${esc(url)}${tokenSuffix(url)}"`;
+  const breiten = hoch ? BREITEN_HOCH : BREITEN_QUER;
+  return `src="${esc(bildMitBreite(url, hoch ? 342 : 780))}" srcset="${breiten.map(b => `${esc(bildMitBreite(url, b))} ${b}w`).join(', ')}" sizes="${sizes}"`;
 }
 // Der Titel steht in der Karte ohnehin darunter; auf dem Bild selbst
 // stünde er doppelt. data-nochmal: Entsteht das Bild noch (der Server
@@ -823,7 +843,7 @@ async function load() {
     // Der Zähler der Neuigkeiten hängt an /me — auf der Startseite
     // nebenbei auffrischen, damit der Punkt nicht bis zur nächsten
     // Anmeldung alt bleibt.
-    if (S.me && S.view === 'home') api.me().then(me => { S.me = me; const n = app.querySelector('.sidebar'); if (n) n.outerHTML = sidebar(); }).catch(() => {});
+    if (S.me && S.view === 'home' && Date.now() - meGeholt > 60 * 1000) api.me().then(me => { S.me = me; const n = app.querySelector('.sidebar'); if (n) n.outerHTML = sidebar(); }).catch(() => {});
     const daten = await fetchFor(S.view);
     if (nr !== ladeNummer) return;
     S.data = daten;
@@ -859,6 +879,10 @@ async function load() {
   render();
 }
 
+// Beim Start vorab geholte Startseite (boot) und wann /me zuletzt kam:
+// load frischt /me auf der Startseite nur auf, wenn es länger her ist.
+let vorabStart = null, meGeholt = 0;
+
 async function fetchFor(view) {
   switch (view) {
     case 'profiles':
@@ -868,8 +892,11 @@ async function fetchFor(view) {
       // Die Startseite zeigt höchstens zwölf Reihen — nur die holen, nicht alle.
       // Kinderprofil: auch die Bildschirmzeit — ist sie um, sagt es ein
       // Band oben (bzBand), nicht erst der Knopf „Ansehen".
-      const [h, reihen] = await Promise.all([api.home(), api.call('/collections?limit=12').catch(() => []),
-        S.me?.account?.isKid ? bzLaden() : null]);
+      // Beim Start schon mit /hello losgeschickt (boot): einmal verwenden.
+      const frisch = () => Promise.all([api.home(), api.call('/collections?limit=12').catch(() => [])]);
+      const vorab = vorabStart && Date.now() - vorabStart.zeit < 30 * 1000 ? vorabStart.p.catch(frisch) : null;
+      vorabStart = null;
+      const [[h, reihen]] = await Promise.all([vorab || frisch(), S.me?.account?.isKid ? bzLaden() : null]);
       return { ...h, collections: reihen };
     }
     case 'collections': return { collections: await api.collections() };
@@ -1355,7 +1382,7 @@ function viewHome() {
     : `<button class="btn btn-primary" data-play="${esc(first.id)}">${PLAY(16)} ${heroSek > 0 && !first.naechsteFolge ? `${tr('Weiter bei')} ${clock(heroSek)}` : tr('Ansehen')}</button>`;
   const hero = first ? `
     <div class="hero${first.backdrop || first.poster || first.frame ? '' : ' hero--ohnebild'}" data-vorschau-hero="${first.id}">
-      ${artOf(first, 'wide')}
+      ${artOf(first, 'wide', '100vw')}
       <div class="hero-scrim"></div>
       <div class="hero-text">
         <h2 class="t-hero">${esc(heroFolge && first.seriesTitle ? first.seriesTitle : first.title)}</h2>
@@ -1693,7 +1720,7 @@ function viewNews() {
     if (!ziel) return `<div class="row" style="width:100%;min-height:62px;gap:14px">${kopf}</div>`;
     const liste = klapp ? `<div class="neu-titel-liste" id="neu-titel-${i}"${auf ? '' : ' hidden'}>${titel.map(t => `
         <button type="button" class="neu-titel" data-go="detail" data-id="${esc(t.id)}">
-          <span class="neu-titel-bild">${artOf(t, 'poster')}</span>
+          <span class="neu-titel-bild">${artOf(t, 'poster', '42px')}</span>
           <span class="neu-titel-text"><span class="t-body clamp-2">${esc(t.title)}</span>
             <span class="t-caption c-2">${[t.year || '', t.kind === 'series' ? tr('Serie') : tr('Film')].filter(Boolean).join(' · ')}</span></span>
         </button>`).join('')}
@@ -1887,7 +1914,7 @@ function viewDetail() {
     <div class="orow folge" style="height:auto;padding:12px 16px;gap:14px">
       <button class="card folge-bild" data-play="${esc(e.id)}" aria-label="${esc(tr('{titel} ansehen', { titel: e.title }))}">
         <div class="thumb" style="position:relative;width:160px;height:90px;border-radius:8px;overflow:hidden;flex:none">
-          ${artOf(e, 'wide')}
+          ${artOf(e, 'wide', '160px')}
           <span class="folge-play" aria-hidden="true">${PLAY(22)}</span>
           ${e.progress > 1 && !e.finished ? `<div class="progress progress--onart"><i style="width:${e.progress}%"></i></div>` : ''}
         </div>
@@ -1982,7 +2009,7 @@ function viewDetail() {
 
   return shell(`<div class="wrap">
     <div class="hero">
-      ${artOf(it, 'wide')}
+      ${artOf(it, 'wide', '100vw')}
       <div class="hero-scrim"></div>
       <button class="btn btn-round sm glass glass--regular" style="position:absolute;top:28px;width:44px;height:44px;z-index:3"
         data-back data-heldzurueck aria-label="${tr('Zurück')}">${svg(I.back, 18, 2)}</button>
@@ -2687,7 +2714,7 @@ function folgenPanel(p) {
   const zeilen = (f.episodes || []).map(e => {
     const aktuell = e.id === p.itemId;
     return `<button class="folge-zeile${aktuell ? ' folge-zeile--aktuell' : ''}" data-pl-folge="${esc(e.id)}" ${aktuell ? 'aria-current="true"' : ''}>
-      <span class="folge-thumb">${artOf(e, 'wide')}
+      <span class="folge-thumb">${artOf(e, 'wide', '120px')}
         ${e.progress > 1 && !e.finished ? `<span class="progress progress--onart"><i style="width:${e.progress}%"></i></span>` : ''}</span>
       <span style="flex:1;min-width:0">
         <span class="t-body" style="display:flex;gap:8px;align-items:center${aktuell ? ';font-weight:600' : ''}">
@@ -4181,7 +4208,7 @@ function viewCollection() {
   // Mit eigenem Hintergrund der Reihe wird aus der Seite ein Kopf wie
   // bei einem Film; ohne bleibt es die schlichte Überschrift.
   const kopfbild = r.backdrop ? `<div class="hero" style="height:min(44vh,420px);min-height:280px">
-      ${artOf({ backdrop: r.backdrop, title: r.name }, 'wide')}<div class="hero-scrim"></div>
+      ${artOf({ backdrop: r.backdrop, title: r.name }, 'wide', '100vw')}<div class="hero-scrim"></div>
       <div class="hero-text" style="bottom:28px">
         <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px;margin-bottom:14px" data-back>
           ${svg(I.back, 16, 2)}${tr('Zurück')}</button>
@@ -4270,7 +4297,7 @@ function viewPlaylist() {
   const zeilen = items.map((x, i) => `
     <div class="orow" style="height:auto;padding:10px 16px;gap:14px">
       <button class="card" data-go="detail" data-id="${esc(x.id)}" style="display:flex;gap:14px;align-items:center;flex:1;min-width:0">
-        <div class="thumb" style="position:relative;width:46px;height:69px;border-radius:7px;overflow:hidden;flex:none">${artOf(x)}</div>
+        <div class="thumb" style="position:relative;width:46px;height:69px;border-radius:7px;overflow:hidden;flex:none">${artOf(x, 'poster', '46px')}</div>
         <div style="min-width:0">
           <div class="t-body clamp-1">${esc(x.title)}</div>
           <div class="t-caption c-2">${[x.year, x.kind === 'series' ? tr('Serie') : '',
@@ -7891,6 +7918,20 @@ document.addEventListener('click', e => {
 /* ---------------------------------------------------------------- Start */
 
 async function boot() {
+  // Angemeldet: /me, Medienschlüssel und – wenn es auf die Startseite
+  // geht – deren Daten gleich mit /hello losschicken, nicht nacheinander.
+  // Unterwegs kostet jede Runde eine halbe Sekunde; vorher waren es vier
+  // Runden hintereinander (hello → me → home), und /me kam doppelt.
+  let vorabIch = null;
+  if (api.signedIn) {
+    vorabIch = Promise.all([api.me(), api.medienSchluessel()]);
+    vorabIch.catch(() => {});
+    const z = ansichtAusAdresse();
+    if (!z || z.view === 'home') {
+      vorabStart = { p: Promise.all([api.home(), api.call('/collections?limit=12').catch(() => [])]), zeit: Date.now() };
+      vorabStart.p.catch(() => {});
+    }
+  }
   try {
     const hello = await api.hello();
     S.hello = hello;
@@ -7926,7 +7967,8 @@ async function boot() {
     if (api.signedIn) {
       try {
         // Beides zugleich: unterwegs kostet jede Runde eine halbe Sekunde.
-        [S.me] = await Promise.all([api.me(), api.medienSchluessel()]);
+        [S.me] = await (vorabIch || Promise.all([api.me(), api.medienSchluessel()]));
+        meGeholt = Date.now();
         const st = history.state;
         if (st?.view && ziel && st.view === ziel.view) {
           verlaufTiefe = typeof st.tiefe === 'number' ? st.tiefe : 0;

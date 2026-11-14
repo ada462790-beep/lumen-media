@@ -46,6 +46,12 @@ type Store struct {
 	// geholtOrdner: wo von OpenSubtitles geholte Untertitel liegen
 	// (spuren.go, SetGeholteUntertitel). Leer = keine.
 	geholtOrdner string
+	// tokens: geprüfte Anmeldungen; zuletzt: „zuletzt gesehen", das
+	// nebenbei geschrieben wird (merken.go).
+	tokens  tokenSpeicher
+	zuletzt zuletztSchreiber
+	// kennzahlen: Abzeichen je Titel, bis sich etwas ändert (kennzahlen.go).
+	kennzahlen kennzahlenSpeicher
 }
 
 // Open legt die Datenbank an oder öffnet sie und bringt das Schema auf Stand.
@@ -69,7 +75,7 @@ func Open(path string) (*Store, error) {
 	// Profil, eine Liste oder seinen Fortschritt löscht, soll es nicht aus
 	// freien Seiten der Datei zurückholen können.
 	dsn := path + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on&_synchronous=NORMAL&_txlock=immediate&_secure_delete=on"
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open(treiberName, dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +83,12 @@ func Open(path string) (*Store, error) {
 	// darf parallel laufen. Ein knapper Pool erspart gesperrte Datenbanken.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(8)
-	db.SetConnMaxLifetime(time.Hour)
+	// Verbindungen bleiben offen: Jede hält ihren eigenen Vorrat an
+	// gelesenen Seiten. Eine neue (früher jede Stunde) liest Schema und
+	// Seiten wieder von der Platte — auf einer NAS, deren Platten schlafen,
+	// weckte das sie im Leerlauf.
+	db.SetConnMaxLifetime(0)
+	db.SetConnMaxIdleTime(0)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("datenbank öffnen: %w", err)
@@ -716,6 +727,12 @@ func nachruesten(db *sql.DB) error {
 		// Verwaltung zählt das bei jedem Aufruf, der Metadaten-Durchgang
 		// holt es in Häppchen. Ohne Index ging beides über alle Titel.
 		`CREATE INDEX IF NOT EXISTS item_by_state ON item (match_state, kind)`,
+		// „Neu in den letzten sieben Tagen" (Neuigkeiten, Zähler in /me):
+		// Ohne diesen Index las jede Anfrage von /me alle Folgen der
+		// Mediathek — auf einer NAS mit 100 000 Folgen ein Grossteil der
+		// Zeit von /me, und bei kaltem Zwischenspeicher Sprünge über die
+		// ganze Platte.
+		`CREATE INDEX IF NOT EXISTS item_neu_seit ON item (kind, added_at)`,
 		`CREATE INDEX IF NOT EXISTS file_fehlt ON media_file (missing_since) WHERE missing_since IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS playlist_by_account ON playlist (account_id)`,
 		`CREATE INDEX IF NOT EXISTS playlist_item_by_list ON playlist_item (playlist_id, ord)`,
@@ -763,6 +780,8 @@ func nachruesten(db *sql.DB) error {
 }
 
 func (s *Store) Close() error {
+	// Was „zuletzt gesehen" noch vorgemerkt hat (merken.go).
+	s.zuletztJetzt()
 	if tag, alt := s.stoerungen.alles(); alt != nil {
 		s.stoerungenSchreiben(context.Background(), tag, alt)
 	}
@@ -862,7 +881,8 @@ func (s *Store) Log(ctx context.Context, level, area, message string) {
 		return
 	}
 	at := time.Now().Unix()
-	_, _ = s.db.ExecContext(ctx,
+	// Das Protokoll ändert nichts, was eine Seite zeigt (Stand).
+	_, _ = s.db.ExecContext(OhneStand(ctx),
 		`INSERT INTO log_line (at, level, area, message) VALUES (?, ?, ?, ?)`,
 		at, level, area, message)
 }

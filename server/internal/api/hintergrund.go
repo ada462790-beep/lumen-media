@@ -179,6 +179,10 @@ func (s *Server) aufRuheWarten(ctx context.Context) error {
 // dateiKennung: welche Fassung einer Datei etwas Vorbereitetes gehört.
 // Wird eine Datei am selben Pfad ersetzt, behält sie ihre Kennung, aber
 // Grösse und Änderungszeit ändern sich (der Durchlauf trägt sie ein).
+// vorbereitetMerk: Datei → Kennung und Schalter, mit denen sie zuletzt
+// fertig vorbereitet war (dateiVorbereiten). Nur im Speicher.
+var vorbereitetMerk sync.Map
+
 func dateiKennung(f *store.MediaFile) string {
 	return fmt.Sprintf("%s:%d:%d", f.ID, f.SizeBytes, f.MTime)
 }
@@ -226,6 +230,19 @@ func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
 	if err != nil || f.Missing || f.DurationMS <= 0 || f.Defekt != "" {
 		return
 	}
+	// Schon in diesem Lauf von Lumen fertig vorbereitet, und die Datei ist
+	// dieselbe: nichts anfassen. Der Durchgang alle sechs Stunden sah sonst
+	// jede Datei in der Mediathek an (os.Stat) und las für jede die
+	// Vorschaubilder-, Untertitel- und Fehlerordner — das weckte die
+	// Platten der NAS viermal am Tag, auch wenn längst alles fertig war.
+	trick, ut := s.trickplayAn(ctx), s.untertitelVorbereitenAn(ctx)
+	if !trick && !ut {
+		return
+	}
+	merk := fmt.Sprintf("%s|%t|%t", dateiKennung(f), trick, ut)
+	if v, ok := vorbereitetMerk.Load(fileID); ok && v == merk {
+		return
+	}
 	if _, err := os.Stat(f.Path); err != nil {
 		return
 	}
@@ -234,39 +251,44 @@ func (s *Server) dateiVorbereiten(ctx context.Context, fileID string) {
 	// einem Neustart. Erst wenn sich Grösse oder Änderungszeit ändern.
 	// Ein vorübergehender Fehler ruht nur vorbereitenPause lang.
 	var fehler []string
+	// ausgelassen: wegen eines früheren Fehlers nicht versucht — dann
+	// nicht als fertig merken, nach der Pause kommt es wieder dran.
+	ausgelassen := false
 	gescheitert := func(art, was string, err error) {
 		fehler = append(fehler, was+": "+stream.Bereinigt(err.Error()))
 		s.vorbereitenGescheitertMerken(f, art, istFormatFehler(err.Error()))
 	}
-	if s.trickplayAn(ctx) && !trickplayFertig(s.trickplayOrdner(fileID), f) &&
-		!s.vorbereitenGescheitert(f, artTrickplay) {
-		d, _ := s.ff.Feinmessung(ctx, f.Path)
-		if _, err := s.ff.TrickplayErzeugenMit(ctx, f.Path, f.DurationMS, d, s.trickplayOrdner(fileID),
-			stream.TrickplayOptionen{Kennung: dateiKennung(f), Warten: s.aufRuheWarten}); err != nil {
-			if ctx.Err() == nil {
-				gescheitert(artTrickplay, "Vorschaubilder", err)
-			}
+	if trick && !trickplayFertig(s.trickplayOrdner(fileID), f) {
+		if s.vorbereitenGescheitert(f, artTrickplay) {
+			ausgelassen = true
 		} else {
-			zeitlosAlles(s.trickplayOrdner(fileID))
-			zeitlos(s.trickplayWurzel())
+			d, _ := s.ff.Feinmessung(ctx, f.Path)
+			if _, err := s.ff.TrickplayErzeugenMit(ctx, f.Path, f.DurationMS, d, s.trickplayOrdner(fileID),
+				stream.TrickplayOptionen{Kennung: dateiKennung(f), Warten: s.aufRuheWarten}); err != nil {
+				if ctx.Err() == nil {
+					gescheitert(artTrickplay, "Vorschaubilder", err)
+				}
+			} else {
+				zeitlosAlles(s.trickplayOrdner(fileID))
+				zeitlos(s.trickplayWurzel())
+			}
 		}
 	}
-	if s.untertitelVorbereitenAn(ctx) && !s.vorbereitenGescheitert(f, artUntertitel) {
-		if err := s.untertitelVorbereiten(ctx, f); err != nil && ctx.Err() == nil {
+	if ut {
+		if s.vorbereitenGescheitert(f, artUntertitel) {
+			ausgelassen = true
+		} else if err := s.untertitelVorbereiten(ctx, f); err != nil && ctx.Err() == nil {
 			gescheitert(artUntertitel, "Untertitel", err)
 		}
 	}
 	if len(fehler) > 0 {
 		// Ins Protokoll: dass es nicht ging, nicht bei welchem Film.
 		s.st.Log(ctx, "warn", "vorbereiten", "Eine Datei liess sich nicht vorbereiten — "+strings.Join(fehler, "; "))
+	} else if !ausgelassen && ctx.Err() == nil {
+		vorbereitetMerk.Store(fileID, merk)
 	}
 }
 
-// vorbereitenFehlerOrdner: je Datei und Art, bei der das Vorbereiten
-// scheiterte, eine kleine Datei „<datei>.<art>" mit der Kennung der
-// Fassung (dateiKennung) und ob der Fehler dauerhaft ist. Im
-// Arbeitsspeicher allein ging das Wissen mit jedem Neustart verloren, und
-// dieselben kaputten Dateien standen wieder im Protokoll.
 func (s *Server) vorbereitenFehlerOrdner() string {
 	return filepath.Join(s.dataDir, "vorbereiten-fehler")
 }

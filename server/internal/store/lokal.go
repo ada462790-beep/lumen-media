@@ -353,16 +353,17 @@ func (s *Store) FreigabenNachrechnen(ctx context.Context, alter func(string) *in
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
-	// In einer Transaktion: vorher war jede Zeile ein eigener Schreibvorgang
-	// (719 Titel, 719-mal die Schreibsperre).
-	err = s.tx(ctx, func(t *sql.Tx) error {
-		for id, j := range neu {
-			if _, err := t.ExecContext(ctx,
-				`UPDATE item SET age_years = ? WHERE id = ? AND age_years IS NULL`, j, id); err != nil {
-				return err
-			}
-		}
-		return nil
+	// In Häppchen (haeppchen.go): Früher war jede Zeile ein eigener
+	// Schreibvorgang (719 Titel, 719-mal die Schreibsperre), danach alles
+	// in einer Transaktion — bei 100 000 Titeln 3,5 s Sperre am Stück.
+	ids := make([]string, 0, len(neu))
+	for id := range neu {
+		ids = append(ids, id)
+	}
+	err = s.inHaeppchen(ctx, len(ids), func(t *sql.Tx, i int) error {
+		_, err := t.ExecContext(ctx,
+			`UPDATE item SET age_years = ? WHERE id = ? AND age_years IS NULL`, neu[ids[i]], ids[i])
+		return err
 	})
 	if err != nil {
 		return 0, err

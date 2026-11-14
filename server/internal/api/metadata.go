@@ -13,13 +13,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"lumen/internal/meta"
+	"lumen/internal/store"
 )
 
 // Die Metadaten-Quellen richtet der Besitzer einmal ein — dann gelten sie
@@ -270,22 +270,30 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 		s.sammlungBildZeigen(w, r)
 		return
 	}
+	// Dieselbe Anfrage schon einmal beantwortet, und seither hat sich
+	// nichts geändert: aus dem Speicher, ohne Datenbank und Platte
+	// (bildgroesse.go).
+	kind := r.PathValue("kind")
+	if kind != "vorschau" && kind != "frame" && s.bildAusSpeicher(w, r) {
+		return
+	}
+	stand := store.Stand()
 	it, err := s.visibleItem(r, r.PathValue("item"))
 	if err != nil {
 		failErr(w, err)
 		return
 	}
 	// Ein Bild aus dem Film selbst, wo es kein Poster gibt.
-	if r.PathValue("kind") == "vorschau" {
+	if kind == "vorschau" {
 		s.vorschauSenden(w, r, it)
 		return
 	}
-	if r.PathValue("kind") == "frame" {
+	if kind == "frame" {
 		s.standbildSenden(w, r, it)
 		return
 	}
 	var name string
-	if kind := r.PathValue("kind"); strings.HasPrefix(kind, "cast") {
+	if strings.HasPrefix(kind, "cast") {
 		// Bild aus der Besetzung: cast03 ist die vierte Person.
 		if leute, err := s.st.Besetzung(r.Context(), it.ID); err == nil {
 			if i, err := strconv.Atoi(strings.TrimPrefix(kind, "cast")); err == nil && i >= 0 && i < len(leute) {
@@ -310,25 +318,11 @@ func (s *Server) artwork(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
-	path := filepath.Join(s.meta.ArtDir(), name)
-	f, err := os.Open(path)
-	if err != nil {
-		fail(w, http.StatusNotFound, "kein bild")
-		return
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		fail(w, http.StatusNotFound, "kein bild")
-		return
-	}
-	// Kurz zwischenspeichern, danach fragt der Browser nach (304, wenn gleich):
-	// Beim Neuzuordnen bleibt die Adresse dieselbe, mit einem Tag sah man das
-	// falsche Bild nach der Korrektur noch bis morgen.
-	bildAufbewahren(w, name, info)
-	w.Header().Set("Content-Type", fmt.Sprintf("image/%s",
-		strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")))
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	// Kurz zwischenspeichern, danach fragt der Browser nach (304, wenn
+	// gleich): Beim Neuzuordnen bleibt die Adresse dieselbe, mit einem Tag
+	// sah man das falsche Bild nach der Korrektur noch bis morgen. In der
+	// Breite, die die Oberfläche braucht (?w=…, bildgroesse.go).
+	s.bildSenden(w, r, s.meta.ArtDir(), name, kind, stand)
 }
 
 func (s *Server) reihenBild(w http.ResponseWriter, r *http.Request) {
@@ -354,24 +348,7 @@ func (s *Server) reihenBild(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
-	f, err := os.Open(filepath.Join(s.meta.ArtDir(), name))
-	if err != nil {
-		fail(w, http.StatusNotFound, "kein bild")
-		return
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		fail(w, http.StatusNotFound, "kein bild")
-		return
-	}
-	// Kurz zwischenspeichern, danach fragt der Browser nach (304, wenn gleich):
-	// Beim Neuzuordnen bleibt die Adresse dieselbe, mit einem Tag sah man das
-	// falsche Bild nach der Korrektur noch bis morgen.
-	bildAufbewahren(w, name, info)
-	w.Header().Set("Content-Type", fmt.Sprintf("image/%s",
-		strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")))
-	http.ServeContent(w, r, name, info.ModTime(), f)
+	s.bildSenden(w, r, s.meta.ArtDir(), name, r.PathValue("kind"), store.Stand())
 }
 
 var metaLaeuft atomic.Bool

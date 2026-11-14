@@ -49,6 +49,9 @@ type Server struct {
 	version     string
 	started     time.Time
 
+	// Zuletzt gelieferte Antworten (antwortspeicher.go).
+	antworten antwortSpeicher
+
 	// Weitere Namen, unter denen Lumen erreichbar ist (siehe herkunft.go).
 	erlaubteHosts []string
 	// Gegen Durchprobieren von PIN, Passwort, Codes (siehe bremse.go).
@@ -211,7 +214,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Angemeldet.
 	auth := s.requireAuth
-	mux.Handle("GET /api/v1/me", auth(s.me))
+	// s.gemerkt: Startseite, Listen und /me kommen aus dem Speicher,
+	// solange sich in der Datenbank nichts geändert hat (antwortspeicher.go).
+	mux.Handle("GET /api/v1/me", auth(s.gemerkt(s.me)))
 	mux.Handle("POST /api/v1/code/approve", auth(s.codeFreigeben))
 	mux.Handle("PATCH /api/v1/me", auth(s.updateMe))
 	mux.Handle("POST /api/v1/me/avatar", auth(s.meAvatarSetzen))
@@ -232,8 +237,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/me/sperre", auth(s.meineSperre))
 	mux.Handle("POST /api/v1/me/sign-out-everywhere", auth(s.signOutEverywhere))
 
-	mux.Handle("GET /api/v1/home", auth(s.home))
-	mux.Handle("GET /api/v1/items", auth(s.items))
+	mux.Handle("GET /api/v1/home", auth(s.gemerkt(s.home)))
+	mux.Handle("GET /api/v1/items", auth(s.gemerkt(s.items)))
 	mux.Handle("GET /api/v1/search", auth(s.suche))
 	mux.Handle("GET /api/v1/items/{id}", auth(s.item))
 	mux.Handle("GET /api/v1/items/{id}/children", auth(s.itemChildren))
@@ -247,7 +252,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/watchlist/{id}", auth(s.removeWatchlist))
 	mux.Handle("PUT /api/v1/favorites/{id}", auth(s.addFavorit))
 	mux.Handle("DELETE /api/v1/favorites/{id}", auth(s.removeFavorit))
-	mux.Handle("GET /api/v1/items/letters", auth(s.buchstaben))
+	mux.Handle("GET /api/v1/items/letters", auth(s.gemerkt(s.buchstaben)))
 	mux.Handle("GET /api/v1/persons/{name}", auth(s.person))
 	mux.Handle("GET /api/v1/persons/{name}/bild", auth(s.personBild))
 	mux.Handle("DELETE /api/v1/me/progress", auth(s.clearAllProgress))
@@ -358,7 +363,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Filmreihen — von Lumen selbst gebildet. Lesen darf jeder, was er
 	// sehen darf; umbenennen und auflösen nur der Besitzer.
-	mux.Handle("GET /api/v1/collections", auth(s.reihen))
+	mux.Handle("GET /api/v1/collections", auth(s.gemerkt(s.reihen)))
 	mux.Handle("GET /api/v1/collections/{id}", auth(s.reihe))
 	mux.Handle("GET /api/v1/admin/collections", admin(s.adminReihen))
 	mux.Handle("POST /api/v1/admin/collections/{id}", admin(s.adminReiheAendern))
@@ -408,7 +413,7 @@ func (s *Server) Handler() http.Handler {
 	s.routenFunktionen(mux)
 
 	// JSON und Text gepackt, wo der Client es versteht (kompression.go).
-	return kompression(s.withCommonHeaders(vorrang(mux)))
+	return kompression(s.withCommonHeaders(vorrang(s.messen(mux))))
 }
 
 // ---------------------------------------------------------------- Anmeldung

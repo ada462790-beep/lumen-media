@@ -14,6 +14,7 @@ package store
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,12 +27,23 @@ type Kennzahl struct {
 
 // Kennzahlen liefert je Titel die beste Datei: bei Filmen die eigene, bei
 // Serien die ihrer Folgen.
+//
+// Für eine Serie heisst das: alle Dateien aller Folgen ansehen. Die
+// Startseite fragt das bei jedem Aufruf für Dutzende Serien — darum
+// bleiben die Ergebnisse im Speicher, bis sich in der Datenbank etwas
+// ändert (Stand). Auch Titel ohne Datei werden gemerkt.
 func (s *Store) Kennzahlen(ctx context.Context, ids []string) (map[string]Kennzahl, error) {
 	out := map[string]Kennzahl{}
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := s.db.QueryContext(ctx, kennzahlenSQL(len(ids)), kennzahlenArgs(ids)...)
+	stand := Stand()
+	fehlt := s.kennzahlenAusSpeicher(stand, ids, out)
+	if len(fehlt) == 0 {
+		return out, nil
+	}
+	neu := map[string]Kennzahl{}
+	rows, err := s.db.QueryContext(ctx, kennzahlenSQL(len(fehlt)), kennzahlenArgs(fehlt)...)
 	if err != nil {
 		return nil, err
 	}
@@ -42,9 +54,62 @@ func (s *Store) Kennzahlen(ctx context.Context, ids []string) (map[string]Kennza
 		if err := rows.Scan(&id, &k.Height, &k.Width, &k.HDR, &k.Channels); err != nil {
 			return nil, err
 		}
+		neu[id] = k
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for id, k := range neu {
 		out[id] = k
 	}
-	return out, rows.Err()
+	s.kennzahlenMerken(stand, fehlt, neu)
+	return out, nil
+}
+
+// kennzahlenSpeicher: Kennzahlen je Titel, gültig für einen Stand.
+type kennzahlenSpeicher struct {
+	mu    sync.Mutex
+	stand int64
+	m     map[string]Kennzahl // ohne Datei: die leere Kennzahl
+}
+
+// kennzahlenAusSpeicher füllt out mit dem Gemerkten und gibt zurück, was
+// noch fehlt.
+func (s *Store) kennzahlenAusSpeicher(stand int64, ids []string, out map[string]Kennzahl) []string {
+	k := &s.kennzahlen
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.stand != stand || k.m == nil {
+		return ids
+	}
+	var fehlt []string
+	for _, id := range ids {
+		v, ok := k.m[id]
+		switch {
+		case !ok:
+			fehlt = append(fehlt, id)
+		case v != (Kennzahl{}):
+			out[id] = v
+		}
+	}
+	return fehlt
+}
+
+func (s *Store) kennzahlenMerken(stand int64, gefragt []string, neu map[string]Kennzahl) {
+	k := &s.kennzahlen
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	// Erst gerechnet, dann gemerkt: Hat sich der Stand inzwischen
+	// geändert, passt das Ergebnis nicht mehr.
+	if Stand() != stand {
+		return
+	}
+	if k.stand != stand || k.m == nil || len(k.m) > 50000 {
+		k.stand, k.m = stand, map[string]Kennzahl{}
+	}
+	for _, id := range gefragt {
+		k.m[id] = neu[id]
+	}
 }
 
 // NeueFolgenSeit nennt die Serien, zu denen seit dem Zeitpunkt Folgen
