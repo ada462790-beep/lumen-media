@@ -330,7 +330,7 @@ func (w *stoppableWriter) Flush() {
 // mit DTS auf einem Gerät ohne DTS nicht stumm läuft. Wer eine Spur
 // gewählt hat, nimmt spurWahlFuer und dateiInfoFuer.
 func (s *Server) dateiInfo(ctx context.Context, f *store.MediaFile) stream.FileInfoT {
-	info := stream.FileInfo(f.VideoCodec, f.Container, f.Height, f.Bitrate, f.HDR)
+	info := stream.FileInfo(f.VideoCodec, f.Container, f.Height, dateiBitrate(f), f.HDR)
 	if spuren, err := s.st.Spuren(ctx, f.ID); err == nil {
 		for _, t := range spuren {
 			if t.Kind == "audio" {

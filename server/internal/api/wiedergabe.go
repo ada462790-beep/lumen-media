@@ -145,10 +145,24 @@ func (s *Server) spurWahlFuer(ctx context.Context, f *store.MediaFile, r *http.R
 	return w
 }
 
+// dateiBitrate: die gemessene Bitrate, sonst geschätzt aus Grösse und
+// Laufzeit. Ohne Wert griffe keine Bitrate-Grenze — weder die für
+// unterwegs noch eine im Player gewählte Qualität („720p · 4 Mbit/s"):
+// eine alte AVI ohne Angabe liefe dann immer im Original.
+func dateiBitrate(f *store.MediaFile) int {
+	if f.Bitrate > 0 {
+		return f.Bitrate
+	}
+	if f.DurationMS > 0 && f.SizeBytes > 0 {
+		return int(f.SizeBytes * 8 * 1000 / f.DurationMS)
+	}
+	return 0
+}
+
 // dateiInfoFuer ist dateiInfo mit der gewählten Tonspur und dem
 // Einbrennen — beides entscheidet mit, ob es direkt geht.
 func (s *Server) dateiInfoFuer(f *store.MediaFile, w spurWahl) stream.FileInfoT {
-	info := stream.FileInfo(f.VideoCodec, f.Container, f.Height, f.Bitrate, f.HDR)
+	info := stream.FileInfo(f.VideoCodec, f.Container, f.Height, dateiBitrate(f), f.HDR)
 	if w.ton != nil {
 		info = info.MitTon(w.ton.Codec)
 	}

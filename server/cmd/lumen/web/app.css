@@ -377,6 +377,8 @@ button.row:hover, .orow-link:focus-visible { background:rgba(255,255,255,.05) }
 .spur-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .spur:hover, .spur:focus-visible { background:#fff; color:#000; outline:0 }
 .spur--aktiv { font-weight:500 }
+/* Nebensache in einer Zeile („· Standard", „· 1080p · 9,8 Mbit/s"). */
+.spur-zusatz { opacity:.6; font-weight:400; font-size:.9375rem }
 .nextpill.btn { color:var(--label); font:inherit; border:0; cursor:pointer; left:auto; right:40px; bottom:150px }
 .naechster { bottom:150px }
 /* Solange ein Feld offen ist, tritt der Vorspann-Knopf zurück. */
