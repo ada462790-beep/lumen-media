@@ -1616,5 +1616,19 @@
   "one": "at least {n} video",
   "other": "at least {n} videos"
  },
- "· {n} Sprachen": "· {n} languages"
+ "· {n} Sprachen": "· {n} languages",
+ "DVD- und Blu-ray-Ordner": "DVD and Blu-ray folders",
+ "Das Umwandeln ist gescheitert.": "The conversion failed.",
+ "Davon spielt Lumen nur einen Titel direkt ab – ohne Menü, Kapitel und Sprachangaben. „In MKV umwandeln“ legt den Hauptfilm als eine Datei in den Ordner.": "Lumen plays only one title of these directly – without menu, chapters or track languages. “Convert to MKV” puts the main feature into the folder as a single file.",
+ "Der Hauptfilm wird ohne Qualitätsverlust als MKV daneben gelegt. Die ISO bleibt.": "The main feature is saved next to it as an MKV, without any loss of quality. The ISO stays.",
+ "Der Hauptfilm wird ohne Qualitätsverlust als MKV in den Ordner gelegt. Der Ordner bleibt.": "The main feature is saved into the folder as an MKV, without any loss of quality. The folder stays.",
+ "Fertig – der Film erscheint nach dem nächsten Durchlauf.": "Done – the film appears after the next scan.",
+ "In MKV umwandeln": "Convert to MKV",
+ "Schon umgewandelt – die MKV liegt daneben.": "Already converted – the MKV is next to it.",
+ "Umwandeln in MKV": "Converting to MKV",
+ "Wird ausgepackt … {p} %": "Unpacking … {p} %",
+ "Wird umgewandelt … {p} %": "Converting … {p} %",
+ "Wird vorbereitet …": "Preparing …",
+ "noch etwa {n} Min.": "about {n} min left",
+ "noch knapp eine Minute": "less than a minute left"
 }

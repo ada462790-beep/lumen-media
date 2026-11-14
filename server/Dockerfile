@@ -35,7 +35,10 @@ FROM alpine:3.22
 # Metadaten-Quellen. Die VAAPI-Treiber (Intel/AMD) machen die
 # Hardware-Beschleunigung möglich, sobald /dev/dri durchgereicht wird —
 # ohne Gerät schaden sie nicht. Den Intel-Treiber gibt es nur für x86_64.
-RUN apk add --no-cache ffmpeg tzdata ca-certificates su-exec \
+# 7zip (Programm „7zz", 1,7 MB, LGPL) liest ISO-Abbilder für „In MKV
+# umwandeln" unter Aufräumen — auch reine UDF-Abbilder von Blu-rays, an
+# denen bsdtar und xorriso scheitern. Alpine baut es ohne den RAR-Teil.
+RUN apk add --no-cache ffmpeg tzdata ca-certificates su-exec 7zip \
       libva mesa-va-gallium \
  && if [ "$(apk --print-arch)" = "x86_64" ]; then \
       apk add --no-cache intel-media-driver libva-intel-driver onevpl-intel-gpu || \
@@ -67,7 +70,8 @@ LABEL org.opencontainers.image.title="Lumen" \
 
 # /data hält Datenbank, Bilder und Zwischenspeicher.
 # Die Filme hängt man mit :rw ein: Lumen führt Filme in Teilen (a/b/c,
-# CD1/CD2) auf Wunsch zu einer Datei zusammen. Siehe README.md.
+# CD1/CD2) auf Wunsch zu einer Datei zusammen und legt den Hauptfilm einer
+# ISO oder eines DVD-Ordners als MKV daneben. Siehe README.md.
 VOLUME ["/data"]
 ENV LUMEN_DATA=/data LUMEN_ADDR=:8097
 EXPOSE 8097

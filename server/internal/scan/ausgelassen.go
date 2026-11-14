@@ -18,6 +18,7 @@ package scan
 // nichts — dort stehen keine Pfade.
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -32,6 +33,10 @@ const (
 	// Ein Verweis auf einen Ordner, dem der Durchlauf nicht folgt: zurück
 	// in die Bibliothek (Schleife), in Lumens Datenordner, schon gelesen.
 	AuslassVerweis = "verweis"
+	// Ein DVD- oder Blu-ray-Ordner: Lumen spielt davon nur den grössten
+	// Titel, ohne Menü, Kapitel und Sprachen. Gemerkt wird der Filmordner
+	// (der über VIDEO_TS bzw. BDMV) — für „In MKV umwandeln".
+	AuslassScheibe = "scheibe"
 )
 
 // maxAuslassPfade: so viele Pfade je Grund werden gezeigt; gezählt wird
@@ -55,7 +60,8 @@ var unbekannteEndungen = map[string]bool{
 }
 
 type auslassLauf struct {
-	je map[string]*Auslassung
+	je       map[string]*Auslassung
+	scheiben map[string]bool
 }
 
 func neuerAuslassLauf() *auslassLauf { return &auslassLauf{je: map[string]*Auslassung{}} }
@@ -86,6 +92,21 @@ func (a *auslassLauf) datei(pfad string) {
 		a.merken(AuslassBeiwerk, pfad)
 	case unbekannteEndungen[ext]:
 		a.merken(AuslassEndung, pfad)
+	}
+}
+
+// scheibe merkt einen DVD- oder Blu-ray-Ordner einmal je Durchlauf — nicht,
+// wenn der Hauptfilm schon als MKV daneben liegt.
+func (a *auslassLauf) scheibe(wurzel string) {
+	if a.scheiben == nil {
+		a.scheiben = map[string]bool{}
+	}
+	if a.scheiben[wurzel] {
+		return
+	}
+	a.scheiben[wurzel] = true
+	if !ScheibeUmgewandelt(wurzel) {
+		a.merken(AuslassScheibe, wurzel)
 	}
 }
 
@@ -123,4 +144,38 @@ func (s *Scanner) auslassenSetzen(libraryID string, a *auslassLauf) {
 		s.ausgelassen = map[string][]Auslassung{}
 	}
 	s.ausgelassen[libraryID] = a.liste()
+}
+
+// ScheibeZiel: wohin „In MKV umwandeln" den Hauptfilm legt. Aus
+// „Film (2001).iso" wird „Film (2001).mkv" daneben, aus dem Ordner
+// „Film (2001)" (mit VIDEO_TS oder BDMV darin) „Film (2001)/Film (2001).mkv".
+func ScheibeZiel(quelle string, istOrdner bool) string {
+	if istOrdner {
+		return filepath.Join(quelle, filepath.Base(quelle)+".mkv")
+	}
+	return strings.TrimSuffix(quelle, filepath.Ext(quelle)) + ".mkv"
+}
+
+// ScheibeUmgewandelt: Liegt der Hauptfilm dieses DVD- oder
+// Blu-ray-Ordners schon als MKV darin? Dann liest der Durchlauf die
+// Scheibe nicht mehr — sonst stünde der Film doppelt da.
+func ScheibeUmgewandelt(wurzel string) bool {
+	info, err := os.Stat(ScheibeZiel(wurzel, true))
+	return err == nil && info.Mode().IsRegular() && info.Size() > 0
+}
+
+// scheibenWurzel: der Filmordner über VIDEO_TS bzw. BDMV, wenn die Datei
+// zu einer Scheibe gehört.
+func scheibenWurzel(path string, dirs []string) (string, bool) {
+	k := discOrdner(dirs)
+	if k < 0 {
+		return "", false
+	}
+	// path = Bibliothek/dirs[0]/…/dirs[k]/…/Datei
+	hoch := len(dirs) - k
+	w := filepath.Dir(path)
+	for i := 0; i < hoch; i++ {
+		w = filepath.Dir(w)
+	}
+	return w, true
 }

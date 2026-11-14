@@ -186,6 +186,15 @@ func (w discWahl) nimmt(path string, dirs []string) bool {
 
 func discAuswahl(dir string, dvd bool) map[string]bool {
 	out := map[string]bool{}
+	// Schon in MKV umgewandelt („In MKV umwandeln" unter Aufräumen): Die
+	// MKV im Filmordner ist der Film, die Scheibe bleibt draussen.
+	wurzel := filepath.Dir(dir) // über VIDEO_TS
+	if !dvd {
+		wurzel = filepath.Dir(wurzel) // über BDMV/STREAM
+	}
+	if ScheibeUmgewandelt(wurzel) {
+		return out
+	}
 	eintraege, err := os.ReadDir(dir)
 	if err != nil {
 		return out

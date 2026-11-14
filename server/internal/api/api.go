@@ -335,6 +335,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/admin/sprache", owner(s.adminSprache))
 	// Schreibt in die Medienordner — nur der Besitzer.
 	mux.Handle("POST /api/v1/admin/items/{id}/teile-zusammenfuehren", owner(s.adminTeileZusammenfuehren))
+	// ISO-Datei oder DVD-/Blu-ray-Ordner: den Hauptfilm als MKV daneben
+	// (scheiben.go). Schreibt in die Medienordner — nur der Besitzer.
+	mux.Handle("GET /api/v1/admin/cleanup/umwandeln", owner(s.adminScheibeStand))
+	mux.Handle("POST /api/v1/admin/cleanup/umwandeln", owner(s.adminScheibeUmwandeln))
+	mux.Handle("DELETE /api/v1/admin/cleanup/umwandeln", owner(s.adminScheibeAbbrechen))
 	// Sicherung: sehen, jetzt sichern, wiederherstellen — nur der Besitzer.
 	mux.Handle("GET /api/v1/admin/backups", owner(s.adminSicherungen))
 	mux.Handle("POST /api/v1/admin/backups", owner(s.adminSichernJetzt))

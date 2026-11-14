@@ -309,6 +309,9 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		}
 		rel, _ := filepath.Rel(lib.Path, path)
 		dirs := splitDirs(rel)
+		if w, ok := scheibenWurzel(path, dirs); ok {
+			aus.scheibe(w)
+		}
 		if !disc.nimmt(path, dirs) {
 			return nil
 		}
