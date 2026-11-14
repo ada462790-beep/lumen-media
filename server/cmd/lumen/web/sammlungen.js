@@ -35,6 +35,60 @@ export function reiter(aktiv) {
 
 function titelAnzahl(n) { return tr('{n} Titel', { n }); }
 
+/* Suchen und Sortieren — auf beiden Reitern (Filmreihen, Sammlungen).
+ * Das Suchfeld wird nur mit der Seite gezeichnet; beim Tippen ersetzt
+ * reihenGitterZeichnen nur das Raster darunter, damit Fokus und Cursor
+ * bleiben. Die Sortierung gilt je Gerät. */
+const SORT_KEY = 'lumen.reihenSort';
+const REIHEN_SORT = () => [['name', tr('A–Z')], ['neu', tr('Zuletzt hinzugefügt')], ['anzahl', tr('Anzahl Filme')]];
+export function reihenSortierung() {
+  try { const v = localStorage.getItem(SORT_KEY); if (['name', 'neu', 'anzahl'].includes(v)) return v; } catch {}
+  return 'name';
+}
+export function reihenSortierungSetzen(v) { try { localStorage.setItem(SORT_KEY, v); } catch {} }
+const klein = t => String(t || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+export function reihenSuche(art) { return (U.S?.reihenSuche || {})[art] || ''; }
+export function reihenSucheSetzen(art, text) { U.S.reihenSuche = { ...(U.S.reihenSuche || {}), [art]: text }; }
+// Gefiltert und sortiert: Der Name zählt, aber auch die Titel darin —
+// „Neo" findet die Matrix-Reihe nicht, „Matrix Reloaded" schon.
+export function reihenAuswahl(liste, art) {
+  const worte = klein(reihenSuche(art)).split(/\s+/).filter(Boolean);
+  const passt = x => {
+    if (!worte.length) return true;
+    const heu = klein([x.name, ...(x.items || []).map(i => i.title)].join(' '));
+    return worte.every(w => heu.includes(w));
+  };
+  const sort = reihenSortierung();
+  const name = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base', numeric: true });
+  return liste.filter(passt).sort(sort === 'neu' ? (a, b) => (b.zuletztNeu || 0) - (a.zuletztNeu || 0) || name(a, b)
+    : sort === 'anzahl' ? (a, b) => (b.anzahl || 0) - (a.anzahl || 0) || name(a, b) : name);
+}
+export function reihenWerkzeug(art, anzahl) {
+  if (anzahl < 2) return '';
+  const sort = reihenSortierung();
+  const q = reihenSuche(art);
+  const was = art === 'collections' ? tr('Filmreihen durchsuchen') : tr('Sammlungen durchsuchen');
+  return `<div class="reihen-werkzeug" role="search">
+    <label class="sfield reihen-suche">${U.svg(U.I.search, 17, 2)}
+      <input type="search" data-reihen-suche="${art}" value="${escH(q)}" placeholder="${escH(was)}" aria-label="${escH(was)}"
+        autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-controls="reihen-grid"></label>
+    <label class="reihen-sort"><span class="t-sub c-2">${tr('Sortieren')}</span>
+      <select data-reihen-sort>${REIHEN_SORT().map(([k, n]) => `<option value="${k}"${k === sort ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+  </div>`;
+}
+// Das Raster samt Zahl und Hinweis, wenn nichts passt.
+export function reihenGitter(liste, art, karte) {
+  const auswahl = reihenAuswahl(liste, art);
+  const q = reihenSuche(art).trim();
+  return `<div class="reihen-grid" id="reihen-grid" aria-live="polite">${auswahl.map(karte).join('')}</div>
+    ${q && !auswahl.length ? `<p class="hint reihen-nichts">${tr('Nichts passt zu „{q}“.', { q: escH(q) })}</p>` : ''}
+    ${q && auswahl.length ? `<p class="sr-only">${tr('{n} Treffer', { n: auswahl.length })}</p>` : ''}`;
+}
+export function reihenGitterZeichnen(liste, art, karte) {
+  const ort = document.getElementById('reihen-gitter');
+  if (ort) ort.innerHTML = reihenGitter(liste, art, karte);
+}
+
 export function sammlungKarte(x) {
   const { artOf } = U;
   const bild = x.bild ? `<div class="reihe-blatt reihe-blatt--0"><img class="art-img" src="${escH(mitSchluessel(x.bild))}" alt="" loading="lazy"></div>` : '';
@@ -57,7 +111,8 @@ export function sammlungenSeite() {
     <div class="t-sub c-2" style="margin:4px 0 22px">
       ${liste.length ? `${tr('{n} Sammlungen', { n: liste.length })} · ${tr('von Hand zusammengestellt')}` : ''}</div>
     ${verwalten() ? `<div style="margin:-6px 0 24px"><button class="btn btn-pill btn-pill--fill" data-sam-neu>${tr('+ Neue Sammlung')}</button></div>` : ''}
-    ${liste.length ? `<div class="reihen-grid">${liste.map(sammlungKarte).join('')}</div>`
+    ${reihenWerkzeug('sammlungen', liste.length)}
+    ${liste.length ? `<div id="reihen-gitter">${reihenGitter(liste, 'sammlungen', sammlungKarte)}</div>`
       : `<div class="group group--inset" style="max-width:620px"><p class="hint" style="padding:18px 16px;margin:0">
           ${tr('Noch keine Sammlungen.')} ${S.me?.account?.isAdmin
             ? tr('Leg eine an — etwa „Weihnachtsfilme“ oder „Marvel in Reihenfolge“ — und füge auf der Seite eines Films „Zu Sammlung hinzufügen“ dazu.')

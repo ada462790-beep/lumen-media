@@ -22,7 +22,8 @@ import { T, altersOptionen, schutzText, falschMeldung, frage, schutzDialog, mitt
 // Handbearbeitung, Sammlungen, Übernahme aus Emby/Jellyfin, Untertitel.
 import { U as FU, funktionenKlick, detailVerwaltung, detailUntertitel, staffelBearbeiten, folgeBearbeiten,
   einstellungenUmzug, metadatenUntertitel, playerUntertitelEintrag, utStand, utStandLaden,
-  sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter } from './funktionen.js';
+  sammlungenLaden, sammlungLaden, sammlungenSeite, sammlungSeite, reihenReiter,
+  reihenWerkzeug, reihenGitter, reihenGitterZeichnen, reihenSucheSetzen, reihenSortierungSetzen } from './funktionen.js';
 // Bildschirmzeit der Kinderprofile (durchgesetzt vom Server).
 import { grenzenBearbeiten } from './konto.js';
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss, bzBand, bzTagText } from './bildschirmzeit.js';
@@ -1032,6 +1033,7 @@ function render() {
   const altScroll = altSeite ? altSeite.scrollTop : 0;
   const altReihen = gleicheSeite ? [...app.querySelectorAll('.rail')].map(r => r.scrollLeft) : null;
   app.innerHTML = html;
+  staffelLeisteEinrichten();
   randHinweise();
   hoverKarteWeg();
   reihenPfeile();
@@ -1058,11 +1060,18 @@ function render() {
 /* Waagerecht scrollende Leisten (Segmente, Genres, A–Z): Ein
    Verlauf am Rand zeigt, dass es dort weitergeht – sonst sähe „Ält…"
    aus wie ein abgeschnittener Knopf. */
-const ROLL_LEISTEN = '.segment, .chips--rollen, .az-leiste';
+const ROLL_LEISTEN = '.segment, .chips--rollen, .az-leiste, .staffel-roll';
 function randHinweis(el) {
   const mehr = el.scrollWidth - el.clientWidth;
+  const links = mehr > 2 && el.scrollLeft > 2, rechts = mehr > 2 && el.scrollLeft < mehr - 2;
+  // Die Staffel-Leiste hat Pfeile daneben: nur zeigen, wo es weitergeht.
+  if (el.classList.contains('staffel-roll')) {
+    const huelle = el.parentElement;
+    const l = huelle?.querySelector('.staffel-pfeil--l'), r = huelle?.querySelector('.staffel-pfeil--r');
+    if (l) l.hidden = !links;
+    if (r) r.hidden = !rechts;
+  }
   if (mehr <= 2) { el.removeAttribute('data-rand'); return; }
-  const links = el.scrollLeft > 2, rechts = el.scrollLeft < mehr - 2;
   el.setAttribute('data-rand', links && rechts ? 'beide' : links ? 'links' : 'rechts');
 }
 function randHinweise() { for (const el of app.querySelectorAll(ROLL_LEISTEN)) randHinweis(el); }
@@ -1510,6 +1519,24 @@ function viewWatchlist() {
 }
 
 function viewSearch() {
+  const q = S.query.trim();
+  // Das Feld wird nur beim Betreten der Seite gezeichnet. Danach ersetzt
+  // die Suche beim Tippen nur noch #suchtreffer (suchTrefferZeichnen) —
+  // sonst verlöre das Feld bei jedem Buchstaben Fokus und Cursor.
+  return shell(`<div class="wrap wrap--flat">
+    <h1 class="t-large" style="margin:0 0 16px">${tr('Suchen')}</h1>
+    <form id="searchform" class="sfield" autocomplete="off" role="search">
+      ${svg(I.search, 18, 2)}
+      <input id="q" name="q" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false"
+        value="${esc(S.query)}" placeholder="${tr('Titel, Schauspieler, Genre, Jahr …')}" aria-label="${tr('Suchen')}"
+        aria-controls="suchtreffer">
+      <button type="button" class="btn btn-round sm" data-clear aria-label="${tr('Leeren')}"${q ? '' : ' hidden'}>${svg(I.x, 15, 2.2)}</button>
+    </form>
+    <div id="suchtreffer" class="suchtreffer" style="margin-top:28px">${suchTreffer()}</div>
+    <div style="height:40px"></div></div>`);
+}
+
+function suchTreffer() {
   const d = S.data || {};
   const items = d.items || [], personen = d.personen || [], genres = d.genres || [];
   const reihen = d.reihen || [], sammlungen = d.sammlungen || [], folgen = d.folgen || [];
@@ -1519,6 +1546,7 @@ function viewSearch() {
     de.jahrVon ? (de.jahrVon === de.jahrBis ? String(de.jahrVon) : `${de.jahrVon}–${de.jahrBis}`) : '',
     de.text ? `„${de.text}“` : ''].filter(Boolean).join(' · ');
   const gedeutet = de.person || de.genre || de.jahrVon;
+  if (S.suchFehler && q) return `<p class="hint" role="alert">${esc(S.suchFehler)}</p>`;
 
   const personenHtml = personen.length ? `<section style="margin-bottom:26px">
       <div class="section-h" style="padding-left:0">${tr('Personen')}</div>
@@ -1545,16 +1573,7 @@ function viewSearch() {
   // Schreibweise gesucht und sagt, mit welcher.
   const meintest = d.meintest && q ? `<p class="t-body" style="margin:0 0 18px">${tr('Meintest du')}
       <button type="button" class="link-knopf" data-meintest="${esc(d.meintest)}">„${esc(d.meintest)}“</button>?</p>` : '';
-  return shell(`<div class="wrap wrap--flat">
-    <h1 class="t-large" style="margin:0 0 16px">${tr('Suchen')}</h1>
-    <form id="searchform" class="sfield" autocomplete="off" role="search">
-      ${svg(I.search, 18, 2)}
-      <input id="q" name="q" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false"
-        value="${esc(S.query)}" placeholder="${tr('Titel, Schauspieler, Genre, Jahr …')}" aria-label="${tr('Suchen')}">
-      ${q ? `<button type="button" class="btn btn-round sm" data-clear aria-label="${tr('Leeren')}">${svg(I.x, 15, 2.2)}</button>` : ''}
-    </form>
-    <div style="margin-top:28px">
-      ${!q ? leer({ symbol: I.search, titel: tr('Wonach suchst du?'), text: tr('Titel, Schauspieler, Genre oder Jahr — auch „Komödie 2019“, „Filme mit Tom Hanks“ oder „Thriller 80er“.') })
+  return !q ? leer({ symbol: I.search, titel: tr('Wonach suchst du?'), text: tr('Titel, Schauspieler, Genre oder Jahr — auch „Komödie 2019“, „Filme mit Tom Hanks“ oder „Thriller 80er“.') })
         : `${reihenHtml}${personenHtml}${genresHtml}${meintest}
            ${items.length ? `<div class="t-sub c-2" style="margin-bottom:18px">${tr('{n} Treffer', { n: items.length })}${gedeutet ? ' · ' + esc(deutung) : ''}</div>
             <div class="grid">${items.map(posterCard).join('')}</div>${folgenHtml}`
@@ -1563,9 +1582,61 @@ function viewSearch() {
            : leer({ symbol: I.search, titel: tr('Keine Treffer für „{q}“', { q }),
                text: tr('Prüf die Schreibweise oder versuch es mit einem anderen Wort.'),
                aktion: `<button class="btn btn-pill btn-pill--fill" data-wish="${esc(q)}">${tr('„{q}“ wünschen', { q: esc(q) })}</button>
-                 <p class="hint" style="margin:10px 0 0">${tr('Der Besitzer sieht den Wunsch und sonst nichts.')}</p>` })}`}
-    </div>
-    <div style="height:40px"></div></div>`);
+                 <p class="hint" style="margin:10px 0 0">${tr('Der Besitzer sieht den Wunsch und sonst nichts.')}</p>` })}`;
+}
+
+/* Suchen beim Tippen: entprellt, ältere Anfragen werden abgebrochen, und
+   nur die Trefferliste wird neu gezeichnet — das Feld bleibt stehen. */
+let suchZeit = null, suchAbbruch = null, suchLangsam = null;
+function suchTrefferZeichnen() {
+  const box = document.getElementById('suchtreffer');
+  if (!box || S.view !== 'search') return;
+  box.innerHTML = suchTreffer();
+  const leeren = app.querySelector('#searchform [data-clear]');
+  if (leeren) leeren.hidden = !S.query.trim();
+  hoverKarteWeg();
+  reihenPfeile();
+  randHinweise();
+  trefferAnsagen();
+}
+function sucheEingabe(text, sofort = false) {
+  S.query = text;
+  try { history.replaceState({ ...(history.state || {}), view: 'search', query: S.query }, '', adresseFuer('search', null, S.query)); } catch {}
+  clearTimeout(suchZeit);
+  const leeren = app.querySelector('#searchform [data-clear]');
+  if (leeren) leeren.hidden = !text.trim();
+  if (!text.trim()) {
+    suchAbbruch?.abort(); suchAbbruch = null;
+    S.data = { items: [], personen: [], genres: [] }; S.suchFehler = '';
+    return suchTrefferZeichnen();
+  }
+  if (sofort) return suchen();
+  suchZeit = setTimeout(suchen, 250);
+}
+async function suchen() {
+  clearTimeout(suchZeit);
+  const q = S.query;
+  suchAbbruch?.abort();
+  const c = new AbortController();
+  suchAbbruch = c;
+  const box = document.getElementById('suchtreffer');
+  // Dauert es, werden die alten Treffer nur leicht abgeblendet — keine
+  // Ladeanzeige, die das Feld wegschiebt oder flackert.
+  clearTimeout(suchLangsam);
+  suchLangsam = setTimeout(() => { if (suchAbbruch === c) box?.setAttribute('aria-busy', 'true'); }, 300);
+  try {
+    const d = await api.search(q, 60, c.signal);
+    if (suchAbbruch !== c || S.view !== 'search') return;
+    S.data = d; S.suchFehler = '';
+    if (SPEICHER_ANSICHTEN.includes('search')) datenSpeicher.set(aktSchluessel, { data: d, zeit: Date.now() });
+  } catch (e) {
+    if (c.signal.aborted || e?.abgebrochen || suchAbbruch !== c) return;
+    if (e instanceof ApiError && e.status === 401) { S.me = null; return go('profiles'); }
+    S.suchFehler = e instanceof ApiError ? e.message : tr('Unerwarteter Fehler.');
+  } finally {
+    if (suchAbbruch === c) { clearTimeout(suchLangsam); suchAbbruch = null; document.getElementById('suchtreffer')?.removeAttribute('aria-busy'); }
+  }
+  suchTrefferZeichnen();
 }
 
 /* Neuigkeiten: neue Folgen zu meinen Serien, neue Filme in meinen Reihen,
@@ -1573,16 +1644,33 @@ function viewSearch() {
 function viewNews() {
   const d = S.data || {};
   const gelesen = d.gelesenBis ? new Date(d.gelesenBis).getTime() : 0;
-  const zeile = n => {
+  const zeile = (n, i) => {
     const neu = new Date(n.at).getTime() > gelesen;
-    const ziel = n.itemId ? `data-go="detail" data-id="${esc(n.itemId)}"` : n.art === 'server' && verwaltungHier() ? 'data-go="admin"' : 'data-go="home"';
+    const titel = n.titelListe || [];
+    // „{n} neue Titel": aufklappen und die Titel zeigen (vorher führte der
+    // Klick auf die Startseite). Ein einzelner Titel öffnet sich direkt.
+    const klapp = !n.itemId && titel.length > 0;
+    const auf = klapp && S.newsAuf === i;
+    const ziel = klapp ? `data-neu-auf="${i}" aria-expanded="${auf}" aria-controls="neu-titel-${i}"`
+      : n.itemId ? `data-go="detail" data-id="${esc(n.itemId)}"`
+      : n.art === 'server' && verwaltungHier() ? 'data-go="admin"' : '';
     const symbol = n.art === 'folgen' ? I.tv : n.art === 'reihe' ? I.reihe : I.film;
-    return `<button class="row orow-link" ${ziel} style="width:100%;min-height:62px;text-align:left;gap:14px">
+    const kopf = `
       <span style="width:38px;height:38px;border-radius:12px;background:${neu ? 'rgba(10,132,255,.18)' : 'var(--fill)'};color:${neu ? '#4aa3ff' : 'var(--label-2)'};display:inline-flex;align-items:center;justify-content:center;flex:none">${svg(symbol, 18)}</span>
       <span style="flex:1;min-width:0">
         <span class="t-body clamp-1" style="display:block${neu ? ';font-weight:600' : ''}">${esc(n.titel)}</span>
         <span class="t-caption c-2 clamp-1" style="display:block">${esc(n.text)} · ${new Date(n.at).toLocaleDateString(sprache(), { day: 'numeric', month: 'short' })}</span></span>
-      ${neu ? `<span class="sr-only">${tr(', neu')}</span>` : ''}${svg(I.chev, 14, 2.4)}</button>`;
+      ${neu ? `<span class="sr-only">${tr(', neu')}</span>` : ''}`;
+    if (!ziel) return `<div class="row" style="width:100%;min-height:62px;gap:14px">${kopf}</div>`;
+    const liste = klapp ? `<div class="neu-titel-liste" id="neu-titel-${i}"${auf ? '' : ' hidden'}>${titel.map(t => `
+        <button type="button" class="neu-titel" data-go="detail" data-id="${esc(t.id)}">
+          <span class="neu-titel-bild">${artOf(t, 'poster')}</span>
+          <span class="neu-titel-text"><span class="t-body clamp-2">${esc(t.title)}</span>
+            <span class="t-caption c-2">${[t.year || '', t.kind === 'series' ? tr('Serie') : tr('Film')].filter(Boolean).join(' · ')}</span></span>
+        </button>`).join('')}
+        ${n.anzahl > titel.length ? `<p class="t-caption c-2 neu-titel-mehr">${tr('und {n} weitere — alle unter „Filme“ und „Serien“, sortiert nach „Hinzugefügt“.', { n: n.anzahl - titel.length })}</p>` : ''}</div>` : '';
+    return `<div class="neu-eintrag${auf ? ' neu-eintrag--auf' : ''}"><button class="row orow-link" ${ziel} style="width:100%;min-height:62px;text-align:left;gap:14px">${kopf}
+      <span class="neu-chev${klapp ? ' neu-chev--klapp' : ''}">${svg(I.chev, 14, 2.4)}</span></button>${liste}</div>`;
   };
   const liste = d.eintraege || [];
   return shell(`<div class="wrap wrap--flat" style="max-width:760px">
@@ -1713,23 +1801,16 @@ function viewDetail() {
   const playable = fassungen[0] || files.find(f => !f.missing);
   const resumeSec = it.resumeMs ? it.resumeMs / 1000 : 0;
 
-  const meta = [
-    jahre(it), it.ageYears != null ? tr('ab {n}', { n: it.ageYears }) : null, mins(it.runtimeMs),
-    (it.genres || []).join(' · '),
-    it.imdbRating ? `IMDb ${it.imdbRating}${it.imdbVotes ? ` (${it.imdbVotes.toLocaleString(sprache())})` : ''}` : null,
-  ].filter(Boolean).join(' · ');
-  // Rotten Tomatoes: Anteil guter Kritiken. Ab 60 % „frisch" (Tomate),
-  // darunter „faul" — ein brauner Klecks, kein grüner Punkt, der wie
-  // „gut" aussähe.
-  const tomaten = it.rottenTomatoes == null ? '' : `${meta ? ' · ' : ''}<span class="rt">${it.rottenTomatoes >= 60
-    ? '<span aria-hidden="true">🍅</span>'
-    : `<svg class="rt-faul" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3c1.2 2.4 3.6 1.6 4.6 3.4 1 1.8-.6 3 .8 4.6 1.4 1.6 3.6 1.4 3.6 3.6 0 2.2-2.6 2.2-3.6 3.8-1 1.6.2 3.6-2.2 3.6-2.4 0-2-2-3.2-2s-1.2 2-3.4 1.6C6.4 21.2 7.6 19 6.2 18c-1.4-1-4.2-.6-4.2-2.8 0-2.2 2.6-2 3-3.8.4-1.8-2.2-3.2-.8-4.8 1.4-1.6 3.4.2 4.8-.8C10.4 4.8 10.8 3 12 3z"/></svg>`}
-    ${tr('{rottenTomatoes} % Rotten Tomatoes', { rottenTomatoes: it.rottenTomatoes })}${it.rottenTomatoes >= 60 ? '' : ` <span class="sr-only">${tr('(faul)')}</span>`}</span>`;
+  // Die ruhige Eckdatenzeile: Jahre · Laufzeit · Genres. Die Wertungen
+  // stehen eigens darüber (wertungsReihe), die Altersfreigabe bei den
+  // Abzeichen — vorher suchte man die Note in einer langen grauen Zeile.
+  const meta = [jahre(it), mins(it.runtimeMs), (it.genres || []).map(genreName).join(' · ')].filter(Boolean).join(' · ');
+  const wertungen = wertungsReihe(it, d.links);
 
   // Die Technik-Zeile: was die Datei kann — Auflösung, HDR, Ton,
   // Sprachen, Untertitel, und ob dieses Gerät sie direkt abspielt.
   const technik = (() => {
-    if (!playable && !it.qualitaet) return '';
+    if (!playable && !it.qualitaet) return it.ageYears != null ? `<div class="technik" aria-label="${tr('Technische Daten')}"><span class="tech tech--alter">${esc(tr('ab {n}', { n: it.ageYears }))}</span></div>` : '';
     const spuren = playable?.tracks || [];
     // Bild-Untertitel zählen mit: der Player bietet sie an (eingebrannt).
     const ton = spuren.filter(t => t.kind === 'audio'), text = spuren.filter(t => t.kind === 'subtitle' && (!t.bitmap || !t.external));
@@ -1741,6 +1822,8 @@ function viewDetail() {
     const kan = kanaele || it.kanaele || 0;
     const abz = [q, hdr, kan > 2 ? `${kan - 1}.1` : kan === 2 ? tr('Stereo') : '',
       sprachen.length ? sprachen.join(' · ') : ''].filter(Boolean).map(x => `<span class="tech">${esc(x)}</span>`);
+    // Die Altersfreigabe als erstes Abzeichen, in derselben Form.
+    if (it.ageYears != null) abz.unshift(`<span class="tech tech--alter" title="${esc(tr('Freigegeben ab {n} Jahren', { n: it.ageYears }))}">${esc(tr('ab {n}', { n: it.ageYears }))}</span>`);
     if (text.length) abz.push(`<span class="tech">${svg(I.untertitel, 13, 1.8)}${tr('Untertitel')}${utSprachen.length ? ' ' + esc(utSprachen.join(' · ')) : ''}</span>`);
     if (d.plan) abz.push(d.plan.direct ? `<span class="tech tech--gut">${tr('Direkt abspielbar')}</span>` : `<span class="tech tech--leise">${tr('Wird umgewandelt')}</span>`);
     return abz.length ? `<div class="technik" aria-label="${tr('Technische Daten')}">${abz.join('')}</div>` : '';
@@ -1753,9 +1836,7 @@ function viewDetail() {
   // Staffeln als Reiter, darunter die Folgen der gewählten — wie man es
   // von Emby kennt: Bild, Nummer und Name, Länge, kurze Beschreibung,
   // und was schon gesehen ist, trägt den Haken.
-  const seasons = (d.seasons || []).map(s =>
-    `<button class="tab-pill" aria-pressed="${d.staffel === s.id}" data-season="${esc(s.id)}">
-      ${(s.seasonNo || 0) === 0 ? tr('Specials') : esc(s.title)}</button>`).join('');
+  const seasons = staffelLeiste(d);
 
   const episodes = (d.episodes || []).map(e => `
     <div class="orow folge" style="height:auto;padding:12px 16px;gap:14px">
@@ -1868,7 +1949,8 @@ function viewDetail() {
         ${it.originalTitle && it.originalTitle !== it.title
           ? `<div class="t-sub c-2" style="margin-top:4px">${esc(it.originalTitle)}</div>` : ''}
         ${d.nfo?.tagline ? `<div class="t-sub" style="margin-top:6px;font-style:italic">${esc(d.nfo.tagline)}</div>` : ''}
-        <div class="t-sub c-2" style="margin-top:8px">${esc(meta)}${tomaten}</div>
+        ${wertungen}
+        ${meta ? `<div class="t-sub c-2 eckdaten">${esc(meta)}</div>` : ''}
         ${technik}
         <div style="display:flex;gap:12px;margin-top:22px;flex-wrap:wrap">
           ${playable
@@ -1945,10 +2027,9 @@ function viewDetail() {
               ${p.rolle ? `<div class="t-caption c-2 clamp-1">${esc(p.rolle)}</div>` : ''}
             </button>`).join('')}</div></section>` : ''}
         ${extrasAbschnitt(it, d.extras)}
-        ${seasons ? `<section style="margin-top:28px">
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <div role="group" aria-label="${tr('Staffel')}" class="chips" style="display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;max-width:100%;overflow-x:auto">${seasons}</div>${staffelBearbeiten(d.staffel)}
-              ${staffelKnopf}</div>
+        ${seasons ? `<section class="staffeln" style="margin-top:28px">
+            ${seasons}
+            <div class="staffel-werkzeuge">${staffelBearbeiten(d.staffel)}${staffelKnopf}</div>
             ${vorherFrage}
             <div class="group group--inset" style="margin-top:14px">${episodes
               || `<p class="hint" style="padding:18px 16px;margin:0">${tr('In dieser Staffel liegt noch keine Folge.')}</p>`}</div></section>` : ''}
@@ -1988,6 +2069,130 @@ function viewDetail() {
         <h2 class="t-title3">${tr('Ähnliche Titel')}</h2>
         <div class="rail">${d.similar.map(x => posterCard(x)).join('')}</div></section>` : ''}
     <div style="height:40px"></div></div>`);
+}
+
+/* Wertungen unter dem Titel: IMDb (gelber Schriftzug als Text, Stern,
+   Note, Stimmen klein), Rotten Tomatoes (Tomate ab 60 %, darunter der
+   braune Klecks für „faul") und TMDb (kleines Logo, Prozent). Je ein Link
+   auf die Seite des Titels, wenn Lumen die Kennung kennt. */
+function wertungsReihe(it, links = []) {
+  const link = name => (links || []).find(l => l.name === name && /^https:\/\//.test(l.url))?.url || '';
+  const zahl = (n, stellen = 1) => Number(n).toLocaleString(sprache(), { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+  const teil = (inhalt, url, label) => url
+    ? `<a class="wertung" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="${esc(label)}">${inhalt}</a>`
+    : `<span class="wertung" role="img" aria-label="${esc(label)}">${inhalt}</span>`;
+  const teile = [];
+  if (it.imdbRating) {
+    const stimmen = it.imdbVotes ? it.imdbVotes.toLocaleString(sprache()) : '';
+    teile.push(teil(`<span class="wertung-imdb" aria-hidden="true">IMDb</span>
+      <span class="wertung-wert" aria-hidden="true"><span class="wertung-stern">★</span> ${zahl(it.imdbRating)}</span>
+      ${stimmen ? `<span class="wertung-zusatz" aria-hidden="true">${esc(stimmen)}</span>` : ''}`, link('IMDb'),
+      stimmen ? tr('IMDb: {note} von 10, {stimmen} Stimmen', { note: zahl(it.imdbRating), stimmen })
+        : tr('IMDb: {note} von 10', { note: zahl(it.imdbRating) })));
+  }
+  if (it.rottenTomatoes != null) {
+    const frisch = it.rottenTomatoes >= 60;
+    teile.push(teil(`${frisch ? '<span class="wertung-rt" aria-hidden="true">🍅</span>'
+      : `<svg class="rt-faul wertung-rt" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3c1.2 2.4 3.6 1.6 4.6 3.4 1 1.8-.6 3 .8 4.6 1.4 1.6 3.6 1.4 3.6 3.6 0 2.2-2.6 2.2-3.6 3.8-1 1.6.2 3.6-2.2 3.6-2.4 0-2-2-3.2-2s-1.2 2-3.4 1.6C6.4 21.2 7.6 19 6.2 18c-1.4-1-4.2-.6-4.2-2.8 0-2.2 2.6-2 3-3.8.4-1.8-2.2-3.2-.8-4.8 1.4-1.6 3.4.2 4.8-.8C10.4 4.8 10.8 3 12 3z"/></svg>`}
+      <span class="wertung-wert" aria-hidden="true">${it.rottenTomatoes} %</span>
+      <span class="wertung-zusatz" aria-hidden="true">Rotten Tomatoes</span>`, '',
+      frisch ? tr('Rotten Tomatoes: {prozent} % (frisch)', { prozent: it.rottenTomatoes }) : tr('Rotten Tomatoes: {prozent} % (faul)', { prozent: it.rottenTomatoes })));
+  }
+  if (it.tmdbRating) {
+    teile.push(teil(`<img class="wertung-tmdb" src="/tmdb.svg" alt="" width="38" height="16">
+      <span class="wertung-wert" aria-hidden="true">${it.tmdbRating} %</span>`, link('TheMovieDb'),
+      tr('TMDb: {prozent} % der Nutzer', { prozent: it.tmdbRating })));
+  }
+  return teile.length ? `<div class="wertungen" aria-label="${tr('Wertungen')}" role="group">${teile.join('')}</div>` : '';
+}
+
+/* Genres, wie sie aus TMDb (englisch) oder einer NFO kommen, in der
+   Sprache der Oberfläche. Unbekannte bleiben, wie sie sind. */
+// Englische Namen auf die deutschen Schlüssel (sprache: fest — keine Anzeige).
+const GENRE_EN = { 'Action': 'Action', 'Adventure': 'Abenteuer', 'Animation': 'Animation', 'Comedy': 'Komödie', 'Crime': 'Krimi', // sprache: fest
+  'Documentary': 'Dokumentarfilm', 'Drama': 'Drama', 'Family': 'Familie', 'Fantasy': 'Fantasy', 'History': 'Historie',
+  'Horror': 'Horror', 'Music': 'Musik', 'Mystery': 'Mystery', 'Romance': 'Liebesfilm', 'Science Fiction': 'Science Fiction',
+  'Sci-Fi': 'Science Fiction', 'TV Movie': 'TV-Film', 'Thriller': 'Thriller', 'War': 'Kriegsfilm', 'Western': 'Western',
+  'Kids': 'Kinder', 'Reality': 'Reality', 'Sci-Fi & Fantasy': 'Sci-Fi & Fantasy', 'Action & Adventure': 'Action & Adventure',
+  'War & Politics': 'Krieg & Politik', 'News': 'Nachrichten', 'Talk': 'Talkshow', 'Soap': 'Seifenoper' };
+function genreName(g) {
+  const de = GENRE_EN[g] || g;
+  const namen = {
+    'Action': tr('Genre|Action'), 'Abenteuer': tr('Genre|Abenteuer'), 'Animation': tr('Genre|Animation'), 'Komödie': tr('Genre|Komödie'), // sprache: fest
+    'Krimi': tr('Genre|Krimi'), 'Dokumentarfilm': tr('Genre|Dokumentarfilm'), 'Drama': tr('Genre|Drama'), 'Familie': tr('Genre|Familie'),
+    'Fantasy': tr('Genre|Fantasy'), 'Historie': tr('Genre|Historie'), 'Horror': tr('Genre|Horror'), 'Musik': tr('Genre|Musik'),
+    'Mystery': tr('Genre|Mystery'), 'Liebesfilm': tr('Genre|Liebesfilm'), 'Science Fiction': tr('Genre|Science Fiction'),
+    'TV-Film': tr('Genre|TV-Film'), 'Thriller': tr('Genre|Thriller'), 'Kriegsfilm': tr('Genre|Kriegsfilm'), 'Western': tr('Genre|Western'),
+    'Kinder': tr('Genre|Kinder'), 'Reality': tr('Genre|Reality'), 'Sci-Fi & Fantasy': tr('Genre|Sci-Fi & Fantasy'),
+    'Action & Adventure': tr('Genre|Action & Adventure'), 'Krieg & Politik': tr('Genre|Krieg & Politik'),
+    'Nachrichten': tr('Genre|Nachrichten'), 'Talkshow': tr('Genre|Talkshow'), 'Seifenoper': tr('Genre|Seifenoper'),
+  };
+  return namen[de] || g;
+}
+
+/* Die Staffel-Leiste einer Serie. Wenige Staffeln: „Staffel 1" als
+   Kapseln. Viele (Doctor Who, Die Simpsons): nur die Zahlen unter der
+   Überschrift „Staffeln", seitlich scrollbar mit Verlauf am Rand und
+   Pfeilen; „Specials" bleibt ein eigener Knopf daneben. Sehr viele: ein
+   Auswahlfeld. Die gewählte Staffel rückt ins Sichtfeld
+   (staffelLeisteEinrichten). Mit Tastatur und Fernbedienung: Die Knöpfe
+   sind gewöhnliche Knöpfe in einer Reihe (tastatur.js), Pos1/Ende springen
+   an den Anfang und ans Ende. */
+const STAFFEL_KOMPAKT_AB = 7, STAFFEL_AUSWAHL_AB = 16;
+function staffelLeiste(d) {
+  const liste = d.seasons || [];
+  if (!liste.length) return '';
+  const special = s => (s.seasonNo || 0) === 0;
+  const regulaer = liste.filter(s => !special(s)), specials = liste.filter(special);
+  const kompakt = regulaer.length >= STAFFEL_KOMPAKT_AB;
+  const name = s => special(s) ? tr('Specials') : s.seasonNo ? tr('Staffel {n}', { n: s.seasonNo }) : (s.title || '');
+  const knopf = s => {
+    const zahl = kompakt && !special(s) && s.seasonNo;
+    return `<button type="button" class="staffel-knopf${zahl ? ' staffel-knopf--zahl' : ''}" aria-pressed="${d.staffel === s.id}"
+      data-season="${esc(s.id)}"${zahl ? ` aria-label="${esc(name(s))}" title="${esc(name(s))}"` : ''}>${zahl ? s.seasonNo : special(s) ? tr('Specials') : esc(s.title || name(s))}</button>`;
+  };
+  if (regulaer.length >= STAFFEL_AUSWAHL_AB) {
+    // Sehr viele Staffeln: ein Auswahlfeld statt einer endlosen Leiste.
+    return `<div class="staffel-kopf">
+      <h2 class="staffel-titel" id="staffel-titel">${tr('Staffeln')}</h2>
+      <label class="staffel-wahl"><span class="sr-only">${tr('Staffel wählen')}</span>
+        <select data-staffel-wahl aria-labelledby="staffel-titel">${liste.map(s =>
+          `<option value="${esc(s.id)}"${d.staffel === s.id ? ' selected' : ''}>${esc(name(s))}</option>`).join('')}</select>
+        ${svg('<path d="m6 9 6 6 6-6"/>', 16, 2.2)}</label>
+      <span class="t-caption c-2">${tr('{n} Staffeln', { n: regulaer.length })}</span></div>`;
+  }
+  const pfeil = (r, text) => `<button type="button" class="staffel-pfeil staffel-pfeil--${r > 0 ? 'r' : 'l'}" data-staffel-pfeil="${r}"
+      tabindex="-1" aria-label="${text}" hidden>${svg(r > 0 ? '<path d="M9 5l7 7-7 7"/>' : '<path d="M15 5l-7 7 7 7"/>', 16, 2.4)}</button>`;
+  const leiste = kompakt ? regulaer : liste;
+  return `${kompakt ? `<div class="staffel-kopf"><h2 class="staffel-titel" id="staffel-titel">${tr('Staffeln')}</h2></div>` : ''}
+    <div class="staffel-zeile">
+      <div class="staffel-leiste">
+        ${pfeil(-1, tr('Frühere Staffeln'))}
+        <div class="staffel-roll${kompakt ? ' staffel-roll--kompakt' : ''}" role="group" ${kompakt ? 'aria-labelledby="staffel-titel"' : `aria-label="${tr('Staffel')}"`}>${leiste.map(knopf).join('')}</div>
+        ${pfeil(1, tr('Weitere Staffeln'))}
+      </div>
+      ${kompakt ? specials.map(knopf).join('') : ''}
+    </div>`;
+}
+// Nach dem Zeichnen: die gewählte Staffel ins Sichtfeld, Pfeile und Rand
+// nach Lage.
+function staffelLeisteEinrichten() {
+  const roll = app.querySelector('.staffel-roll');
+  if (!roll) return;
+  const an = roll.querySelector('[aria-pressed="true"]');
+  if (an) {
+    const ziel = an.offsetLeft - (roll.clientWidth - an.offsetWidth) / 2;
+    roll.scrollLeft = Math.max(0, Math.min(ziel, roll.scrollWidth - roll.clientWidth));
+  }
+  randHinweis(roll);
+}
+async function staffelZeigen(id) {
+  S.staffelWahl = { serie: S.id, staffel: id };
+  const eps = await api.children(id).catch(() => []);
+  S.data = { ...S.data, episodes: eps, staffel: id };
+  render();
+  // Der Fokus bleibt auf dem gewählten Knopf (oder dem Auswahlfeld).
+  (app.querySelector(`.staffel-knopf[data-season="${CSS.escape(id)}"]`) || app.querySelector('[data-staffel-wahl]'))?.focus({ preventScroll: true });
 }
 
 /* Was die NFO-Datei ausserdem weiss: Regie, Drehbuch, Studio, Land,
@@ -3786,7 +3991,8 @@ function viewCollections() {
     ${reihenReiter('collections')}
     <div class="t-sub c-2" style="margin:4px 0 26px">
       ${rs.length ? tr('{n} Reihen · Lumen stellt sie selbst zusammen', { n: rs.length }) : ''}</div>
-    ${rs.length ? `<div class="reihen-grid">${rs.map(reiheKarte).join('')}</div>`
+    ${reihenWerkzeug('collections', rs.length)}
+    ${rs.length ? `<div id="reihen-gitter">${reihenGitter(rs, 'collections', reiheKarte)}</div>`
       : `<div class="group group--inset" style="max-width:620px"><p class="hint" style="padding:18px 16px;margin:0">
           ${tr('Noch keine Reihen. Lumen erkennt sie von selbst, sobald zwei Filme einer Reihe da sind — am Titel („Teil 2“, „II“, „Der Herr der Ringe: …“) oder, mit TMDb-Schlüssel, sicher über TMDb.')}</p></div>`}
     <div style="height:40px"></div></div>`);
@@ -5322,14 +5528,31 @@ function viewCleanup() {
     defekt_gesperrt: [tr('Keine Leserechte'), tr('Lumen darf die Datei nicht öffnen (Rechte auf dem NAS prüfen). Sie wird nicht angeboten, bis sie lesbar ist.')],
     defekt_kaputt: [tr('Defekte Datei'), tr('FFmpeg erkennt darin kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten.')],
   };
-  const ausgelassen = (d.ausgelassen || []).map(b => b.liste.map(a => `
-    <details class="orow" style="height:auto;padding:12px 16px;display:block">
-      <summary style="cursor:pointer;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
-        <span class="t-body" style="flex:1">${esc((AUSLASS[a.grund] || [a.grund])[0])}</span>
-        <span class="t-caption c-2">${esc(b.name)} · ${tr('{n} Einträge', { n: a.anzahl })}</span></summary>
-      <p class="t-caption c-2" style="margin:6px 0">${esc((AUSLASS[a.grund] || ['', ''])[1])}</p>
-      <div class="mono c-2" style="font-size:.7188rem;line-height:1.6;overflow-wrap:anywhere">${a.pfade.map(esc).join('<br>')}${a.anzahl > a.pfade.length ? '<br>…' : ''}</div>
-    </details>`).join('')).join('');
+  // Jede Zeile klappt auf und nennt die Dateien (oder Ordner): der Name
+  // hervorgehoben, davor der Ordner, lang umbrechend. Vorher sah man nur
+  // „Defekte Datei · 3 Einträge", aber nicht, welche.
+  const pfadZeile = pfad => {
+    const i = pfad.replace(/\/+$/, '').lastIndexOf('/');
+    const ordner = i >= 0 ? pfad.slice(0, i + 1) : '', name = i >= 0 ? pfad.slice(i + 1) : pfad;
+    return `<li class="auslass-pfad" title="${esc(pfad)}"><span class="auslass-ordner">${esc(ordner)}</span><span class="auslass-name">${esc(name)}</span></li>`;
+  };
+  const ausgelassen = (d.ausgelassen || []).map(b => b.liste.map(a => {
+    const [titel, grund] = AUSLASS[a.grund] || [a.grund, ''];
+    return `
+    <details class="auslass">
+      <summary class="auslass-kopf">
+        <span class="auslass-chev" aria-hidden="true">${svg(I.chev, 13, 2.6)}</span>
+        <span class="t-body auslass-titel">${esc(titel)}</span>
+        <span class="t-caption c-2 auslass-ort">${esc(b.name)}</span>
+        <span class="auslass-zahl" aria-label="${esc(tr('{n} Einträge', { n: a.anzahl }))}">${a.anzahl}</span>
+      </summary>
+      <div class="auslass-inhalt">
+        ${grund ? `<p class="t-caption c-2 auslass-grund">${esc(grund)}</p>` : ''}
+        <ul class="auslass-pfade">${(a.pfade || []).map(pfadZeile).join('')}</ul>
+        ${a.anzahl > (a.pfade || []).length ? `<p class="t-caption c-2" style="margin:8px 0 0">${tr('… und {n} weitere (gezeigt werden die ersten {m}).', { n: a.anzahl - (a.pfade || []).length, m: (a.pfade || []).length })}</p>` : ''}
+      </div>
+    </details>`;
+  }).join('')).join('');
 
   // Der Schlüssel fehlt oder wird abgelehnt: einmal oben sagen, was das
   // heisst und wo er hingehört — statt bei jedem Titel „nicht erreichbar".
@@ -5759,11 +5982,27 @@ app.addEventListener('click', async e => {
     const from = n.dataset.from != null ? Number(n.dataset.from) : undefined;
     return startPlayer(n.dataset.play, from, n.dataset.file || null);
   }
-  if ((n = hit('data-season'))) {
-    S.staffelWahl = { serie: S.id, staffel: n.dataset.season };
-    const eps = await api.children(n.dataset.season).catch(() => []);
-    S.data = { ...S.data, episodes: eps, staffel: n.dataset.season };
-    return render();
+  if ((n = hit('data-neu-auf'))) {
+    const i = Number(n.dataset.neuAuf), auf = n.getAttribute('aria-expanded') !== 'true';
+    // Nur eine Zeile offen; ohne Neuzeichnen, damit der Fokus bleibt.
+    app.querySelectorAll('[data-neu-auf][aria-expanded="true"]').forEach(b => {
+      b.setAttribute('aria-expanded', 'false');
+      document.getElementById(b.getAttribute('aria-controls'))?.setAttribute('hidden', '');
+      b.closest('.neu-eintrag')?.classList.remove('neu-eintrag--auf');
+    });
+    if (auf) {
+      n.setAttribute('aria-expanded', 'true');
+      document.getElementById(n.getAttribute('aria-controls'))?.removeAttribute('hidden');
+      n.closest('.neu-eintrag')?.classList.add('neu-eintrag--auf');
+    }
+    S.newsAuf = auf ? i : null;
+    return;
+  }
+  if ((n = hit('data-season'))) return staffelZeigen(n.dataset.season);
+  if ((n = hit('data-staffel-pfeil'))) {
+    const roll = n.parentElement?.querySelector('.staffel-roll');
+    roll?.scrollBy({ left: Number(n.dataset.staffelPfeil) * Math.max(120, roll.clientWidth * 0.8), behavior: wenigBewegung() ? 'auto' : 'smooth' });
+    return;
   }
   if ((n = hit('data-serie-play'))) {
     S.warteschlange = null;
@@ -5869,7 +6108,11 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-filter'))) { S.filter = n.dataset.filter; return load(); }
   if ((n = hit('data-genre'))) return go('movies', { filter: n.dataset.genre });
   if (hit('data-back')) return history.length > 1 ? history.back() : go('home');
-  if (hit('data-clear')) { S.query = ''; return load(); }
+  if (hit('data-clear')) {
+    const feld = $('#q');
+    if (feld && S.view === 'search') { feld.value = ''; feld.focus(); return sucheEingabe(''); }
+    S.query = ''; return load();
+  }
   if ((n = hit('data-wish'))) {
     // Statt gleich zu wünschen: das Wunschfeld mit dem Suchwort und den
     // Treffern von TMDb darunter (wuensche.js).
@@ -6425,7 +6668,9 @@ async function formularAbschicken(e) {
     }
   }
 
-  if (f.id === 'searchform') { $('#q')?.blur(); S.suchTastaturZu = true; return load(); }
+  // Enter: sofort suchen (ohne die Pause) und die Handy-Tastatur zu,
+  // damit sie die Treffer nicht verdeckt.
+  if (f.id === 'searchform') { const feld = $('#q'); feld?.blur(); return sucheEingabe(feld ? feld.value : S.query, true); }
 
   if (f.id === 'libform') {
     try {
@@ -6483,6 +6728,8 @@ async function formularAbschicken(e) {
 /* Auswahlfelder: das Intervall einer Bibliothek. */
 app.addEventListener('change', async e => {
   const z = e.target;
+  if (z.matches && z.matches('select[data-staffel-wahl]')) return staffelZeigen(z.value);
+  if (z.matches && z.matches('select[data-reihen-sort]')) { reihenSortierungSetzen(z.value); return reihenNeuZeichnen(); }
   if (z.matches && z.matches('input[data-avatarbild]') && z.files?.[0]) {
     toast(tr('Bild wird hochgeladen …'));
     try { S.me = await api.uploadAvatar(z.files[0]); S.avatarStand = Date.now(); toast(tr('Profilbild gesetzt')); return render(); }
@@ -6549,13 +6796,31 @@ app.addEventListener('change', async e => {
   }
 });
 
-let searchTimer = null;
+// Filmreihen und Sammlungen durchsuchen und sortieren: nur das Raster neu.
+function reihenNeuZeichnen() {
+  if (S.view === 'collections') reihenGitterZeichnen(S.data?.collections || [], 'collections', reiheKarte);
+  else if (S.view === 'sammlungen') reihenGitterZeichnen(S.data?.sammlungen || [], 'sammlungen', sammlungKarte);
+}
 app.addEventListener('input', e => {
-  if (e.target.id !== 'q') return;
-  S.query = e.target.value;
-  try { history.replaceState({ ...(history.state || {}), view: 'search', query: S.query }, '', adresseFuer('search', null, S.query)); } catch {}
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(load, 220);
+  const z = e.target;
+  if (!(z instanceof HTMLInputElement) || !z.dataset.reihenSuche) return;
+  reihenSucheSetzen(z.dataset.reihenSuche, z.value);
+  reihenNeuZeichnen();
+});
+
+// Pos1/Ende in der Staffel-Leiste: an den Anfang, ans Ende.
+app.addEventListener('keydown', e => {
+  const k = e.target instanceof Element ? e.target.closest('.staffel-roll .staffel-knopf') : null;
+  if (!k || (e.key !== 'Home' && e.key !== 'End')) return;
+  const alle = [...k.parentElement.querySelectorAll('.staffel-knopf')];
+  const ziel = e.key === 'Home' ? alle[0] : alle[alle.length - 1];
+  if (!ziel) return;
+  e.preventDefault();
+  ziel.focus();
+});
+app.addEventListener('input', e => {
+  if (e.target.id !== 'q' || S.view !== 'search') return;
+  sucheEingabe(e.target.value);
 });
 
 // Nur die Maus: Ein Tipp auf dem Handy schickt vor dem Klick ein
@@ -7159,9 +7424,9 @@ app.addEventListener('click', async e => {
   if (t.closest('.mehr-menue [role="menuitem"]')) { mehrMenueZu(false); return; }
   if (t.closest('[data-alle-zeigen]')) { S.filter = 'Alle'; S.buchstabe = ''; return load(); }
   if ((n = t.closest('[data-meintest]'))) {
-    S.query = n.dataset.meintest;
-    try { history.replaceState({ ...(history.state || {}), view: 'search', query: S.query }, '', adresseFuer('search', null, S.query)); } catch {}
-    return load();
+    const feld = $('#q');
+    if (feld) feld.value = n.dataset.meintest;
+    return sucheEingabe(n.dataset.meintest, true);
   }
   if ((n = t.closest('[data-geraetweg]'))) {
     if (!(await rueckfrage({ titel: `${n.dataset.name} abmelden?`, ja: tr('Abmelden'), gefaehrlich: true,

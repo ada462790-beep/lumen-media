@@ -143,6 +143,7 @@ func (t *TMDb) SeriesDetails(ctx context.Context, seriesID string) (*Candidate, 
 		Cast:        t.cast(d.Credits.Cast),
 		IMDbID:      d.ExternalIDs.IMDbID,
 		Laender:     d.OriginCountry,
+		TMDbNote:    d.VoteAverage, TMDbStimmen: d.VoteCount,
 	}
 	if d.ExternalIDs.TVDBID > 0 {
 		c.TVDBID = strconv.Itoa(d.ExternalIDs.TVDBID)
@@ -209,6 +210,7 @@ func (t *TMDb) SearchSeriesSprache(ctx context.Context, title string, year int, 
 			PosterURL:   t.image(s.PosterPath, "w500"),
 			BackdropURL: t.image(s.BackdropPath, "w1280"),
 			Laender:     s.OriginCountry,
+			TMDbNote:    s.VoteAverage, TMDbStimmen: s.VoteCount,
 		})
 	}
 	return out, nil
@@ -360,6 +362,9 @@ type tmdbMovie struct {
 	PosterPath    string  `json:"poster_path"`
 	BackdropPath  string  `json:"backdrop_path"`
 	Popularity    float64 `json:"popularity"`
+	// Die Note der TMDb-Nutzer (0–10) und wie viele abgestimmt haben.
+	VoteAverage float64 `json:"vote_average"`
+	VoteCount   int     `json:"vote_count"`
 }
 
 type tmdbSeries struct {
@@ -374,6 +379,8 @@ type tmdbSeries struct {
 	Popularity   float64 `json:"popularity"`
 	// Herkunftsländer — für gleichnamige Serien aus verschiedenen Ländern.
 	OriginCountry []string `json:"origin_country"`
+	VoteAverage   float64  `json:"vote_average"`
+	VoteCount     int      `json:"vote_count"`
 }
 
 func (t *TMDb) movie(m tmdbMovie) Candidate {
@@ -381,7 +388,8 @@ func (t *TMDb) movie(m tmdbMovie) Candidate {
 		SourceID: fmt.Sprint(m.ID), Source: "tmdb",
 		Title: m.Title, Original: m.OriginalTitle, Sprache: m.OriginalLang, Overview: m.Overview,
 		Premiered: m.ReleaseDate, Year: yearOf(m.ReleaseDate),
-		Popularity:  m.Popularity,
+		Popularity: m.Popularity,
+		TMDbNote:   m.VoteAverage, TMDbStimmen: m.VoteCount,
 		PosterURL:   t.image(m.PosterPath, "w500"),
 		BackdropURL: t.image(m.BackdropPath, "w1280"),
 	}

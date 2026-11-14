@@ -76,7 +76,7 @@ function naechster(von, richtung, kandidaten) {
 }
 
 function kandidatenIn(wurzel) {
-  return [...wurzel.querySelectorAll(FOKUSSIERBAR)].filter(el => !el.closest('.rail-pfeil, .skip-link') && sichtbar(el));
+  return [...wurzel.querySelectorAll(FOKUSSIERBAR)].filter(el => !el.closest('.rail-pfeil, .staffel-pfeil, .skip-link') && sichtbar(el));
 }
 
 /**

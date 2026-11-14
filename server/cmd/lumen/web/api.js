@@ -81,7 +81,7 @@ export const api = {
 
   /* ---------------------------------------------------------- Grundlage */
 
-  async call(path, { method = 'GET', body, raw = false, bestaetigung = '' } = {}) {
+  async call(path, { method = 'GET', body, raw = false, bestaetigung = '', signal = null } = {}) {
     const headers = {};
     // Rechte ändern (Gruppen, Einschränkungen) verlangt den Code noch einmal.
     if (bestaetigung) headers['X-Lumen-Bestaetigung'] = bestaetigung;
@@ -107,10 +107,13 @@ export const api = {
         res = await fetch('/api/v1' + path, {
           method, headers,
           body: body === undefined ? undefined : JSON.stringify(body),
-          signal: frist(lesen ? FRIST_LESEN : FRIST_SCHREIBEN),
+          signal: mitAbbruch(frist(lesen ? FRIST_LESEN : FRIST_SCHREIBEN), signal),
         });
         break;
       } catch (e) {
+        // Selbst abgebrochen (eine neuere Suche ist unterwegs): kein
+        // zweiter Versuch und keine Fehlermeldung.
+        if (signal?.aborted) { const a = new ApiError(tr('Abgebrochen.'), 0); a.abgebrochen = true; throw a; }
         if (lesen && versuch === 0 && navigator.onLine !== false) {
           await new Promise(r => setTimeout(r, 1500));
           continue;
@@ -260,8 +263,8 @@ export const api = {
   removeFavorite(id) { return this.call('/favorites/' + encodeURIComponent(id), { method: 'DELETE' }); },
 
   /* Die Suche: Titel, Personen, Genres — und wie die Eingabe gedeutet wurde. */
-  search(q, limit = 60) {
-    return this.call('/search?' + new URLSearchParams({ q, limit }));
+  search(q, limit = 60, signal = null) {
+    return this.call('/search?' + new URLSearchParams({ q, limit }), { signal });
   },
 
   /* ---------------------------------------------------------- mein Stand */
@@ -742,6 +745,19 @@ function sekunden(s) {
 
    frist: ein Signal, das nach ms abbricht. AbortSignal.timeout gibt es
    in älteren Safari nicht. */
+/* Die Frist und ein eigener Abbruch (AbortController) zusammen: was
+   zuerst kommt, beendet die Anfrage. */
+function mitAbbruch(fristSignal, eigenes) {
+  if (!eigenes) return fristSignal;
+  try { if (AbortSignal.any) return AbortSignal.any([fristSignal, eigenes]); } catch {}
+  const c = new AbortController();
+  const ab = () => c.abort();
+  if (fristSignal.aborted || eigenes.aborted) c.abort();
+  fristSignal.addEventListener('abort', ab, { once: true });
+  eigenes.addEventListener('abort', ab, { once: true });
+  return c.signal;
+}
+
 function frist(ms) {
   try { if (AbortSignal.timeout) return AbortSignal.timeout(ms); } catch {}
   const c = new AbortController();

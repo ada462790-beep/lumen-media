@@ -44,9 +44,12 @@ type Candidate struct {
 	IMDbID    string
 	// TVDBID: Kennung bei TheTVDB (nur Serien, kommt über TMDb) — für den
 	// Link auf der Titelseite.
-	TVDBID      string
-	IMDbRating  float64
-	IMDbVotes   int
+	TVDBID     string
+	IMDbRating float64
+	IMDbVotes  int
+	// TMDbNote: die Note der TMDb-Nutzer (0–10); zählt nur mit Stimmen.
+	TMDbNote    float64
+	TMDbStimmen int
 	PosterURL   string
 	BackdropURL string
 	Popularity  float64

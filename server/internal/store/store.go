@@ -633,6 +633,10 @@ func nachruesten(db *sql.DB) error {
 		`ALTER TABLE item ADD COLUMN laeuft_noch INTEGER`,
 		// Rotten Tomatoes in Prozent; -1 = gibt es nicht, NULL = nie gefragt.
 		`ALTER TABLE item ADD COLUMN rt_wertung INTEGER`,
+		// Die Note der TMDb-Nutzer in Prozent und die Zahl der Stimmen;
+		// NULL = (noch) keine.
+		`ALTER TABLE item ADD COLUMN tmdb_wertung INTEGER`,
+		`ALTER TABLE item ADD COLUMN tmdb_stimmen INTEGER`,
 		// Titel und Originaltitel klein geschrieben: Darüber findet der
 		// Scanner einen Titel, den es schon gibt, mit einem Index statt
 		// über die Volltextsuche (TitelGleich).
