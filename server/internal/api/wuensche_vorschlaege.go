@@ -30,6 +30,7 @@ package api
 // selbst, und Poster von Wünschen bleiben auf der Platte.
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -42,6 +43,7 @@ import (
 	"sync"
 	"time"
 
+	"lumen/internal/ablage"
 	"lumen/internal/meta"
 	"lumen/internal/sprache"
 	"lumen/internal/store"
@@ -662,10 +664,8 @@ func (s *Server) wunschPosterLaden(ctx context.Context, groesse, datei string) (
 	s.wuensche.bildMerken(k, daten, art)
 	if ordner != "" && s.st.WunschPosterBekannt(ctx, "/"+datei) {
 		if err := os.MkdirAll(ordner, 0o755); err == nil {
-			tmp := filepath.Join(ordner, k+".teil")
-			if err := os.WriteFile(tmp, daten, 0o644); err == nil {
-				_ = os.Rename(tmp, filepath.Join(ordner, k))
-			}
+			ziel := filepath.Join(ordner, k)
+			_ = ablage.Einmal(ziel, func() error { return ablage.Schreiben(ziel, bytes.NewReader(daten), 0) })
 		}
 	}
 	return daten, art, nil

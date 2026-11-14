@@ -149,6 +149,8 @@ func (s *Server) hintergrundDurchgang(ctx context.Context) {
 			}
 			continue
 		}
+		// Und wer gerade eine Seite öffnet, auch (store/vorrang.go).
+		store.HintergrundWarten(ctx)
 		s.dateiVorbereiten(ctx, ids[i])
 		i++
 	}
@@ -163,6 +165,7 @@ func (s *Server) wiedergabeLaeuft() bool {
 // aufRuheWarten hält an, solange abgespielt wird — zwischen zwei
 // Vorschaubildern einer grossen Datei.
 func (s *Server) aufRuheWarten(ctx context.Context) error {
+	store.HintergrundWarten(ctx)
 	for s.wiedergabeLaeuft() {
 		select {
 		case <-time.After(15 * time.Second):

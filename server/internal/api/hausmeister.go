@@ -208,6 +208,8 @@ func (s *Server) nachholen(ctx context.Context) {
 	s.meta.SerienFreigabenNachholen(ctx, 200)
 	s.meta.SerienWertungenNachholen(ctx, 300)
 	s.meta.TomatenNachholen(ctx, 300)
+	// Poster, deren Download scheiterte, beim nächsten Mal nachholen.
+	s.meta.PosterNachholen(ctx, 100)
 }
 
 func (s *Server) durchlaufGesperrt(ctx context.Context, lib store.Library, vonSelbst bool) {

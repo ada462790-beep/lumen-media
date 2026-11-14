@@ -31,6 +31,12 @@ type TMDb struct {
 	ImageURL string
 	http     *http.Client
 	limiter  *limiter
+
+	// Die Folgen ganzer Staffeln (staffel_speicher.go): Ein Durchgang über
+	// tausende Folgen fragt je Staffel einmal statt je Folge.
+	staffelMu    sync.Mutex
+	staffelDaten map[string]*staffelFolgen
+	serienDaten  map[string]serienEintrag
 }
 
 func NewTMDb(key, language, region string) *TMDb {
@@ -97,7 +103,7 @@ func (t *TMDb) SearchMovieSprache(ctx context.Context, title string, year int, s
 
 // SeriesDetails holt zu einer Serie, was die Suche nicht mitbringt — vor
 // allem die Besetzung.
-func (t *TMDb) SeriesDetails(ctx context.Context, seriesID string) (*Candidate, error) {
+func (t *TMDb) seriesDetailsAbfragen(ctx context.Context, seriesID string) (*Candidate, error) {
 	if err := tmdbKennung(seriesID); err != nil {
 		return nil, err
 	}

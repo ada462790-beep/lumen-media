@@ -619,50 +619,63 @@ func (s *Store) SerienStaende(ctx context.Context, accountID string, seriesIDs [
 	if len(seriesIDs) == 0 {
 		return out, nil
 	}
-	// Zwei Schritte, bewusst: Gezählt wird nur über die Titel (öffentlich),
-	// und aus der privaten Tabelle kommen bloss die eigenen Haken — keine
-	// Zusammenfassung über progress, das verbietet der Datenschutz-Test.
-	zuSerie := map[string]string{} // Folge → Serie
+	// Zwei Abfragen, bewusst getrennt: Gezählt wird nur über die Titel
+	// (öffentlich); aus der privaten Tabelle kommen bloss die eigenen
+	// Haken, Zeile für Zeile — keine Zusammenfassung über progress, das
+	// verbietet der Datenschutz-Test.
+	//
+	// Früher kamen alle Folgen der Serien einzeln zurück (bei 60 Serien
+	// ein paar tausend Zeilen) und wurden danach in Stücken zu 400 gegen
+	// progress geprüft. Das kostete die Seite „Serien" 30 ms von 35 —
+	// auf einer kleinen NAS ein Vielfaches.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT e.id, st.parent_id FROM item e JOIN item st ON st.id = e.parent_id
+		`SELECT st.parent_id, count(*) FROM item st INDEXED BY item_by_parent
+		   JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
 		  WHERE e.kind = 'episode' AND COALESCE(st.season_no,0) > 0
-		    AND st.parent_id IN (`+placeholders(len(seriesIDs))+`)`,
+		    AND st.parent_id IN (`+placeholders(len(seriesIDs))+`)
+		  GROUP BY st.parent_id`,
 		toAny(seriesIDs)...)
 	if err != nil {
 		return nil, err
 	}
 	for rows.Next() {
-		var folge, serie string
-		if err := rows.Scan(&folge, &serie); err != nil {
+		var serie string
+		var n int
+		if err := rows.Scan(&serie, &n); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		zuSerie[folge] = serie
-		st := out[serie]
-		st.Folgen++
-		out[serie] = st
+		out[serie] = SerienStand{Folgen: n}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	folgen := make([]string, 0, len(zuSerie))
-	for id := range zuSerie {
-		folgen = append(folgen, id)
+	// Die eigenen gesehenen Folgen dieser Serien: von den Haken des Kontos
+	// aus (wenige) zur Serie.
+	rows, err = s.db.QueryContext(ctx,
+		`SELECT st.parent_id FROM progress p
+		   JOIN item e ON e.id = p.item_id
+		   JOIN item st ON st.id = e.parent_id
+		  WHERE p.account_id = ? AND p.finished = 1
+		    AND e.kind = 'episode' AND COALESCE(st.season_no,0) > 0
+		    AND st.parent_id IN (`+placeholders(len(seriesIDs))+`)`,
+		append([]any{accountID}, toAny(seriesIDs)...)...)
+	if err != nil {
+		return nil, err
 	}
-	for i := 0; i < len(folgen); i += 400 {
-		teil := folgen[i:min(i+400, len(folgen))]
-		gesehen, err := s.FinishedIDs(ctx, accountID, teil)
-		if err != nil {
+	defer rows.Close()
+	for rows.Next() {
+		var serie string
+		if err := rows.Scan(&serie); err != nil {
 			return nil, err
 		}
-		for id := range gesehen {
-			st := out[zuSerie[id]]
+		if st, ok := out[serie]; ok {
 			st.Gesehen++
-			out[zuSerie[id]] = st
+			out[serie] = st
 		}
 	}
-	return out, nil
+	return out, rows.Err()
 }
 
 // AngefangeneIDs: alles, wozu dieses Konto irgendeinen Stand hat —

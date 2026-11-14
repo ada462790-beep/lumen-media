@@ -974,6 +974,9 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 			hits[ende].guess.SeasonNo == hits[start].guess.SeasonNo {
 			ende++
 		}
+		// Vor jedem Stapel (er hält die Schreibsperre) der Bedienung den
+		// Vortritt lassen (store/vorrang.go).
+		store.HintergrundWarten(ctx)
 		var nachher []func()
 		err := s.st.Stapel(ctx, func(st *store.Store) error {
 			for i := start; i < ende; i++ {
@@ -1277,6 +1280,9 @@ func (s *Scanner) fillFromProbe(ctx context.Context, f *store.MediaFile) {
 			return
 		}
 	}
+	// Und wer gerade eine Seite öffnet, auch (store/vorrang.go): Eine
+	// Messung kostet auf einer kleinen NAS spürbar Rechenzeit.
+	store.HintergrundWarten(ctx)
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 

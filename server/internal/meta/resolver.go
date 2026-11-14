@@ -11,9 +11,9 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"lumen/internal/ablage"
 	"lumen/internal/store"
 )
 
@@ -45,6 +46,9 @@ type Stand struct {
 type Resolver struct {
 	standMu sync.Mutex
 	stand   Stand
+	// schluesselOK: wann TMDb den Schlüssel zuletzt angenommen hat
+	// (schluesselPruefen) — geschützt durch standMu.
+	schluesselOK time.Time
 
 	st      *store.Store
 	tmdb    *TMDb
@@ -159,6 +163,8 @@ func (r *Resolver) ResolvePending(ctx context.Context, libraryID string, limit i
 		if ctx.Err() != nil {
 			return res, ctx.Err()
 		}
+		// Wer gerade eine Seite öffnet, geht vor (store/vorrang.go).
+		store.HintergrundWarten(ctx)
 		r.standMu.Lock()
 		r.stand.Fertig, r.stand.Titel = i, pending[i].Title
 		r.standMu.Unlock()
@@ -422,7 +428,9 @@ func (r *Resolver) resolveEpisode(ctx context.Context, it *store.Item) error {
 	case it.SeasonNo >= 1900 && len(it.Premiered) >= 10:
 		e, _, _, err = r.datumAufloesen(ctx, src, it.Premiered[:10])
 	default:
-		e, err = r.tmdb.Episode(ctx, src, it.SeasonNo, it.EpisodeNo)
+		// Über die ganze Staffel: eine Anfrage für alle ihre Folgen
+		// (staffel_speicher.go) statt einer je Folge.
+		e, err = r.tmdb.FolgeAusStaffel(ctx, src, it.SeasonNo, it.EpisodeNo)
 		if err == nil && zusatz.BisFolge > it.EpisodeNo {
 			r.doppelfolgeErgaenzen(ctx, src, it.SeasonNo, it.EpisodeNo, zusatz.BisFolge, e)
 		}
@@ -613,7 +621,7 @@ func (r *Resolver) alteCastBilderWeg(ctx context.Context, itemID string) {
 	alle, _ := filepath.Glob(filepath.Join(r.artDir, itemID+"-cast*"))
 	for _, pfad := range alle {
 		name := filepath.Base(pfad)
-		if !behalten[name] && !strings.Contains(name, ".teil") {
+		if !behalten[name] && !strings.Contains(name, ablage.Endung) {
 			_ = os.Remove(pfad)
 		}
 	}
@@ -621,6 +629,11 @@ func (r *Resolver) alteCastBilderWeg(ctx context.Context, itemID string) {
 
 func (r *Resolver) saveArtwork(ctx context.Context, itemID string, c *Candidate) error {
 	r.saveCast(ctx, itemID, c)
+	return r.bilderSpeichern(ctx, itemID, c)
+}
+
+// bilderSpeichern legt Poster und Hintergrund ab (ohne die Besetzung).
+func (r *Resolver) bilderSpeichern(ctx context.Context, itemID string, c *Candidate) error {
 	// Bilder aus der Sammlung selbst („poster.jpg" neben dem Film) hat
 	// jemand bewusst dort hingelegt — die ersetzt TMDb nicht.
 	lokaleArten := r.st.LokaleBildArten(ctx, itemID)
@@ -656,54 +669,34 @@ func (r *Resolver) saveArtwork(ctx context.Context, itemID string, c *Candidate)
 }
 
 func (r *Resolver) download(ctx context.Context, url, dest string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := r.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("antwortete mit %s", resp.Status)
-	}
-
-	// Erst daneben schreiben, dann umbenennen: so entsteht nie eine halbe
-	// Datei, die später für ein fertiges Bild gehalten wird. Der Name der
-	// Zwischendatei ist eindeutig — holten zwei dasselbe Bild zugleich
-	// (Titel von Hand neu laden während eines Durchgangs), schrieben sie
-	// sonst beide in dieselbe „.teil"-Datei.
-	f, err := os.CreateTemp(filepath.Dir(dest), filepath.Base(dest)+".*.teil")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	// Eine Obergrenze, damit eine falsche Adresse nicht die Platte füllt.
-	// Ist das Bild grösser, ist das ein Fehler — früher wurde es still
-	// abgeschnitten und als halbes Bild gespeichert.
-	n, err := io.Copy(f, io.LimitReader(resp.Body, maxBild+1))
-	if err == nil && n > maxBild {
-		err = fmt.Errorf("bild grösser als %d MB", maxBild>>20)
-	}
-	cerr := f.Close()
-	if err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if cerr != nil {
-		_ = os.Remove(tmp)
-		return cerr
-	}
-	if err := os.Chmod(tmp, 0o644); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, dest); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
+	// Dasselbe Ziel nur einmal gleichzeitig (ablage.Einmal): Ein Durchgang
+	// und „Neu laden" holten sonst dasselbe Poster zweimal.
+	return ablage.Einmal(dest, func() error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := r.http.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("antwortete mit %s", resp.Status)
+		}
+		// Erst daneben in eine eigene Zwischendatei, dann umbenennen: So
+		// entsteht nie eine halbe Datei, und zwei Schreiber kommen sich
+		// nicht in die Quere. Eine Obergrenze, damit eine falsche Adresse
+		// nicht die Platte füllt — ein grösseres Bild ist ein Fehler, kein
+		// halbes Poster.
+		if err := ablage.Schreiben(dest, resp.Body, maxBild); err != nil {
+			if errors.Is(err, ablage.ErrZuGross) {
+				return fmt.Errorf("bild grösser als %d MB", maxBild>>20)
+			}
+			return err
+		}
+		return nil
+	})
 }
 
 // maxBild: grösser ist kein Poster, sondern eine falsche Adresse.
@@ -912,6 +905,7 @@ func (r *Resolver) SerienZeitraeumeNachholen(ctx context.Context, n int) int {
 	}
 	fertig := 0
 	for _, it := range serien {
+		store.HintergrundWarten(ctx)
 		src, err := r.st.SourceID(ctx, it.ID, "tmdb")
 		if err != nil || src == "" {
 			continue
@@ -927,9 +921,15 @@ func (r *Resolver) SerienZeitraeumeNachholen(ctx context.Context, n int) int {
 	return fertig
 }
 
-// freigabeVersucht: Serien, für die TMDb schon gefragt wurde und keine
-// Freigabe kannte — bis zum nächsten Start nicht noch einmal.
-var freigabeVersucht sync.Map
+// einstellungFreigabeVersucht: Serien, für die TMDb schon gefragt wurde
+// und keine Freigabe kannte (Kennung → Tag der Anfrage). Früher stand das
+// nur im Speicher: Nach jedem Neustart (also nach jedem Update) fragte
+// Lumen für all diese Serien wieder bei TMDb nach. Jetzt erst nach
+// freigabeWieder.
+const (
+	einstellungFreigabeVersucht = "meta.freigabe_versucht"
+	freigabeWieder              = 30 * 24 * time.Hour
+)
 
 // SerienFreigabenNachholen holt für zugeordnete Serien die Altersfreigabe
 // nach. Frühere Fassungen fragten TMDb gar nicht danach; ein Kinderprofil
@@ -942,30 +942,96 @@ func (r *Resolver) SerienFreigabenNachholen(ctx context.Context, n int) int {
 	if err != nil {
 		return 0
 	}
+	versucht := map[string]int64{}
+	_ = json.Unmarshal([]byte(r.st.Setting(ctx, einstellungFreigabeVersucht, "{}")), &versucht)
+	geaendert := false
+	defer func() {
+		if geaendert {
+			// Nur behalten, was noch gilt — die Liste wächst nicht ewig.
+			for id, tag := range versucht {
+				if time.Since(time.Unix(tag, 0)) >= freigabeWieder {
+					delete(versucht, id)
+				}
+			}
+			b, _ := json.Marshal(versucht)
+			_ = r.st.SetSetting(context.WithoutCancel(ctx), einstellungFreigabeVersucht, string(b))
+		}
+	}()
 	fertig, gefragt := 0, 0
 	for _, it := range serien {
 		if ctx.Err() != nil || gefragt >= n {
 			break
 		}
-		if _, schon := freigabeVersucht.Load(it.ID); schon {
+		if tag, schon := versucht[it.ID]; schon && time.Since(time.Unix(tag, 0)) < freigabeWieder {
 			continue
 		}
 		src, err := r.st.SourceID(ctx, it.ID, "tmdb")
 		if err != nil || src == "" {
 			continue
 		}
+		store.HintergrundWarten(ctx)
 		gefragt++
 		d, err := r.tmdb.SeriesDetails(ctx, src)
 		if err != nil {
 			continue
 		}
 		if d.AgeYears == nil {
-			freigabeVersucht.Store(it.ID, true)
+			versucht[it.ID] = time.Now().Unix()
+			geaendert = true
 			continue
 		}
 		if r.st.FreigabeSetzen(ctx, it.ID, d.AgeRating, *d.AgeYears) == nil {
 			fertig++
 		}
+	}
+	return fertig
+}
+
+// posterVersucht: Titel, für die das Nachholen schon einmal lief und TMDb
+// kein Poster kannte (oder es wieder scheiterte) — bis zum nächsten Start
+// nicht noch einmal.
+var posterVersucht sync.Map
+
+// PosterNachholen holt Poster und Hintergrund für zugeordnete Titel, deren
+// Download scheiterte (store.TitelOhnePoster). Höchstens n auf einmal;
+// jeder Titel kostet eine Anfrage bei TMDb.
+func (r *Resolver) PosterNachholen(ctx context.Context, n int) int {
+	if !r.Ready() || r.tmdb == nil {
+		return 0
+	}
+	titel, err := r.st.TitelOhnePoster(ctx, n+200)
+	if err != nil {
+		return 0
+	}
+	fertig, gefragt := 0, 0
+	for _, it := range titel {
+		if ctx.Err() != nil || gefragt >= n {
+			break
+		}
+		if _, schon := posterVersucht.LoadOrStore(it.ID, true); schon {
+			continue
+		}
+		src, err := r.st.SourceID(ctx, it.ID, "tmdb")
+		if err != nil || src == "" {
+			continue
+		}
+		store.HintergrundWarten(ctx)
+		gefragt++
+		var c *Candidate
+		if it.Kind == "series" {
+			c, err = r.tmdb.SeriesDetails(ctx, src)
+		} else {
+			c, err = r.tmdb.Details(ctx, src)
+		}
+		if err != nil || c.PosterURL == "" {
+			continue
+		}
+		if r.bilderSpeichern(ctx, it.ID, c) == nil && r.st.BildQuelle(ctx, it.ID, "poster") != "" {
+			fertig++
+		}
+	}
+	if fertig > 0 {
+		r.st.Log(ctx, "info", "metadaten", fmt.Sprintf("%d fehlende Poster nachgeholt", fertig))
 	}
 	return fertig
 }
@@ -983,6 +1049,7 @@ func (r *Resolver) TomatenNachholen(ctx context.Context, n int) int {
 	}
 	fertig := 0
 	for _, it := range titel {
+		store.HintergrundWarten(ctx)
 		if ctx.Err() != nil {
 			break
 		}
@@ -1024,6 +1091,7 @@ func (r *Resolver) SerienWertungenNachholen(ctx context.Context, n int) int {
 	}
 	fertig := 0
 	for _, it := range serien {
+		store.HintergrundWarten(ctx)
 		if ctx.Err() != nil {
 			break
 		}

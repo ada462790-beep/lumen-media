@@ -285,11 +285,19 @@ func (s *Store) FreigabenNachrechnen(ctx context.Context, alter func(string) *in
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
-	for id, j := range neu {
-		if _, err := s.db.ExecContext(ctx,
-			`UPDATE item SET age_years = ? WHERE id = ? AND age_years IS NULL`, j, id); err != nil {
-			return 0, err
+	// In einer Transaktion: vorher war jede Zeile ein eigener Schreibvorgang
+	// (719 Titel, 719-mal die Schreibsperre).
+	err = s.tx(ctx, func(t *sql.Tx) error {
+		for id, j := range neu {
+			if _, err := t.ExecContext(ctx,
+				`UPDATE item SET age_years = ? WHERE id = ? AND age_years IS NULL`, j, id); err != nil {
+				return err
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
 	return len(neu), nil
 }

@@ -1643,3 +1643,31 @@ func (s *Store) SetPersonInfo(ctx context.Context, name, daten string) error {
 		strings.ToLower(strings.TrimSpace(name)), daten, time.Now().Unix())
 	return err
 }
+
+// TitelOhnePoster: zugeordnete Filme und Serien mit TMDb-Kennung, die kein
+// Poster haben — weder geladen noch aus der Sammlung noch von Hand. Meist
+// scheiterte der Download (kein Netz, TMDb bremst); ohne Nachholen
+// blieben sie für immer ohne Bild, weil der Titel als erkannt gilt.
+func (s *Store) TitelOhnePoster(ctx context.Context, limit int) ([]Item, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+itemCols+` FROM item i
+		  WHERE i.kind IN ('movie','series') AND i.match_state IN ('matched','manual')
+		    AND COALESCE(i.tmdb_id,'') != ''
+		    AND NOT EXISTS (SELECT 1 FROM artwork a WHERE a.item_id = i.id AND a.kind = 'poster'
+		                     AND COALESCE(a.path,'') != '')
+		    AND NOT EXISTS (SELECT 1 FROM feld_sperre fs WHERE fs.item_id = i.id AND fs.feld = 'poster')
+		  LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Item
+	for rows.Next() {
+		it, err := scanItem(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *it)
+	}
+	return out, rows.Err()
+}
