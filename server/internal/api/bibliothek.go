@@ -451,6 +451,14 @@ func (s *Server) adminWishes(w http.ResponseWriter, r *http.Request) {
 	}
 	alle = s.wuenscheImBereich(w, r, alle)
 	s.wuenscheAufbereiten(r, alle)
+	// Doppelte offene Wünsche: als Gruppe zeigen (wuensche_pflege.go).
+	if gruppen, err := s.st.WunschGruppen(r.Context()); err == nil {
+		for i := range alle {
+			alle[i].Gruppe = gruppen[alle[i].ID]
+		}
+	}
+	// Alten Wünschen ohne Kennung Poster und Kennung nachtragen.
+	s.wuenscheNachtragenAnstossen()
 	offen := 0
 	for _, w := range alle {
 		if w.State == "open" || w.State == "" {

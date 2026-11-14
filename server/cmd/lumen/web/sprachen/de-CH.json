@@ -185,5 +185,25 @@
  "{n} Kennungen gespeichert — TMDb lehnt den Schlüssel ab; Poster und Beschreibungen kommen mit einem gültigen.": {
   "one": "{n} Kennung gespeichert — TMDb lehnt den Schlüssel ab; Poster und Beschreibungen kommen mit einem gültigen.",
   "other": "{n} Kennungen gespeichert — TMDb lehnt den Schlüssel ab; Poster und Beschreibungen kommen mit einem gültigen."
+ },
+ "{n} Reihen fehlen in Lumen": {
+  "one": "{n} Reihe fehlt in Lumen",
+  "other": "{n} Reihen fehlen in Lumen"
+ },
+ "{n} Sammlungen in {art}": {
+  "one": "{n} Sammlung in {art}",
+  "other": "{n} Sammlungen in {art}"
+ },
+ "{n} werden ergänzt": {
+  "one": "{n} wird ergänzt",
+  "other": "{n} werden ergänzt"
+ },
+ "+{n} Filme": {
+  "one": "+{n} Film",
+  "other": "+{n} Filme"
+ },
+ "{n} doppelte Wünsche zusammengeführt": {
+  "one": "{n} doppelter Wunsch zusammengeführt",
+  "other": "{n} doppelte Wünsche zusammengeführt"
  }
 }

@@ -49,6 +49,12 @@ type Wish struct {
 	// AuchIDs: die Konten zu Auch, in derselben Reihenfolge — nie in der
 	// Antwort.
 	AuchIDs []string `json:"-"`
+	// Vorhanden: beim Wünschen gab es diesen Wunsch schon (eigen oder
+	// angeschlossen) — es ist kein neuer entstanden.
+	Vorhanden bool `json:"vorhanden,omitempty"`
+	// Gruppe: nur in der Liste der Verwaltung — der älteste von mehreren
+	// offenen Wünschen, die dasselbe meinen (WunschGruppen).
+	Gruppe string `json:"gruppe,omitempty"`
 }
 
 func (s *Store) CreateWish(ctx context.Context, accountID, title string, year int) (*Wish, error) {

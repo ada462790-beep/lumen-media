@@ -12,7 +12,8 @@ package api
 //	POST   /api/v1/me/uebernahme/server    {"adresse"}  → Art, Name, Benutzer zur Auswahl
 //	POST   /api/v1/me/uebernahme           {"adresse","benutzer","passwort","zuordnungen"} → startet
 //	GET    /api/v1/me/uebernahme           Stand und Vorschau
-//	POST   /api/v1/me/uebernahme/anwenden  {"gesehen","angefangen","favoriten","bewertungen","zuordnungen","ueberschreiben"}
+//	POST   /api/v1/me/uebernahme           … "reihen": true → auch die Sammlungen (nur Verwaltung)
+//	POST   /api/v1/me/uebernahme/anwenden  {"gesehen","angefangen","favoriten","bewertungen","zuordnungen","ueberschreiben","reihen"}
 //	DELETE /api/v1/me/uebernahme           verwerfen
 //
 // Datenschutz, weil es hier darum geht, was jemand geschaut hat:
@@ -42,6 +43,8 @@ package api
 // Sache des Profils, sondern der Mediathek: Es ändert, welcher Film ein
 // Titel für alle ist. Darum nur für Konten mit Verwaltungsrechten und nur
 // für die Bibliotheken, die sie verwalten (uebernahme_zuordnungen.go).
+// Dasselbe gilt für die Filmreihen (Sammlungen aus Emby,
+// uebernahme_reihen.go).
 
 import (
 	"context"
@@ -88,6 +91,9 @@ type uebernahmeLauf struct {
 	// (nur, wenn verlangt und erlaubt).
 	Zuordnungen    *zuordnungsVorschau `json:"zuordnungen,omitempty"`
 	ZuordnungStand *zuordnungsStand    `json:"zuordnungStand,omitempty"`
+	// Reihen: Vorschau der Filmreihen aus Emby; ReihenErgebnis danach.
+	Reihen         *uebernahme.ReihenPlan `json:"reihen,omitempty"`
+	ReihenErgebnis *reihenErgebnis        `json:"reihenErgebnis,omitempty"`
 
 	eintraege []store.UebernahmeEintrag
 	plan      []uebernahme.Zuordnung
@@ -125,6 +131,12 @@ func (l *uebernahmeLauf) stand() map[string]any {
 	if l.ZuordnungStand != nil {
 		z := *l.ZuordnungStand
 		m["zuordnungStand"] = z
+	}
+	if l.Reihen != nil {
+		m["reihen"] = l.Reihen
+	}
+	if l.ReihenErgebnis != nil {
+		m["reihenErgebnis"] = l.ReihenErgebnis
 	}
 	return m
 }
@@ -241,11 +253,14 @@ func (s *Server) uebernahmeStarten(w http.ResponseWriter, r *http.Request) {
 		// Zuordnungen: auch die Kennungen der Filme und Serien holen
 		// (nur mit Verwaltungsrechten).
 		Zuordnungen bool `json:"zuordnungen"`
+		// Reihen: auch die Sammlungen (BoxSets) holen (nur mit
+		// Verwaltungsrechten).
+		Reihen bool `json:"reihen"`
 	}
 	if !readJSON(w, r, &in) || !s.uebernahmeVorab(w, r) {
 		return
 	}
-	if in.Zuordnungen && !accountOf(r).IsAdmin {
+	if (in.Zuordnungen || in.Reihen) && !accountOf(r).IsAdmin {
 		failCode(w, http.StatusForbidden, "nur_verwaltung",
 			"Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.")
 		return
@@ -312,10 +327,14 @@ func (s *Server) uebernahmeStarten(w http.ResponseWriter, r *http.Request) {
 	if in.Zuordnungen {
 		zuo = &zuordnungsAuftrag{bibliotheken: s.verwalteteMediatheken(r)}
 	}
+	var reihen *zuordnungsAuftrag
+	if in.Reihen {
+		reihen = &zuordnungsAuftrag{bibliotheken: s.verwalteteMediatheken(r)}
+	}
 	go func() {
 		defer func() { <-uebernahmeAmLaufen }()
 		defer abbruch()
-		angemeldet := s.uebernahmeHolen(ctx, lauf, sv, in.Benutzer, passwort, acc.ID, q, zuo)
+		angemeldet := s.uebernahmeHolen(ctx, lauf, sv, in.Benutzer, passwort, acc.ID, q, zuo, reihen)
 		s.bremse.beenden(angemeldet, schluessel)
 	}()
 	writeJSON(w, http.StatusAccepted, lauf.stand())
@@ -324,7 +343,7 @@ func (s *Server) uebernahmeStarten(w http.ResponseWriter, r *http.Request) {
 // uebernahmeHolen: anmelden, Stand holen, abmelden, zuordnen, Vorschau.
 // Gibt zurück, ob die Anmeldung bei Emby gelungen ist (für die Bremse).
 func (s *Server) uebernahmeHolen(ctx context.Context, lauf *uebernahmeLauf, sv *uebernahme.Server,
-	benutzer, passwort, konto string, q store.Query, zuo *zuordnungsAuftrag) (angemeldet bool) {
+	benutzer, passwort, konto string, q store.Query, zuo, reihen *zuordnungsAuftrag) (angemeldet bool) {
 	scheitern := func(err error) {
 		lauf.setzen(func(l *uebernahmeLauf) { l.Phase, l.Meldung = "fehler", uebernahmeFehler(err, angemeldet) })
 	}
@@ -351,6 +370,16 @@ func (s *Server) uebernahmeHolen(ctx context.Context, lauf *uebernahmeLauf, sv *
 		// gesehenen.
 		alle, err = sv.FilmeUndSerien(ctx, func(n int) {
 			lauf.setzen(func(l *uebernahmeLauf) { l.Gelesen = gelesen + n })
+		})
+	}
+	var embyReihen []uebernahme.EmbyReihe
+	if err == nil && reihen != nil {
+		basis := 0
+		lauf.mu.Lock()
+		basis = lauf.Gelesen
+		lauf.mu.Unlock()
+		embyReihen, err = sv.Reihen(ctx, func(n int) {
+			lauf.setzen(func(l *uebernahmeLauf) { l.Gelesen = basis + n })
 		})
 	}
 	// Das Token wird nicht mehr gebraucht — abmelden, bevor irgendetwas
@@ -418,8 +447,19 @@ func (s *Server) uebernahmeHolen(ctx context.Context, lauf *uebernahmeLauf, sv *
 			return true
 		}
 	}
+	var rPlan *uebernahme.ReihenPlan
+	if reihen != nil {
+		rPlan, err = s.reihenPlanen(ctx, embyReihen, katalog, dateien, reihen.bibliotheken)
+		if err != nil {
+			scheitern(err)
+			return true
+		}
+	}
 	lauf.setzen(func(l *uebernahmeLauf) {
 		l.Zuordnungen, l.plan = zVorschau, zPlan
+		if reihen != nil {
+			l.Reihen = rPlan
+		}
 		l.Phase = "bereit"
 		l.eintraege = eintraege
 		l.Vorschau = &uebernahmeVorschau{Gesehen: plan.Gesehen, Angefangen: plan.Angefangen,
@@ -448,6 +488,8 @@ func (s *Server) uebernahmeAnwenden(w http.ResponseWriter, r *http.Request) {
 		// in Lumen von Hand zugewiesen wurden.
 		Zuordnungen    *bool `json:"zuordnungen"`
 		Ueberschreiben bool  `json:"ueberschreiben"`
+		// Reihen: die fehlenden Filmreihen anlegen und ergänzen.
+		Reihen *bool `json:"reihen"`
 	}
 	if !readJSON(w, r, &in) {
 		return
@@ -467,12 +509,14 @@ func (s *Server) uebernahmeAnwenden(w http.ResponseWriter, r *http.Request) {
 	}
 	eintraege := l.eintraege
 	zPlan := l.plan
+	rPlan := l.Reihen
 	l.Phase = "anwenden"
 	l.mu.Unlock()
 	mitZuordnungen := in.Zuordnungen != nil && *in.Zuordnungen && len(zPlan) > 0
+	mitReihen := in.Reihen != nil && *in.Reihen && rPlan != nil && len(rPlan.Fehlen)+len(rPlan.Ergaenzen) > 0
 	// Ohne (gültigen) TMDb-Schlüssel werden die Kennungen vorgemerkt
 	// (zuordnungUebernehmen) — das geht auch so.
-	if mitZuordnungen && !acc.IsAdmin {
+	if (mitZuordnungen || mitReihen) && !acc.IsAdmin {
 		l.setzen(func(l *uebernahmeLauf) { l.Phase = "bereit" })
 		failCode(w, http.StatusForbidden, "nur_verwaltung",
 			"Zuordnungen übernehmen darf nur, wer die Mediathek verwaltet.")
@@ -508,8 +552,18 @@ func (s *Server) uebernahmeAnwenden(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
+	var rErg *reihenErgebnis
+	if mitReihen {
+		rErg, err = s.reihenAnwenden(r.Context(), rPlan, s.verwalteteMediatheken(r))
+		if err != nil {
+			l.setzen(func(l *uebernahmeLauf) { l.Phase = "bereit" })
+			failErr(w, err)
+			return
+		}
+	}
 	l.setzen(func(l *uebernahmeLauf) {
 		l.Phase, l.Ergebnis, l.eintraege = "fertig", &erg, nil
+		l.ReihenErgebnis = rErg
 		l.plan = nil
 		if mitZuordnungen {
 			l.ZuordnungStand = &zuordnungsStand{Laeuft: true, Gesamt: len(zPlan)}

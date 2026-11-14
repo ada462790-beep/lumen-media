@@ -258,6 +258,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /api/v1/wishes", auth(s.wishes))
 	mux.Handle("POST /api/v1/wishes", auth(s.createWish))
+	mux.Handle("DELETE /api/v1/wishes/{id}", auth(s.wunschLoeschen))
 	// Vorschläge von TMDb beim Wünschen, samt kleinen Postern (wuensche_vorschlaege.go).
 	mux.Handle("GET /api/v1/wishes/vorschlaege", auth(s.wunschVorschlaege))
 	mux.Handle("GET /api/v1/wishes/poster/{groesse}/{datei}", auth(s.wunschPoster))
@@ -286,6 +287,8 @@ func (s *Server) Handler() http.Handler {
 	owner := s.requireOwner
 	mux.Handle("GET /api/v1/admin/overview", admin(s.adminOverview))
 	mux.Handle("GET /api/v1/admin/remote", admin(s.adminRemote))
+	// So sieht Lumen dieses Gerät: zu Hause oder unterwegs (netzwerk.go).
+	mux.Handle("GET /api/v1/admin/netz", admin(s.adminNetz))
 	mux.Handle("GET /api/v1/admin/libraries", admin(s.adminLibraries))
 	// Bibliotheken anlegen und entfernen und dabei Ordner auf dem NAS
 	// durchsehen: nur der Besitzer. Ein Mitverwalter könnte sonst jeden
@@ -385,6 +388,8 @@ func (s *Server) Handler() http.Handler {
 	// PIN eines Haushaltsprofils zurücksetzen — nie die des Besitzers.
 	mux.Handle("PUT /api/v1/admin/accounts/{id}/sperre", admin(s.bestaetigt(s.adminKontoSperre)))
 	mux.Handle("PUT /api/v1/admin/wishes/{id}", admin(s.adminSetWishState))
+	mux.Handle("DELETE /api/v1/admin/wishes/{id}", admin(s.adminWunschLoeschen))
+	mux.Handle("POST /api/v1/admin/wishes/{id}/zusammenfuehren", admin(s.adminWuenscheZusammenfuehren))
 	mux.Handle("GET /api/v1/admin/metadata", admin(s.adminMetaSources))
 	// Die Schlüssel für TMDb und OMDb: nur Besitzer und Vollzugriff. Ein
 	// Mitverwalter könnte sonst die Quelle auf einen eigenen Schlüssel

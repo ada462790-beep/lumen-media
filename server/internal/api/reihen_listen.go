@@ -129,7 +129,9 @@ const reiheMindestens = 2
 // in Lumen (Emby 239 Reihen, Lumen 233). Selbst erkannte und TMDb-Reihen
 // brauchen weiter zwei Filme.
 func reiheMindestensFuer(source string) int {
-	if source == "nfo" {
+	// Reihen, die der Besitzer selbst gepflegt hat (NFO-Sets, aus Emby
+	// übernommen), zeigt Lumen wie Emby schon ab einem Film.
+	if source == "nfo" || source == "emby" {
 		return 1
 	}
 	return reiheMindestens

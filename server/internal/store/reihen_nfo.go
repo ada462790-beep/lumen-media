@@ -84,12 +84,13 @@ func (s *Store) NFOReiheLoesen(ctx context.Context, itemID string) error {
 	return err
 }
 
-// inNFOReihe: Steht der Film in einer Reihe aus seiner NFO?
+// inNFOReihe: Steht der Film in einer Reihe aus seiner NFO oder aus der
+// Übernahme aus Emby (reihen_emby.go)? Dann ändert TMDb nichts an ihm.
 func inNFOReihe(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, itemID string) bool {
 	var n int
 	_ = q.QueryRowContext(ctx, `SELECT count(*) FROM collection_item ci JOIN collection c ON c.id = ci.collection_id
-		 WHERE ci.item_id = ? AND c.source = 'nfo'`, itemID).Scan(&n)
+		 WHERE ci.item_id = ? AND c.source IN ('nfo', 'emby')`, itemID).Scan(&n)
 	return n > 0
 }

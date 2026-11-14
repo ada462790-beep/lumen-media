@@ -41,6 +41,10 @@ type Server struct {
 	// Alle: alle Filme und Serien der Mediathek (ohne Filter abgefragt,
 	// für das Übernehmen der Zuordnungen). nil: wie Titel.
 	Alle []Titel
+	// Reihen: Sammlungen (BoxSet); ReihenInhalt: Sammlung → IDs der Filme
+	// (aus Alle, sonst aus Titel).
+	Reihen       []Titel
+	ReihenInhalt map[string][]string
 
 	mu          sync.Mutex
 	Token       string
@@ -141,10 +145,25 @@ func (s *Server) titelListe(w http.ResponseWriter, r *http.Request) {
 		typen[t] = true
 	}
 	quelle := s.Titel
-	if q.Get("IncludeItemTypes") == "Series" && q.Get("Filters") == "" {
+	if eltern := q.Get("ParentId"); eltern != "" {
+		alle := s.Alle
+		if alle == nil {
+			alle = s.Titel
+		}
+		quelle = nil
+		for _, id := range s.ReihenInhalt[eltern] {
+			for _, t := range alle {
+				if t["Id"] == id {
+					quelle = append(quelle, t)
+				}
+			}
+		}
+	} else if q.Get("IncludeItemTypes") == "BoxSet" {
+		quelle = s.Reihen
+	} else if q.Get("IncludeItemTypes") == "Series" && q.Get("Filters") == "" {
 		quelle = s.Serien
 	}
-	if q.Get("Filters") == "" && typen["Movie"] && s.Alle != nil {
+	if q.Get("Filters") == "" && typen["Movie"] && s.Alle != nil && q.Get("ParentId") == "" {
 		quelle = s.Alle
 	}
 	var passend []Titel
@@ -202,6 +221,11 @@ func Folge(id, serieID, serie string, staffel, folge int, pfad string, ud map[st
 	return Titel{"Id": id, "Name": "Folge", "Type": "Episode", "SeriesId": serieID, "SeriesName": serie,
 		"ParentIndexNumber": staffel, "IndexNumber": folge, "Path": pfad,
 		"RunTimeTicks": int64(6_000_000_000 * 4), "UserData": ud}
+}
+
+// Reihe baut eine Sammlung (BoxSet).
+func Reihe(id, name string, kennungen map[string]string) Titel {
+	return Titel{"Id": id, "Name": name, "Type": "BoxSet", "ProviderIds": kennungen, "UserData": map[string]any{}}
 }
 
 // Serie baut einen Serien-Eintrag.
