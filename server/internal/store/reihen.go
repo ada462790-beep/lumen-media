@@ -40,7 +40,7 @@ type Reihe struct {
 	ID       string   `json:"id"`
 	Name     string   `json:"name"`
 	Overview string   `json:"overview,omitempty"`
-	Source   string   `json:"source"` // tmdb | nfo | auto
+	Source   string   `json:"source"` // tmdb | nfo | auto | emby
 	Hidden   bool     `json:"hidden,omitempty"`
 	ItemIDs  []string `json:"-"`
 	// Dateinamen im Bilderordner — die Bilder der Reihe selbst.
@@ -57,7 +57,7 @@ func (s *Store) TMDbReiheZuordnen(ctx context.Context, tmdbID, name, itemID stri
 	if tmdbID == "" || name == "" {
 		return nil
 	}
-	// Eine Reihe aus der NFO (Emby-Sammlung) geht vor.
+	// Eine Reihe aus der NFO (Emby-Sammlung) oder aus der Übernahme geht vor.
 	if inNFOReihe(ctx, s.db, itemID) {
 		return nil
 	}
@@ -122,7 +122,7 @@ func (s *Store) ReihenNeuBilden(ctx context.Context) (int, error) {
 		    AND i.fehlt_seit IS NULL
 		    AND NOT EXISTS (SELECT 1 FROM collection_item ci
 		                      JOIN collection c ON c.id = ci.collection_id
-		                     WHERE ci.item_id = i.id AND c.source IN ('tmdb', 'nfo'))
+		                     WHERE ci.item_id = i.id AND c.source IN ('tmdb', 'nfo', 'emby'))
 		  ORDER BY COALESCE(i.year, 9999), i.sort_title, i.id`)
 	if err != nil {
 		return 0, err
@@ -319,7 +319,7 @@ func (s *Store) ReiheVon(ctx context.Context, itemID string) (*Reihe, error) {
 	err := s.db.QueryRowContext(ctx,
 		`SELECT c.id FROM collection_item ci JOIN collection c ON c.id = ci.collection_id
 		  WHERE ci.item_id = ? AND c.hidden = 0
-		  ORDER BY CASE c.source WHEN 'nfo' THEN 0 WHEN 'tmdb' THEN 1 ELSE 2 END LIMIT 1`, itemID).Scan(&id)
+		  ORDER BY CASE c.source WHEN 'nfo' THEN 0 WHEN 'emby' THEN 0 WHEN 'tmdb' THEN 1 ELSE 2 END LIMIT 1`, itemID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

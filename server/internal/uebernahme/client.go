@@ -380,6 +380,11 @@ func (r rohTitel) eintrag() Eintrag {
 
 // titelHolen holt alle Titel einer Abfrage, Seite für Seite.
 func (s *Server) titelHolen(ctx context.Context, typen, filter string, fertig func(int)) ([]Eintrag, error) {
+	return s.titelHolenMit(ctx, typen, filter, nil, fertig)
+}
+
+// titelHolenMit: wie titelHolen, mit weiteren Angaben (etwa ParentId).
+func (s *Server) titelHolenMit(ctx context.Context, typen, filter string, extra url.Values, fertig func(int)) ([]Eintrag, error) {
 	var out []Eintrag
 	// Weiter nach dem, was wirklich kam: Manche Server liefern weniger als
 	// verlangt (eigene Obergrenze je Seite).
@@ -395,6 +400,9 @@ func (s *Server) titelHolen(ctx context.Context, typen, filter string, fertig fu
 		}
 		if filter != "" {
 			q.Set("Filters", filter)
+		}
+		for k, v := range extra {
+			q[k] = v
 		}
 		antwort := &titelSeite{}
 		if err := s.anfrage(ctx, http.MethodGet, "/Users/"+url.PathEscape(s.benutzer)+"/Items", q, nil, antwort); err != nil {

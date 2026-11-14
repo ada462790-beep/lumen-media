@@ -59,6 +59,10 @@ arm64). No registry login, no token.
    - `PUID`/`PGID` — the user that may read your media (Synology: usually
      `1026`/`100`, Linux: usually `1000`/`1000`),
    - `TZ`, your time zone.
+   - Leave `network_mode: host` as it is: Lumen then runs in the NAS's
+     network and sees the real addresses of your devices (see
+     [Home or away](#home-or-away-docker-and-addresses)). There is no
+     `ports:` block; Lumen listens directly on port 8097 of the NAS.
 3. Start it:
 
    ```bash
@@ -66,7 +70,11 @@ arm64). No registry login, no token.
    ```
 
    On a Synology: *Container Manager › Project › Create*, paste the file.
-4. Open `http://<your-nas>:8097`, create the owner account and add your
+4. If the NAS firewall is on (Synology: *Control Panel › Security ›
+   Firewall*), allow port **8097/TCP** from your home network only (e.g.
+   `192.168.1.0/24`). With `network_mode: host` the firewall applies to
+   Lumen like to any other service.
+5. Open `http://<your-nas>:8097`, create the owner account and add your
    libraries.
 
 Updating: `sudo docker compose pull && sudo docker compose up -d`, or with
@@ -74,6 +82,29 @@ one click in the admin pages — see [One-click updates](#one-click-updates).
 Lumen always
 listens on port **8097** — never forward it in your router; use the relay
 or Tailscale/WireGuard for remote access.
+
+### Home or away: Docker and addresses
+
+Lumen decides by the sender address whether a device is at home (profile
+picker, setup, import from Emby/Jellyfin, no quality limit for remote
+streaming). In bridge mode (the old `ports: - "8097:8097"` block) Docker
+on some NAS — Synology included — passes every connection through the
+container network's gateway (`172.17.0.1` or similar). Lumen then sees
+the same address for every device and, to be safe, treats all of them as
+away ("Import from Emby or Jellyfin only works at home").
+
+*Admin › This device* shows what Lumen sees: the address, whether it
+counts as home, and why — plus a hint when requests arrive via Docker's
+gateway. To switch: in the `lumen` service delete the `ports:` block and
+add `network_mode: host`; with the updater enabled set
+`LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080` and give the updater
+`ports: - "127.0.0.1:8080:8080"`; if Emby or Jellyfin with HTTPS runs on
+the same NAS and Lumen has HTTPS on (`LUMEN_TLS` or the relay), set
+`LUMEN_TLS_ADDR=:8921`; allow 8097 in the NAS firewall; then *Action ›
+Build*. Requests from the NAS itself (e.g. its reverse proxy), from other
+containers, via the router, with `X-Forwarded-For` or via the relay still
+count as away. A public IPv6 address never counts as home either — open
+Lumen via the NAS's IPv4 address at home.
 
 **Already running the old image** `ghcr.io/ada462790-beep/lumen:latest`?
 Replace that line in your `docker-compose.yml` with
@@ -127,15 +158,16 @@ new version is running. In the night window the same happens, but only
 when nobody is watching.
 
 **Security:** only the updater gets Docker access (`/var/run/docker.sock`),
-Lumen does not. The updater listens only on the project's internal
-network (no published port) and accepts only requests carrying the secret
+Lumen does not. The updater is published only on the NAS's own
+`127.0.0.1:8080` (not reachable from other devices) and accepts only requests carrying the secret
 token, so all Lumen can tell it is "update now". It only touches
 containers labelled `com.centurylinklabs.watchtower.enable=true` — i.e.
 Lumen. The token never appears in API responses, logs or error messages,
 and the address can only be set in `docker-compose.yml`, not in the UI.
 
-Settings on the `lumen` service: `LUMEN_AKTUALISIERER_URL` (e.g.
-`http://aktualisierer:8080`) and `LUMEN_AKTUALISIERER_TOKEN` (same value
+Settings on the `lumen` service: `LUMEN_AKTUALISIERER_URL`
+(`http://127.0.0.1:8080` with `network_mode: host`, as in the template;
+`http://aktualisierer:8080` if Lumen still runs in bridge mode) and `LUMEN_AKTUALISIERER_TOKEN` (same value
 as the updater's `WATCHTOWER_HTTP_API_TOKEN`). The
 [`docker-compose.yml`](docker-compose.yml) in this repository has the
 lines for the `lumen` service; the updater itself is commented out because
@@ -164,7 +196,7 @@ an older file), on a Synology:
          - com.centurylinklabs.watchtower.enable=true
        environment:
          # … existing lines, plus:
-         - LUMEN_AKTUALISIERER_URL=http://aktualisierer:8080
+         - LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080
          - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
    ```
 
@@ -177,6 +209,8 @@ an older file), on a Synology:
        restart: unless-stopped
        volumes:
          - /var/run/docker.sock:/var/run/docker.sock
+       ports:
+         - "127.0.0.1:8080:8080"
        environment:
          - TZ=Europe/Zurich
          - WATCHTOWER_HTTP_API_ENDPOINTS=update
@@ -186,6 +220,9 @@ an older file), on a Synology:
          - WATCHTOWER_TIMEOUT=30s
          - WATCHTOWER_NO_STARTUP_MESSAGE=true
    ```
+   Lumen runs in the NAS's network, so it reaches the updater via
+   `127.0.0.1:8080`, not by its name. If port 8080 is taken on the NAS, use
+   e.g. `127.0.0.1:18080:8080` and `http://127.0.0.1:18080`.
 3. **Save, then *Action › Build*.** The button appears in *Admin › Updates*
    as soon as a newer version is available (*Check Now*).
 

@@ -917,6 +917,8 @@ async function fetchFor(view) {
     }
     case 'admin':     return { ...await api.adminOverview(),
                                 fern: await api.adminRemote().catch(() => null),
+                                // Zu Hause oder unterwegs, und warum.
+                                netz: await api.adminNetz().catch(() => null),
                                 // Damit die Übersicht sagen kann, ob ein
                                 // Schlüssel fehlt und wie viele Wünsche
                                 // offen sind — sonst muss man überall
@@ -3609,7 +3611,7 @@ function viewCollection() {
   const gesehen = r.items.filter(x => x.finished).length;
   const unter = [tr('{n} Filme', { n: r.anzahl }),
     gesehen ? tr('{n} gesehen', { n: gesehen }) : '',
-    r.source === 'tmdb' ? tr('zusammengestellt nach TMDb') : r.source === 'nfo' ? tr('aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)') : tr('von Lumen am Titel erkannt'),
+    r.source === 'tmdb' ? tr('zusammengestellt nach TMDb') : r.source === 'nfo' ? tr('aus den NFO-Dateien (Sammlung aus Emby, Jellyfin oder Kodi)') : r.source === 'emby' ? tr('aus Emby oder Jellyfin übernommen') : tr('von Lumen am Titel erkannt'),
     r.hidden ? tr('aufgelöst') : ''].filter(Boolean).join(' · ');
 
   const titel = S.bearbeiten === 'reihe' && besitzer
@@ -3831,6 +3833,15 @@ async function listenPanel(itemId) {
 
 /* ---------------------------------------------------------------- Wünsche */
 
+/* Löschen: die Verwaltung jeden Wunsch, wer ihn hat, den eigenen offenen;
+   wer sich nur angeschlossen hat, tritt aus. */
+function wunschWegKnopf(w, verwaltung) {
+  const art = verwaltung && !w.dabei ? 'verwaltung' : w.dabei ? 'dabei' : w.mine && w.state === 'open' ? 'eigen' : '';
+  if (!art) return '';
+  return `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem;flex:none" data-wunschweg="${esc(w.id)}:${art}"
+    aria-label="${esc(tr('„{titel}“ löschen', { titel: w.title }))}">${art === 'dabei' ? tr('Nicht mehr wünschen') : tr('Löschen')}</button>`;
+}
+
 function viewWishes() {
   const list = S.data?.wishes || [];
   const owner = S.me.account.isAdmin;
@@ -3854,6 +3865,7 @@ function viewWishes() {
           <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
           <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
         </div>` : ''}
+      ${wunschWegKnopf(w, owner)}
     </div>`).join('');
 
   return shell(`<div class="wrap wrap--flat" style="max-width:820px">
@@ -4099,6 +4111,66 @@ function fernzugriffGruppe(f) {
     tr('Der Vermittler reicht nur verschlüsselte Bytes durch. Was jemand schaut, erfährt er nicht — auch wenn du ihn selbst betreibst. Den Fingerabdruck brauchen die Apps einmal, um diesen Server wiederzuerkennen.'));
 }
 
+/* So sieht Lumen dieses Gerät: Adresse, zu Hause oder unterwegs, und der
+ * Grund. Dazu ein Hinweis, wenn Docker die echten Adressen verdeckt —
+ * dann gilt jedes Gerät als unterwegs (keine Übernahme, Qualitätsgrenze). */
+function netzGrund(g) {
+  const k = g.kopf || '';
+  switch (g.grund) {
+    case 'festgelegt':      return tr('Die Adresse steht in LUMEN_HEIMNETZ.');
+    case 'nichtFestgelegt': return tr('Die Adresse steht nicht in LUMEN_HEIMNETZ.');
+    case 'lumenSelbst':     return tr('Die Anfrage kommt aus dem Container von Lumen selbst.');
+    case 'rechnerSelbst':   return tr('Die Anfrage kommt vom NAS selbst, etwa über seinen Reverse-Proxy. Das zählt nie als zu Hause.');
+    case 'containerNetz':   return tr('Die Anfrage kommt aus einem anderen Container auf dem NAS, etwa einem Reverse-Proxy.');
+    case 'gateway':         return tr('Die Adresse ist das Gateway eines eigenen Netzes. Dahinter kann jedes Gerät stecken, auch eines aus dem Internet.');
+    case 'oeffentlich':     return tr('Keine Adresse aus dem Heimnetz.');
+    case 'privat':          return tr('Private Adresse im Heimnetz.');
+    case 'vermittler':      return tr('Über den Vermittler (Fernzugriff).');
+    case 'weitergereicht':  return tr('Ein Reverse-Proxy hat die Anfrage weitergereicht ({kopf}).', { kopf: k });
+    default:                return tr('Die Adresse ist nicht lesbar.');
+  }
+}
+
+function netzGruppe(n) {
+  if (!n || !n.geraet) return '';
+  const g = n.geraet;
+  const warn = '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>';
+  const hinweis = (titel, text) => `<div class="row" style="min-height:62px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
+      <span style="color:#ff9f0a;display:flex;margin-top:2px">${svg(warn, 18)}</span>
+      <div style="flex:1;min-width:0"><div class="t-body">${esc(titel)}</div>
+        <div class="t-sub c-2" style="margin-top:4px;line-height:1.45">${text}</div></div></div>`;
+  let extra = '';
+  const gw = n.gateway;
+  if ((gw && gw.docker) || (g.grund === 'gateway' && n.bruecke)) {
+    const adr = gw?.adresse || g.adresse;
+    extra += hinweis(tr('Docker verdeckt die echten Adressen'),
+      esc(tr('Anfragen kommen über das Gateway des Container-Netzes ({adresse}). Lumen sieht so für alle Geräte dieselbe Adresse und behandelt sicherheitshalber alle als unterwegs: keine Profilauswahl, keine Übernahme aus Emby oder Jellyfin, Qualitätsgrenze für unterwegs.', { adresse: adr })) +
+      '<ol style="margin:8px 0 0;padding-left:20px">' +
+      [tr('In der docker-compose.yml beim Dienst lumen „network_mode: host“ eintragen und den Block „ports:“ entfernen.'),
+       tr('Ist der Aktualisierer eingeschaltet: dort „ports: 127.0.0.1:8080:8080“ und bei Lumen LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080.'),
+       tr('Im Container Manager: Projekt › Aktion › Erstellen. Danach diese Seite neu laden.')]
+        .map(t => `<li>${esc(t)}</li>`).join('') + '</ol>' +
+      `<div style="margin-top:6px">${esc(tr('Die neue Vorlage steht in der README.md unter „Synology Schritt für Schritt“.'))}</div>`);
+  } else if (gw && !gw.docker) {
+    extra += hinweis(tr('Anfragen über den Router'),
+      esc(tr('Manche Anfragen kommen über das Gateway {adresse}, etwa wenn ein Gerät zu Hause Lumen über die öffentliche Adresse oder einen DDNS-Namen öffnet. Solche Anfragen gelten als unterwegs. Im Heimnetz besser die Adresse des NAS benutzen.', { adresse: gw.adresse })));
+  }
+  if (g.grund === 'oeffentlich' && (g.adresse || '').includes(':')) {
+    extra += hinweis(tr('Öffentliche IPv6-Adresse'),
+      esc(tr('Dieses Gerät erreicht Lumen über eine öffentliche IPv6-Adresse, und die gilt nie als zu Hause. Öffne Lumen im Heimnetz über die IPv4-Adresse des NAS, etwa http://192.168.1.20:8097.')));
+  }
+  return grp(tr('Dieses Gerät'),
+    `<div class="row" style="min-height:62px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
+       <span style="color:${g.zuHause ? '#30d158' : '#ff9f0a'};display:flex;margin-top:2px">
+         ${svg(g.zuHause ? I.check : warn, 18)}</span>
+       <div style="flex:1;min-width:0">
+         <div class="t-body">${g.zuHause ? tr('Gilt als zu Hause') : tr('Gilt als unterwegs')}</div>
+         <div class="t-sub c-2" style="margin-top:2px">${esc(tr('So sieht Lumen dieses Gerät: Adresse {adresse}', { adresse: g.adresse || '?' }))}</div>
+         <div class="t-sub c-2" style="margin-top:2px">${esc(netzGrund(g))}</div></div></div>` + extra,
+    n.hostNetz ? tr('Lumen läuft im Netz des NAS und sieht die echten Adressen der Geräte.')
+      : tr('Zu Hause gibt es die Profilauswahl, die Übernahme aus Emby und Jellyfin und keine Qualitätsgrenze für unterwegs.'));
+}
+
 /* §13 der AGPL verlangt, dass wer Lumen über das Netz benutzt, an den
  * Quelltext kommt. Lumen nennt ihn von selbst; hier steht nur, woher.
  *
@@ -4185,6 +4257,7 @@ function viewAdmin() {
           (voll() ? linkRow(tr('Sicherung'), d.sicherung ? tr('zuletzt {wann}', { wann: tagText(d.sicherung) }) : tr('noch keine'), 'adminBackups') : '') +
           (voll() ? linkRow(tr('Umwandeln'), tr('Hardware, Vorschaubilder'), 'adminUmwandlung') : ''))}
         ${fernzugriffGruppe(d.fern)}
+        ${netzGruppe(d.netz)}
         ${voll() ? grp(tr('Name dieses Servers'), `<form id="servernameform" class="row" style="min-height:54px;gap:10px">
             <label for="servername" class="sr-only">${tr('Name dieses Servers')}</label>
             <input id="servername" name="name" maxlength="40" value="${esc(S.hello?.name || '')}" placeholder="${tr('z. B. Mein NAS')}"
@@ -4489,16 +4562,44 @@ function viewAdminWishes() {
       </div>
       <span class="badge" style="border:0;flex:none;background:${COL[w.state][0]};color:${COL[w.state][1]}">
         ${NAME[w.state]}</span>
-      <div style="display:flex;gap:8px;flex:none">
+      <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap">
         ${w.state === 'open' ? knopf(w.id, 'working', tr('Annehmen')) : ''}
         ${w.state !== 'done' ? knopf(w.id, 'done', tr('Erfüllt')) : ''}
         ${w.state !== 'declined' && w.state !== 'done' ? knopf(w.id, 'declined', tr('Ablehnen'), true) : ''}
         ${w.state === 'done' || w.state === 'declined' ? knopf(w.id, 'open', tr('Wieder offen')) : ''}
+        ${wunschWegKnopf(w, true)}
       </div>
+      ${w.doppel?.length ? `<div class="wunsch-doppel" style="flex-basis:100%;margin-left:56px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="t-caption c-2">${tr('{n}-mal gewünscht – auch von {namen}', { n: w.doppel.length + 1,
+          namen: esc([...new Set(w.doppel.map(x => x.by))].join(', ')) })}</span>
+        <button class="btn btn-pill btn-pill--fill" style="height:28px;font-size:.8125rem"
+          data-wunschzusammen="${esc(w.id)}:${esc(w.doppel.map(x => x.id).join(','))}">${tr('Zusammenführen')}</button></div>` : ''}
     </div>`;
 
+  // Doppelte offene Wünsche (gleiche Kennung oder gleicher Titel und
+  // Jahr) als eine Zeile: der älteste, darunter die übrigen.
+  const sichtbar = [];
+  const nachGruppe = new Map();
+  for (const w of alle) {
+    if (!w.gruppe) { sichtbar.push(w); continue; }
+    const kopf = nachGruppe.get(w.gruppe);
+    if (kopf) { kopf.doppel.push(w); continue; }
+    const k = { ...w, doppel: [] };
+    nachGruppe.set(w.gruppe, k);
+    sichtbar.push(k);
+  }
+  // Der älteste vorne (die Gruppe heisst nach ihm), sonst der erste.
+  for (const k of nachGruppe.values()) {
+    const haupt = k.doppel.find(x => x.id === k.gruppe);
+    if (haupt && k.id !== k.gruppe) {
+      const rest = k.doppel.filter(x => x.id !== haupt.id);
+      const alt = { ...k }; delete alt.doppel;
+      Object.assign(k, haupt, { doppel: [alt, ...rest] });
+    }
+  }
+
   const gruppe = (titel, zustaende) => {
-    const teil = alle.filter(w => zustaende.includes(w.state || 'open'));
+    const teil = sichtbar.filter(w => zustaende.includes(w.state || 'open'));
     if (!teil.length) return '';
     return `<section style="margin-top:24px">
       <div class="section-h">${titel} · ${teil.length}</div>
@@ -5683,6 +5784,26 @@ app.addEventListener('click', async e => {
     wunschVerhalten.nachZeichnen();
     return;
   }
+  if ((n = hit('data-wunschweg'))) {
+    const [id, art] = n.dataset.wunschweg.split(':');
+    const w = (S.data?.wishes || []).find(x => x.id === id);
+    const frage = art === 'dabei'
+      ? { titel: tr('Nicht mehr wünschen?'), ja: tr('Nicht mehr wünschen'),
+          text: tr('Du bist dann bei „{titel}“ nicht mehr dabei. Der Wunsch der anderen bleibt.', { titel: w?.title || '' }) }
+      : { titel: tr('Wunsch löschen?'), ja: tr('Löschen'), gefaehrlich: true,
+          text: art === 'verwaltung' && (w?.auch?.length || w?.doppel?.length)
+            ? tr('„{titel}“ verschwindet für alle, die ihn sich gewünscht haben.', { titel: w?.title || '' })
+            : tr('„{titel}“ verschwindet aus der Liste.', { titel: w?.title || '' }) };
+    if (!await rueckfrage(frage)) return;
+    await (art === 'verwaltung' ? api.adminWunschLoeschen(id) : api.wunschLoeschen(id)).catch(err => toast(err.message));
+    return load();
+  }
+  if ((n = hit('data-wunschzusammen'))) {
+    const [id, rest] = n.dataset.wunschzusammen.split(':');
+    const r = await api.adminWuenscheZusammenfuehren(id, rest.split(',')).catch(err => { toast(err.message); return null; });
+    if (r) toast(tr('{n} doppelte Wünsche zusammengeführt', { n: r.zusammengefuehrt }));
+    return load();
+  }
   if ((n = hit('data-wishstate'))) {
     const [id, state] = n.dataset.wishstate.split(':');
     await api.adminWishState(id, state).catch(err => toast(err.message));
@@ -6066,7 +6187,8 @@ function seekTo(sec) {
 // Ereignisse — vor denen hier, damit Enter in der Liste wählt statt abschickt.
 const wunschVerhalten = wunschFeldEinrichten(app, {
   async gewuenscht(w, dabei) {
-    toast(dabei ? tr('Schon gewünscht – du bist jetzt mit dabei') : tr('Wunsch an den Besitzer geschickt'));
+    toast(dabei ? tr('Schon gewünscht – du bist jetzt mit dabei')
+      : w?.vorhanden ? tr('Das hast du dir schon gewünscht') : tr('Wunsch an den Besitzer geschickt'));
     if (S.view === 'wishes') await load();
   },
   ansehen: id => go('detail', { id }),

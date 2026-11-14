@@ -125,8 +125,8 @@ services:
       - com.centurylinklabs.watchtower.enable=true
     stop_grace_period: 30s
     init: true
-    ports:
-      - "8097:8097"
+    # Im Netz des NAS: nur so sieht Lumen, wer zu Hause ist.
+    network_mode: host
     volumes:
       - type: bind
         source: /volume1/docker/lumen/daten
@@ -139,7 +139,7 @@ services:
       - PUID=1026
       - PGID=100
       - LUMEN_ADDR=:8097
-      - LUMEN_AKTUALISIERER_URL=http://aktualisierer:8080
+      - LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080
       - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
 
   # Optional: der Aktualisierer für den Knopf "Jetzt aktualisieren"
@@ -151,6 +151,8 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:8080:8080"
     environment:
       - TZ=Europe/Zurich
       - WATCHTOWER_HTTP_API_ENDPOINTS=update
@@ -278,8 +280,12 @@ grep -qs LUMEN_AKTUALISIERER_TOKEN /volume1/docker/lumen/.env || \\
          "Weitere Ordner als weitere Zeilen darunter (gleich eingerückt)."],
         ["PUID / PGID", "Die Nummern aus Schritt 2."],
         ["TZ", "Deine Zeitzone. Wichtig für Bildschirmzeit und Zeitpläne."],
+        ["network_mode: host", "So stehen lassen. Lumen läuft damit im Netz des NAS und "
+         "sieht die echten Adressen der Geräte – nur so weiss es, wer zu Hause ist (Profilauswahl, "
+         "Übernahme aus Emby). Einen Block „ports:“ gibt es darum nicht."],
         ["aktualisierer: …", "Nur mit Schritt 3. Ohne Aktualisierer den ganzen Block ab "
-         "„# Optional“ weglassen."],
+         "„# Optional“ weglassen. Ist Port 8080 auf dem NAS belegt: links eine andere Zahl "
+         "(etwa 127.0.0.1:18080:8080) und bei Lumen http://127.0.0.1:18080."],
     ], [62, 108])]
     s += punkte(
         "Ein Webportal über Web Station braucht es nicht. <i>Weiter › Fertig</i> – der "
@@ -294,8 +300,12 @@ grep -qs LUMEN_AKTUALISIERER_TOKEN /volume1/docker/lumen/.env || \\
           P("Ist die Firewall des NAS eingeschaltet (<i>Systemsteuerung › Sicherheit › Firewall</i>), "
             "unter <i>Regeln bearbeiten</i> eine Regel anlegen: Port <b>8097/TCP</b>, Quelle "
             "<b>nur dein Heimnetz</b> (zum Beispiel <font face='%s'>192.168.1.0/24</font>), "
-            "<i>Zulassen</i>. Lumen nie ungeschützt ins Internet stellen – für unterwegs gibt es "
-            "einen eigenen, sicheren Weg (siehe README, „Von unterwegs schauen“)." % MONO)]
+            "<i>Zulassen</i>. Weil Lumen im Netz des NAS läuft (<font face='%s'>network_mode: "
+            "host</font>), gilt die Firewall für Lumen wie für jeden anderen Dienst – ohne diese "
+            "Regel kommt bei eingeschalteter Firewall niemand an Lumen heran. Lumen nie "
+            "ungeschützt ins Internet stellen und Port 8097 nicht im Router freigeben – für "
+            "unterwegs gibt es einen eigenen, sicheren Weg (siehe README, „Von unterwegs "
+            "schauen“)." % (MONO, MONO))]
 
     # ---------------------------------------------------------- 6 Erster Start
     s += [P("6. Erster Start", "h1"),
@@ -381,6 +391,10 @@ grep -qs LUMEN_AKTUALISIERER_TOKEN /volume1/docker/lumen/.env || \\
     s += [tabelle(["Was du siehst", "Was hilft"], [
         ["Seite lädt nicht", "Läuft der Container (Container Manager › Container)? Firewall-Regel "
          "für 8097? Richtige Adresse und Port?"],
+        ["„Geht nur zu Hause im Heimnetz“, obwohl du zu Hause bist",
+         "<i>Verwaltung › Dieses Gerät</i> zeigt, welche Adresse Lumen sieht und warum. Steht dort "
+         "ein Gateway wie 172.17.0.1, fehlt <font face='%s'>network_mode: host</font> in der "
+         "Projektdatei (alte Fassung mit „ports:“) – wie oben in Schritt 4 umstellen." % MONO],
         ["Bibliothek bleibt leer", "Darf der Benutzer aus PUID/PGID den Ordner lesen? Ist der "
          "Ordner unter volumes freigegeben? Lumen sagt es beim „Durchsuchen“."],
         ["Keine Poster, Titel wie Dateinamen", "TMDb-Schlüssel fehlt oder ist der kurze statt des "

@@ -60,15 +60,20 @@ services:
     # Ein kleiner Init-Prozess räumt beendete FFmpeg-Prozesse ab, damit im
     # Container keine „Zombies" liegen bleiben.
     init: true
-    ports:
-      # Nur im Heimnetz. Diesen Port NICHT im Router freigeben — für
-      # unterwegs gibt es den Vermittler (siehe unten und README.md).
-      - "8097:8097"
-      # Der verschlüsselte Eingang (HTTPS), nur wenn LUMEN_TLS gesetzt ist
-      # oder der Fernzugriff läuft. Für den Vermittler braucht es diese
-      # Zeile nicht — nur, wenn Geräte im Heimnetz Lumen direkt über HTTPS
-      # erreichen sollen (oder ein Reverse-Proxy auf HTTPS weiterleitet).
-      # - "8920:8920"
+    # Lumen läuft im Netz des NAS, nicht in einem eigenen Container-Netz.
+    # Nur so sieht es die echten Adressen der Geräte und weiss, wer zu
+    # Hause ist (Profilauswahl, Übernahme aus Emby, keine Qualitätsgrenze
+    # für unterwegs). Im Bridge-Betrieb mit „ports:" reicht Docker auf
+    # manchen NAS — auch Synology — jede Verbindung über sein Gateway
+    # (172.x.0.1) weiter; dann gilt jedes Gerät als unterwegs. Was Lumen
+    # sieht, zeigt die Verwaltung unter „Dieses Gerät".
+    #
+    # Darum hier kein „ports:": Lumen hört direkt auf Port 8097 des NAS
+    # (LUMEN_ADDR unten), HTTPS auf 8920, wenn LUMEN_TLS gesetzt ist oder
+    # der Fernzugriff läuft. Diese Ports NICHT im Router freigeben — für
+    # unterwegs gibt es den Vermittler (siehe unten und README.md). Ist
+    # die Firewall des NAS an, Port 8097 dort fürs Heimnetz erlauben.
+    network_mode: host
     volumes:
       # Datenbank, Poster, Zwischenspeicher und die tägliche Sicherung
       # (Unterordner „sicherungen"). Ein gewöhnlicher Ordner auf dem NAS,
@@ -116,8 +121,8 @@ services:
       # es meist 1000/1000. Lumen selbst läuft nie als root.
       - PUID=1026
       - PGID=100
-      # Lumen hört im Container immer auf 8097; nach aussen legst du den
-      # Port oben fest.
+      # Der Port, auf dem Lumen auf dem NAS hört. Ist 8097 schon belegt,
+      # hier einen anderen nehmen, etwa :8098.
       - LUMEN_ADDR=:8097
 
       # Für ein schwaches NAS: höchstens so viele Umwandlungen gleichzeitig
@@ -142,7 +147,9 @@ services:
       # docker-compose.yml (eine Zeile LUMEN_AKTUALISIERER_TOKEN=…; wie man
       # sie anlegt, steht in der README.md, „Updates per Knopfdruck").
       # Ist es leer, bleibt der Knopf weg, und sonst ändert sich nichts.
-      - LUMEN_AKTUALISIERER_URL=http://aktualisierer:8080
+      # Der Aktualisierer ist nur über 127.0.0.1 erreichbar (Lumen läuft
+      # im Netz des NAS, der Name „aktualisierer" gilt dort nicht).
+      - LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080
       - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
 
       # Zusätzlich verschlüsselt (HTTPS) auf 8920 hören — oben den Port
@@ -150,6 +157,10 @@ services:
       # der Geräte das NAS erreichen; er kommt ins eigene Zertifikat.
       # - LUMEN_TLS=1
       # - LUMEN_TLS_NAME=192.168.1.20
+      # Läuft Emby oder Jellyfin auf demselben NAS mit HTTPS, ist 8920
+      # dort schon belegt, und Lumen startet mit HTTPS nicht. Dann einen
+      # anderen Port nehmen (gilt auch für den Fernzugriff):
+      # - LUMEN_TLS_ADDR=:8921
 
       # Wer Lumen unter einem eigenen Namen erreicht (Reverse-Proxy des
       # Synology, eigene Domain, DDNS wie name.synology.me), trägt ihn
@@ -190,9 +201,9 @@ services:
   # nicht selbst ersetzen — das übernimmt dieser kleine Begleiter
   # (Watchtower, gepflegte Fassung von nickfedor). Er allein bekommt
   # Zugriff auf Docker; Lumen kann ihm nur sagen „jetzt bitte", über seine
-  # HTTP-Schnittstelle und mit dem geheimen Token aus der .env. Er hört nur
-  # im internen Netz dieses Projekts (kein Port nach aussen) und tauscht
-  # nur Container mit dem Label oben, also nur Lumen.
+  # HTTP-Schnittstelle und mit dem geheimen Token aus der .env. Er ist nur
+  # auf dem NAS selbst unter 127.0.0.1:8080 erreichbar (kein Port nach
+  # aussen) und tauscht nur Container mit dem Label oben, also nur Lumen.
   #
   # Von selbst tut er nichts: Updates gibt es, wenn du in der Verwaltung
   # „Jetzt aktualisieren" drückst — oder nachts, wenn dort „Von selbst
@@ -211,10 +222,16 @@ services:
   #   restart: unless-stopped
   #   volumes:
   #     - /var/run/docker.sock:/var/run/docker.sock
+  #   # Nur auf 127.0.0.1 des NAS, damit Lumen (im Netz des NAS) ihn
+  #   # erreicht, aber kein anderes Gerät. Ist 8080 auf dem NAS belegt:
+  #   # links eine andere Zahl, etwa 127.0.0.1:18080:8080, und bei Lumen
+  #   # LUMEN_AKTUALISIERER_URL=http://127.0.0.1:18080.
+  #   ports:
+  #     - "127.0.0.1:8080:8080"
   #   environment:
   #     - TZ=Europe/Zurich
-  #     # Nur die Update-Schnittstelle (POST /v1/update), auf 8080 im
-  #     # Projektnetz. Damit sind seine eigenen Zeitpläne aus.
+  #     # Nur die Update-Schnittstelle (POST /v1/update), auf 8080.
+  #     # Damit sind seine eigenen Zeitpläne aus.
   #     - WATCHTOWER_HTTP_API_ENDPOINTS=update
   #     - WATCHTOWER_HTTP_API_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
   #     # Nur Container mit dem Label (Lumen).

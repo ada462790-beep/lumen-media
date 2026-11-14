@@ -73,59 +73,46 @@ type WunschDaten struct {
 
 func (d WunschDaten) mitKennung() bool { return d.TMDbID != "" || d.IMDbID != "" }
 
-// offeneMitKennung sucht einen offenen Wunsch mit derselben Kennung —
-// von wem auch immer. Eigene zuerst.
-func (s *Store) offeneMitKennung(ctx context.Context, accountID string, d WunschDaten) (id, owner string, err error) {
-	err = s.db.QueryRowContext(ctx,
-		`SELECT id, account_id FROM wish
-		  WHERE state IN ('open','working')
-		    AND ((? <> '' AND tmdb_id = ? AND (COALESCE(art,'') = '' OR ? = '' OR art = ?))
-		      OR (? <> '' AND imdb_id = ?))
-		  ORDER BY account_id = ? DESC, created_at LIMIT 1`,
-		d.TMDbID, d.TMDbID, d.Art, d.Art, d.IMDbID, d.IMDbID, accountID).Scan(&id, &owner)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", nil
-	}
-	return id, owner, err
-}
-
 // WunschAnlegen legt einen Wunsch an — mit Kennung, wenn eine mitkommt.
 // Gibt es schon einen offenen mit derselben Kennung, entsteht kein
 // zweiter: Der eigene kommt zurück, der von jemand anderem bekommt dieses
 // Profil dazu.
 func (s *Store) WunschAnlegen(ctx context.Context, accountID string, d WunschDaten) (*Wish, error) {
 	d.Titel = strings.TrimSpace(d.Titel)
-	if !d.mitKennung() {
-		return s.CreateWish(ctx, accountID, d.Titel, d.Jahr)
-	}
 	if d.Titel == "" {
 		return nil, errors.New("titel fehlt")
 	}
-	id, owner, err := s.offeneMitKennung(ctx, accountID, d)
+	// Derselbe Wunsch, offen, von wem auch immer (wunsch_doppelt.go): über
+	// die Kennung, sonst über Titel und Jahr.
+	id, owner, err := s.gleicherOffenerWunsch(ctx, accountID, d)
 	if err != nil {
 		return nil, err
 	}
-	if id != "" && owner != accountID {
-		if _, err := s.db.ExecContext(ctx,
-			`INSERT OR IGNORE INTO wish_dabei (wish_id, account_id) VALUES (?, ?)`, id, accountID); err != nil {
+	if id != "" {
+		if owner != accountID {
+			if _, err := s.db.ExecContext(ctx,
+				`INSERT OR IGNORE INTO wish_dabei (wish_id, account_id) VALUES (?, ?)`, id, accountID); err != nil {
+				return nil, err
+			}
+		}
+		// Kommt jetzt eine Kennung mit, bekommt der alte Wunsch sie.
+		if err := s.wunschKennungErgaenzen(ctx, id, d); err != nil {
 			return nil, err
 		}
-	}
-	if id != "" {
-		return s.wunschFuer(ctx, accountID, id)
+		w, err := s.wunschFuer(ctx, accountID, id)
+		if err == nil {
+			w.Vorhanden = true
+		}
+		return w, err
 	}
 	w, err := s.CreateWish(ctx, accountID, d.Titel, d.Jahr)
 	if err != nil {
 		return nil, err
 	}
-	// Ein schon vorhandener eigener Wunsch mit gleichem Titel behält, was
-	// er hat, und bekommt nur, was fehlt.
-	if _, err := s.db.ExecContext(ctx,
-		`UPDATE wish SET art = COALESCE(art, ?), tmdb_id = COALESCE(tmdb_id, ?), imdb_id = COALESCE(imdb_id, ?),
-		                 originaltitel = COALESCE(originaltitel, ?), poster = COALESCE(poster, ?)
-		  WHERE id = ?`,
-		nullStr(d.Art), nullStr(d.TMDbID), nullStr(d.IMDbID), nullStr(d.Originaltitel), nullStr(d.PosterPfad),
-		w.ID); err != nil {
+	if !d.mitKennung() {
+		return w, nil
+	}
+	if err := s.wunschKennungErgaenzen(ctx, w.ID, d); err != nil {
 		return nil, err
 	}
 	return s.wunschFuer(ctx, accountID, w.ID)

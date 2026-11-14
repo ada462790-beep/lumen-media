@@ -472,6 +472,7 @@ export const api = {
 
   adminOverview()  { return this.call('/admin/overview'); },
   adminRemote()    { return this.call('/admin/remote'); },
+  adminNetz()      { return this.call('/admin/netz'); },
   adminLibraries() { return this.call('/admin/libraries'); },
   adminAddLibrary(name, kind, path, language = 'de') {
     return this.call('/admin/libraries', { method: 'POST',
@@ -620,6 +621,11 @@ export const api = {
   /* Das eigene Profil schützen: mit dem bisherigen Code. */
   meineSperre(alt, art, neu) {
     return this.call('/me/sperre', { method: 'PUT', body: { alt, art, neu } });
+  },
+  wunschLoeschen(id) { return this.call('/wishes/' + encodeURIComponent(id), { method: 'DELETE' }); },
+  adminWunschLoeschen(id) { return this.call('/admin/wishes/' + encodeURIComponent(id), { method: 'DELETE' }); },
+  adminWuenscheZusammenfuehren(id, ids) {
+    return this.call('/admin/wishes/' + encodeURIComponent(id) + '/zusammenfuehren', { method: 'POST', body: { ids } });
   },
   adminWishState(id, state, note = '') {
     return this.call('/admin/wishes/' + encodeURIComponent(id), { method: 'PUT', body: { state, note } });

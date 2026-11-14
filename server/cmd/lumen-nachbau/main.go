@@ -57,6 +57,12 @@ func main() {
 		emby.Film("a4", "Gibt es nicht", 1990, "/media/filme/y.mkv", 0,
 			map[string]string{"Tmdb": "1"}, map[string]any{}),
 	}
+	// Sammlungen (BoxSets) — für „Filmreihen übernehmen".
+	e.Reihen = []emby.Titel{
+		emby.Reihe("b1", "Lieblingsfilme", nil),
+		emby.Reihe("b2", "Nicht in Lumen", nil),
+	}
+	e.ReihenInhalt = map[string][]string{"b1": {"a1", "a3"}, "b2": {"a4"}}
 	if err := os.WriteFile(os.Args[1], []byte(fmt.Sprintf("OS=%s\nEMBY=%s\n", o.Adresse(), e.Adresse())), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

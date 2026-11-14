@@ -77,6 +77,11 @@ aus diesem Repository hineinkopieren. Darin prüfen:
   (Freigabe `video` = `/volume1/video`). Weitere Ordner als weitere Zeilen.
 - **Benutzer:** `PUID` und `PGID` (siehe [unten](#benutzer-puid-und-pgid)).
 - **Zeitzone:** `TZ` — Vorgabe ist `Europe/Zurich`.
+- **Netz:** `network_mode: host` bleibt so stehen. Lumen läuft damit im
+  Netz des NAS und sieht die echten Adressen der Geräte — nur so weiss es,
+  wer zu Hause ist (siehe [unten](#zu-hause-oder-unterwegs-docker-und-die-adressen)).
+  Ein `ports:`-Block gehört dann nicht dazu; Lumen hört direkt auf Port
+  8097 des NAS.
 
 Ein Webportal über Web Station braucht es nicht. *Fertig* — der Container
 Manager lädt das Abbild und startet Lumen.
@@ -85,7 +90,9 @@ Manager lädt das Abbild und startet Lumen.
 › Firewall*), unter *Regeln bearbeiten* eine Regel anlegen: Port
 **8097/TCP**, Quelle **nur dein Heimnetz** (etwa `192.168.1.0/24`),
 *Zulassen*. Wer HTTPS auf 8920 nutzt, gibt diesen Port genauso frei — auch
-nur fürs Heimnetz.
+nur fürs Heimnetz. Mit `network_mode: host` gilt die Firewall des NAS für
+Lumen wie für jeden anderen Dienst; ohne diese Regel kommt dann niemand
+an Lumen heran.
 
 **4. Öffnen.** `http://<adresse-des-nas>:8097` im Browser. Beim ersten Start
 legst du dich als Besitzer an und sagst Lumen, wo die Filme liegen: unter
@@ -98,6 +105,43 @@ neue Abbild; die Daten im Ordner `daten` bleiben. Alte, nicht mehr
 benutzte Abbilder kann man unter *Image* löschen. Per Knopfdruck in der
 Verwaltung oder von selbst nachts: siehe
 [Updates per Knopfdruck](#updates-per-knopfdruck).
+
+#### Zu Hause oder unterwegs: Docker und die Adressen
+
+Ob ein Gerät zu Hause ist, erkennt Lumen an seiner Adresse. Zu Hause gibt
+es die Profilauswahl, das Einrichten, die Übernahme aus Emby oder Jellyfin
+und keine Qualitätsgrenze für unterwegs. Im Bridge-Betrieb (der alte
+Block `ports: - "8097:8097"`) reicht Docker auf manchen NAS — auch auf
+Synology — jede Verbindung über das Gateway des Container-Netzes weiter
+(`172.17.0.1` o. ä.). Dann sieht Lumen für alle Geräte dieselbe Adresse
+und behandelt sicherheitshalber alle als unterwegs. Typische Meldung: „Die
+Übernahme aus Emby oder Jellyfin geht nur zu Hause im Heimnetz."
+
+Was Lumen sieht, steht in der **Verwaltung unter „Dieses Gerät"**: die
+Adresse, ob sie als zu Hause gilt und warum. Kommen Anfragen über das
+Gateway von Docker, steht dort ein Hinweis.
+
+**Umstellen** (Container Manager › Projekt › lumen › *Stoppen*, dann
+*YAML-Konfiguration*):
+
+1. Beim Dienst `lumen` den Block `ports:` samt seinen Zeilen löschen und
+   stattdessen `network_mode: host` eintragen (auf derselben Höhe wie
+   `restart`). `LUMEN_ADDR=:8097` bleibt.
+2. Ist der Aktualisierer eingeschaltet: bei Lumen
+   `LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080`, beim Aktualisierer
+   `ports:` mit der Zeile `- "127.0.0.1:8080:8080"` (siehe
+   [Updates per Knopfdruck](#updates-per-knopfdruck)).
+3. Läuft Emby oder Jellyfin auf demselben NAS mit HTTPS und hat Lumen
+   HTTPS an (`LUMEN_TLS` oder Fernzugriff): `LUMEN_TLS_ADDR=:8921`, denn
+   8920 ist dann schon belegt.
+4. Firewall des NAS: Port 8097 fürs Heimnetz erlauben (Schritt 3 oben).
+5. *Speichern*, dann *Aktion › Erstellen*. In der Verwaltung unter
+   „Dieses Gerät" nachsehen: Dort sollte jetzt die Adresse des Geräts
+   stehen (etwa `192.168.1.35`) und „Gilt als zu Hause".
+
+Sicher bleibt es trotzdem: Anfragen vom NAS selbst (etwa über seinen
+Reverse-Proxy), aus anderen Containern, über den Router, mit
+`X-Forwarded-For` oder über den Vermittler gelten weiter als unterwegs.
 
 #### Wenn das Abbild nicht lädt
 
@@ -302,7 +346,7 @@ unter `environment`):
       - com.centurylinklabs.watchtower.enable=true
     environment:
       # … was schon da ist, und dazu:
-      - LUMEN_AKTUALISIERER_URL=http://aktualisierer:8080
+      - LUMEN_AKTUALISIERER_URL=http://127.0.0.1:8080
       - LUMEN_AKTUALISIERER_TOKEN=${LUMEN_AKTUALISIERER_TOKEN:-}
 ```
 
@@ -316,6 +360,8 @@ Und unter `services:` einen zweiten Dienst, auf derselben Höhe wie
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:8080:8080"
     environment:
       - TZ=Europe/Zurich
       - WATCHTOWER_HTTP_API_ENDPOINTS=update
@@ -325,6 +371,14 @@ Und unter `services:` einen zweiten Dienst, auf derselben Höhe wie
       - WATCHTOWER_TIMEOUT=30s
       - WATCHTOWER_NO_STARTUP_MESSAGE=true
 ```
+
+Lumen läuft im Netz des NAS (`network_mode: host`) und erreicht den
+Aktualisierer darum über `127.0.0.1:8080`, nicht über seinen Namen. Die
+Zeile `127.0.0.1:8080:8080` gibt den Port nur auf dem NAS selbst frei,
+nicht im Heimnetz. Ist 8080 auf dem NAS schon belegt, links eine andere
+Zahl nehmen (etwa `127.0.0.1:18080:8080`) und bei Lumen
+`http://127.0.0.1:18080`. Wer Lumen noch im Bridge-Betrieb mit `ports:`
+laufen hat, kann bei `http://aktualisierer:8080` bleiben.
 
 **3. Speichern, dann *Aktion › Erstellen*.** Der Container Manager holt
 den Aktualisierer und startet beide. In der Verwaltung unter *Updates*
@@ -346,7 +400,7 @@ Gut zu wissen:
 - Klappt es nicht, sagt die Seite warum: *Token abgelehnt* (die beiden
   Token-Zeilen müssen denselben Wert bekommen — steht die `.env` am
   richtigen Ort?), *nicht erreichbar* (läuft `lumen-aktualisierer` im
-  selben Projekt?), *kein neueres Abbild* (es wird nach einer
+  selben Projekt, mit `127.0.0.1:8080:8080` bei `ports`?), *kein neueres Abbild* (es wird nach einer
   Veröffentlichung noch ein paar Minuten gebaut). Näheres steht im
   Protokoll des Containers `lumen-aktualisierer`.
 - Weil das Abbild öffentlich ist, braucht der Aktualisierer keine
@@ -768,7 +822,7 @@ Im Container stehen sie bei `environment`, ohne Docker gehen sie genauso
 |---|---|---|---|
 | `TZ` | — | `Europe/Zurich` (in der Compose-Datei) | Zeitzone. **Anpassen**, falls du woanders wohnst: Danach richten sich Update-Fenster und nächtliche Sicherung |
 | `PUID`, `PGID` | — | `1000` im Abbild, `1026`/`100` in der Compose-Datei | Benutzer, unter dem Lumen im Container läuft (nur Docker) |
-| `LUMEN_ADDR` | `--addr` | `:8097` | Adresse und Port. Im Container `:8097` lassen und nur den Port nach aussen ändern |
+| `LUMEN_ADDR` | `--addr` | `:8097` | Adresse und Port. Mit `network_mode: host` (Vorlage) der Port auf dem NAS; im Bridge-Betrieb `:8097` lassen und nur den Port nach aussen ändern |
 | `LUMEN_DATA` | `--data` | `/data` im Container, sonst der Konfigurationsordner des Systems | Datenbank, Poster, Zwischenspeicher, Sicherungen |
 | `LUMEN_UMWANDLUNG_DIR` | — | der Datenordner | Wohin die Zwischendateien beim Umwandeln kommen. Auf einem schwachen NAS gern in den Arbeitsspeicher: `tmpfs` (in der Compose-Datei vorbereitet) und `LUMEN_UMWANDLUNG_DIR=/umwandlung` |
 | `LUMEN_MAX_UMWANDLUNGEN` | — | nach Rechner: ohne Hardware `1` bei höchstens zwei Kernen, `2` bis sieben Kerne, darüber ein Viertel der Kerne; mit Hardware-Beschleunigung `4` (auf zwei Kernen `2`) | Wie viele Filme gleichzeitig umgewandelt werden dürfen. Auf einem ARM-NAS ohne Hardware eher `1` |
@@ -777,17 +831,17 @@ Im Container stehen sie bei `environment`, ohne Docker gehen sie genauso
 | `LUMEN_FFMPEG`, `LUMEN_FFPROBE` | `--ffmpeg`, `--ffprobe` | `ffmpeg`, `ffprobe` | Pfad zu FFmpeg (im Abbild schon dabei) |
 | `LUMEN_WEB` | `--web` | eingebaut | Web-App aus einem Ordner statt der eingebauten (zum Entwickeln) |
 | `LUMEN_TLS` | `--tls` | aus | `1` (oder `ja`, `true`) schaltet den verschlüsselten Eingang (HTTPS) ein, `0`/`nein` lässt ihn aus. Mit `LUMEN_RELAY` geht er von selbst an |
-| `LUMEN_TLS_ADDR` | `--tls-addr` | `:8920` | Adresse des verschlüsselten Eingangs. Im Container den Port `8920` veröffentlichen, wenn Geräte im Heimnetz ihn direkt nutzen sollen |
+| `LUMEN_TLS_ADDR` | `--tls-addr` | `:8920` | Adresse des verschlüsselten Eingangs. Mit `network_mode: host` liegt er direkt auf dem NAS — läuft dort Emby oder Jellyfin mit HTTPS, ist 8920 belegt, dann etwa `:8921`. Im Bridge-Betrieb den Port veröffentlichen, wenn Geräte im Heimnetz ihn direkt nutzen sollen |
 | `LUMEN_TLS_NAME` | `--tls-name` | — | Name oder Adresse des NAS fürs eigene Zertifikat (im Container sieht Lumen nur seine Container-Adresse). Gilt auch als bekannter Name |
 | `LUMEN_TLS_CERT`, `LUMEN_TLS_KEY` | `--tls-cert`, `--tls-key` | eigenes Zertifikat | Ein mitgebrachtes Zertifikat, etwa von Let's Encrypt; wird nach Erneuerung von selbst neu gelesen |
 | `LUMEN_HOSTS` | — | — | Weitere Namen, unter denen Lumen erreichbar ist (Reverse-Proxy, DDNS wie `name.synology.me`), mit Komma getrennt. Sonst lehnt Lumen Anmeldung und Einrichtung unter diesem Namen ab (Schutz vor DNS-Rebinding) |
-| `LUMEN_HEIMNETZ` | — | — | Welche Netze als „zu Hause“ gelten, etwa `192.168.1.0/24,fd00::/8`. Ohne Angabe gelten private Adressen — ausser den Gateways der Container-Netze, damit Anfragen von aussen über Docker nicht als „zu Hause“ durchgehen. Setzen, wenn Geräte im Heimnetz nach dem Update plötzlich als „unterwegs“ gelten |
+| `LUMEN_HEIMNETZ` | — | — | Welche Netze als „zu Hause“ gelten, etwa `192.168.1.0/24,fd00::/8`. Ohne Angabe gelten private Adressen — ausser den Gateways der eigenen Netze, dem NAS selbst und anderen Containern, damit Anfragen von aussen über Docker oder einen Proxy nicht als „zu Hause“ durchgehen. Gelten Geräte im Heimnetz als „unterwegs“, zuerst in der Verwaltung unter „Dieses Gerät“ nachsehen (meist hilft `network_mode: host`, siehe [hier](#zu-hause-oder-unterwegs-docker-und-die-adressen)) |
 | `LUMEN_OPENSUBTITLES_URL` | — | OpenSubtitles | Eigener Spiegel für den Untertitel-Download (selten nötig) |
 | `LUMEN_RELAY` | `--relay` | aus | Adresse des Vermittlers für den Fernzugriff, etwa `meinserver.example:8444` |
 | `LUMEN_RELAY_SECRET` | `--relay-secret` | — | Gemeinsames Geheimnis mit dem Vermittler |
 | `LUMEN_RELAY_FINGERPRINT` | `--relay-fingerprint` | — | Fingerabdruck des Vermittler-Zertifikats (gibt der Vermittler beim Start aus) |
 | `LUMEN_GITHUB_TOKEN` | — | — | *Optional.* Die Update-Prüfung braucht kein Token; nur für Updates aus einem privaten Repository (siehe „Aktuell bleiben"). Ein Token aus der Verwaltung hat Vorrang |
-| `LUMEN_AKTUALISIERER_URL` | — | — | Adresse des Aktualisierers für Updates per Knopfdruck im Container, etwa `http://aktualisierer:8080` (siehe [Updates per Knopfdruck](#updates-per-knopfdruck)). Nur hier einstellbar, nicht in der Verwaltung |
+| `LUMEN_AKTUALISIERER_URL` | — | — | Adresse des Aktualisierers für Updates per Knopfdruck im Container, etwa `http://127.0.0.1:8080` mit `network_mode: host` oder `http://aktualisierer:8080` im Bridge-Betrieb (siehe [Updates per Knopfdruck](#updates-per-knopfdruck)). Nur hier einstellbar, nicht in der Verwaltung |
 | `LUMEN_AKTUALISIERER_TOKEN` | — | — | Geheimes Token für den Aktualisierer, dasselbe wie dort `WATCHTOWER_HTTP_API_TOKEN` (am besten über die Datei `.env`). Wird nie angezeigt, nie protokolliert und nie an Geräte geschickt |
 | `LUMEN_SOURCE_URL` | — | dieses Repository | Wo der Quelltext deiner Fassung liegt (AGPL, siehe [Lizenz](#lizenz)) |
 | `LUMEN_TMDB_URL`, `LUMEN_TMDB_IMG_URL`, `LUMEN_OMDB_URL` | — | die echten Dienste | Andere Adressen für die Metadaten-Quellen — nur für Tests oder einen eigenen Spiegel. Absichtlich nicht in der Verwaltung einstellbar |
@@ -1012,9 +1066,10 @@ drei Zeilen `LUMEN_RELAY`, `LUMEN_RELAY_SECRET` und
 Die Ports 8443 und 8444 öffnest du auf dem Mietserver, nicht zu Hause.
 
 Sobald `LUMEN_RELAY` gesetzt ist, schaltet Lumen die Verschlüsselung von
-selbst ein (auch den Eingang auf 8920). Für den Vermittler muss dieser
-Port im Container nicht veröffentlicht sein — der Vermittler bekommt
-einen eigenen, nur im Container erreichbaren Eingang.
+selbst ein (auch den Eingang auf 8920). Für den Vermittler braucht es
+diesen Port nicht — der Vermittler bekommt einen eigenen Eingang, der nur
+auf `127.0.0.1` erreichbar ist und jede Anfrage als „unterwegs" behandelt,
+auch mit `network_mode: host`.
 
 ### Was von unterwegs anders ist
 
@@ -1055,14 +1110,20 @@ Proxy abschalten, bis das stimmt.
 
 **Achtung, Docker und die Absender-Adresse.** „Zu Hause" heisst für Lumen:
 die Anfrage kommt von einer privaten Adresse (192.168.x, 10.x, 172.16–31.x,
-fe80::, localhost) und ohne Proxy-Kopfzeilen. Docker reicht die echte
-Adresse aber nicht immer durch: Bei IPv6-Zugriffen, bei manchen
-Netzwerk-Einstellungen des NAS und bei einem Proxy auf demselben Gerät
-sieht Lumen statt des Absenders die Adresse des Docker-Netzes (etwa
-`172.17.0.1`) — und die ist privat. Eine Anfrage aus dem Internet gälte
-dann als „zu Hause": mit Profilauswahl, ohne PIN-Pflicht, mit Einrichten.
-Darum: Lumens Ports nie im Router freigeben, und einen Reverse-Proxy nur
-mit `X-Forwarded-For` betreiben.
+fe80::) und ohne Proxy-Kopfzeilen. Docker reicht die echte Adresse im
+Bridge-Betrieb aber nicht immer durch: Bei IPv6-Zugriffen, bei manchen
+NAS (auch Synology) und bei einem Proxy auf demselben Gerät sieht Lumen
+statt des Absenders das Gateway des Docker-Netzes (etwa `172.17.0.1`).
+Das zählt nie als zu Hause — sonst gälte eine Anfrage aus dem Internet als
+„zu Hause": mit Profilauswahl, ohne PIN-Pflicht, mit Einrichten. Genauso
+wenig zählen der NAS selbst (seine Adressen und, mit `network_mode: host`,
+`127.0.0.1`), andere Container und der Router. Die Kehrseite: Sieht Lumen
+nur das Gateway, gilt auch das Sofa als unterwegs — die Lösung ist
+`network_mode: host` (siehe [Docker und die Adressen](#zu-hause-oder-unterwegs-docker-und-die-adressen)).
+Eine öffentliche IPv6-Adresse gilt ebenfalls nie als zu Hause; im
+Heimnetz Lumen darum über die IPv4-Adresse des NAS öffnen. Und: Lumens
+Ports nie im Router freigeben, einen Reverse-Proxy nur mit
+`X-Forwarded-For` betreiben.
 Zugangsschlüssel stehen bei Lumen nie in Adressen, also auch nicht im
 Protokoll des Proxys; Bilder und Videos tragen nur einen kurzlebigen
 Medienschlüssel, der zu niemandem zurückführt.

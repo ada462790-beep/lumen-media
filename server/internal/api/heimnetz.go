@@ -22,6 +22,10 @@ package api
 //     Adresse jedes eigenen Netzes, etwa x.x.x.1) zählen nie als zu Hause.
 //     Wer in so einem Aufbau trotzdem die Profilauswahl will, legt das
 //     Heimnetz ausdrücklich fest.
+//   - Der Rechner selbst (seine Adressen, und 127.0.0.1, wenn Lumen im
+//     Netz des Rechners läuft) und andere Container auf ihm zählen nicht
+//     als zu Hause: Dort sitzt vielleicht ein Reverse-Proxy, der Anfragen
+//     aus dem Internet weiterreicht, ohne es zu sagen.
 //   - LUMEN_HEIMNETZ (Liste von Netzen, z. B. „192.168.1.0/24,fd00::/8")
 //     legt ausdrücklich fest, was zu Hause ist. Ist es gesetzt, gilt nur
 //     das — auch eine Gateway-Adresse, wenn man sie hineinschreibt.
@@ -71,14 +75,36 @@ type netzStand struct {
 	gateways   map[string]bool
 	heimnetz   []*net.IPNet
 	festgelegt bool
+	sicht      netzSicht
+}
+
+// netzSicht: was Lumen von den Schnittstellen des Rechners sieht, auf dem
+// es läuft (im Container: die des Containers).
+type netzSicht struct {
+	// eigene: die eigenen Adressen ausser 127.0.0.1/::1.
+	eigene map[string]bool
+	// containerNetze: Netze von Brücken für Container (docker0, br-…).
+	// Wer von dort kommt, ist ein anderer Container auf demselben Rechner
+	// — etwa ein Reverse-Proxy —, keine Person im Wohnzimmer.
+	containerNetze []*net.IPNet
+	// hostNetz: Lumen läuft im Container, aber im Netz des Rechners
+	// (Docker „network_mode: host"). Dann kommen über 127.0.0.1 und die
+	// Adressen des NAS auch Dienste des NAS selbst, etwa sein Reverse-Proxy.
+	hostNetz bool
+	// bruecke: Lumen läuft im Container mit eigenem Netz (Bridge-Betrieb).
+	bruecke bool
 }
 
 var netze netzStand
 
-// gatewaysFinden ist austauschbar, damit Tests eigene Gateways setzen.
-var gatewaysFinden = eigeneGateways
+// gatewaysFinden und sichtFinden sind austauschbar, damit Tests eigene
+// Netze setzen.
+var (
+	gatewaysFinden = eigeneGateways
+	sichtFinden    = eigeneSicht
+)
 
-func (n *netzStand) aktuell() (map[string]bool, []*net.IPNet, bool) {
+func (n *netzStand) aktuell() (map[string]bool, []*net.IPNet, bool, netzSicht) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if time.Now().After(n.bis) {
@@ -89,9 +115,10 @@ func (n *netzStand) aktuell() (map[string]bool, []*net.IPNet, bool) {
 		roh := os.Getenv("LUMEN_HEIMNETZ")
 		n.festgelegt = strings.TrimSpace(roh) != ""
 		n.heimnetz = heimnetzAus(roh)
+		n.sicht = sichtFinden()
 		n.bis = time.Now().Add(5 * time.Minute)
 	}
-	return n.gateways, n.heimnetz, n.festgelegt
+	return n.gateways, n.heimnetz, n.festgelegt, n.sicht
 }
 
 // netzeNeuLesen vergisst den Stand (für Tests und nach Änderungen).
@@ -101,29 +128,131 @@ func netzeNeuLesen() {
 	netze.mu.Unlock()
 }
 
+// Gründe, warum eine Adresse als zu Hause oder unterwegs gilt. Die
+// Verwaltung zeigt sie an (Verwaltung › Netzwerk), damit man sieht, woran
+// es liegt, statt zu raten.
+const (
+	grundFestgelegt      = "festgelegt"      // zu Hause: steht in LUMEN_HEIMNETZ
+	grundNichtFestgelegt = "nichtFestgelegt" // unterwegs: nicht in LUMEN_HEIMNETZ
+	grundLumenSelbst     = "lumenSelbst"     // zu Hause: 127.0.0.1 im eigenen Container
+	grundRechnerSelbst   = "rechnerSelbst"   // unterwegs: der Rechner selbst (Proxy?)
+	grundContainerNetz   = "containerNetz"   // unterwegs: anderer Container
+	grundGateway         = "gateway"         // unterwegs: Gateway eines eigenen Netzes
+	grundOeffentlich     = "oeffentlich"     // unterwegs: keine private Adresse
+	grundPrivat          = "privat"          // zu Hause: private Adresse im Heimnetz
+	grundUnbekannt       = "unbekannt"       // unterwegs: Adresse nicht lesbar
+	grundVermittler      = "vermittler"      // unterwegs: über den Vermittler
+	grundWeitergereicht  = "weitergereicht"  // unterwegs: Reverse-Proxy davor
+)
+
 // imHeimnetz entscheidet für eine Absenderadresse, ob sie zu Hause ist.
 func imHeimnetz(ip net.IP) bool {
+	zuHause, _ := heimnetzPruefen(ip)
+	return zuHause
+}
+
+// heimnetzPruefen sagt, ob eine Adresse zu Hause ist, und warum.
+func heimnetzPruefen(ip net.IP) (bool, string) {
 	if ip == nil {
-		return false
+		return false, grundUnbekannt
 	}
-	gateways, heim, festgelegt := netze.aktuell()
+	gateways, heim, festgelegt, sicht := netze.aktuell()
+	// Der Rechner selbst: Im eigenen Container ist 127.0.0.1 Lumen selbst
+	// (Gesundheitsprüfung). Im Netz des Rechners dagegen und von den
+	// eigenen Adressen aus kann es jeder Dienst auf dem NAS sein — auch ein
+	// Reverse-Proxy, der Anfragen aus dem Internet ohne X-Forwarded-For
+	// weiterreicht. Das bleibt unterwegs, ausser die Adresse steht einzeln
+	// in LUMEN_HEIMNETZ.
+	selbst := ip.IsLoopback() || sicht.eigene[ip.String()]
+	if selbst {
+		if ip.IsLoopback() && !sicht.hostNetz {
+			return true, grundLumenSelbst
+		}
+		if festgelegt && einzelnFestgelegt(heim, ip) {
+			return true, grundFestgelegt
+		}
+		return false, grundRechnerSelbst
+	}
 	if festgelegt {
 		for _, n := range heim {
 			if n.Contains(ip) {
-				return true
+				return true, grundFestgelegt
 			}
 		}
-		// Lumen selbst (Gesundheitsprüfung, ein Browser auf dem NAS)
-		// bleibt zu Hause, auch wenn das Heimnetz anders festgelegt ist.
-		return ip.IsLoopback()
-	}
-	if ip.IsLoopback() {
-		return true
+		return false, grundNichtFestgelegt
 	}
 	if !(ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
-		return false
+		return false, grundOeffentlich
 	}
-	return !gateways[ip.String()]
+	if gateways[ip.String()] {
+		return false, grundGateway
+	}
+	for _, n := range sicht.containerNetze {
+		if n.Contains(ip) {
+			return false, grundContainerNetz
+		}
+	}
+	return true, grundPrivat
+}
+
+// einzelnFestgelegt: steht genau diese Adresse (als /32 bzw. /128) in
+// LUMEN_HEIMNETZ? Ein ganzes Netz genügt für den Rechner selbst nicht.
+func einzelnFestgelegt(heim []*net.IPNet, ip net.IP) bool {
+	for _, n := range heim {
+		eins, bits := n.Mask.Size()
+		if eins == bits && n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// containerSchnittstelle: Namen, unter denen Docker, Podman und Co. ihre
+// Brücken und virtuellen Kabel anlegen.
+func containerSchnittstelle(name string) bool {
+	for _, p := range []string{"docker", "br-", "veth", "cni", "podman", "virbr", "lxcbr", "lxdbr"} {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// eigeneSicht liest die Schnittstellen. Sieht Lumen im Container Brücken
+// wie docker0, läuft es im Netz des Rechners — im eigenen Container-Netz
+// gibt es nur lo und eth0.
+func eigeneSicht() netzSicht {
+	s := netzSicht{eigene: map[string]bool{}}
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return s
+	}
+	containerBruecken := false
+	for _, ifc := range ifs {
+		istContainer := containerSchnittstelle(ifc.Name)
+		if istContainer {
+			containerBruecken = true
+		}
+		addrs, err := ifc.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			n, ok := a.(*net.IPNet)
+			if !ok || n.IP.IsLoopback() {
+				continue
+			}
+			s.eigene[n.IP.String()] = true
+			if istContainer && !n.IP.IsLinkLocalUnicast() {
+				s.containerNetze = append(s.containerNetze, &net.IPNet{IP: n.IP.Mask(n.Mask), Mask: n.Mask})
+			}
+		}
+	}
+	if imContainer() {
+		s.hostNetz = containerBruecken
+		s.bruecke = !containerBruecken
+	}
+	return s
 }
 
 // eigeneGateways sammelt die Gateway-Adressen der eigenen Netze: die

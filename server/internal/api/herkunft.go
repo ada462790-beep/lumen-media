@@ -30,6 +30,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 type ctxHerkunft int
@@ -46,19 +48,71 @@ func VonAussen(h http.Handler) http.Handler {
 
 // vonAussen sagt, ob eine Anfrage von unterwegs kommt.
 func vonAussen(r *http.Request) bool {
+	h := herkunftVon(r)
+	return !h.ZuHause
+}
+
+// weitergereichtKoepfe: Angaben, die ein Reverse-Proxy davor setzt.
+var weitergereichtKoepfe = []string{"X-Forwarded-For", "Forwarded", "X-Real-Ip", "X-Forwarded-Host", "Cf-Connecting-Ip"}
+
+// herkunft: wie Lumen eine Anfrage einordnet, samt Grund. Dieselbe
+// Entscheidung wie vonAussen — die Verwaltung zeigt sie nur an.
+type herkunft struct {
+	Adresse string `json:"adresse"`
+	ZuHause bool   `json:"zuHause"`
+	Grund   string `json:"grund"`
+	Kopf    string `json:"kopf,omitempty"` // welcher weitergereichte Kopf
+}
+
+func herkunftVon(r *http.Request) herkunft {
+	ip := absenderIP(r)
+	h := herkunft{}
+	if ip != nil {
+		h.Adresse = ip.String()
+	}
 	if v, _ := r.Context().Value(ctxVonAussen).(bool); v {
-		return true
+		h.Grund = grundVermittler
+		return h
 	}
 	// Ein Reverse-Proxy davor: Was er weiterreicht, kann von überall
 	// kommen. Seinen Angaben, woher, glauben wir nicht.
-	for _, k := range []string{"X-Forwarded-For", "Forwarded", "X-Real-Ip", "X-Forwarded-Host", "Cf-Connecting-Ip"} {
+	for _, k := range weitergereichtKoepfe {
 		if r.Header.Get(k) != "" {
-			return true
+			h.Grund, h.Kopf = grundWeitergereicht, k
+			return h
 		}
 	}
 	// Private Adresse allein genügt nicht: Gateways der eigenen Netze und
 	// alles ausserhalb von LUMEN_HEIMNETZ zählen als unterwegs (heimnetz.go).
-	return !imHeimnetz(absenderIP(r))
+	h.ZuHause, h.Grund = heimnetzPruefen(ip)
+	if h.Grund == grundGateway {
+		gatewayMerken(h.Adresse)
+	}
+	return h
+}
+
+// Zuletzt gesehene Anfrage über ein Gateway. Kommen alle Geräte über das
+// Gateway des Container-Netzes, verdeckt Docker die echten Adressen — die
+// Verwaltung sagt es dann, auch wenn man sie selbst über den Vermittler
+// öffnet.
+var gatewaySpur struct {
+	mu      sync.Mutex
+	adresse string
+	zuletzt time.Time
+	anzahl  int64
+}
+
+func gatewayMerken(adresse string) {
+	gatewaySpur.mu.Lock()
+	gatewaySpur.adresse, gatewaySpur.zuletzt = adresse, time.Now()
+	gatewaySpur.anzahl++
+	gatewaySpur.mu.Unlock()
+}
+
+func gatewayGesehen() (string, time.Time, int64) {
+	gatewaySpur.mu.Lock()
+	defer gatewaySpur.mu.Unlock()
+	return gatewaySpur.adresse, gatewaySpur.zuletzt, gatewaySpur.anzahl
 }
 
 func absenderIP(r *http.Request) net.IP {
