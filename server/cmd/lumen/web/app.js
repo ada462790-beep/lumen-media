@@ -148,6 +148,8 @@ const I = {
   herz: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
   wish: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
+  // Zahnrad für „Qualität" im Player (eigene Zeichnung, acht Zähne).
+  zahnrad: '<path stroke-linejoin="round" d="M18.7 10.1 21.1 10.4 21.1 13.6 18.7 13.9 18.1 15.5 19.5 17.3 17.3 19.5 15.5 18.1 13.9 18.7 13.6 21.1 10.4 21.1 10.1 18.7 8.5 18.1 6.7 19.5 4.5 17.3 5.9 15.5 5.3 13.9 2.9 13.6 2.9 10.4 5.3 10.1 5.9 8.5 4.5 6.7 6.7 4.5 8.5 5.9 10.1 5.3 10.4 2.9 13.6 2.9 13.9 5.3 15.5 5.9 17.3 4.5 19.5 6.7 18.1 8.5z"/><circle cx="12" cy="12" r="2.8"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
@@ -1628,29 +1630,74 @@ function groesse(bytes) {
     : Math.max(1, Math.round(bytes / 1e6)) + ' MB';
 }
 
-function fassungName(f) {
-  // Breitformat zählt nach der Breite: 1920×800 ist ein 1080p-Film.
-  const h = f.height || 0, w = f.width || 0;
-  const q = h >= 2000 || w >= 3400 ? '4K' : h >= 1000 || w >= 1800 ? '1080p' : h >= 700 || w >= 1200 ? '720p' : h ? `${h}p` : '';
-  const gb = groesse(f.sizeBytes);
-  return [q, (f.container || '').toUpperCase(), gb].filter(Boolean).join(' · ');
+/* Auflösung als Klasse: Breitformat zählt nach der Breite — 1920×800 ist
+   ein 1080p-Film. hoehe ist die Zeilenzahl der Klasse (für die Stufen). */
+function aufloesungVon(f) {
+  const h = f?.height || 0, w = f?.width || 0;
+  if (h >= 2000 || w >= 3400) return { name: '4K', hoehe: 2160 };
+  if (h >= 1000 || w >= 1800) return { name: '1080p', hoehe: 1080 };
+  if (h >= 700 || w >= 1200) return { name: '720p', hoehe: 720 };
+  return h ? { name: `${h}p`, hoehe: h } : { name: '', hoehe: 0 };
 }
 
-function fassungsWahl(it, fassungen, resumeSec) {
-  const admin = S.me?.account?.isAdmin;
-  const zeile = (f, i) => `<div class="row" style="min-height:56px;gap:12px">
-      <button class="btn" style="flex:1;justify-content:flex-start;gap:12px;padding:0;text-align:left"
-        data-play="${esc(it.id)}" data-file="${esc(f.id)}"${resumeSec > 60 ? '' : ' data-from="0"'} title="${esc(f.path || '')}">
-        <span style="display:flex;width:30px;height:30px;border-radius:50%;background:var(--fill);align-items:center;justify-content:center;flex:none">${PLAY(12)}</span>
-        <span><span class="t-body">${esc(fassungName(f))}</span>
-          ${i === 0 ? `<span class="t-caption c-2"> ${tr('· Standard')}</span>` : ''}</span></button>
-      ${resumeSec > 60 ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-play="${esc(it.id)}" data-file="${esc(f.id)}" data-from="0">${tr('Von vorn')}</button>` : ''}
-      ${admin && i > 0 ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassungstandard="${esc(it.id)}:${esc(f.id)}"
-          title="${tr('Diese Qualität für alle als Standard nehmen')}">${tr('Als Standard')}</button>` : ''}
-    </div>`;
-  return `<div class="group group--inset listen-panel" style="max-width:560px;margin-top:14px" role="group" aria-label="${tr('Qualität wählen')}">
-    <div class="row" style="min-height:40px"><span class="t-caption c-2">${tr('In welcher Qualität?')}</span></div>
-    ${fassungen.map(zeile).join('')}</div>`;
+const mbit = b => `${zahl(b / 1e6, { maximumFractionDigits: 1 })} ${tr('Mbit/s')}`;
+
+/* Mehrere Dateien desselben Titels (MKV in 1080p, AVI in 400p) heissen
+   Fassungen. Im Player stehen sie unter „Qualität“, beschriftet mit
+   Auflösung, Sprache der ersten Tonspur, Format und gegebenenfalls der
+   Edition. Teile eines Films (CD1, CD2) sind keine Fassungen. */
+const fassungenVon = files => (files || []).filter(f => !f.missing && !f.defekt && (f.partNo || 1) === 1);
+function fassungTeile(f) {
+  const ton = (f.tracks || []).find(t => t.kind === 'audio');
+  const sprache = ton?.language && ton.language !== 'und' ? sprachName(ton.language) : '';
+  return [aufloesungVon(f).name, sprache, (f.container || '').toUpperCase(), f.edition || ''].filter(Boolean);
+}
+function fassungNamen(fassungen) {
+  const namen = fassungen.map(f => fassungTeile(f).join(' · '));
+  // Zwei gleich beschriftete Fassungen: die Grösse unterscheidet sie.
+  return namen.map((n, i) => (namen.indexOf(n) !== namen.lastIndexOf(n) && fassungen[i].sizeBytes
+    ? [n, groesse(fassungen[i].sizeBytes)].filter(Boolean).join(' · ') : n) || tr('Fassung {n}', { n: i + 1 }));
+}
+
+/* Stufen fürs Umwandeln, wie man sie von YouTube kennt. Angeboten wird,
+   was nicht über der Quelle liegt; „Original“ und „Auto“ gibt es immer.
+   Die Wahl gilt für dieses Gerät (localStorage), nicht fürs Konto: Am
+   Handy unterwegs will man etwas anderes als am Fernseher. */
+const QUALITAETS_STUFEN = [
+  { id: '2160', hoehe: 2160, bitrate: 20e6 },
+  { id: '1080', hoehe: 1080, bitrate: 8e6 },
+  { id: '720', hoehe: 720, bitrate: 4e6 },
+  { id: '480', hoehe: 480, bitrate: 2e6 },
+  { id: '360', hoehe: 360, bitrate: 1e6 },
+];
+const QUALITAET_KEY = 'lumen.qualitaet';
+function gemerkteQualitaet() {
+  try { return localStorage.getItem(QUALITAET_KEY) || 'auto'; } catch { return 'auto'; }
+}
+function qualitaetMerken(id) {
+  try { localStorage.setItem(QUALITAET_KEY, id); } catch {}
+}
+// Unbekannte Höhe: so tun, als wäre es 1080p — dann gibt es die üblichen Stufen.
+const stufenFuer = quellHoehe => QUALITAETS_STUFEN.filter(s => s.hoehe <= (quellHoehe || 1080));
+/* Was für diese Quelle gilt: die gemerkte Stufe, wenn es sie hier gibt —
+   sonst „Auto“ (480p gemerkt, die Datei hat 400p: dann eben die Datei). */
+function wirksameQualitaet(quellHoehe) {
+  const id = gemerkteQualitaet();
+  if (id === 'original') return id;
+  return stufenFuer(quellHoehe).some(s => s.id === id) ? id : 'auto';
+}
+/* Was der Server dazu wissen muss: Obergrenzen für Höhe und Bitrate.
+   „Original“ hebt die Grenze des Bildschirms auf; „Auto“ schickt nichts. */
+function qualitaetParameter(quellHoehe) {
+  const id = wirksameQualitaet(quellHoehe);
+  if (id === 'original') return { maxHeight: 4320 };
+  const s = QUALITAETS_STUFEN.find(x => x.id === id);
+  return s ? { maxHeight: s.hoehe, maxBitrate: s.bitrate } : null;
+}
+function qualitaetName(id) {
+  if (id === 'original') return tr('Original');
+  const s = QUALITAETS_STUFEN.find(x => x.id === id);
+  return s ? `${s.hoehe === 2160 ? '4K' : s.hoehe + 'p'} · ${mbit(s.bitrate)}` : tr('Auto');
 }
 
 function viewDetail() {
@@ -1659,12 +1706,11 @@ function viewDetail() {
   const it = d.item;
   const files = d.files || [];
   // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p): Sie
-  // sind ein Film. „Ansehen" fragt dann zuerst nach der Qualität
-  // (Auflösung, Format, Grösse). Oben steht die Standard-Fassung — die vom
-  // Besitzer gewählte, sonst die mit der höchsten Auflösung. Teile eines
-  // Films (CD1, CD2, a/b) sind keine Fassungen.
-  const fassungen = files.filter(f => !f.missing && (f.partNo || 1) === 1);
-  const playable = files.find(f => !f.missing);
+  // sind ein Film. „Ansehen" spielt gleich die Standard-Fassung — die vom
+  // Besitzer gewählte, sonst die mit der höchsten Auflösung (der Server
+  // liefert sie zuerst). Eine andere wählt man im Player unter „Qualität".
+  const fassungen = fassungenVon(files);
+  const playable = fassungen[0] || files.find(f => !f.missing);
   const resumeSec = it.resumeMs ? it.resumeMs / 1000 : 0;
 
   const meta = [
@@ -1773,6 +1819,17 @@ function viewDetail() {
   const spur = t => [spracheN(t.language), codecN(t.codec), t.kind === 'audio' ? kanaele(t.channels) : '',
     t.forced ? tr('erzwungen') : '', t.hearingImpaired ? tr('für Hörgeschädigte') : '', t.external ? tr('eigene Datei') : '',
     t.title && !/^(stereo|surround|5\.1|2\.0)$/i.test(t.title) ? `„${t.title}“` : ''].filter(Boolean).join(' · ');
+  // Bei mehreren Fassungen: welche „Ansehen" spielt — und für Verwalter
+  // der Knopf, eine andere für alle zum Standard zu machen (früher im
+  // Menü „In welcher Qualität?", das es nicht mehr gibt).
+  const admin = S.me?.account?.isAdmin;
+  const standardZeile = f => {
+    const i = fassungen.length > 1 ? fassungen.indexOf(f) : -1;
+    if (i < 0) return '';
+    if (i === 0) return `<span class="tech" style="margin:0;flex:none">${tr('Standard')}</span>`;
+    return admin ? `<button class="btn btn-pill btn-pill--fill" style="height:28px;font-size:.75rem;flex:none" data-fassungstandard="${esc(it.id)}:${esc(f.id)}"
+      title="${tr('Diese Qualität für alle als Standard nehmen')}">${tr('Als Standard')}</button>` : '';
+  };
   const fileRows = files.map(f => {
     const ton = (f.tracks || []).filter(t => t.kind === 'audio');
     const ut = (f.tracks || []).filter(t => t.kind === 'subtitle');
@@ -1780,7 +1837,9 @@ function viewDetail() {
       <span class="c-2" style="flex:1;min-width:0">${inhalt}</span></div>` : '';
     return `
     <div class="datei-info" style="padding:12px 16px;display:flex;flex-direction:column;gap:5px">
-      <span class="mono c-2" style="overflow-wrap:anywhere">${/* Verwalter bekommen vom Server den vollen Pfad, alle anderen nur den Dateinamen */ ''}${esc(f.path)}${f.missing ? ' · ' + tr('fehlt') : ''}</span>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="mono c-2" style="overflow-wrap:anywhere;flex:1;min-width:0">${/* Verwalter bekommen vom Server den vollen Pfad, alle anderen nur den Dateinamen */ ''}${esc(f.path)}${f.missing ? ' · ' + tr('fehlt') : ''}</span>
+        ${standardZeile(f)}</div>
       <div class="t-caption" style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
         ${zeile(tr('Bild'), [f.width && f.height ? `${f.width}×${f.height}` : (f.height ? f.height + 'p' : ''), codecN(f.videoCodec), f.hdr].filter(Boolean).join(' · '))}
         ${zeile(tr('Ton'), ton.map(t => esc(spur(t))).join('<br>'))}
@@ -1812,22 +1871,20 @@ function viewDetail() {
         <div class="t-sub c-2" style="margin-top:8px">${esc(meta)}${tomaten}</div>
         ${technik}
         <div style="display:flex;gap:12px;margin-top:22px;flex-wrap:wrap">
-          ${playable ? (fassungen.length > 1
-            // Mehrere Qualitäten: „Ansehen" fragt zuerst, welche.
-            ? `<button class="btn btn-primary" data-fassungmenu="${esc(it.id)}" aria-expanded="${S.fassungMenu === it.id}">
-                ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}
-                <span style="opacity:.6;font-weight:500;margin-left:2px">${tr('· {n} Qualitäten', { n: fassungen.length })}</span></button>`
+          ${playable
             // „Ansehen" heisst von vorn: Unter einer Minute zeigt der Knopf
             // keine Stelle an — dann darf er auch nicht still dort weitermachen.
-            : `<button class="btn btn-primary" data-play="${it.id}" data-file="${esc(playable.id)}"${resumeSec > 60 ? '' : ' data-from="0"'}>
-                ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}</button>`) : ''}
+            // Mehrere Qualitäten: der kleine Hinweis bleibt, gewählt wird im Player.
+            ? `<button class="btn btn-primary" data-play="${it.id}" data-file="${esc(playable.id)}"${resumeSec > 60 ? '' : ' data-from="0"'}>
+                ${PLAY(16)} ${resumeSec > 60 ? `${tr('Weiter bei')} ${clock(resumeSec)}` : tr('Ansehen')}${fassungen.length > 1
+                  ? `<span style="opacity:.6;font-weight:500;margin-left:2px">${tr('· {n} Qualitäten', { n: fassungen.length })}</span>` : ''}</button>` : ''}
           ${it.kind === 'series' && (d.seasons || []).length ? `<button class="btn btn-primary" data-serie-play="${esc(it.id)}">
               ${PLAY(16)} ${esc(serienKnopfText)}</button>` : ''}
           ${'' /* Eine Hauptaktion (Ansehen), daneben runde Symbole mit kurzer
                  Beschriftung — wie in der TV-App von Apple. Vorher standen
                  sechs gleich grosse Kapseln da, am Handy auf drei Zeilen. */}
           <div class="aktionen">
-          ${resumeSec > 60 && fassungen.length <= 1 ? `<button class="aktion" data-play="${it.id}" data-file="${esc(playable?.id || '')}" data-from="0">
+          ${resumeSec > 60 && playable ? `<button class="aktion" data-play="${it.id}" data-file="${esc(playable?.id || '')}" data-from="0">
               <span class="aktion-rund">${svg(I.vonVorn, 18, 2)}</span><span class="aktion-text">${tr('Aktion|Von vorn')}</span></button>` : ''}
           <button class="aktion" data-list="${it.onList ? 'off' : 'on'}" aria-pressed="${!!it.onList}">
             <span class="aktion-rund">${svg(it.onList ? I.check : I.plus, 18, 2.2)}</span><span class="aktion-text">${it.onList ? tr('Gemerkt') : tr('Merken')}</span></button>
@@ -1858,7 +1915,6 @@ function viewDetail() {
       </div>
     </div>
 
-    ${S.fassungMenu === it.id && fassungen.length > 1 ? fassungsWahl(it, fassungen, resumeSec) : ''}
     <div id="listenpanel"></div>
     ${verwaltungHier() && (it.kind === 'movie' || it.kind === 'series') ? `
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;align-items:center">
@@ -2113,6 +2169,7 @@ function spurenPanel(p) {
     return `<div class="spuren spuren--kapitel" role="menu" aria-label="${tr('Kapitel')}">${abschnitt(tr('Kapitel'),
       p.kapitel.map((k, i) => zeile(i === aktiv, `data-kapitel="${k.startMs}"`, `${clock(k.startMs / 1000)}  ${k.title || tr('Kapitel {n}', { n: i + 1 })}`)).join(''))}</div>`;
   }
+  if (p.spurenOffen === 'qualitaet') return qualitaetPanel(p, zeile, abschnitt);
   if (p.spurenOffen === 'tempo') {
     return `<div class="spuren" role="menu" aria-label="${tr('Wiedergabetempo')}">${abschnitt(tr('Tempo'),
       TEMPI.map(t => zeile((p.tempo || 1) === t, `data-tempo="${t}"`, tempoText(t))).join(''))}</div>`;
@@ -2152,6 +2209,120 @@ function spurenPanel(p) {
     }
   }
   return `<div class="spuren" role="menu">${html}</div>`;
+}
+
+/* „Qualität“ im Player (Zahnrad): oben die Fassungen des Titels, darunter
+   die Stufen fürs Umwandeln — Original, 1080p · 8 Mbit/s … und Auto. */
+function qualitaetPanel(p, zeile, abschnitt) {
+  const haken = svg('<path d="M4 12.5 9.5 18 20 6.5"/>', 18, 2.6);
+  const eintrag = (aktiv, attr, name, nebenbei = '') => `
+    <button class="spur${aktiv ? ' spur--aktiv' : ''}" ${attr} role="menuitemradio" aria-checked="${aktiv}">
+      <span class="spur-name">${esc(name)}${nebenbei ? `<span class="spur-zusatz"> · ${esc(nebenbei)}</span>` : ''}</span>${aktiv ? haken : ''}</button>`;
+  let html = '';
+  const fassungen = p.fassungen || [];
+  if (fassungen.length > 1) {
+    const namen = fassungNamen(fassungen);
+    html += abschnitt(tr('Fassung'), fassungen.map((f, i) =>
+      eintrag(f.id === p.fassungId, `data-fassungwahl="${esc(f.id)}"`, namen[i], i === 0 ? tr('Standard') : '')).join(''));
+  }
+  const jetzt = wirksameQualitaet(p.quellHoehe);
+  html += abschnitt(tr('Qualität'),
+    eintrag(jetzt === 'original', 'data-qualitaet="original"', tr('Original'), (p.quellInfo || []).join(' · ')) +
+    stufenFuer(p.quellHoehe).map(st => eintrag(jetzt === st.id, `data-qualitaet="${st.id}"`, qualitaetName(st.id))).join('') +
+    eintrag(jetzt === 'auto', 'data-qualitaet="auto"', tr('Auto')));
+  // Verwalter: die laufende Fassung für alle zum Standard machen — das,
+  // was früher im Menü „In welcher Qualität?“ auf der Titelseite stand.
+  if (S.me?.account?.isAdmin && fassungen.length > 1) {
+    html += abschnitt(tr('Für alle'), fassungen[0]?.id === p.fassungId
+      ? `<div class="spuren-hinweis">${tr('Diese Fassung ist der Standard.')}</div>`
+      : `<button class="spur" data-pl-standard><span class="spur-name">${tr('Diese Fassung als Standard nehmen')}</span></button>`);
+  }
+  return `<div class="spuren spuren--qualitaet" role="menu" aria-label="${tr('Qualität')}">${html}</div>`;
+}
+
+/* Eine andere Stufe: dieselbe Datei an derselben Stelle neu holen, mit
+   den neuen Grenzen. Ton und Untertitel bleiben, wie sie sind. */
+async function qualitaetWaehlen(id) {
+  const p = S.playing;
+  if (!p) return;
+  const vorher = JSON.stringify(qualitaetParameter(p.quellHoehe));
+  qualitaetMerken(id);
+  p.spurenOffen = false; p.spurenHtml = '';
+  patchChrome();
+  app.querySelector('[data-spuren="qualitaet"]')?.focus({ preventScroll: true });
+  if (JSON.stringify(qualitaetParameter(p.quellHoehe)) === vorher) return;
+  const v = $('#v');
+  const pos = p.offset + (v ? v.currentTime : p.current);
+  // Ob jetzt umgewandelt wird, sagt der Plan (für den Hinweis oben).
+  api.plan(p.fileId, qualitaetParameter(p.quellHoehe))
+    .then(pl => { if (S.playing === p && pl?.plan) { p.mode = pl.plan.direct ? 'direct' : 'transcode'; patchChrome(); } })
+    .catch(() => {});
+  await openStream(pos, { abspielen: !p.paused });
+  toast(tr('Qualität: {stufe}', { stufe: qualitaetName(wirksameQualitaet(p.quellHoehe)) }));
+}
+
+/* Eine andere Fassung (Datei) desselben Titels: an derselben Stelle
+   weiter, mit derselben Ton- und Untertitelsprache. Der Fortschritt
+   gehört zum Titel, nicht zur Datei — er bleibt. */
+async function fassungWechseln(fileId) {
+  const p = S.playing;
+  if (!p) return;
+  if (fileId === p.fassungId || !(p.fassungen || []).some(f => f.id === fileId)) {
+    p.spurenOffen = false; p.spurenHtml = ''; patchChrome();
+    return;
+  }
+  const v = $('#v');
+  const pos = filmVor(p) + p.offset + (v ? v.currentTime : p.current);
+  const ton = tonspuren(p).find(t => t.index === p.spur) || (p.spur < 0 ? tonspuren(p)[0] : null);
+  const ut = p.untertitel == null ? null : alleUntertitel(p).find(t => t.index === p.untertitel);
+  const wahl = {
+    ton: ton ? { language: ton.language || '', channels: ton.channels || 0 } : null,
+    ut: p.untertitel == null ? 'aus'
+      : ut ? { language: ut.language || '', forced: !!ut.forced, hearingImpaired: !!ut.hearingImpaired, bitmap: !!ut.bitmap } : null,
+  };
+  const anhalten = !!p.paused;
+  await standSichern();
+  if (S.playing !== p) return;
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  clearTimeout(p.wartenZeit);
+  S.playing = null;
+  await startPlayer(p.itemId, pos, fileId, { wahl, anhalten });
+  if (S.playing) toast(tr('Fassung: {name}', { name: fassungNamen(S.playing.fassungen)[S.playing.fassungen.findIndex(f => f.id === fileId)] || '' }));
+}
+
+/* Die Wahl aus der vorigen Fassung auf die Spuren dieser übertragen —
+   nach Sprache (und Kanälen, Merkmalen), nicht nach Nummer. Gibt es die
+   Sprache hier nicht, bleibt die Vorbelegung. */
+function spurenUebernehmen(p, w) {
+  const ton = tonspuren(p);
+  if (w.ton?.language) {
+    const t = ton.find(x => x.language === w.ton.language && (x.channels || 0) === w.ton.channels)
+      || ton.find(x => x.language === w.ton.language);
+    if (t) p.spur = t.index;
+  }
+  if (w.ut === 'aus') {
+    p.untertitel = null;
+  } else if (w.ut) {
+    const passt = x => (x.language || '') === w.ut.language && !!x.forced === w.ut.forced;
+    const u = alleUntertitel(p).find(x => passt(x) && !!x.hearingImpaired === w.ut.hearingImpaired && !!x.bitmap === w.ut.bitmap)
+      || textspuren(p).find(passt) || alleUntertitel(p).find(passt);
+    if (u) p.untertitel = u.index;
+  }
+}
+
+async function fassungAlsStandard() {
+  const p = S.playing;
+  if (!p) return;
+  try {
+    await api.call(`/admin/items/${encodeURIComponent(p.itemId)}/fassung`, { method: 'PUT', body: { fileId: p.fassungId } });
+    const f = p.fassungen.find(x => x.id === p.fassungId);
+    if (f) p.fassungen = [f, ...p.fassungen.filter(x => x !== f)];
+    p.spurenHtml = '';
+    patchChrome();
+    toast(tr('Gilt jetzt für alle'));
+  } catch (err) {
+    toast(err.status === 404 || err.status === 403 ? tr('Erst die Verwaltung entsperren, dann geht das.') : err.message);
+  }
 }
 
 /* Vorspann und Abspann für die Datei, die läuft: aus jeDatei, wenn der
@@ -2462,7 +2633,8 @@ function filmSprung(sek) {
   const v = $('#v');
   if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
   S.playing = null;
-  startPlayer(p.itemId, Math.max(0, Math.min(sek, filmDauer(p) - 2)));
+  // Mit der Fassung, die läuft — nicht still zurück zur Standard-Fassung.
+  startPlayer(p.itemId, Math.max(0, Math.min(sek, filmDauer(p) - 2)), p.fassungId);
 }
 
 function zeitleisteText(pos, total) {
@@ -2526,6 +2698,8 @@ function viewPlayer() {
           aria-label="${tr('Ton')}" aria-expanded="${p.spurenOffen === 'ton'}">${svg(I.ton, 22, 2)}</button>` : ''}
         ${p.kapitel?.length ? `<button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'kapitel' ? ' pl-knopf--an' : ''}" data-spuren="kapitel"
           aria-label="${tr('Kapitel')}" aria-expanded="${p.spurenOffen === 'kapitel'}">${svg(I.kapitel, 21, 2)}</button>` : ''}
+        <button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'qualitaet' ? ' pl-knopf--an' : ''}" data-spuren="qualitaet"
+          aria-label="${tr('Qualität')}" title="${tr('Qualität')}" aria-expanded="${p.spurenOffen === 'qualitaet'}">${svg(I.zahnrad, 21, 1.9)}</button>
         <button class="btn btn-pill glass glass--clear pl-knopf pl-knopf--tempo${p.spurenOffen === 'tempo' ? ' pl-knopf--an' : ''}" data-spuren="tempo"
           aria-label="${esc(tr('Wiedergabetempo: {tempo}', { tempo: tempoText(p.tempo || 1) }))}" aria-expanded="${p.spurenOffen === 'tempo'}">${esc(tempoZahl(p.tempo || 1))}</button>
         ${bildImBildDa() ? `<button class="btn btn-round sm glass glass--clear pl-knopf" data-pip aria-label="${tr('Bild im Bild')}" title="${tr('Bild im Bild (P)')}">${svg(I.bildImBild, 20, 2)}</button>` : ''}
@@ -2546,7 +2720,10 @@ function viewPlayer() {
 
 let idleTimer = null;
 
-async function startPlayer(itemId, fromSec, fileId = null) {
+/* opts beim Wechsel der Fassung im Player (fassungWechseln): wahl — die
+   bisherige Ton- und Untertitelwahl, nach Sprache übertragen (die Spuren
+   der anderen Datei haben andere Nummern); anhalten — es war pausiert. */
+async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
   try {
     const d = await api.item(itemId);
     const it = d.item;
@@ -2582,7 +2759,8 @@ async function startPlayer(itemId, fromSec, fileId = null) {
 
     // Ist die Bildschirmzeit um, sagt es schon der Plan — dann gar nicht
     // erst den Player öffnen.
-    const plan = await api.plan(file.id).catch(e => { if (e?.code === 'bildschirmzeit') throw e; return null; });
+    const quellHoehe = aufloesungVon(file).hoehe;
+    const plan = await api.plan(file.id, qualitaetParameter(quellHoehe)).catch(e => { if (e?.code === 'bildschirmzeit') throw e; return null; });
     const dur = (file.durationMs || it.runtimeMs || 0) / 1000;
 
     let start = fromSec != null ? fromSec : (it.resumeMs ? it.resumeMs / 1000 : 0);
@@ -2613,6 +2791,13 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       // Filmen in Teilen gehören sie zu einem Teil — dann keine.
       kapitel: teile.length > 1 ? [] : kapitelListe(file),
       spur: -1, untertitel: null, spurenOffen: false,
+      // Qualität: die Fassungen des Titels (Dateien von Teil 1) und die
+      // Auflösung der laufenden Datei — danach richten sich die Stufen.
+      fassungen: fassungenVon(d.files), fassungId: (teile[0] || file).id, quellHoehe,
+      quellInfo: [aufloesungVon(file).name, (() => {
+        const b = file.bitrate || (file.durationMs > 0 && file.sizeBytes > 0 ? file.sizeBytes * 8000 / file.durationMs : 0);
+        return b ? mbit(b) : '';
+      })()].filter(Boolean),
       // Vorspann und Abspann, falls bekannt — für „Überspringen" und „Als Nächstes".
       // Je Fassung eigene Zeiten (jeDatei): Kapitel und Erkanntes gehören
       // zur Datei, die wirklich läuft.
@@ -2629,6 +2814,7 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       lauf: zufallsKennung(),
     };
     spurenVorbelegen(S.playing);
+    if (opts.wahl) spurenUebernehmen(S.playing, opts.wahl);
     // Die Vorschaubilder fürs Spulen gleich mitholen – beim ersten
     // Überfahren der Leiste sollen sie schon da sein.
     trickplayLaden(S.playing);
@@ -2654,7 +2840,7 @@ async function startPlayer(itemId, fromSec, fileId = null) {
       bzLaden().then(() => bzBeimSchauen(() => S.playing === p && S.view === 'player',
         async meldung => { await stopPlayer(); bzSchluss(meldung); }));
     }
-    await openStream(start);
+    await openStream(start, { anhalten: !!opts.anhalten });
   } catch (e) {
     S.playing = null;
     if (e?.code === 'bildschirmzeit') return bzSchluss(e.message);
@@ -2669,7 +2855,7 @@ async function startPlayer(itemId, fromSec, fileId = null) {
  * startet nichts; sie kostet den Server eine Handvoll Millisekunden.
  * (Früher holte die App dafür den Strom selbst und las die Kopfzeile —
  * das zählte als zweite Wiedergabe und löste die eigene Grenze aus.) */
-async function openStream(atSec, { abspielen = false } = {}) {
+async function openStream(atSec, { abspielen = false, anhalten = false } = {}) {
   // Frischer Medienschlüssel vor jeder Wiedergabe: Ein Film dauert.
   try { await api.medienSchluessel(); } catch {}
   const p = S.playing;
@@ -2682,7 +2868,7 @@ async function openStream(atSec, { abspielen = false } = {}) {
   // Wer pausiert und springt, will an der neuen Stelle stehen, nicht
   // losspielen. (Der Wechsel der Quelle meldet selbst eine Pause — darum
   // vorher merken.)
-  const warPausiert = !abspielen && p.paused && p.mounted && !!v.src;
+  const warPausiert = anhalten || (!abspielen && p.paused && p.mounted && !!v.src);
 
   p.offset = atSec || 0;
   // Die alte Stelle im alten Strom gilt nicht mehr — sonst sicherte die
@@ -2690,7 +2876,7 @@ async function openStream(atSec, { abspielen = false } = {}) {
   p.current = 0;
   if (atSec > 0) {
     try {
-      const sp = await api.seekPoint(p.fileId, atSec, einbrennenVon(p));
+      const sp = await api.seekPoint(p.fileId, atSec, einbrennenVon(p), qualitaetParameter(p.quellHoehe));
       p.offset = sp.start ?? atSec;
       p.mode = sp.mode || p.mode;
     } catch { /* dann eben die gewünschte Stelle */ }
@@ -2700,7 +2886,7 @@ async function openStream(atSec, { abspielen = false } = {}) {
   if (einbrennenVon(p) >= 0) p.mode = 'transcode';
   v.autoplay = !warPausiert;
   p.strom = (p.strom || 0) + 1;
-  v.src = api.streamURL(p.fileId, p.offset, p.spur, { untertitel: einbrennenVon(p), lauf: p.lauf });
+  v.src = api.streamURL(p.fileId, p.offset, p.spur, { untertitel: einbrennenVon(p), lauf: p.lauf, qualitaet: qualitaetParameter(p.quellHoehe) });
   untertitelAnwenden();
   v.load();
   // load() setzt das Tempo zurück — nach jedem Sprung wieder anlegen.
@@ -2836,6 +3022,11 @@ function patchChrome() {
     if (sel !== '.pl-scrim') el.inert = !p.ui;
   }
   app.querySelector('.player')?.classList.toggle('pl-nocursor', !p.ui);
+  // „Wird umgewandelt" folgt dem Strom: nach einem Wechsel der Qualität
+  // kann aus direkt umgewandelt werden und umgekehrt.
+  const oben = app.querySelector('.pl-top'), umw = oben?.querySelector('.pl-umw');
+  if (p.mode === 'transcode' && oben && !umw) oben.insertAdjacentHTML('beforeend', `<span class="badge pl-umw">${tr('Wird umgewandelt')}</span>`);
+  else if (p.mode !== 'transcode' && umw) umw.remove();
   untertitelLage();
 
   const toggle = app.querySelector('[data-toggle]');
@@ -3449,7 +3640,7 @@ async function amEnde() {
   if (p.teile && p.teil < p.teile.length - 1) {
     const weiter = (p.vorher || 0) + (p.duration || 0) + 0.5;
     S.playing = null;
-    return startPlayer(p.itemId, weiter);
+    return startPlayer(p.itemId, weiter, p.fassungId);
   }
   if (!p.fertigGemeldet) {
     p.fertigGemeldet = true; // markDoneAndLeave soll es nicht zweimal senden
@@ -5037,7 +5228,8 @@ function viewCleanup() {
   // eine falsch zugeordnete Datei lässt sich abtrennen; ein Film in Teilen
   // (a/b/c, CD1/CD2) lässt sich zu einer Datei zusammenführen.
   // Nur Filme in Teilen: Fassungen (dieselbe Datei in zwei Qualitäten)
-  // sind kein Aufräumfall — man wählt sie beim Film unter „Ansehen".
+  // sind kein Aufräumfall — „Ansehen" spielt die Standard-Fassung, eine
+  // andere wählt man im Player unter „Qualität".
   const istTeile = x => x.files.every((f, i) => f.partNo === i + 1);
   const nurTeile = (d.duplicates || []).filter(x => x.files.length > 1 && istTeile(x));
   // Fassungen (derselbe Film mehrfach, auch gemischt mit Teilen) zeigt die
@@ -5161,7 +5353,7 @@ function viewCleanup() {
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Im Browser laufen die Teile nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.')}</p></section>` : ''}
     ${dupFassungen ? `<section style="margin-top:22px"><div class="section-h">${tr('Mehrere Fassungen · {n}', { n: fassungen.length })}</div>
       <div class="group group--inset">${dupFassungen}</div>
-      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: Beim Film wählt man unter „Ansehen“, welche läuft. Gehört eine Datei zu einem anderen Film, trenne sie ab.')}</p></section>` : ''}
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: „Ansehen“ spielt die Standard-Fassung, eine andere wählt man im Player unter „Qualität“. Gehört eine Datei zu einem anderen Film, trenne sie ab.')}</p></section>` : ''}
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>
@@ -5353,10 +5545,19 @@ app.addEventListener('click', async e => {
   if (hit('data-skipintro')) return vorspannUeberspringen();
   if ((n = hit('data-spuren'))) {
     const p = S.playing;
-    if (p) { p.spurenOffen = p.spurenOffen === n.dataset.spuren ? false : n.dataset.spuren; p.spurenHtml = ''; showChrome(true); }
+    if (p) {
+      p.spurenOffen = p.spurenOffen === n.dataset.spuren ? false : n.dataset.spuren; p.spurenHtml = ''; showChrome(true);
+      // Mit Tastatur oder Fernbedienung geöffnet (ein Klick ohne Maus hat
+      // detail 0): der Fokus geht in das Menü, auf den gewählten Eintrag —
+      // sonst käme man mit den Pfeilen nicht hinein.
+      if (p.spurenOffen && e.detail === 0) app.querySelector('.spuren .spur--aktiv, .spuren button')?.focus({ preventScroll: true });
+    }
     return;
   }
   if ((n = hit('data-spur'))) return spurWaehlen(Number(n.dataset.spur));
+  if ((n = hit('data-qualitaet'))) return qualitaetWaehlen(n.dataset.qualitaet);
+  if ((n = hit('data-fassungwahl'))) return fassungWechseln(n.dataset.fassungwahl);
+  if (hit('data-pl-standard')) return fassungAlsStandard();
   if ((n = hit('data-untertitel'))) return untertitelWaehlen(n.dataset.untertitel);
   if (hit('data-intro-von')) { const p = S.playing; if (p) { p.introMarke = p.offset + p.current; patchChrome(); } return; }
   if (hit('data-intro-abbruch')) { const p = S.playing; if (p) { p.introMarke = null; patchChrome(); } return; }
@@ -5556,7 +5757,6 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-play'))) {
     S.warteschlange = null;
     const from = n.dataset.from != null ? Number(n.dataset.from) : undefined;
-    S.fassungMenu = null;
     return startPlayer(n.dataset.play, from, n.dataset.file || null);
   }
   if ((n = hit('data-season'))) {
@@ -5591,10 +5791,6 @@ app.addEventListener('click', async e => {
   // Neu mischen: ohne Samen fragen, der Server würfelt einen neuen.
   if (hit('data-sortmischen')) return load();
   if ((n = hit('data-buchstabe'))) { S.buchstabe = n.dataset.buchstabe; return load(); }
-  if ((n = hit('data-fassungmenu'))) {
-    S.fassungMenu = S.fassungMenu === n.dataset.fassungmenu ? null : n.dataset.fassungmenu;
-    return render();
-  }
   if ((n = hit('data-fassungstandard'))) {
     const [item, datei] = n.dataset.fassungstandard.split(':');
     try {
@@ -6436,7 +6632,12 @@ function playerTaste(e) {
   if (e.key === 'Escape') {
     e.preventDefault();
     // Erst ein offenes Menü schliessen, dann den Player.
-    if (p.spurenOffen) { p.spurenOffen = false; p.spurenHtml = ''; patchChrome(); app.querySelector('[data-spuren]')?.focus(); return; }
+    if (p.spurenOffen) {
+      const offen = p.spurenOffen;
+      p.spurenOffen = false; p.spurenHtml = ''; patchChrome();
+      (app.querySelector(`[data-spuren="${offen}"]`) || app.querySelector('[data-spuren]'))?.focus();
+      return;
+    }
     return stopPlayer();
   }
   if (fokus?.matches('[data-bar]') && zeitleisteTaste(e)) return;
@@ -6888,11 +7089,6 @@ function mehrMenueAuf(k) {
 function escAufTitelseite() {
   if (mehrMenueZu(true)) return;
   if (hoverKarte) { hoverKarteWeg(); return; }
-  if (S.fassungMenu) {
-    S.fassungMenu = null; render();
-    app.querySelector('[data-fassungmenu]')?.focus();
-    return;
-  }
   const liste = document.getElementById('listenpanel');
   if (liste && liste.innerHTML.trim()) {
     liste.innerHTML = '';

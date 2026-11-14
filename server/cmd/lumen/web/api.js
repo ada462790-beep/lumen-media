@@ -396,14 +396,17 @@ export const api = {
 
   /* ---------------------------------------------------------- Wiedergabe */
 
-  plan(fileId) {
-    return this.call(`/stream/${encodeURIComponent(fileId)}/plan?${browserCaps()}`);
+  /* qualitaet: die im Player gewählte Stufe ({ maxHeight, maxBitrate }),
+     null für „Auto". Plan, Sprung und Strom bekommen dieselbe — sonst
+     rechnete /seek mit einem anderen Einstieg als der Strom. */
+  plan(fileId, qualitaet = null) {
+    return this.call(`/stream/${encodeURIComponent(fileId)}/plan?${browserCaps(qualitaet)}`);
   },
 
   /* Wo ein Strom wirklich beginnen würde. Beim blossen Umpacken ist der
      Einstieg an Schlüsselbilder gebunden — danach richtet sich die Anzeige. */
-  seekPoint(fileId, sec, untertitel = -1) {
-    const p = new URLSearchParams(browserCaps());
+  seekPoint(fileId, sec, untertitel = -1, qualitaet = null) {
+    const p = new URLSearchParams(browserCaps(qualitaet));
     p.set('t', sekunden(sec));
     // Ein eingebrannter Bild-Untertitel heisst: neu gerechnet, nicht nur
     // umgepackt — und damit ein anderer Einstieg. Der Server muss es wissen.
@@ -414,8 +417,8 @@ export const api = {
   /* Die Adresse des Stroms. Der Browser bekommt ein Format, das er von sich
      aus abspielt — gesprungen wird, indem der Strom an der neuen Stelle neu
      beginnt. Wo er dann wirklich steht, sagt der Server in X-Lumen-Start. */
-  streamURL(fileId, startSec = 0, spur = -1, { untertitel = -1, lauf = '' } = {}) {
-    const p = new URLSearchParams(browserCaps());
+  streamURL(fileId, startSec = 0, spur = -1, { untertitel = -1, lauf = '', qualitaet = null } = {}) {
+    const p = new URLSearchParams(browserCaps(qualitaet));
     if (startSec > 0) p.set('t', sekunden(startSec));
     // Die gewählte Tonspur — ohne Angabe nimmt der Server die erste.
     if (spur >= 0) p.set('spur', String(spur));
@@ -664,7 +667,7 @@ export class ApiError extends Error {
 
 /* Was dieser Browser kann. Bewusst knapp gehalten: lieber einmal mehr
    umrechnen lassen als ein schwarzes Bild zeigen. */
-function browserCaps() {
+function browserCaps(qualitaet = null) {
   const v = document.createElement('video');
   const can = t => v.canPlayType(t) !== '';
 
@@ -695,6 +698,10 @@ function browserCaps() {
   // Mehr als der Bildschirm hergibt, bringt nichts — spart Leitung und
   // erspart dem Server unnötige Arbeit.
   p.set('maxHeight', String(Math.min(2160, Math.round(screen.height * (devicePixelRatio || 1)))));
+  // Im Player gewählte Qualität: Höhe und Bitrate als Obergrenze. Die
+  // Grenze für unterwegs setzt der Server trotzdem durch (bitrateLimit).
+  if (qualitaet?.maxHeight > 0) p.set('maxHeight', String(qualitaet.maxHeight));
+  if (qualitaet?.maxBitrate > 0) p.set('maxBitrate', String(qualitaet.maxBitrate));
   if (isHomeNetwork()) p.set('home', '1');
   return p.toString();
 }
