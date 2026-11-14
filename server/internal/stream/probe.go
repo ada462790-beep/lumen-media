@@ -86,13 +86,33 @@ type probeJSON struct {
 	} `json:"chapters"`
 }
 
-// Probe misst eine Datei aus.
+// Probe misst eine Datei aus. Scheitert der erste Versuch („Invalid data
+// found when processing input"), folgt ein zweiter, gründlicherer: mehr
+// lesen, bevor FFmpeg aufgibt (probesize, analyzeduration), Zeitstempel
+// selbst erzeugen (alte AVI mit kaputtem Index), und Müll vor dem
+// eigentlichen Anfang überspringen (Eingang). Erst wenn auch der kein
+// Bild findet, gilt die Datei als defekt.
 func (f *FFmpeg) Probe(ctx context.Context, path string) (*scan.Probe, error) {
-	cmd := exec.CommandContext(ctx, f.FFprobePath,
-		"-v", "error",
-		"-print_format", "json",
-		"-show_format", "-show_streams", "-show_chapters",
-		path)
+	p, err := f.probeMit(ctx, path, nil)
+	// Gelesen, aber kein Bild oder keine Laufzeit gefunden, ist bei einer
+	// Videodatei genauso verdächtig: Müll vorne sieht für FFmpeg aus wie
+	// ein roher Videostrom ohne Länge.
+	if (err == nil && p.VideoCodec != "" && p.DurationMS > 0) || ctx.Err() != nil {
+		return p, err
+	}
+	gruendlich := append([]string{"-probesize", "100M", "-analyzeduration", "100M",
+		"-fflags", "+genpts+igndts"}, Eingang(path)...)
+	if p2, err2 := f.probeMit(ctx, path, gruendlich); err2 == nil && p2.VideoCodec != "" {
+		return p2, nil
+	}
+	return p, err
+}
+
+func (f *FFmpeg) probeMit(ctx context.Context, path string, vorne []string) (*scan.Probe, error) {
+	args := append([]string{"-v", "error"}, vorne...)
+	args = append(args, "-print_format", "json",
+		"-show_format", "-show_streams", "-show_chapters", path)
+	cmd := exec.CommandContext(ctx, f.FFprobePath, args...)
 	out, err := Niedrig(cmd, false)
 	if err != nil {
 		var ee *exec.ExitError

@@ -43,6 +43,16 @@ type Auslassung struct {
 	Grund  string   `json:"grund"`
 	Anzahl int      `json:"anzahl"`
 	Pfade  []string `json:"pfade"`
+	// Dateien: bei defekten Dateien je Pfad Kennung und Grösse — damit die
+	// Liste „vermutlich abgebrochener Download" sagen und „Trotzdem
+	// anspielen" anbieten kann. In derselben Reihenfolge wie Pfade.
+	Dateien []AuslassDatei `json:"dateien,omitempty"`
+}
+
+// AuslassDatei: eine defekte Datei unter Aufräumen.
+type AuslassDatei struct {
+	FileID    string `json:"fileId"`
+	SizeBytes int64  `json:"sizeBytes"`
 }
 
 // unbekannteEndungen sind Videos, die der Scanner bewusst nicht aufnimmt

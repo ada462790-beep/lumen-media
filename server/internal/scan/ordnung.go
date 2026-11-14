@@ -111,13 +111,17 @@ func (s *Scanner) festerTitel(ctx context.Context, it *store.Item) bool {
 
 // ---------------------------------------------------------------- Teile
 
-// teilOrdner zählt je Ordner, welche „Film - Teil N"-Dateien es gibt.
-type teilOrdner map[string]map[string]int // Ordner → Basis → Zahl der Teile
+// teilOrdner merkt sich je Ordner, welche Teilnummern es zu jeder Basis
+// gibt.
+type teilOrdner map[string]map[string]map[int]bool // Ordner → Basis → Teilnummern
 
 // teileKlaeren entscheidet über „Film - Teil 2": Liegen im selben Ordner
-// mindestens zwei Dateien mit derselben Basis („Film - Teil 1", „Film -
-// Teil 2"), sind es Teile eines Films. Sonst bleibt „Teil 2" im Titel —
-// „Zurück in die Zukunft Teil 2" ist ein eigener Film.
+// Dateien mit derselben Basis, demselben Jahr und verschiedenen
+// Teilnummern („Film - Teil 1", „Film - Teil 2"), sind es Teile eines
+// Films. Sonst bleibt „Teil 2" im Titel — „Zurück in die Zukunft Teil 2"
+// ist ein eigener Film. Das Jahr gehört zur Basis: „Dune - Part One
+// (2021)" und „Part Two (2024)" sind zwei Filme, und fehlt das Jahr auf
+// einer Seite, bleiben sie lieber getrennt.
 func teileKlaeren(g Guess, path string, dirs []string, art string, cache teilOrdner) Guess {
 	if g.Kind != "movie" || g.TeilKandidat == 0 || g.TitelOhneTeil == "" {
 		return g
@@ -125,7 +129,7 @@ func teileKlaeren(g Guess, path string, dirs []string, art string, cache teilOrd
 	dir := filepath.Dir(path)
 	zahl, ok := cache[dir]
 	if !ok {
-		zahl = map[string]int{}
+		zahl = map[string]map[int]bool{}
 		if eintraege, err := os.ReadDir(dir); err == nil {
 			for _, e := range eintraege {
 				if !e.Type().IsRegular() || !IsVideo(e.Name()) || IsJunkFile(e.Name()) {
@@ -133,7 +137,11 @@ func teileKlaeren(g Guess, path string, dirs []string, art string, cache teilOrd
 				}
 				x := ParseFuer(filepath.Join(dir, e.Name()), dirs, art)
 				if x.Kind == "movie" && x.TeilKandidat > 0 && x.TitelOhneTeil != "" {
-					zahl[teilBasis(x)]++
+					b := teilBasis(x)
+					if zahl[b] == nil {
+						zahl[b] = map[int]bool{}
+					}
+					zahl[b][x.TeilKandidat] = true
 				}
 			}
 		}
@@ -141,7 +149,8 @@ func teileKlaeren(g Guess, path string, dirs []string, art string, cache teilOrd
 			cache[dir] = zahl
 		}
 	}
-	if zahl[teilBasis(g)] >= 2 {
+	if len(zahl[teilBasis(g)]) >= 2 {
+		g.TitelMitTeil = g.Title
 		g.Title, g.PartNo = g.TitelOhneTeil, g.TeilKandidat
 		g.Confident = g.Title != "" && (g.Year > 0 || len(strings.Fields(g.Title)) >= 2)
 	}
@@ -149,7 +158,7 @@ func teileKlaeren(g Guess, path string, dirs []string, art string, cache teilOrd
 }
 
 func teilBasis(g Guess) string {
-	return strings.ToLower(g.TitelOhneTeil) + "\x00" + strconv.Itoa(g.Year)
+	return titelSchluessel(g.TitelOhneTeil) + "\x00" + strconv.Itoa(g.Year)
 }
 
 // ---------------------------------------------------------------- BluRay und DVD

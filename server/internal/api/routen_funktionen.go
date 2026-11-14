@@ -19,6 +19,11 @@ func (s *Server) routenFunktionen(mux *http.ServeMux) {
 	// Extras eines Films (extras.go): Trailer, Featurettes … zum Abspielen.
 	mux.Handle("GET /api/v1/stream/{item}/extra/{nr}", auth(s.extraAbspielen))
 	mux.Handle("GET /api/v1/stream/{item}/extra/{nr}/browser.mp4", auth(s.extraStrom))
+	// Aufräumen (aufraeumen_teile.go): eine Datei anspielen, Teile von
+	// Hand zusammenfügen oder trennen.
+	mux.Handle("GET /api/v1/stream/{fileId}/anspielen.mp4", auth(s.dateiAnspielen))
+	mux.Handle("POST /api/v1/admin/items/{id}/als-teile", admin(s.adminAlsTeile))
+	mux.Handle("POST /api/v1/admin/items/{id}/teile-trennen", admin(s.adminTeileTrennen))
 	// Kennung ohne TMDb-Schlüssel speichern (kennung_vormerken.go).
 	mux.Handle("POST /api/v1/admin/items/{id}/metadata/kennung", admin(s.adminKennungVormerken))
 

@@ -174,8 +174,10 @@ func TestFalschZusammengelegteFilmeWerdenGetrennt(t *testing.T) {
 	if _, err := sc.Scan(ctx, *lib); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(filmeMitDateien(t, st, lib.ID)); n != 5 {
-		t.Fatalf("nach dem ersten Durchlauf %d Filme, erwartet 5: %v", n, filmeMitDateien(t, st, lib.ID))
+	// Vier: „Die Pfeiler der Macht - Teil 1/2 (2016)" ist seit v0.1.27 ein
+	// Film in zwei Teilen (gleiches Jahr), nicht mehr zwei Filme.
+	if n := len(filmeMitDateien(t, st, lib.ID)); n != 4 {
+		t.Fatalf("nach dem ersten Durchlauf %d Filme, erwartet 4: %v", n, filmeMitDateien(t, st, lib.ID))
 	}
 
 	// So sah es auf dem NAS aus: je zwei Filme an einem erkannten Eintrag.
@@ -218,8 +220,8 @@ func TestFalschZusammengelegteFilmeWerdenGetrennt(t *testing.T) {
 	soll := map[string][]string{
 		"Batman v Superman: Dawn of Justice": {"(2016) Batman vs. Superman - Dawn of Justice.mkv"},
 		"Batman Anime: Bad Blood":            {"(2016) Batman Anime - Bad Blood.mkv"},
-		"Die Pfeiler der Macht":              {"Die Pfeiler der Macht - Teil 1 (2016).mkv"},
-		"Die Pfeiler der Macht: Teil 2":      {"Die Pfeiler der Macht - Teil 2 (2016).mkv"},
+		// Der Zweiteiler bleibt ein Eintrag — mit Teil 1 und Teil 2.
+		"Die Pfeiler der Macht": {"Die Pfeiler der Macht - Teil 1 (2016).mkv", "Die Pfeiler der Macht - Teil 2 (2016).mkv"},
 		// Echte Doppel (gleicher Name) bleiben ein Film mit zwei Dateien.
 		"Brust oder Keule": {"Brust oder Keule (1976).mkv", "Brust oder Keule (1976).mkv"},
 	}

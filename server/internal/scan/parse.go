@@ -67,6 +67,11 @@ type Guess struct {
 	// der Scanner, der den Ordner sieht. TitelOhneTeil ist dann der Titel.
 	TeilKandidat  int
 	TitelOhneTeil string
+	// TitelMitTeil: der Titel, wie er ohne teileKlaeren hiesse („Die
+	// Pfeiler der Macht Teil 2") — gesetzt, wenn teileKlaeren Teile daraus
+	// gemacht hat. Damit stellt der Scanner den Titel wieder her, wenn
+	// jemand gesagt hat: „Sind verschiedene Filme".
+	TitelMitTeil string
 	// TeilNr: eine „Teil 2"/„Part 2"-Angabe überhaupt — in einer
 	// Serienbibliothek ist das die Folge einer Miniserie.
 	TeilNr int
@@ -634,6 +639,10 @@ func ParseFuer(path string, dirs []string, art string) Guess {
 func (g *Guess) teilLesen(name string, jahrVorne, ordnerMitJahr bool) (string, bool) {
 	m := reTeilWort.FindStringSubmatchIndex(name)
 	if m == nil {
+		// „Kill Bill Vol. 1 (2003)", „Dune - Part One (2021)", „Teil II":
+		// Titel — aber vielleicht Teil eines Films, wenn daneben dieselbe
+		// Basis mit gleichem Jahr liegt (teilMitJahr, teileKlaeren).
+		g.teilMitJahr(name)
 		return name, false
 	}
 	nr, _ := strconv.Atoi(name[m[6]:m[7]])
@@ -644,10 +653,12 @@ func (g *Guess) teilLesen(name string, jahrVorne, ordnerMitJahr bool) (string, b
 		return vorne, false
 	}
 	if jahrInKlammern(hinten) != nil {
+		g.teilMitJahr(name)
 		return name, false
 	}
 	for _, j := range reYearLoose.FindAllStringSubmatch(hinten, -1) {
 		if plausiblesJahr(j[1]) {
+			g.teilMitJahr(name)
 			return name, false
 		}
 	}
@@ -670,6 +681,64 @@ func (g *Guess) teilLesen(name string, jahrVorne, ordnerMitJahr bool) (string, b
 		}
 	}
 	return name, false
+}
+
+// reTeilAngabe: „Teil 2", „Part Two", „Vol. 1", „Volume II", „Teil drei"
+// — mit Ziffern, ausgeschrieben oder römisch. Dahinter muss das Wort zu
+// Ende sein („Teil eines …", „System Volume Information" sind keine).
+var reTeilAngabe = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:teil|part|pt|vol|volume)\.?[\s._-]*` +
+	`(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eins|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|viii|vii|vi|iv|ix|iii|ii|i|v|x)` +
+	`(?:$|[\s._,)\](\[-])`)
+
+// teilAngabe findet die letzte „Teil/Part/Vol. N"-Angabe in einem Namen:
+// die Basis davor (ohne Trenner) und die Nummer (0 = keine).
+func teilAngabe(name string) (basis string, nr int) {
+	basis, nr, _ = teilAngabeBei(name)
+	return basis, nr
+}
+
+// teilAngabeBei ist teilAngabe mit der Stelle hinter der Nummer.
+func teilAngabeBei(name string) (basis string, nr, ende int) {
+	alle := reTeilAngabe.FindAllStringSubmatchIndex(name, -1)
+	if len(alle) == 0 {
+		return "", 0, 0
+	}
+	m := alle[len(alle)-1]
+	w := strings.ToLower(name[m[2]:m[3]])
+	if n, err := strconv.Atoi(w); err == nil {
+		nr = n
+	} else if n, ok := zahlWort[w]; ok {
+		nr = n
+	} else if n, ok := roemisch[w]; ok {
+		nr = n
+	}
+	basis = strings.TrimRight(name[:m[0]], " ._-:–—,")
+	return basis, nr, m[3]
+}
+
+// teilMitJahr merkt „Film - Teil 2 (2016)" als möglichen Teil eines Films
+// vor (TeilKandidat): Steht im selben Ordner dieselbe Basis mit einer
+// anderen Teilnummer und demselben Jahr, sind es Teile eines Films
+// („Die Pfeiler der Macht - Teil 1 (2016)" und „- Teil 2 (2016)"). Mit
+// verschiedenen Jahren sind es Fortsetzungen („Dune: Part One" 2021 und
+// „Part Two" 2024, „Kill Bill Vol. 1" 2003 und „Vol. 2" 2004) — das
+// entscheidet teileKlaeren. Nur wenn hinter der Angabe ein Jahr steht.
+func (g *Guess) teilMitJahr(name string) {
+	basis, nr, ende := teilAngabeBei(name)
+	if nr <= 0 || g.TeilKandidat > 0 {
+		return
+	}
+	hinten := name[ende:]
+	mitJahr := jahrInKlammern(hinten) != nil
+	for _, j := range reYearLoose.FindAllStringSubmatch(hinten, -1) {
+		mitJahr = mitJahr || plausiblesJahr(j[1])
+	}
+	if !mitJahr {
+		return
+	}
+	if t := clean(basis); t != "" {
+		g.TeilKandidat, g.TitelOhneTeil = nr, t
+	}
 }
 
 // discOrdner findet „BDMV" oder „VIDEO_TS" unter den Ordnern und gibt

@@ -313,6 +313,7 @@ type DefekteDatei struct {
 	LibraryID string `json:"libraryId"`
 	Path      string `json:"path"`
 	Grund     string `json:"grund"`
+	SizeBytes int64  `json:"sizeBytes"`
 }
 
 // DefekteDateien: vorhandene Dateien, die sich nicht ausmessen liessen
@@ -322,7 +323,7 @@ func (s *Store) DefekteDateien(ctx context.Context, grenze int) ([]DefekteDatei,
 		grenze = 500
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT f.id, f.item_id, i.library_id, f.path, f.defekt FROM media_file f
+		`SELECT f.id, f.item_id, i.library_id, f.path, f.defekt, f.size_bytes FROM media_file f
 		   JOIN item i ON i.id = f.item_id
 		  WHERE f.defekt IS NOT NULL AND f.missing_since IS NULL
 		  ORDER BY f.path LIMIT ?`, grenze)
@@ -333,7 +334,7 @@ func (s *Store) DefekteDateien(ctx context.Context, grenze int) ([]DefekteDatei,
 	out := []DefekteDatei{}
 	for rows.Next() {
 		var d DefekteDatei
-		if err := rows.Scan(&d.ID, &d.ItemID, &d.LibraryID, &d.Path, &d.Grund); err != nil {
+		if err := rows.Scan(&d.ID, &d.ItemID, &d.LibraryID, &d.Path, &d.Grund, &d.SizeBytes); err != nil {
 			return nil, err
 		}
 		out = append(out, d)

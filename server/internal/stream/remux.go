@@ -136,6 +136,8 @@ func (f *FFmpeg) Remux(ctx context.Context, j RemuxJob) (io.ReadCloser, func(), 
 		}
 		args = append(args, "-ss", strconv.FormatFloat(ss, 'f', 3, 64))
 	}
+	// Müll vor dem Anfang einer alten Datei: ab wo und als was (eingang.go).
+	args = append(args, Eingang(j.SourcePath)...)
 	args = append(args, "-i", j.SourcePath)
 	// Der Strom selbst beginnt immer bei null — ein fragmentiertes MP4
 	// führt keine Lage im Film mit sich. Wo er im Film steht, steht in der
