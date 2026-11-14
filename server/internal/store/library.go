@@ -813,6 +813,65 @@ type Duplicate struct {
 	Title  string      `json:"title"`
 	Year   int         `json:"year"`
 	Files  []MediaFile `json:"files"`
+	// Art sagt, was die Seite Aufräumen damit anfängt:
+	//
+	//	"teile"       Teile eines Films (1, 2, … n) — zusammenführen
+	//	"verschieden" Dateien verschiedener Filme an einem Eintrag
+	//	              (falsche Zuordnung) — abtrennen
+	//	"identisch"   dieselbe Datei mehrfach (gleiche Grösse und Laufzeit)
+	//	              — eine kann weg
+	//	"fassungen"   echte Fassungen (Sprache, Qualität) — kein Problem,
+	//	              gewählt wird beim Abspielen
+	//
+	// "verschieden" setzt die Schnittstelle (sie liest die Dateinamen),
+	// die übrigen Duplicates.
+	Art string `json:"art"`
+	// Identisch: Kennungen der Dateien, die eine gleiche Zwillingsdatei
+	// im selben Eintrag haben (leer, wenn es keine gibt).
+	Identisch []string `json:"identisch,omitempty"`
+}
+
+// identischeDateien nennt die Dateien, zu denen es im selben Eintrag eine
+// mit gleicher Grösse und gleicher Laufzeit gibt (auf zwei Sekunden;
+// fehlt eine Laufzeit, zählt die Grösse allein). Zwei Fassungen eines
+// Films sind nie byte-genau gleich gross.
+func identischeDateien(dateien []MediaFile) []string {
+	var out []string
+	for i, a := range dateien {
+		for j, b := range dateien {
+			if i == j || a.SizeBytes <= 0 || a.SizeBytes != b.SizeBytes {
+				continue
+			}
+			if a.DurationMS > 0 && b.DurationMS > 0 && abs64(a.DurationMS-b.DurationMS) > 2000 {
+				continue
+			}
+			out = append(out, a.ID)
+			break
+		}
+	}
+	return out
+}
+
+func abs64(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// sindTeile: Die Dateien sind Teil 1, 2, … n eines Films.
+func sindTeile(dateien []MediaFile) bool {
+	if len(dateien) < 2 {
+		return false
+	}
+	gesehen := map[int]bool{}
+	for _, f := range dateien {
+		if f.PartNo < 1 || f.PartNo > len(dateien) || gesehen[f.PartNo] {
+			return false
+		}
+		gesehen[f.PartNo] = true
+	}
+	return true
 }
 
 // doppelVon findet Filme mit mehr als einer vorhandenen Datei — Fassungen
@@ -888,6 +947,17 @@ func (s *Store) Duplicates(ctx context.Context) ([]Duplicate, error) {
 				out[i].Files = append(out[i].Files, f)
 			}
 		}
+		switch {
+		case sindTeile(out[i].Files):
+			// Teile sind oft gleich gross (je 700 MB) — doppelt sind sie nicht.
+			out[i].Art = "teile"
+		default:
+			out[i].Identisch = identischeDateien(out[i].Files)
+			out[i].Art = "fassungen"
+			if len(out[i].Identisch) > 0 {
+				out[i].Art = "identisch"
+			}
+		}
 	}
 	return out, nil
 }
@@ -943,7 +1013,7 @@ func (s *Store) PendingCount(ctx context.Context) int {
 func (s *Store) UnmatchedCount(ctx context.Context) int {
 	var n int
 	_ = s.db.QueryRowContext(ctx,
-		`SELECT count(*) FROM item WHERE match_state = 'unmatched'`).Scan(&n)
+		`SELECT count(*) FROM item WHERE match_state = 'unmatched' AND kind IN ('movie','series')`).Scan(&n)
 	return n
 }
 
@@ -1180,13 +1250,18 @@ func (s *Store) ArtworkFor(ctx context.Context, itemIDs []string) (map[string]ma
 	return out, rows.Err()
 }
 
-// UnmatchedItems sind die Titel, die der Besitzer von Hand zuordnen muss.
+// UnmatchedItems sind die Titel, die der Besitzer von Hand zuordnen muss —
+// Filme und Serien. Eine Folge, die TMDb nicht kennt (ein Special, eine
+// neue Folge), gehört trotzdem zu ihrer Serie und steht dort mit dem
+// Namen aus der Datei; von Hand zuzuordnen gibt es an ihr nichts. Vorher
+// standen solche Folgen unter „Aufräumen" als „nicht erkannt".
 func (s *Store) UnmatchedItems(ctx context.Context, limit int) ([]Item, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+itemCols+` FROM item i WHERE i.match_state = 'unmatched'
+		  AND i.kind IN ('movie','series')
 		  ORDER BY i.added_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err

@@ -123,6 +123,18 @@ func reiheBilder(x *store.Reihe, a *reiheAntwort) {
 // darf.
 const reiheMindestens = 2
 
+// reiheMindestensFuer: Eine Reihe aus einer NFO-Datei (<set> aus Emby,
+// Kodi, Jellyfin) hat jemand selbst angelegt — sie zeigt sich wie bei
+// Emby auch mit nur einem vorhandenen Film. Vorher fehlten solche Reihen
+// in Lumen (Emby 239 Reihen, Lumen 233). Selbst erkannte und TMDb-Reihen
+// brauchen weiter zwei Filme.
+func reiheMindestensFuer(source string) int {
+	if source == "nfo" {
+		return 1
+	}
+	return reiheMindestens
+}
+
 // reihen liefert die Filmreihen, die die Person sieht.
 //
 // ?limit= und ?offset= zählen nur die Reihen, die tatsächlich gezeigt
@@ -171,7 +183,7 @@ func (s *Server) reihen(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			a.ZuletztNeu = zuletztNeu(a.Items)
-			if a.Anzahl = len(a.Items); a.Anzahl < reiheMindestens {
+			if a.Anzahl = len(a.Items); a.Anzahl < reiheMindestensFuer(x.Source) {
 				continue
 			}
 			if uebersprungen < offset {
@@ -205,7 +217,7 @@ func (s *Server) reihe(w http.ResponseWriter, r *http.Request) {
 		failErr(w, err)
 		return
 	}
-	if len(items) < reiheMindestens && !accountOf(r).IsAdmin {
+	if len(items) < reiheMindestensFuer(x.Source) && !accountOf(r).IsAdmin {
 		failErr(w, store.ErrNotFound)
 		return
 	}
@@ -223,7 +235,7 @@ func (s *Server) reiheZumTitel(r *http.Request, itemID string) *reiheAntwort {
 		return nil
 	}
 	items, err := s.sichtbar(r, x.ItemIDs)
-	if err != nil || len(items) < reiheMindestens {
+	if err != nil || len(items) < reiheMindestensFuer(x.Source) {
 		return nil
 	}
 	a := &reiheAntwort{ID: x.ID, Name: x.Name, Source: x.Source,

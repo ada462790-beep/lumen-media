@@ -266,3 +266,35 @@ func TestOhneFreigabeNichtsUeberReihenUndListen(t *testing.T) {
 		t.Errorf("die Zahl verrät verborgene Titel: %s", raw)
 	}
 }
+
+// Eine Reihe aus einer NFO (<set> aus Emby) zeigt sich auch mit nur einem
+// vorhandenen Film — wie bei Emby. Eine TMDb-Reihe mit nur einem Film
+// bleibt verborgen.
+func TestNFOReiheMitEinemFilm(t *testing.T) {
+	h := newHarness(t)
+	hulk, _ := h.film("Hulk", 1)
+	solo, _ := h.film("Solo", 1)
+	if err := h.st.NFOReiheZuordnen(t.Context(), "Hulk Filmreihe", "1059", hulk, 2003); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.st.TMDbReiheZuordnen(t.Context(), "535313", "Star Wars Story Reihe", solo, 2018); err != nil {
+		t.Fatal(err)
+	}
+	h.svr().ReihenBilden(t.Context())
+	_, raw := h.do("GET", "/api/v1/collections", "", h.tok)
+	var reihen []struct {
+		Name   string
+		Source string
+		Anzahl int
+	}
+	if err := json.Unmarshal(raw, &reihen); err != nil {
+		t.Fatal(err, string(raw))
+	}
+	if len(reihen) != 1 || reihen[0].Name != "Hulk Filmreihe" || reihen[0].Anzahl != 1 {
+		t.Fatalf("Reihen: %s", raw)
+	}
+	_, raw = h.do("GET", "/api/v1/items/"+hulk, "", h.tok)
+	if !strings.Contains(string(raw), "Hulk Filmreihe") {
+		t.Fatalf("die Detailseite nennt die NFO-Reihe nicht: %s", raw)
+	}
+}

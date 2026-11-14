@@ -162,3 +162,51 @@ func TestSerieBleibtNachUmbenennung(t *testing.T) {
 		t.Fatalf("%d Serien nach Umbenennung und drei Scans, erwartet 1", len(serien))
 	}
 }
+
+// Eine Datei, die einmal gültig gemessen war und dann defekt wurde
+// (ersetzt, kaputt kopiert), bleibt als defekt vermerkt, solange sie sich
+// nicht ändert — und wird nicht bei jedem Durchlauf neu gemessen. Vorher
+// ging der Vermerk beim zweiten Durchlauf verloren.
+func TestDefektBleibtVermerkt(t *testing.T) {
+	root := t.TempDir()
+	film := filepath.Join(root, "Hulk (2003)", "Hulk.avi")
+	_ = os.MkdirAll(filepath.Dir(film), 0o755)
+	_ = os.WriteFile(film, []byte("x"), 0o644)
+	st, err := store.Open(filepath.Join(t.TempDir(), "l.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", root, "de")
+	p := &zaehlProbe{}
+	sc := New(st, p)
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(film, []byte("xy"), 0o644)
+	later := time.Now().Add(time.Minute)
+	_ = os.Chtimes(film, later, later)
+	p.fehler = true
+	for i := 0; i < 3; i++ {
+		if _, err := sc.Scan(ctx, *lib); err != nil {
+			t.Fatal(err)
+		}
+		if g := st.GemessenZuPfad(ctx, film); g == nil || g.Datei.Defekt != DefektKaputt {
+			t.Fatalf("Durchlauf %d: Vermerk „defekt“ verloren: %+v", i+2, g)
+		}
+	}
+	if p.n != 2 {
+		t.Fatalf("%d Messungen, erwartet 2 (einmal gut, einmal defekt)", p.n)
+	}
+	log, _ := st.RecentLog(ctx, "", 50)
+	n := 0
+	for _, l := range log {
+		if strings.Contains(l.Message, "nicht ausmessen") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d Meldungen über die defekte Datei, erwartet 1", n)
+	}
+}

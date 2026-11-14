@@ -70,6 +70,12 @@ type Guess struct {
 	// TeilNr: eine „Teil 2"/„Part 2"-Angabe überhaupt — in einer
 	// Serienbibliothek ist das die Folge einer Miniserie.
 	TeilNr int
+	// Special: „S03E00" — eine Sonderfolge ohne eigene Nummer. Sie kommt
+	// in Staffel 0 (so führen TMDb und Emby Specials) und bekommt dort
+	// eine Nummer hinter den vorhandenen; die Zuordnung sucht sie bei
+	// TMDb nach dem Titel. SpecialAus ist die Staffel aus dem Namen.
+	Special    bool
+	SpecialAus int
 }
 
 var (
@@ -78,7 +84,7 @@ var (
 	//
 	// Die Grenzen sind von Hand gebaut statt mit \b: Für \b ist der
 	// Unterstrich ein Buchstabe, und „HIMYM_S02E01" fand keine Folge.
-	reSeasonEp = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:s|season[\s._-]*|staffel[\s._-]*)(\d{1,2})[\s._-]*(?:e|ep|episode|folge|x)[\s._-]*(\d{1,3})(?:[\s._-]*(?:e|-)[\s._-]*(?:s\d{1,2}[\s._-]*e)?(\d{1,3}))?(?:[^a-z0-9]|$)`)
+	reSeasonEp = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:ss?|season[\s._-]*|staffel[\s._-]*)(\d{1,2})[\s._-]*(?:e|ep|episode|folge|x)[\s._-]*(\d{1,3})(?:[\s._-]*(?:e|-)[\s._-]*(?:s\d{1,2}[\s._-]*e)?(\d{1,3}))?(?:[^a-z0-9]|$)`)
 	// Kreuzform ohne Buchstaben davor: 2x07, als Doppelfolge 1x16-1x17
 	// oder 1x01+1x02.
 	reCrossEp = regexp.MustCompile(`(?i)(?:^|[\s._-])(\d{1,2})x(\d{1,3})(?:[-+_](?:\d{1,2}x)?(\d{1,3}))?\b`)
@@ -335,6 +341,13 @@ func ParseFuer(path string, dirs []string, art string) Guess {
 			g.EpisodeTitle = folgentitelAusOrdner(dirs, g.SeasonNo, g.EpisodeNo)
 		}
 		g.Confident = g.Title != ""
+		// „Game of Thrones - S08E00 - The Last Watch": Folge 0 gibt es
+		// nicht — das ist ein Special. Vorher bekam die Datei die nächste
+		// freie Nummer der Staffel (S08E07), TMDb kannte die Folge nicht
+		// (oder schlimmer: eine andere), und sie stand unter „Aufräumen".
+		if g.EpisodeNo == 0 && g.EpisodeTo == 0 {
+			g.Special, g.SpecialAus, g.SeasonNo = true, g.SeasonNo, 0
+		}
 	} else if datum != "" {
 		// „Tagesschau 2024-03-15": Staffel ist das Jahr, Folge Monat und
 		// Tag. Welche Folge das bei der Quelle ist, sagt das Sendedatum.

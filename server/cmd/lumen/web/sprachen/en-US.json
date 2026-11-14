@@ -1260,7 +1260,6 @@
  "FFmpeg erkennt darin kein Video (abgebrochener Download, beschädigte Datei). Sie wird nicht angeboten.": "FFmpeg finds no video in it (incomplete download, damaged file). It isn’t offered.",
  "Noch nicht geprüft.": "Not checked yet.",
  "Ordner wie „Extras“, „Trailers“, „Featurettes“ liest Lumen nicht als Filme ein.": "Lumen doesn’t read folders like “Extras”, “Trailers”, “Featurettes” as movies.",
- "Seit dem letzten Neustart nicht mehr geprüft.": "Not checked since the last restart.",
  "TMDb kennt keinen Titel mit diesem Namen.": "TMDb knows no title with this name.",
  "TMDb war nicht erreichbar — Lumen versucht es später noch einmal.": "TMDb couldn’t be reached — Lumen will try again later.",
  "Tipp: Eine Kennung im Ordner- oder Dateinamen, etwa „Matrix (1999) {imdb-tt0133093}“, ordnet beim nächsten Durchlauf ohne Suche zu.": "Tip: an ID in the folder or file name, such as “Matrix (1999) {imdb-tt0133093}”, matches on the next scan without searching.",
@@ -1370,7 +1369,6 @@
  "Lumen antwortet noch nicht. Lade die Seite gleich selbst neu.": "Lumen isn’t responding yet. Reload the page yourself in a moment.",
  "Lumen behält nur zwei Sicherungen. Die Sicherung von {davor} wird dabei gelöscht; die von {neueste} wird zur älteren. Willst du zu einem früheren Stand zurück, stelle ihn zuerst wieder her.": "Lumen keeps only two backups. The backup from {davor} will be deleted; the one from {neueste} becomes the older one. If you want to go back to an earlier state, restore it first.",
  "Lumen startet neu und nimmt die Sicherung von {wann}.": "Lumen is restarting with the backup from {wann}.",
- "Mehrere Fassungen · {n}": "Multiple Versions · {n}",
  "Offene Einladungen": "Open Invitations",
  "PIN der Verwaltungssperre": "Admin lock PIN",
  "Passwort der Verwaltungssperre": "Admin lock password",
@@ -1468,7 +1466,6 @@
  "Umwandeln und Abspielen, unter der GPL — im Docker-Abbild aus den Paketen von Alpine Linux": "Transcoding and playback, under the GPL — in the Docker image from Alpine Linux packages",
  "Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.": "The full list with licenses is in THIRD_PARTY.md in the source code.",
  "Auto": "Auto",
- "Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: „Ansehen“ spielt die Standard-Fassung, eine andere wählt man im Player unter „Qualität“. Gehört eine Datei zu einem anderen Film, trenne sie ab.": "The same film in several files, for example in two qualities. That’s fine: “Watch” plays the default version, and another one can be chosen in the player under “Quality”. If a file belongs to a different film, split it off.",
  "Diese Fassung als Standard nehmen": "Make this version the default",
  "Diese Fassung ist der Standard.": "This version is the default.",
  "Fassung {n}": "Version {n}",
@@ -1527,5 +1524,11 @@
   "one": "{n} season",
   "other": "{n} seasons"
  },
- "… und {n} weitere (gezeigt werden die ersten {m}).": "… and {n} more (showing the first {m})."
+ "… und {n} weitere (gezeigt werden die ersten {m}).": "… and {n} more (showing the first {m}).",
+ "TMDb lieferte keinen sicheren Treffer. Mit „Suchen“ oder „ID eingeben“ zuordnen.": "TMDb returned no reliable match. Use “Search” or “Enter ID” to assign it.",
+ "· verschiedene Filme an einem Eintrag": "· different films under one title",
+ "· dieselbe Datei mehrfach": "· the same file more than once",
+ "doppelt — eine kann weg": "duplicate — one can go",
+ "Doppelt oder falsch zugeordnet · {n}": "Duplicates or wrongly matched · {n}",
+ "„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“.": "“The same file more than once”: same size and running time in two folders – one copy can go (Lumen never deletes files). “Different films”: the files are named after different films – split off the wrong one. Real versions (language, quality) are not listed here; you pick them in the player under “Quality”."
 }

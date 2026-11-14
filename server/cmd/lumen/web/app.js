@@ -5429,36 +5429,39 @@ function viewLogs() {
 function viewCleanup() {
   const d = S.data || {};
   const aufgeloest = (d.reihen || []).filter(r => r.hidden);
-  // Je Titel: jede Datei mit vollem Pfad, Auflösung, Grösse. Bei Fassungen
-  // („American Psycho" als 1080p-MKV und 400p-AVI) wählt man, welche gilt;
-  // eine falsch zugeordnete Datei lässt sich abtrennen; ein Film in Teilen
-  // (a/b/c, CD1/CD2) lässt sich zu einer Datei zusammenführen.
-  // Nur Filme in Teilen: Fassungen (dieselbe Datei in zwei Qualitäten)
-  // sind kein Aufräumfall — „Ansehen" spielt die Standard-Fassung, eine
-  // andere wählt man im Player unter „Qualität".
-  const istTeile = x => x.files.every((f, i) => f.partNo === i + 1);
+  // Je Titel: jede Datei mit vollem Pfad, Auflösung, Grösse. Der Server
+  // sagt mit x.art, was es ist: „teile" (a/b/c, CD1/CD2 — zusammenführen),
+  // „verschieden" (Dateien verschiedener Filme an einem Eintrag —
+  // abtrennen), „identisch" (dieselbe Datei zweimal — eine kann weg) oder
+  // „fassungen" (Sprache, Qualität). Fassungen sind kein Aufräumfall: Man
+  // wählt sie im Player unter „Qualität“.
+  const istTeile = x => x.art ? x.art === 'teile' : x.files.every((f, i) => f.partNo === i + 1);
   const nurTeile = (d.duplicates || []).filter(x => x.files.length > 1 && istTeile(x));
-  // Fassungen (derselbe Film mehrfach, auch gemischt mit Teilen) zeigt die
-  // Seite ebenfalls — sonst meldete die Übersicht „1 Doppel", und hier
-  // stand nichts dazu.
-  const fassungen = (d.duplicates || []).filter(x => x.files.length > 1 && !istTeile(x));
+  const fassungen = (d.duplicates || []).filter(x => x.files.length > 1 &&
+    (x.art === 'verschieden' || x.art === 'identisch'));
   const doppelZeile = x => {
     const teile = istTeile(x);
+    const gleich = new Set(x.identisch || []);
+    const art = teile ? tr('· {n} Teile eines Films', { n: x.files.length })
+      : x.art === 'verschieden' ? tr('· verschiedene Filme an einem Eintrag')
+      : x.art === 'identisch' ? tr('· dieselbe Datei mehrfach')
+      : tr('· {n} Fassungen', { n: x.files.length });
     return `
     <div class="orow" style="height:auto;padding:14px 16px;display:block">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="t-body" style="flex:1 1 200px">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
-          <span class="t-caption c-2">${teile ? ` ${tr('· {n} Teile eines Films', { n: x.files.length })}` : ` ${tr('· {n} Fassungen', { n: x.files.length })}`}</span></div>
+          <span class="t-caption c-2"> ${art}</span></div>
         ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
       </div>
       ${x.files.map(f => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
         <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(f.path)}</span>
         <span class="t-caption c-2 tnum">${[teile ? tr('Teil {nr}', { nr: f.partNo }) : '', f.height ? f.height + 'p' : '', f.container ? f.container.toUpperCase() : '',
           groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
-        ${teile ? '' : f.preferred
+        ${gleich.has(f.id) ? `<span class="badge badge--rot">${tr('doppelt — eine kann weg')}</span>` : ''}
+        ${teile || x.art === 'verschieden' ? '' : f.preferred
           ? `<span class="badge badge--gruen">${tr('gewählt')}</span>`
           : `<button class="btn btn-pill" style="height:28px;font-size:.75rem" data-fassung="${esc(x.itemId)}:${esc(f.id)}">${tr('Diese nehmen')}</button>`}
-        ${teile ? '' : `<button class="btn btn-pill" style="height:28px;font-size:.75rem;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
+        ${teile || x.art === 'identisch' ? '' : `<button class="btn btn-pill" style="height:28px;font-size:.75rem;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
           title="${tr('Ist ein anderer Film — als eigenen Titel führen')}">${tr('Abtrennen')}</button>`}
       </div>`).join('')}
     </div>`;
@@ -5501,7 +5504,7 @@ function viewCleanup() {
           ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:.7188rem;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
           <div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${g
             ? `${(g.art === 'fehler' && schl === 'abgelehnt' ? GRUND.schluessel : GRUND[g.art]) || ''}${gesucht ? ' ' + tr('Gesucht: {was}.', { was: gesucht }) : ''}${g.vorschlag ? ' ' + tr('Am nächsten: {titel} ({prozent} %).', { titel: esc(g.vorschlag), prozent: Math.round((g.wert || 0) * 100) }) : ''}`
-            : i.matchState === 'pending' ? offenText : tr('Seit dem letzten Neustart nicht mehr geprüft.')}</div>
+            : i.matchState === 'pending' ? offenText : tr('TMDb lieferte keinen sicheren Treffer. Mit „Suchen“ oder „ID eingeben“ zuordnen.')}</div>
         </div>
         <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap">
           <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
@@ -5574,9 +5577,9 @@ function viewCleanup() {
     ${dup ? `<section style="margin-top:26px"><div class="section-h">${tr('Filme in Teilen · {n}', { n: nurTeile.length })}</div>
       <div class="group group--inset">${dup}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Ein Film, auf mehrere Dateien verteilt (a/b/c, CD1/CD2). Im Browser laufen die Teile nacheinander; zusammengeführt läuft der Film überall am Stück. Zusammenführen hängt die Teile ohne Neurechnen aneinander; die Teile wandern in den Ordner „.lumen-teile“.')}</p></section>` : ''}
-    ${dupFassungen ? `<section style="margin-top:22px"><div class="section-h">${tr('Mehrere Fassungen · {n}', { n: fassungen.length })}</div>
+    ${dupFassungen ? `<section style="margin-top:22px"><div class="section-h">${tr('Doppelt oder falsch zugeordnet · {n}', { n: fassungen.length })}</div>
       <div class="group group--inset">${dupFassungen}</div>
-      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Derselbe Film in mehreren Dateien, etwa in zwei Qualitäten. Das ist in Ordnung: „Ansehen“ spielt die Standard-Fassung, eine andere wählt man im Player unter „Qualität“. Gehört eine Datei zu einem anderen Film, trenne sie ab.')}</p></section>` : ''}
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“.')}</p></section>` : ''}
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>

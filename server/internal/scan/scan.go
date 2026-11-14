@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -699,6 +700,17 @@ func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g 
 			!s.alleDateienSind(ctx, lib, alt.ID, title) {
 			err = errAufteilen
 		}
+		// Auch ein erkannter Titel wird aufgeteilt, wenn an ihm Dateien
+		// verschiedener Filme hängen („(2016) Batman Anime - Bad Blood" und
+		// „(2016) Batman vs. Superman" aus einem Sammelordner, „Die Pfeiler
+		// der Macht - Teil 1" und „- Teil 2"). Bleiben darf die Datei, deren
+		// Name zum erkannten Titel passt; die anderen suchen sich ihren
+		// eigenen. Fassungen desselben Films heissen nach ihrem Namen
+		// gleich und bleiben zusammen.
+		if err == nil && erkannt && g.Title != "" && alt.Kind == "movie" &&
+			s.gehoertNichtDazu(ctx, lib, alt, path, title) {
+			err = errAufteilen
+		}
 		if err == nil && alt.LibraryID == lib.ID && alt.Kind == "movie" {
 			if !erkannt && g.Title != "" && alt.Title != title {
 				alt.Title = title
@@ -788,6 +800,14 @@ func (s *Scanner) ordnerZusammenlegen(ctx context.Context, lib store.Library, or
 		if k == "" {
 			continue
 		}
+		// Gleiche Kennung genügt nicht: Eine falsche NFO oder ein falscher
+		// Treffer gibt zwei Filmen dieselbe. Zusammengelegt wird nur, was
+		// auch nach den Dateinamen derselbe Film ist.
+		titel := s.titelDerDateien(ctx, lib, id)
+		if titel == "" {
+			continue
+		}
+		k += "\x00" + titel
 		if ziel, ok := je[k]; ok {
 			if err := s.st.FilmZusammenlegen(ctx, ziel, id); err == nil {
 				s.st.Log(ctx, "info", "scan", "zwei Einträge desselben Films zusammengelegt (gleicher Ordner, gleiche Kennung)")
@@ -864,8 +884,20 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 
 	// Das Land gehört zur Serie: Daran trennt der nächste Durchlauf „The
 	// Office (US)" von „(UK)", und die Zuordnung sucht im richtigen Land.
-	if land != "" && s.st.ZusatzZu(ctx, series.ID).Land != land {
-		_ = s.st.ZusatzSetzen(ctx, series.ID, store.Zusatz{Land: land})
+	//
+	// Dazu das Ordnerjahr: Unter diesem Jahr hat die Serie jetzt Folgen
+	// aufgenommen. Legt TMDb später eine zweite Gruppe mit anderem Jahr
+	// mit ihr zusammen, wandert das Jahr mit (store.SerienZusammenfuehren),
+	// und passtZuSerie lässt die Gruppe beim nächsten Durchlauf hier.
+	if z := s.st.ZusatzZu(ctx, series.ID); (land != "" && z.Land != land) ||
+		(jahr > 0 && !z.JahrBekannt(jahr)) {
+		if land != "" {
+			z.Land = land
+		}
+		if jahr > 0 {
+			z.Jahre = store.JahreDazu(z.Jahre, strconv.Itoa(jahr))
+		}
+		_ = s.st.ZusatzSetzen(ctx, series.ID, z)
 	}
 	serienOrdner, _ := serienOrdnerZu(lib.Path, hits[0].dirs, lib.Kind)
 	lauf.serie(ctx, series.ID, serienOrdner)
@@ -988,9 +1020,13 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 				}
 				season, ok := seasons[g.SeasonNo]
 				if !ok {
+					staffelTitel := fmt.Sprintf("Staffel %d", g.SeasonNo)
+					if g.SeasonNo == 0 {
+						staffelTitel = "Specials"
+					}
 					season = &store.Item{
 						LibraryID: lib.ID, Kind: "season", ParentID: series.ID,
-						Title:    fmt.Sprintf("Staffel %d", g.SeasonNo),
+						Title:    staffelTitel,
 						SeasonNo: g.SeasonNo, MatchState: "matched",
 					}
 					if err := st.UpsertItem(ctx, season); err != nil {
@@ -1014,6 +1050,9 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 				// TMDb den richtigen bringt.
 				if g.EpisodeTitle != "" {
 					epTitle = g.EpisodeTitle
+				} else if g.Special {
+					// „Knight Rider 2008 - S01E00 -.avi": ein Special ohne Namen.
+					epTitle = "Special"
 				}
 				ep := folgeMitNummer(folgen[season.ID], g.EpisodeNo)
 				if ep == nil {
@@ -1043,7 +1082,9 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 				// Durchgezählt (Anime) oder Doppelfolge: Die Zuordnung muss es
 				// wissen, um die richtige(n) Folge(n) bei TMDb zu holen.
 				epID, pfad := ep.ID, hits[i].path
-				z := store.Zusatz{Absolut: g.Absolut, BisFolge: g.EpisodeTo}
+				// Ein Special („S08E00") trägt eine selbst vergebene Nummer;
+				// die Zuordnung sucht es bei TMDb nach dem Titel.
+				z := store.Zusatz{Absolut: g.Absolut, BisFolge: g.EpisodeTo, Special: g.Special}
 				nachher = append(nachher, func() {
 					if z != s.st.ZusatzZu(ctx, epID) {
 						_ = s.st.ZusatzSetzen(ctx, epID, z)
@@ -1067,6 +1108,163 @@ func (s *Scanner) upsertSeries(ctx context.Context, lib store.Library,
 }
 
 var errAufteilen = errors.New("aufteilen")
+
+// titelSchluessel macht Titel aus Dateinamen vergleichbar: klein, ohne
+// Akzente, Satzzeichen und Leerraum — „Batman: Bad Blood" und
+// „batman bad blood" sind gleich, „…: Teil 1" und „…: Teil 2" nicht.
+func titelSchluessel(t string) string {
+	t = strings.ToLower(strings.NewReplacer("ä", "ae", "ö", "oe", "ü", "ue", "Ä", "ae", "Ö", "oe", "Ü", "ue", "ß", "ss").Replace(store.NFC(t)))
+	var b strings.Builder
+	for _, r := range t {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r > 127 {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// dateiSchluessel: der Titel einer Datei nach ihrem eigenen Namen, als
+// titelSchluessel.
+func (s *Scanner) dateiSchluessel(lib store.Library, path string) string {
+	rel, err := filepath.Rel(lib.Path, path)
+	if err != nil {
+		return ""
+	}
+	return titelSchluessel(s.dateiTitel(path, splitDirs(rel), lib.Kind))
+}
+
+// titelDerDateien: der gemeinsame Titel (titelSchluessel) aller Dateien
+// eines Eintrags — "" wenn sie verschieden heissen oder keine da ist.
+func (s *Scanner) titelDerDateien(ctx context.Context, lib store.Library, itemID string) string {
+	dateien, err := s.st.FilesFor(ctx, itemID)
+	if err != nil {
+		return ""
+	}
+	titel := ""
+	for _, f := range dateien {
+		k := s.dateiSchluessel(lib, f.Path)
+		if k == "" || (titel != "" && k != titel) {
+			return ""
+		}
+		titel = k
+	}
+	return titel
+}
+
+// DateienVerschieden: Sind die Dateien nach ihrem eigenen Namen
+// verschiedene Filme? Für die Seite Aufräumen — dort heisst das „falsch
+// zugeordnet", nicht „Fassungen". Teile eines Films (CD1/CD2, Teil 1/2
+// derselben Basis) heissen gleich.
+func (s *Scanner) DateienVerschieden(lib store.Library, pfade []string) bool {
+	erster := ""
+	for _, p := range pfade {
+		k := s.dateiSchluessel(lib, p)
+		if k == "" {
+			continue
+		}
+		if erster == "" {
+			erster = k
+		} else if k != erster {
+			return true
+		}
+	}
+	return false
+}
+
+// gehoertNichtDazu: Hängen an einem Film Dateien, die nach ihrem Namen
+// verschiedene Filme sind, und ist diese Datei nicht die, deren Name zum
+// Titel des Eintrags passt? Dann wird sie abgetrennt. Welche bleibt: die
+// mit dem Namen, der dem Titel (oder Originaltitel) des Eintrags am
+// ähnlichsten ist (gemeinsame Wörter); bei Gleichstand die mit dem
+// kleinsten Pfad — damit die Entscheidung bei jedem Durchlauf gleich
+// ausfällt.
+func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *store.Item, path, title string) bool {
+	dateien, err := s.st.FilesFor(ctx, it.ID)
+	if err != nil || len(dateien) < 2 {
+		return false
+	}
+	sort.Slice(dateien, func(i, j int) bool { return dateien[i].Path < dateien[j].Path })
+	eigen := titelSchluessel(title)
+	titelZu := map[string]string{} // Schlüssel → Titel, wie gelesen
+	reihe := []string{}
+	for _, f := range dateien {
+		t := title
+		if f.Path != path {
+			rel, err := filepath.Rel(lib.Path, f.Path)
+			if err != nil {
+				continue
+			}
+			t = s.dateiTitel(f.Path, splitDirs(rel), lib.Kind)
+		}
+		k := titelSchluessel(t)
+		if k == "" {
+			continue
+		}
+		if _, ok := titelZu[k]; !ok {
+			titelZu[k] = t
+			reihe = append(reihe, k)
+		}
+	}
+	if len(reihe) < 2 || titelZu[eigen] == "" {
+		return false
+	}
+	punkte := func(k string) float64 {
+		return max(wortAehnlich(titelZu[k], it.Title), wortAehnlich(titelZu[k], it.OriginalTitle))
+	}
+	haupt := reihe[0]
+	for _, k := range reihe[1:] {
+		if punkte(k) > punkte(haupt) {
+			haupt = k
+		}
+	}
+	if eigen == haupt {
+		return false
+	}
+	// „Teil 1" und „Teil 2", „Dune" und „Dune 2": verschiedene Zahlen im
+	// Namen sind verschiedene Filme — auch wenn beide gut zum Titel passen.
+	if zahlenIn(titelZu[eigen]) != zahlenIn(titelZu[haupt]) {
+		return true
+	}
+	// Passt der eigene Name selbst gut zum Titel des Eintrags (etwa ein
+	// deutscher und ein englischer Dateiname derselben Fassung), bleibt
+	// die Datei: lieber eine Fassung zu viel als ein Film auseinandergerissen.
+	return punkte(eigen) < 0.5
+}
+
+// zahlenIn: die Zahlen in einem Titel, in Reihenfolge — „Teil 2 (2016)"
+// ergibt „2 2016".
+func zahlenIn(s string) string {
+	var out []string
+	for _, w := range strings.FieldsFunc(s, func(r rune) bool { return r < '0' || r > '9' }) {
+		out = append(out, strings.TrimLeft(w, "0"))
+	}
+	return strings.Join(out, " ")
+}
+
+// wortAehnlich: Anteil gemeinsamer Wörter zweier Titel (0 bis 1).
+func wortAehnlich(a, b string) float64 {
+	woerter := func(s string) map[string]bool {
+		m := map[string]bool{}
+		for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+			return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r <= 127
+		}) {
+			m[titelSchluessel(w)] = true
+		}
+		delete(m, "")
+		return m
+	}
+	wa, wb := woerter(a), woerter(b)
+	if len(wa) == 0 || len(wb) == 0 {
+		return 0
+	}
+	gemeinsam := 0
+	for w := range wa {
+		if wb[w] {
+			gemeinsam++
+		}
+	}
+	return float64(gemeinsam) / float64(len(wa)+len(wb)-gemeinsam)
+}
 
 // alleDateienSind: Heissen alle Dateien eines Eintrags nach ihrem eigenen
 // Namen gleich?
@@ -1242,19 +1440,24 @@ func (s *Scanner) fillFromProbe(ctx context.Context, f *store.MediaFile) {
 	alt := s.gemessen(ctx, f.Path)
 	daneben := untertitelDaneben(ctx, f.Path)
 
-	if alt != nil && alt.Gelesen && alt.Datei.SizeBytes == f.SizeBytes &&
-		alt.Datei.MTime == f.MTime && alt.Datei.DurationMS > 0 &&
-		gleichePfade(alt.Daneben, daneben) {
-		altBehalten(f, &alt.Datei)
-		return
-	}
 	// Schon als defekt bekannt und unverändert: nicht bei jedem Durchlauf
 	// neu messen (und neu ins Protokoll schreiben) — erst, wenn sich die
 	// Datei ändert (fertig kopiert, ersetzt) oder die Rechte stimmen.
+	// Das muss vor dem Fall „unverändert und gemessen" stehen: Hatte die
+	// Datei vor dem Defekt eine gültige Messung, griff sonst jener, und
+	// der Vermerk „defekt" ging beim nächsten Durchlauf verloren — die
+	// Datei galt wieder als abspielbar, und das Vorbereiten im
+	// Hintergrund scheiterte daran nach jedem Neustart von Neuem.
 	if alt != nil && alt.Datei.Defekt != "" && alt.Datei.SizeBytes == f.SizeBytes &&
 		alt.Datei.MTime == f.MTime && (alt.Datei.Defekt != DefektGesperrt || !lesbar(f.Path)) {
 		altBehalten(f, &alt.Datei)
 		f.Defekt = alt.Datei.Defekt
+		return
+	}
+	if alt != nil && alt.Gelesen && alt.Datei.SizeBytes == f.SizeBytes &&
+		alt.Datei.MTime == f.MTime && alt.Datei.DurationMS > 0 &&
+		gleichePfade(alt.Daneben, daneben) {
+		altBehalten(f, &alt.Datei)
 		return
 	}
 

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,5 +82,78 @@ func TestTeileZusammenfuehren(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(h.root, ".lumen-teile", "Apocalypse Now 1979b.mkv")); err != nil {
 		t.Fatalf("Teil nicht beiseitegelegt: %v", err)
+	}
+}
+
+// Teile in eigenen Ordnern („Doktor Schiwago (1965)/CD1/Doktor
+// Schiwago.avi", „…/CD2/Doktor Schiwago.avi"): Der Film kommt in den
+// Filmordner, und beide Teile bleiben beiseite erhalten. Vorher landete
+// der Film in „CD1", und der zweite Teil ersetzte in „.lumen-teile" den
+// ersten (gleicher Name).
+func TestTeileAusCDOrdnernZusammenfuehren(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ohne ffmpeg")
+	}
+	h := newHarness(t)
+	h.film("Platzhalter", 1)
+	it := &store.Item{LibraryID: h.lib.ID, Kind: "movie", Title: "Doktor Schiwago", Year: 1965, MatchState: "matched"}
+	_ = h.st.UpsertItem(t.Context(), it)
+	filmOrdner := filepath.Join(h.root, "Doktor Schiwago (1965)")
+	for i, cd := range []string{"CD1", "CD2"} {
+		p := filepath.Join(filmOrdner, cd, "Doktor Schiwago.avi")
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		if out, err := exec.Command("ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=160x90:rate=10",
+			"-c:v", "mpeg4", "-y", p).CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+		_ = h.st.UpsertFile(t.Context(), &store.MediaFile{ItemID: it.ID, Path: p, PartNo: i + 1, SizeBytes: 1})
+	}
+	resp, _ := h.do("POST", "/api/v1/admin/items/"+it.ID+"/teile-zusammenfuehren", "", h.tok)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("Zusammenführen: %d", resp.StatusCode)
+	}
+	ziel := filepath.Join(filmOrdner, "Doktor Schiwago (1965).mkv")
+	bisWahr(t, "zusammengeführte Datei", func() bool {
+		d, _ := h.st.FilesFor(t.Context(), it.ID)
+		return len(d) == 1 && d[0].Path == ziel
+	})
+	for _, n := range []string{"CD1 - Doktor Schiwago.avi", "CD2 - Doktor Schiwago.avi"} {
+		if _, err := os.Stat(filepath.Join(filmOrdner, ".lumen-teile", n)); err != nil {
+			t.Errorf("Teil %s nicht beiseitegelegt: %v", n, err)
+		}
+	}
+}
+
+// Scheitert das Zusammenführen, steht der Grund im Protokoll — ohne Pfad.
+func TestZusammenfuehrenNenntDenGrund(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ohne ffmpeg")
+	}
+	h := newHarness(t)
+	h.film("Platzhalter", 1)
+	it := &store.Item{LibraryID: h.lib.ID, Kind: "movie", Title: "Geheim", Year: 2001, MatchState: "matched"}
+	_ = h.st.UpsertItem(t.Context(), it)
+	for i, b := range []string{"cd1", "cd2"} {
+		p := filepath.Join(h.root, "Geheim (2001) "+b+".avi")
+		_ = os.WriteFile(p, []byte("kein video"), 0o644) // FFmpeg erkennt nichts darin
+		_ = h.st.UpsertFile(t.Context(), &store.MediaFile{ItemID: it.ID, Path: p, PartNo: i + 1, SizeBytes: 1})
+	}
+	resp, _ := h.do("POST", "/api/v1/admin/items/"+it.ID+"/teile-zusammenfuehren", "", h.tok)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("Zusammenführen: %d", resp.StatusCode)
+	}
+	var zeile string
+	bisWahr(t, "Protokollzeile", func() bool {
+		log, _ := h.st.RecentLog(t.Context(), "", 50)
+		for _, l := range log {
+			if strings.HasPrefix(l.Message, "Zusammenführen gescheitert") {
+				zeile = l.Message
+				return true
+			}
+		}
+		return false
+	})
+	if !strings.Contains(zeile, ": ffmpeg: ") || strings.Contains(zeile, "Geheim") || strings.Contains(zeile, "/") {
+		t.Fatalf("Protokoll: %q", zeile)
 	}
 }

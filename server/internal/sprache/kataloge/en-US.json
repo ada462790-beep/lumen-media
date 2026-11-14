@@ -322,5 +322,6 @@
   "jemandem ausserhalb deines Bereichs": "someone outside your scope",
   "Für Updates per Knopfdruck braucht es den Aktualisierer — siehe README.md, Abschnitt „Updates per Knopfdruck“.": "One-click updates need the updater companion — see README.md, section “One-click updates”.",
   "Ein Update läuft schon.": "An update is already running.",
-  "Neue Folgen von {serie}": "New episodes of {serie}"
+  "Neue Folgen von {serie}": "New episodes of {serie}",
+  "die teile liegen in verschiedenen ordnern — erst in einen ordner legen": "The parts are in different folders — move them into one folder first."
 }

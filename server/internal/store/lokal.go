@@ -18,6 +18,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -45,11 +47,73 @@ var lokalTabellen = []string{
 	   PRIMARY KEY (item_id, art))`,
 }
 
+// zusatzNachruesten: Stand 17 (store.go). special und jahre an
+// item_zusatz; steht die Spalte schon da, ist das kein Fehler.
+func zusatzNachruesten(db *sql.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE item_zusatz ADD COLUMN special INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE item_zusatz ADD COLUMN jahre TEXT NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
+	}
+	return nil
+}
+
 // Zusatz sind die Angaben aus item_zusatz.
 type Zusatz struct {
 	Land     string
 	Absolut  bool
 	BisFolge int
+	// Special: eine Folge „S03E00" — bei TMDb steht sie in Staffel 0,
+	// aber unter einer Nummer, die der Dateiname nicht nennt. Die Nummer
+	// in Lumen hat der Scanner vergeben; die Zuordnung sucht sie darum
+	// nach dem Titel, nicht nach der Nummer.
+	Special bool
+	// Jahre (nur Serien): Ordnerjahre, unter denen die Serie schon Folgen
+	// aufgenommen hat, kommagetrennt („2019,2021"). TMDb hat zwei
+	// Gruppen mit verschiedenen Jahren als dieselbe Serie erkannt
+	// (SerienZusammenfuehren); ohne dieses Gedächtnis legte jeder
+	// Durchlauf die Serie neu an, und der Hausmeister führte sie wieder
+	// zusammen.
+	Jahre string
+}
+
+// JahrBekannt: Hat die Serie schon Folgen unter diesem Ordnerjahr
+// aufgenommen?
+func (z Zusatz) JahrBekannt(jahr int) bool {
+	if jahr <= 0 {
+		return false
+	}
+	for _, j := range strings.Split(z.Jahre, ",") {
+		if strings.TrimSpace(j) == strconv.Itoa(jahr) {
+			return true
+		}
+	}
+	return false
+}
+
+// JahreDazu nimmt Jahre in die Liste auf (ohne doppelte, sortiert).
+func JahreDazu(alt string, neu ...string) string {
+	gesehen := map[int]bool{}
+	for _, liste := range append([]string{alt}, neu...) {
+		for _, j := range strings.Split(liste, ",") {
+			if n, err := strconv.Atoi(strings.TrimSpace(j)); err == nil && n > 0 {
+				gesehen[n] = true
+			}
+		}
+	}
+	out := make([]int, 0, len(gesehen))
+	for n := range gesehen {
+		out = append(out, n)
+	}
+	sort.Ints(out)
+	teile := make([]string, len(out))
+	for i, n := range out {
+		teile[i] = strconv.Itoa(n)
+	}
+	return strings.Join(teile, ",")
 }
 
 // ZusatzSetzen hält Land, durchgezählte Nummer und Ende einer Doppelfolge
@@ -60,29 +124,33 @@ func (s *Store) ZusatzSetzen(ctx context.Context, itemID string, z Zusatz) error
 		_, err := s.db.ExecContext(ctx, `DELETE FROM item_zusatz WHERE item_id = ?`, itemID)
 		return err
 	}
-	abs := 0
+	abs, sp := 0, 0
 	if z.Absolut {
 		abs = 1
 	}
+	if z.Special {
+		sp = 1
+	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO item_zusatz (item_id, land, absolut, bis_folge) VALUES (?,?,?,?)
+		`INSERT INTO item_zusatz (item_id, land, absolut, bis_folge, special, jahre) VALUES (?,?,?,?,?,?)
 		 ON CONFLICT (item_id) DO UPDATE SET land = excluded.land,
-		   absolut = excluded.absolut, bis_folge = excluded.bis_folge`,
-		itemID, z.Land, abs, z.BisFolge)
+		   absolut = excluded.absolut, bis_folge = excluded.bis_folge,
+		   special = excluded.special, jahre = excluded.jahre`,
+		itemID, z.Land, abs, z.BisFolge, sp, z.Jahre)
 	return err
 }
 
 // ZusatzZu liest den Zusatz eines Titels (leer, wenn keiner da ist).
 func (s *Store) ZusatzZu(ctx context.Context, itemID string) Zusatz {
 	var z Zusatz
-	var abs int
+	var abs, sp int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT land, absolut, bis_folge FROM item_zusatz WHERE item_id = ?`, itemID).
-		Scan(&z.Land, &abs, &z.BisFolge)
+		`SELECT land, absolut, bis_folge, special, jahre FROM item_zusatz WHERE item_id = ?`, itemID).
+		Scan(&z.Land, &abs, &z.BisFolge, &sp, &z.Jahre)
 	if err != nil {
 		return Zusatz{}
 	}
-	z.Absolut = abs == 1
+	z.Absolut, z.Special = abs == 1, sp == 1
 	return z
 }
 

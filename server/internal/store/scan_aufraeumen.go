@@ -69,6 +69,18 @@ func (s *Store) FolgenOhneDatei(ctx context.Context) (int, error) {
 					  WHERE e.parent_id = ? AND e.kind = 'episode' AND e.title = ? AND e.id != ?
 					    AND EXISTS (SELECT 1 FROM media_file f WHERE f.item_id = e.id)
 					 HAVING count(*) = 1`, l.staffel, l.titel, l.id).Scan(&ziel)
+				if ziel == "" {
+					// Ein Special („S08E00 - The Last Watch") bekam früher die
+					// nächste freie Nummer seiner Staffel; jetzt steht es in
+					// Staffel 0 derselben Serie. Der Haken zieht mit.
+					_ = t.QueryRowContext(ctx,
+						`SELECT min(e.id) FROM item e
+						   JOIN item sp ON sp.id = e.parent_id AND sp.kind = 'season' AND COALESCE(sp.season_no, 0) = 0
+						   JOIN item st ON st.id = ? AND st.parent_id = sp.parent_id
+						  WHERE e.kind = 'episode' AND e.title = ? AND e.id != ?
+						    AND EXISTS (SELECT 1 FROM media_file f WHERE f.item_id = e.id)
+						 HAVING count(*) = 1`, l.staffel, l.titel, l.id).Scan(&ziel)
+				}
 				if ziel != "" {
 					if err := persoenlichesUmhaengen(ctx, t, l.id, ziel, konten); err != nil {
 						return err
