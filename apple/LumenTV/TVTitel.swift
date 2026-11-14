@@ -38,9 +38,6 @@ struct TVDetailView: View {
     @State private var staffeln: [Item] = []
     @State private var staffel: String?
     @State private var folgen: [Item] = []
-    /// „In welcher Qualität?" — offen, und ob danach von vorn.
-    @State private var qualitaetWahl = false
-    @State private var qualitaetVonVorn = false
     /// Ob der Server „gesehen" für eine Staffel kennt — sonst kein Knopf.
     @State private var staffelGesehenGeht = true
 
@@ -150,9 +147,8 @@ struct TVDetailView: View {
     /// Zeile, damit der Fokus nur nach rechts und links muss.
     @ViewBuilder
     private func knoepfe(_ item: Item) -> some View {
-        // Mehrere Fassungen desselben Films: „Abspielen" fragt
-        // zuerst nach der Qualität — als Dialog, durch den der Fokus geht.
-        let fassungen = Fassungen.liste(detail?.files ?? [])
+        // Mehrere Fassungen desselben Films: „Abspielen" startet die
+        // Standard-Fassung, eine andere wählt man im Player unter „Qualität".
         HStack(spacing: 24) {
             // Eine Serie hat selbst keine Datei — der Player sucht ihre
             // erste offene Folge. Ein Film braucht eine, die da ist.
@@ -164,23 +160,13 @@ struct TVDetailView: View {
                 }
             } else if detail?.playable != nil {
                 Button {
-                    if fassungen.count > 1 {
-                        qualitaetVonVorn = false
-                        qualitaetWahl = true
-                    } else {
-                        playing = Abspielstart(item: item)
-                    }
+                    playing = Abspielstart(item: item)
                 } label: {
                     Label(Titelseite.abspielen(item), systemImage: "play.fill")
                 }
                 if Titelseite.kannVonVorn(item) {
                     Button {
-                        if fassungen.count > 1 {
-                            qualitaetVonVorn = true
-                            qualitaetWahl = true
-                        } else {
-                            playing = Abspielstart(item: item, vonVorn: true)
-                        }
+                        playing = Abspielstart(item: item, vonVorn: true)
                     } label: {
                         Label("Von vorn", systemImage: "backward.end")
                     }
@@ -228,17 +214,6 @@ struct TVDetailView: View {
             }
         }
         .font(.title3.weight(.semibold))
-        // Jede Fassung als Zeile („1080p · MKV · 7,9 GB"), der Fokus steht
-        // auf der ersten: dem Standard, so wie der Server ordnet.
-        .confirmationDialog("In welcher Qualität?", isPresented: $qualitaetWahl,
-                            titleVisibility: .visible) {
-            ForEach(Array(fassungen.enumerated()), id: \.element.id) { nr, f in
-                Button(Fassungen.name(f) + (nr == 0 ? " · " + String(localized: "Standard", bundle: .lumen, locale: .lumen) : "")) {
-                    playing = Abspielstart(item: item, vonVorn: qualitaetVonVorn, datei: f.id)
-                }
-            }
-            Button("Abbrechen", role: .cancel) {}
-        }
     }
 
     // MARK: Besetzung

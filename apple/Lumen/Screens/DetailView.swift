@@ -25,9 +25,6 @@ struct DetailView: View {
     @State private var backdrop: URL?
     @State private var start: Abspielstart?
     @State private var showLists = false
-    /// „In welcher Qualität?" — offen, und ob danach von vorn.
-    @State private var qualitaetWahl = false
-    @State private var qualitaetVonVorn = false
     /// Ob dieses Gerät die Datei direkt abspielt — für die Technik-Zeile.
     @State private var plan: PlaybackPlan?
     /// Was beim Merken, Gesehen-Markieren oder Bewerten schiefging — als
@@ -171,18 +168,14 @@ struct DetailView: View {
     @ViewBuilder
     private func actions(_ item: Item, _ detail: ItemDetail) -> some View {
         // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p):
-        // „Ansehen" fragt dann zuerst nach der Qualität. Teile
+        // „Ansehen" startet die Standard-Fassung, eine andere wählt man im
+        // Player unter „Qualität". Teile
         // eines Films (a/b/c) sind keine Fassungen; die laufen nacheinander.
         let fassungen = Fassungen.liste(detail.files)
         FlussLayout(abstand: 10) {
             if detail.playable != nil {
                 Button {
-                    if fassungen.count > 1 {
-                        qualitaetVonVorn = false
-                        qualitaetWahl = true
-                    } else {
-                        start = Abspielstart(item: item)
-                    }
+                    start = Abspielstart(item: item)
                 } label: {
                     Label(fassungen.count > 1
                             ? Titelseite.abspielen(item) + " · " + String(localized: "\(fassungen.count) Qualitäten", bundle: .lumen, locale: .lumen)
@@ -202,12 +195,7 @@ struct DetailView: View {
             }
             if detail.playable != nil, Titelseite.kannVonVorn(item) {
                 Button("Von vorn") {
-                    if fassungen.count > 1 {
-                        qualitaetVonVorn = true
-                        qualitaetWahl = true
-                    } else {
-                        start = Abspielstart(item: item, vonVorn: true)
-                    }
+                    start = Abspielstart(item: item, vonVorn: true)
                 }
                 .buttonStyle(KopfKnopf())
             }
@@ -268,17 +256,6 @@ struct DetailView: View {
             #endif
         }
         .padding(.top, 6)
-        // Jede Fassung als Zeile: „1080p · MKV · 7,9 GB". Die erste ist der
-        // Standard — der Server ordnet: bevorzugte, dann höchste Auflösung.
-        .confirmationDialog("In welcher Qualität?", isPresented: $qualitaetWahl,
-                            titleVisibility: .visible) {
-            ForEach(Array(fassungen.enumerated()), id: \.element.id) { nr, f in
-                Button(Fassungen.name(f) + (nr == 0 ? " · " + String(localized: "Standard", bundle: .lumen, locale: .lumen) : "")) {
-                    start = Abspielstart(item: item, vonVorn: qualitaetVonVorn, datei: f.id)
-                }
-            }
-            Button("Abbrechen", role: .cancel) {}
-        }
     }
 
     // MARK: - Rumpf

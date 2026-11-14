@@ -97,10 +97,6 @@ internal fun TvTitel(
     var zurListe by remember { mutableStateOf(false) }
     var entfernen by remember { mutableStateOf(false) }
     var bewerten by remember { mutableStateOf(false) }
-    // „In welcher Qualität?": ob offen, und ab wo es dann läuft — null
-    // beim gespeicherten Stand, 0.0 für „Von vorn".
-    var qualitaetOffen by remember { mutableStateOf(false) }
-    var qualitaetAb by remember { mutableStateOf<Double?>(null) }
     val scope = rememberCoroutineScope()
     val anfang = remember { FocusRequester() }
 
@@ -139,11 +135,8 @@ internal fun TvTitel(
     val item = d?.item ?: ziel.item
     val l = liste
     val staffeln = AmStueck.staffelnOrdnen(d?.seasons ?: emptyList())
-    // Mehrere Fassungen desselben Films: Dann fragt „Abspielen"
-    // zuerst nach der Qualität — nur bei einem Film für sich, nicht aus
-    // einer Liste heraus (die läuft am Stück, mit der Standard-Fassung).
-    val fassungen = Fassungen.liste(d?.files ?: emptyList())
-    val qualitaetFragen = l == null && item.kind != "series" && fassungen.size > 1
+    // Mehrere Fassungen desselben Films: „Abspielen" startet die Standard-
+    // Fassung; eine andere wählt man im Player unter „Qualität".
 
     // Was „Abspielen" heisst, hängt davon ab, woher man kommt: aus einer
     // Liste läuft die Liste ab hier weiter; eine Serie beginnt bei ihrer
@@ -255,12 +248,12 @@ internal fun TvTitel(
                                 },
                                 gross = true,
                                 modifier = Modifier.focusRequester(anfang),
-                            ) { if (qualitaetFragen) { qualitaetAb = null; qualitaetOffen = true } else abspielen() }
+                            ) { abspielen() }
                         }
                         if (l == null && item.kind != "series" && Titelseite.hatStand(item)) {
                             item(key = "vonvorn") {
                                 TvButton(tx(R.string.von_vorn)) {
-                                    if (qualitaetFragen) { qualitaetAb = 0.0; qualitaetOffen = true } else abspielen(ab = 0.0)
+                                    abspielen(ab = 0.0)
                                 }
                             }
                         }
@@ -442,13 +435,6 @@ internal fun TvTitel(
         TvZurListe(client, item.id, onGeaendert = onListeGeaendert) { zurListe = false }
     }
 
-    if (qualitaetOffen) {
-        TvQualitaet(fassungen, onClose = { qualitaetOffen = false }) { f ->
-            qualitaetOffen = false
-            abspielen(ab = qualitaetAb, dateiId = f.id)
-        }
-    }
-
     if (bewerten) {
         TvBewerten(item.myRating, onClose = { bewerten = false }) { sterne ->
             bewerten = false
@@ -563,28 +549,6 @@ private fun TvFolgenKarte(client: ApiClient, folge: Item, onGesehen: () -> Unit,
             folge.overview?.takeIf { it.isNotBlank() }?.let {
                 Text(it, color = Tv.label2, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
-        }
-    }
-}
-
-/**
- * „In welcher Qualität?" — jede Fassung als Zeile („1080p · MKV · 7,9 GB"),
- * der Fokus auf der ersten: Sie ist der Standard, so wie der Server ordnet.
- */
-@Composable
-private fun TvQualitaet(fassungen: List<MediaFile>, onClose: () -> Unit, onWahl: (MediaFile) -> Unit) {
-    val anfang = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(100)
-        runCatching { anfang.requestFocus() }
-    }
-    TvDialogRahmen(onDismiss = onClose) {
-        Text(tx(R.string.in_welcher_qualitaet), fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        fassungen.forEachIndexed { i, f ->
-            TvZeile(text = Fassungen.name(f).ifEmpty { f.fileName },
-                    nebenzeile = if (i == 0) tx(R.string.standard) else null,
-                    modifier = if (i == 0) Modifier.focusRequester(anfang) else Modifier) { onWahl(f) }
         }
     }
 }

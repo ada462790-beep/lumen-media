@@ -428,7 +428,7 @@ public struct Abspielstart: Identifiable, Sendable {
     public let id = UUID()
     public let item: Item
     public let vonVorn: Bool
-    /// Die gewählte Fassung — aus „In welcher Qualität?". nil
+    /// Die gewählte Fassung — im Player unter „Qualität" gewählt. nil
     /// heisst: die erste, so wie der Server sie ordnet.
     public let datei: String?
 

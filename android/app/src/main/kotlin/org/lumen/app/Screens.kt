@@ -91,8 +91,6 @@ fun DetailScreen(
     var loading by remember(itemId) { mutableStateOf(true) }
     var sucht by remember(itemId) { mutableStateOf(false) }
     var hinweis by remember(itemId) { mutableStateOf<String?>(null) }
-    // Ob „In welcher Qualität?" offen ist — nur bei mehreren Fassungen.
-    var qualitaetOffen by remember(itemId) { mutableStateOf(false) }
     val error by model.error.collectAsStateWithLifecycle()
     var reload by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -185,14 +183,12 @@ fun DetailScreen(
                 Spacer(Modifier.height(16.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (d.playable != null && fassungen.size > 1) {
-                        // Mehrere Qualitäten: erst fragen, welche. „Von vorn"
-                        // steht dann bei jeder Fassung in der Auswahl.
-                        PrimaryButton("▶  " + Titelseite.abspielText(item) + " · " + txn(R.plurals.qualitaeten_anzahl, fassungen.size)) {
-                            qualitaetOffen = !qualitaetOffen
-                        }
-                    } else if (d.playable != null) {
-                        PrimaryButton("▶  " + Titelseite.abspielText(item)) { onPlay(Abspielen(item)) }
+                    if (d.playable != null) {
+                        // Mehrere Fassungen: „Ansehen" startet die Standard-
+                        // Fassung; eine andere wählt man im Player unter
+                        // „Qualität" — wie im Browser.
+                        val mehr = if (fassungen.size > 1) " · " + txn(R.plurals.qualitaeten_anzahl, fassungen.size) else ""
+                        PrimaryButton("▶  " + Titelseite.abspielText(item) + mehr) { onPlay(Abspielen(item)) }
                         if (Titelseite.hatStand(item)) {
                             QuietButton(tx(R.string.von_vorn)) { onPlay(Abspielen(item, ab = 0.0)) }
                         }
@@ -240,14 +236,6 @@ fun DetailScreen(
                     }
                     // Auf einen Chromecast schicken — nur, wenn einer da ist.
                     if (d.playable != null) CastKnopf(model)
-                }
-                if (qualitaetOffen && fassungen.size > 1) {
-                    Spacer(Modifier.height(14.dp))
-                    QualitaetsWahl(fassungen, Titelseite.hatStand(item),
-                        onPlay = { f, vonVorn ->
-                            qualitaetOffen = false
-                            onPlay(Abspielen(item, ab = if (vonVorn) 0.0 else null, dateiId = f.id))
-                        })
                 }
                 hinweis?.let {
                     Spacer(Modifier.height(8.dp))
@@ -504,38 +492,6 @@ private fun EpisodeRow(model: LumenViewModel, episode: Item, onGesehen: () -> Un
             Icon(if (episode.finished) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircleOutlined,
                  if (episode.finished) tx(R.string.nicht_mehr_als_gesehen) else tx(R.string.als_gesehen_markieren),
                  tint = if (episode.finished) Lumen.label else Lumen.label3)
-        }
-    }
-}
-
-/**
- * „In welcher Qualität?" — jede Fassung als Zeile: „1080p · MKV · 7,9 GB".
- * Die erste ist der Standard (der Server ordnet: bevorzugte, dann höchste
- * Auflösung). Mit Stand gibt es je Fassung auch „Von vorn" — wie im Browser.
- */
-@Composable
-private fun QualitaetsWahl(
-    fassungen: List<MediaFile>,
-    mitVonVorn: Boolean,
-    onPlay: (MediaFile, Boolean) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
-               .background(Lumen.fill)) {
-        Text(tx(R.string.in_welcher_qualitaet), color = Lumen.label2, fontSize = 13.sp,
-             modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
-        fassungen.forEachIndexed { i, f ->
-            Row(Modifier.fillMaxWidth().clickableRow { onPlay(f, false) }
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.PlayArrow, null, tint = Lumen.label, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(12.dp))
-                Text(Fassungen.name(f).ifEmpty { f.fileName }, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                if (i == 0) Text(tx(R.string.standard), color = Lumen.label3, fontSize = 12.sp,
-                                 modifier = Modifier.padding(end = 8.dp))
-                if (mitVonVorn) TextButton(onClick = { onPlay(f, true) }) {
-                    Text(tx(R.string.von_vorn), color = Lumen.label2, fontSize = 13.sp)
-                }
-            }
         }
     }
 }
