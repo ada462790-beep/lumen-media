@@ -389,3 +389,44 @@ func TestAltesSpecialNimmtDenHakenMit(t *testing.T) {
 		t.Fatalf("Haken nicht mitgezogen: %+v %v", p, err)
 	}
 }
+
+// Ein deutscher und ein englischer Dateiname derselben Fassung bleiben
+// zusammen, wenn beide zum Titel oder Originaltitel passen.
+func TestDeutscherUndEnglischerNameBleibenEinFilm(t *testing.T) {
+	root := t.TempDir()
+	faelleAnlegen(t, root,
+		"Der Pate (1972)/Der Pate (1972).mkv",
+		"Der Pate (1972)/The Godfather (1972).mkv",
+	)
+	st := faelleStore(t)
+	ctx := context.Background()
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", root, "de")
+	sc := New(st, nil)
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	a := st.GemessenZuPfad(ctx, filepath.Join(root, "Der Pate (1972)/Der Pate (1972).mkv"))
+	b := st.GemessenZuPfad(ctx, filepath.Join(root, "Der Pate (1972)/The Godfather (1972).mkv"))
+	if a == nil || b == nil {
+		t.Fatal("Dateien unbekannt")
+	}
+	f := b.Datei
+	f.ItemID = a.Datei.ItemID
+	if err := st.UpsertFile(ctx, &f); err != nil {
+		t.Fatal(err)
+	}
+	it, _ := st.Item(ctx, a.Datei.ItemID)
+	it.Title, it.OriginalTitle, it.MatchState = "Der Pate", "The Godfather", "matched"
+	_ = st.UpsertItem(ctx, it)
+	_ = st.SetSourceID(ctx, it.ID, "tmdb", "238")
+	_ = filmeOhneDateiWeg(ctx, st)
+	for i := 0; i < 2; i++ {
+		if _, err := sc.Scan(ctx, *lib); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b = st.GemessenZuPfad(ctx, filepath.Join(root, "Der Pate (1972)/The Godfather (1972).mkv"))
+	if b == nil || b.Datei.ItemID != it.ID {
+		t.Fatalf("die englische Fassung wurde abgetrennt: %v", filmeMitDateien(t, st, lib.ID))
+	}
+}

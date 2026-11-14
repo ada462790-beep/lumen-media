@@ -1217,7 +1217,28 @@ func (s *Scanner) gehoertNichtDazu(ctx context.Context, lib store.Library, it *s
 			haupt = k
 		}
 	}
-	return eigen != haupt
+	if eigen == haupt {
+		return false
+	}
+	// „Teil 1" und „Teil 2", „Dune" und „Dune 2": verschiedene Zahlen im
+	// Namen sind verschiedene Filme — auch wenn beide gut zum Titel passen.
+	if zahlenIn(titelZu[eigen]) != zahlenIn(titelZu[haupt]) {
+		return true
+	}
+	// Passt der eigene Name selbst gut zum Titel des Eintrags (etwa ein
+	// deutscher und ein englischer Dateiname derselben Fassung), bleibt
+	// die Datei: lieber eine Fassung zu viel als ein Film auseinandergerissen.
+	return punkte(eigen) < 0.5
+}
+
+// zahlenIn: die Zahlen in einem Titel, in Reihenfolge — „Teil 2 (2016)"
+// ergibt „2 2016".
+func zahlenIn(s string) string {
+	var out []string
+	for _, w := range strings.FieldsFunc(s, func(r rune) bool { return r < '0' || r > '9' }) {
+		out = append(out, strings.TrimLeft(w, "0"))
+	}
+	return strings.Join(out, " ")
 }
 
 // wortAehnlich: Anteil gemeinsamer Wörter zweier Titel (0 bis 1).
