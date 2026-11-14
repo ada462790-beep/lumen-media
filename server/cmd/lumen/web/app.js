@@ -536,6 +536,13 @@ function hoverKarteZeigen(card) {
       </div></div>`;
   document.body.appendChild(k);
   hoverKarte = k;
+  // Die Karte liegt ausserhalb des scrollenden Inhalts (main#inhalt). Ohne das
+  // hier fing sie das Mausrad ab: Über der Vorschau liess sich die Seite
+  // nicht mehr scrollen. Das Rad geht an die Seite weiter, die Karte weg.
+  k.addEventListener('wheel', e => {
+    (document.getElementById('inhalt') || app).scrollBy({ top: e.deltaY, left: e.deltaX });
+    hoverKarteWeg();
+  }, { passive: true });
   k.addEventListener('mouseleave', hoverKarteWeg);
 }
 
@@ -7374,6 +7381,7 @@ function standMerken(inVerlauf = true) {
 
 let standZeit = null;
 app.addEventListener('scroll', () => {
+  if (hoverKarte) hoverKarteWeg();
   clearTimeout(standZeit);
   standZeit = setTimeout(() => standMerken(false), 150);
 }, { capture: true, passive: true });

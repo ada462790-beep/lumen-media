@@ -640,6 +640,12 @@ dialog.dialog-karte::backdrop { background:rgba(0,0,0,.45) }
 /* Eingebaute Bedienelemente folgen der Darstellung. */
 :root { color-scheme:dark }
 html.hell, .lumen.light, dialog.lumen.light { color-scheme:light }
+/* Die aufklappende Liste eines Auswahlfelds zeichnet das System. Manche
+   (Windows, eingebettete Browser) halten sich nicht an color-scheme und
+   zeigen sie weiss im dunklen Design — darum die Einträge selbst färben. */
+select option, select optgroup { background-color:#2c2c2e; color:#fff }
+html.hell select option, html.hell select optgroup,
+.lumen.light select option, .lumen.light select optgroup { background-color:#fff; color:#000 }
 .rueckfrage-knoepfe { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap }
 .btn-pill--rot { background:var(--rot); color:#fff }
 /* Konten: PIN zurücksetzen und Rechte rechts, gemeinsam umbrechend. */
