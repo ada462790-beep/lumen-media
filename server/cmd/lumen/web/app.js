@@ -5953,7 +5953,7 @@ function viewCleanup() {
       <span style="color:${ersatz ? 'var(--label-3)' : 'var(--text-orange)'};display:flex;flex:none;margin-top:2px">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
       <div style="flex:1;min-width:0">
         ${a ? `<div class="t-body">${fehlendWas(a)}</div>` : ''}
-        <div class="mono c-2 pfad-kurz" title="${esc(f.path)}">${kurzPfad(f.path)}</div>
+        <div class="mono c-2 fehlend-pfad">${esc(f.path)}</div>
         ${ersatz ? `<div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${a.kind === 'episode'
           ? tr('Wurde vermutlich umbenannt – die Folge ist weiterhin da.')
           : tr('Wurde vermutlich umbenannt – der Film ist weiterhin da.')} ${tr('Lumen trägt den alten Eintrag beim nächsten Durchlauf selbst aus; Stand und Haken bleiben.')}</div>` : ''}
