@@ -3151,6 +3151,13 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
     // Ist die Bildschirmzeit um, sagt es schon der Plan — dann gar nicht
     // erst den Player öffnen.
     const quellHoehe = aufloesungVon(file).hoehe;
+    // Was sich vorher weiss, nicht erst den Server fragen — seine Absage
+    // (422 defekt, 403 Bildschirmzeit) stünde rot in der Konsole.
+    if (file.defekt) throw Object.assign(new Error(tr('Die Datei ist defekt und lässt sich nicht abspielen.')), { code: 'datei_defekt' });
+    if (S.me?.account?.isKid) {
+      const bz = await bzLaden();
+      if (bz?.aktiv && bz.erlaubt === false) throw Object.assign(new Error(bz.meldung || tr('Für heute ist Schluss.')), { code: 'bildschirmzeit' });
+    }
     // Eine defekte oder verschwundene Datei: gleich sagen, statt einen
     // schwarzen Player zu öffnen.
     const plan = await api.plan(file.id, qualitaetParameter(quellHoehe)).catch(e => {

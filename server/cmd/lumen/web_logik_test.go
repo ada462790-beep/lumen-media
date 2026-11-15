@@ -14,6 +14,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -158,5 +159,47 @@ console.log(fassungNamen([
 	soll := "1080p · Deutsch, Englisch · MKV|1080p · Deutsch · MKV · 7 B · Kopie|1080p · Deutsch · MKV · 7 B · Sicherung|1080p · Deutsch · MKV · 7 B · Kopie 4"
 	if out != soll {
 		t.Errorf("Fassungen:\n%s\nerwartet:\n%s", out, soll)
+	}
+}
+
+// Rechte-Änderungen (s.bestaetigt) fragt die Web-App vorher nach dem
+// Code, statt erst eine 428 zu kassieren (rot in der Konsole) — die Liste
+// in api.js deckt jeden solchen Weg aus api.go.
+func TestWebBestaetigungVorher(t *testing.T) {
+	roh, err := os.ReadFile("../../internal/api/api.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(`mux\.Handle\("(\w+) /api/v1(\S+)", \w+\(s\.bestaetigt\(`)
+	var wege []string
+	for _, m := range re.FindAllStringSubmatch(string(roh), -1) {
+		pfad := regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(m[2], "x_1")
+		wege = append(wege, m[1]+" "+pfad)
+	}
+	if len(wege) < 5 {
+		t.Fatalf("nur %d Wege gefunden", len(wege))
+	}
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("ohne node")
+	}
+	js, _ := os.ReadFile("web/api.js")
+	m := regexp.MustCompile(`(?s)export const BESTAETIGEN = \[.*?\];`).Find(js)
+	if m == nil {
+		t.Fatal("BESTAETIGEN fehlt in api.js")
+	}
+	skript := strings.TrimPrefix(string(m), "export ") + `
+const braucht = (method, path) => BESTAETIGEN.some(([m, re]) => m === method && re.test(path));
+const wege = ` + "`" + strings.Join(wege, "\n") + "`" + `.split('\n');
+const fehlt = wege.filter(w => { const [m, p] = w.split(' '); return !braucht(m, p); });
+const zuviel = ['GET /admin/groups', 'PUT /admin/accounts/x_1/avatar'].filter(w => { const [m, p] = w.split(' '); return braucht(m, p); });
+console.log(JSON.stringify({ fehlt, zuviel }));
+`
+	out, err := exec.Command(node, "--input-type=module", "-e", skript).CombinedOutput()
+	if err != nil {
+		t.Fatalf("node: %v %s", err, out)
+	}
+	if s := strings.TrimSpace(string(out)); s != `{"fehlt":[],"zuviel":[]}` {
+		t.Errorf("api.js BESTAETIGEN passt nicht zu api.go: %s", s)
 	}
 }
