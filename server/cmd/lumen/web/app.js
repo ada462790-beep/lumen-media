@@ -506,7 +506,9 @@ let hoverTimer = null, hoverKarte = null, hoverFuer = null;
 const kannH264 = () => document.createElement('video').canPlayType('video/mp4; codecs="avc1.42E01E"') !== '';
 function vorschauVideo(id, klass) {
   // Ohne H.264 (manche Linux-Browser) gibt es denselben Schnipsel als VP9.
-  const src = api.artURL(id, 'vorschau') + (kannH264() ? '' : '&f=webm');
+  // spaeter=1: Gibt es ihn noch nicht, entsteht er im Hintergrund, und der
+  // Server sagt das mit 204 statt mit einem Fehler — das Bild bleibt.
+  const src = api.artURL(id, 'vorschau') + (kannH264() ? '' : '&f=webm') + '&spaeter=1';
   return `<video class="${klass}" muted autoplay loop playsinline preload="none"
     src="${src}" data-weg></video>`;
 }

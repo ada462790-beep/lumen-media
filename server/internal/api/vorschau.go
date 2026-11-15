@@ -8,8 +8,8 @@
 package api
 
 // Die bewegte Vorschau: zwölf Sekunden aus dem Film, klein und leise,
-// für die Maus über einer Karte und den Hero der Startseite. Erzeugt
-// beim ersten Abruf, dann aufbewahrt — wie das Standbild, mit denselben
+// für die Maus über einer Karte und den Hero der Startseite. Angestossen
+// beim ersten Abruf (im Hintergrund, vorschauSenden), dann aufbewahrt — wie das Standbild, mit denselben
 // zwei Plätzen für FFmpeg, damit die Startseite den Rechner nicht
 // lahmlegt. Rund eine Million Byte je Film.
 
@@ -146,11 +146,28 @@ func (s *Server) vorschau(ctx context.Context, it *store.Item, webm bool) (strin
 	return ziel, nil
 }
 
-// vorschauSenden liefert den Schnipsel — oder 404, dann bleibt das Bild stehen.
+// vorschauSenden liefert den Schnipsel. Gibt es ihn noch nicht, entsteht
+// er im Hintergrund, und die Antwort sagt sofort „noch nicht" — vorher
+// wartete der erste Abruf auf FFmpeg (bis 1,6 s, auf einem NAS länger),
+// und die Karte hing so lange. Die Web-App fragt mit ?spaeter=1 und
+// bekommt 204 (kein Fehler in der Konsole, sie zeigt weiter das Bild);
+// die Apps bekommen wie bisher 404 und lassen das Bild stehen. Lässt sich
+// keiner machen: 404.
 func (s *Server) vorschauSenden(w http.ResponseWriter, r *http.Request, it *store.Item) {
 	webm := r.URL.Query().Get("f") == "webm"
-	pfad, err := s.vorschau(r.Context(), it, webm)
+	pfad, fertig, err := s.vorschauHolen(it, webm)
 	if err != nil {
+		fail(w, http.StatusNotFound, "keine vorschau")
+		return
+	}
+	if !fertig {
+		w.Header().Set("Retry-After", "5")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Lumen-Ersatz", "spaeter")
+		if r.URL.Query().Get("spaeter") == "1" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		fail(w, http.StatusNotFound, "keine vorschau")
 		return
 	}
@@ -161,6 +178,38 @@ func (s *Server) vorschauSenden(w http.ResponseWriter, r *http.Request, it *stor
 	}
 	w.Header().Set("Cache-Control", "private, max-age=604800")
 	http.ServeFile(w, r, pfad)
+}
+
+// vorschauHolen: der fertige Schnipsel (fertig), oder er wird im
+// Hintergrund angestossen (nicht fertig). Ein Fehler heisst: Es gibt
+// keinen (kein FFmpeg, kürzlich gescheitert).
+func (s *Server) vorschauHolen(it *store.Item, webm bool) (string, bool, error) {
+	if s.ff == nil || !s.ff.Available() {
+		return "", false, errors.New("kein ffmpeg")
+	}
+	if strings.ContainsAny(it.ID, `/\.`) {
+		return "", false, errors.New("ungültige kennung")
+	}
+	endung := ".mp4"
+	if webm {
+		endung = ".webm"
+	}
+	ziel := filepath.Join(s.vorschauOrdner(), it.ID+endung)
+	if _, err := os.Stat(ziel); err == nil {
+		return ziel, true, nil
+	}
+	vorschauMu.Lock()
+	wann, gescheitert := vorschauFehlschlag[it.ID+endung]
+	_, laeuft := vorschauLaeuft[it.ID+endung]
+	vorschauMu.Unlock()
+	if gescheitert && time.Since(wann) < standbildPause {
+		return "", false, errors.New("keine vorschau")
+	}
+	if !laeuft {
+		kopie := *it
+		s.begleitet(func(ctx context.Context) { _, _ = s.vorschau(ctx, &kopie, webm) })
+	}
+	return "", false, nil
 }
 
 // zeitlos stellt die Änderungszeit eines erzeugten Bildes auf einen festen
