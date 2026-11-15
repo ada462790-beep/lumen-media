@@ -73,17 +73,22 @@ func (s *Server) adminAlsTeile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pfade := make([]string, len(in.FileIDs))
+	jahre := make([]int, len(in.FileIDs)) // je Datei: Jahr ihres Eintrags, sonst aus dem Namen
 	for i, id := range in.FileIDs {
 		f, err := s.st.File(r.Context(), id)
 		if err != nil {
 			failErr(w, err)
 			return
 		}
-		if _, err := s.visibleItem(r, f.ItemID); err != nil {
+		it, err := s.visibleItem(r, f.ItemID)
+		if err != nil {
 			failErr(w, err)
 			return
 		}
 		pfade[i] = f.Path
+		if jahre[i] = it.Year; jahre[i] == 0 {
+			jahre[i] = scan.Parse(f.Path, nil).Year
+		}
 	}
 	reihe := make([]string, 0, len(in.FileIDs))
 	for _, i := range scan.TeileReihenfolge(pfade) {
@@ -102,6 +107,17 @@ func (s *Server) adminAlsTeile(w http.ResponseWriter, r *http.Request) {
 			if t := scan.TeilBasis(pfade[scan.TeileReihenfolge(pfade)[0]]); t != "" && t != it.Title {
 				it.Title = t
 				_ = s.st.UpsertItem(ctx, it)
+			}
+		}
+		// Hat der Film kein Jahr (Teil 1 ohne Jahr im Namen), gilt das
+		// eines anderen Teils — in der Reihenfolge der Teile.
+		if it, e := s.st.Item(ctx, ziel); err == nil && e == nil && it.Year == 0 {
+			for _, i := range scan.TeileReihenfolge(pfade) {
+				if jahre[i] > 0 {
+					it.Year = jahre[i]
+					_ = s.st.UpsertItem(ctx, it)
+					break
+				}
 			}
 		}
 	})

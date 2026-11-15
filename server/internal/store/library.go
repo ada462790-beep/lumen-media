@@ -1497,6 +1497,11 @@ func (s *Store) DateiAbtrennen(ctx context.Context, fileID, titel string, jahr i
 		return nil, err
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE item SET bevorzugte_datei = NULL WHERE id = ? AND bevorzugte_datei = ?`, alt.ID, fileID)
+	// Frisch gelesen: UpsertItem füllt addedAt nicht in die Struktur, und
+	// die Antwort trug sonst „0001-01-01".
+	if gelesen, err := s.Item(ctx, neu.ID); err == nil {
+		return gelesen, nil
+	}
 	return neu, nil
 }
 
