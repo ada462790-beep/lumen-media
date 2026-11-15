@@ -424,7 +424,7 @@ function posterCard(it, hier = false) {
   const serie = it.kind === 'series' && it.folgen;
   const unter = serie && it.gesehen
     ? (it.gesehen >= it.folgen ? tr('alle {folgen} Folgen gesehen', { folgen: it.folgen }) : tr('{gesehen} von {folgen} Folgen', { gesehen: it.gesehen, folgen: it.folgen }))
-    : `${jahre(it)}${it.imdbRating ? ` · ★ ${it.imdbRating}` : ''}`;
+    : `${jahre(it)}${it.imdbRating ? ` · ★ ${note(it.imdbRating)}` : ''}`;
   return `<button class="card poster${hier === true ? ' poster--hier' : ''}" data-go="detail" data-id="${it.id}"
       aria-label="${esc(it.title)}${it.finished ? tr(', gesehen') : serie && it.gesehen ? tr(', {gesehen} von {folgen} Folgen gesehen', { gesehen: it.gesehen, folgen: it.folgen }) : ''}"${hier === true ? ' aria-current="true"' : ''}>
     <div class="thumb thumb--poster" style="position:relative;width:168px;height:252px;border-radius:12px;overflow:hidden">
@@ -481,6 +481,12 @@ function wideCard(it) {
  * Hero: nach einer Sekunde Ruhe über dem Bild läuft stumm ein Schnipsel.
  * Karte: nach 700 ms Maus über einem Poster klappt eine breite Karte auf,
  * mit Schnipsel, Titel und Knöpfen. Der Ton bleibt aus, bis man ihn will. */
+/* Eine Wertung mit genau einer Nachkommastelle („6.8", nicht „6.799" —
+   TMDb und manche NFO liefern mehr Stellen). */
+function note(r) {
+  return (Math.round(r * 10) / 10).toLocaleString(sprache(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
 const mitMaus = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
 let hoverTimer = null, hoverKarte = null, hoverFuer = null;
 
@@ -1388,7 +1394,7 @@ function viewHome() {
         <h2 class="t-hero">${esc(heroFolge && first.seriesTitle ? first.seriesTitle : first.title)}</h2>
         <div class="t-sub c-2" style="margin-top:8px">
           ${heroFolge ? esc(folgenName(first)) : [jahre(first), mins(first.runtimeMs), (first.genres || []).slice(0, 2).join(' · '),
-             first.imdbRating ? `★ ${first.imdbRating}` : ''].filter(Boolean).join(' · ')}</div>
+             first.imdbRating ? `★ ${note(first.imdbRating)}` : ''].filter(Boolean).join(' · ')}</div>
         ${first.overview ? `<p class="t-body c-2 clamp-2" style="margin-top:10px;max-width:520px">${esc(first.overview)}</p>` : ''}
         <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap">
           ${heroKnopf}
