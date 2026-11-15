@@ -100,6 +100,9 @@ func (s *Scanner) umbenennungenErkennen(ctx context.Context, lib store.Library, 
 		}
 		umgezogen++
 		if neuItem.ID == altItem.ID {
+			// Umbenannt im selben Titel (etwa im selben Ordner): „1
+			// umbenannt", nicht zusätzlich „1 aktualisiert".
+			umbenanntGezaehlt(ctx, altItem.ID)
 			continue
 		}
 		titelWeg++

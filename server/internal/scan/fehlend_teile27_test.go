@@ -109,3 +109,58 @@ func TestFehlendeTeileOhneErsatzBleiben(t *testing.T) {
 		t.Errorf("Teil 1 allein gilt als Ersatz: %+v", angaben[fehlend[0].ID])
 	}
 }
+
+// Umbenennen im selben Ordner zählt als „umbenannt" — nicht als
+// „1 aktualisiert, 1 fehlt" und danach „1 ausgetragen".
+func TestUmbenennenImSelbenOrdner(t *testing.T) {
+	root := t.TempDir()
+	dateiMitGroesse(t, root, "Alien (1979)/Alien (1979).mkv", 1234)
+	st := faelleStore(t)
+	ctx := context.Background()
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", root, "de")
+	sc := New(st, nil)
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, "Alien (1979)/Alien (1979).mkv"),
+		filepath.Join(root, "Alien (1979)/Alien (1979) 1080p.mkv")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := sc.Scan(ctx, *lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Renamed != 1 || res.Missing != 0 || res.Updated != 0 {
+		t.Errorf("umbenannt %d, fehlen %d, aktualisiert %d — erwartet 1, 0, 0", res.Renamed, res.Missing, res.Updated)
+	}
+}
+
+// Dasselbe mit Ausmessen, wie auf einem echten Server.
+type festeMessung struct{}
+
+func (festeMessung) Probe(ctx context.Context, path string) (*Probe, error) {
+	return &Probe{DurationMS: 5_400_000, Width: 1920, Height: 1080, VideoCodec: "h264"}, nil
+}
+
+func TestUmbenennenImSelbenOrdnerGemessen(t *testing.T) {
+	root := t.TempDir()
+	dateiMitGroesse(t, root, "Alien (1979)/Alien (1979).mkv", 1234)
+	st := faelleStore(t)
+	ctx := context.Background()
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", root, "de")
+	sc := New(st, festeMessung{})
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, "Alien (1979)/Alien (1979).mkv"),
+		filepath.Join(root, "Alien (1979)/Alien (1979) 1080p.mkv")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := sc.Scan(ctx, *lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Renamed != 1 || res.Missing != 0 || res.Updated != 0 {
+		t.Errorf("umbenannt %d, fehlen %d, aktualisiert %d — erwartet 1, 0, 0", res.Renamed, res.Missing, res.Updated)
+	}
+}

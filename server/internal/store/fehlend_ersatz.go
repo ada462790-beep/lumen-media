@@ -84,27 +84,34 @@ func (s *Store) FehlendeAngaben(ctx context.Context, fileIDs []string) (map[stri
 // deren Titel noch eine vorhandene Datei mit derselben Teilnummer hat —
 // wenn darf(fehlender Pfad, vorhandener Pfad) zustimmt (der Scanner prüft
 // dort, dass es keine abgehängte Platte sein kann). Stand, Haken und
-// Merkliste hängen am Titel und bleiben. Zurück: wie viele.
-func (s *Store) FehlendeMitErsatzAustragen(ctx context.Context, libraryID string, darf func(fehlt, da string) bool) (int, error) {
+// Merkliste hängen am Titel und bleiben. Zurück: wie viele, und die
+// Titel jener, deren Ersatz gleich gross im selben Ordner liegt — das ist
+// eine Umbenennung, keine ersetzte Datei (der Durchlauf zählt sie so).
+func (s *Store) FehlendeMitErsatzAustragen(ctx context.Context, libraryID string, darf func(fehlt, da string) bool) (int, []string, error) {
 	dateien, err := s.ersatzDateien(ctx, `i.library_id = ?`, libraryID)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	nachTitel := map[string][]ersatzDatei{}
+	groesse := map[string]int64{}
 	for _, d := range dateien {
 		nachTitel[d.item] = append(nachTitel[d.item], d)
+		groesse[d.pfad] = d.bytes
 	}
-	var weg []string
+	var weg, umbenannt []string
 	for _, d := range dateien {
 		if !d.fehlt {
 			continue
 		}
 		if da := ersatzFuer(d, nachTitel[d.item], true); da != "" && (darf == nil || darf(d.pfad, da)) {
 			weg = append(weg, d.id)
+			if d.bytes > 0 && groesse[da] == d.bytes && filepath.Dir(da) == filepath.Dir(d.pfad) {
+				umbenannt = append(umbenannt, d.item)
+			}
 		}
 	}
 	if len(weg) == 0 {
-		return 0, nil
+		return 0, nil, nil
 	}
 	err = s.tx(ctx, func(t *sql.Tx) error {
 		for _, id := range weg {
@@ -120,9 +127,9 @@ func (s *Store) FehlendeMitErsatzAustragen(ctx context.Context, libraryID string
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
-	return len(weg), nil
+	return len(weg), umbenannt, nil
 }
 
 // ersatzDatei: was ersatzFuer von einer Datei wissen muss.
