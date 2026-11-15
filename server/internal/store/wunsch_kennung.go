@@ -166,7 +166,7 @@ func (s *Store) wunschErgaenzen(ctx context.Context, out []Wish, accountID strin
 				rows.Close()
 				return nil, err
 			}
-			w.CreatedAt, w.Dabei = time.Unix(created, 0), true
+			w.CreatedAt, w.Dabei = time.Unix(created-created%86400, 0).UTC(), true // wie Wishes: der Tag, in UTC
 			out = append(out, w)
 		}
 		rows.Close()

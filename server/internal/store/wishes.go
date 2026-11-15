@@ -79,7 +79,7 @@ func (s *Store) CreateWish(ctx context.Context, accountID, title string, year in
 	// Verwaltung nichts an. Die Reihenfolge hält die Zeilennummer.
 	tag := heute()
 	w := &Wish{ID: newID("w"), Title: title, Year: year, State: "open",
-		CreatedAt: time.Unix(tag, 0), Mine: true, AccountID: accountID}
+		CreatedAt: time.Unix(tag, 0).UTC(), Mine: true, AccountID: accountID}
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO wish (id, account_id, title, year, state, created_at, updated_at)
 		 VALUES (?,?,?,?,?,?,?)`,

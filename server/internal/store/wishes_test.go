@@ -10,6 +10,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // Zweimal „Matrix wünschen" ergibt einen Wunsch, nicht zwei.
@@ -71,5 +72,32 @@ func TestWunschKennungNachgeruestet(t *testing.T) {
 	k, _ := st.WunschKennungen(ctx)
 	if !k["movie:438631"] || k["series:438631"] {
 		t.Errorf("Kennungen: %v", k)
+	}
+}
+
+// createdAt eines Wunsches steht überall gleich da: der Tag, in UTC —
+// beim Anlegen, in der Liste und bei Wünschen, denen man sich anschloss.
+// Vorher kam beim Anlegen und beim Anschliessen die Zone des Servers.
+func TestWunschCreatedAtEinheitlich(t *testing.T) {
+	alt := time.Local
+	time.Local = time.FixedZone("Irgendwo", 3*3600)
+	defer func() { time.Local = alt }()
+	st := testStore(t)
+	ctx := context.Background()
+	lea, _ := st.CreateAccount(ctx, NewAccount{Name: "Lea", LockKind: "none"})
+	tom, _ := st.CreateAccount(ctx, NewAccount{Name: "Tom", LockKind: "none"})
+	w, err := st.CreateWish(ctx, lea.ID, "Matrix", 1999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.CreatedAt.Location() != time.UTC {
+		t.Errorf("beim Anlegen: %v", w.CreatedAt)
+	}
+	if _, err := st.WunschAnlegen(ctx, tom.ID, WunschDaten{Titel: "Matrix", Jahr: 1999}); err != nil {
+		t.Fatal(err)
+	}
+	liste, _ := st.Wishes(ctx, tom.ID, false)
+	if len(liste) != 1 || liste[0].CreatedAt.Location() != time.UTC {
+		t.Errorf("angeschlossen: %+v", liste)
 	}
 }
