@@ -13,6 +13,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -438,4 +440,50 @@ func (s *Store) FehlendeEntfernen(ctx context.Context, ids []string) (int, error
 		return int(n), err
 	}
 	return int(n), nil
+}
+
+// OrdnerMitGleicherKennung: Ordner einer Film-Bibliothek, in denen
+// mindestens zwei Einträge dieselbe TMDb-Kennung tragen — etwa eine
+// deutsche und eine englische Fassung im Sammelordner „_Police Academy".
+// Der Scanner prüft dort mit seinen Regeln, ob es derselbe Film ist.
+func (s *Store) OrdnerMitGleicherKennung(ctx context.Context, libraryID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT i.tmdb_id, i.id, f.path FROM item i JOIN media_file f ON f.item_id = i.id
+		  WHERE i.library_id = ? AND i.kind = 'movie' AND COALESCE(i.tmdb_id,'') <> ''
+		    AND i.tmdb_id IN (SELECT tmdb_id FROM item WHERE library_id = ? AND kind = 'movie'
+		                       AND COALESCE(tmdb_id,'') <> '' GROUP BY tmdb_id HAVING COUNT(*) > 1)`,
+		libraryID, libraryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	je := map[string]map[string]bool{} // tmdb|ordner → Einträge
+	for rows.Next() {
+		var k, id, p string
+		if err := rows.Scan(&k, &id, &p); err != nil {
+			return nil, err
+		}
+		schl := k + "|" + filepath.Dir(p)
+		if je[schl] == nil {
+			je[schl] = map[string]bool{}
+		}
+		je[schl][id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	schon := map[string]bool{}
+	var out []string
+	for schl, ids := range je {
+		if len(ids) < 2 {
+			continue
+		}
+		o := schl[strings.Index(schl, "|")+1:]
+		if !schon[o] {
+			schon[o] = true
+			out = append(out, o)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }

@@ -58,6 +58,33 @@ type Auslassung struct {
 type AuslassDatei struct {
 	FileID    string `json:"fileId"`
 	SizeBytes int64  `json:"sizeBytes"`
+	// Nullen: Anfang oder Mitte der Datei sind nur Nullbytes — so sieht ein
+	// unvollständiger Download aus, für den das Programm den Platz schon
+	// reserviert hatte (gross, aber leer).
+	Nullen bool `json:"nullen,omitempty"`
+}
+
+// NurNullen prüft je 1 MB am Anfang und in der Mitte der Datei.
+func NurNullen(pfad string, groesse int64) bool {
+	f, err := os.Open(pfad)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	puffer := make([]byte, 1<<20)
+	leer := func(ab int64) bool {
+		n, err := f.ReadAt(puffer, ab)
+		if n == 0 && err != nil {
+			return false
+		}
+		for _, b := range puffer[:n] {
+			if b != 0 {
+				return false
+			}
+		}
+		return true
+	}
+	return leer(0) || (groesse > 4<<20 && leer(groesse/2))
 }
 
 // unbekannteEndungen sind Videos, die der Scanner bewusst nicht aufnimmt

@@ -498,6 +498,18 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 			res.Renamed += umbenannt
 		}
 	}
+	// Sprachfassungen in Sammelordnern („_Police Academy/… (de).mkv" und
+	// „… (en).mkv"): ordnerZusammenlegen läuft beim Einlesen nur für eigene
+	// Filmordner, und die TMDb-Kennung kommt oft erst danach. Hier werden
+	// Ordner nachgeholt, in denen zwei Einträge dieselbe Kennung tragen —
+	// zusammengelegt wird nur, was gleicherFilm als derselbe Film erkennt.
+	if lib.Kind == "movie" {
+		if ordner, err := s.st.OrdnerMitGleicherKennung(ctx, lib.ID); err == nil {
+			for _, o := range ordner {
+				s.ordnerZusammenlegen(ctx, lib, o)
+			}
+		}
+	}
 	// Welche Titel keine abspielbare Datei mehr haben (fehlt_seit): Nach
 	// der Frist blendet die Mediathek sie aus.
 	if err := s.st.VerfuegbarkeitNachfuehren(ctx, lib.ID); err != nil {

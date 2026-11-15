@@ -61,7 +61,11 @@ func (s *Server) defektGruppen(ctx context.Context, darf map[string]bool) map[st
 		a.Anzahl++
 		if len(a.Pfade) < 200 {
 			a.Pfade = append(a.Pfade, d.Path)
-			a.Dateien = append(a.Dateien, scan.AuslassDatei{FileID: d.ID, SizeBytes: d.SizeBytes})
+			ad := scan.AuslassDatei{FileID: d.ID, SizeBytes: d.SizeBytes}
+			if d.Grund == scan.DefektKaputt {
+				ad.Nullen = scan.NurNullen(d.Path, d.SizeBytes)
+			}
+			a.Dateien = append(a.Dateien, ad)
 		}
 	}
 	for lib, m := range je {

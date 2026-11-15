@@ -1285,11 +1285,16 @@ func isGenericName(s string) bool {
 	return false
 }
 
+var reFolgeImBeiwerk = regexp.MustCompile(`(?:^|[^a-z0-9])s\d{1,2}e\d{1,3}(?:[^0-9]|$)`)
+
 // VideoExt sind die Endungen, die der Scanner als Film ansieht.
 var VideoExt = map[string]bool{
 	".mkv": true, ".mp4": true, ".m4v": true, ".avi": true, ".mov": true,
 	".wmv": true, ".ts": true, ".m2ts": true, ".mpg": true, ".mpeg": true,
 	".webm": true, ".flv": true, ".vob": true,
+	// .divx/.xvid sind AVI unter anderem Namen, .ogm Ogg mit Video, .mts
+	// die Endung von Camcordern (MPEG-TS) — FFmpeg liest alle.
+	".divx": true, ".xvid": true, ".ogm": true, ".mts": true, ".asf": true, ".3gp": true,
 	// ISO-Abbilder liest FFmpeg nicht; .strm-Dateien (eine Adresse statt
 	// eines Films) liesse Lumen auf beliebige Adressen zugreifen — beides
 	// bleibt bewusst draussen.
@@ -1335,6 +1340,11 @@ var beiwerkEndungen = []string{
 // IstBeiwerkName prüft einen Dateinamen ohne Endung.
 func IstBeiwerkName(stem string) bool {
 	stem = strings.ToLower(strings.TrimSpace(stem))
+	// „Serie S01E00 - Extra": Eine Folgennummer macht daraus eine Folge
+	// (ein Special), kein Beiwerk.
+	if reFolgeImBeiwerk.MatchString(stem) {
+		return false
+	}
 	switch stem {
 	case "sample", "trailer", "rarbg", "readme",
 		// „theme.mkv" im Filmordner: das Themenvideo von Emby.

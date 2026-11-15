@@ -384,12 +384,9 @@ func videosDarin(dir string) (int, bool) {
 	return gefunden, abgeschnitten
 }
 
+// istVideo zählt für den Ordnerwähler dieselben Endungen wie der Scanner.
 func istVideo(name string) bool {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".m2ts", ".webm", ".mpg", ".mpeg":
-		return true
-	}
-	return false
+	return scan.VideoExt[strings.ToLower(filepath.Ext(name))]
 }
 
 // startpunkte sind die Orte, an denen Filme üblicherweise liegen. Wer

@@ -3,6 +3,7 @@ package scan
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"lumen/internal/store"
@@ -235,5 +236,51 @@ func TestOrdnerZusammenlegenBeiGleicherLaufzeit(t *testing.T) {
 	sc.ordnerZusammenlegen(ctx, *lib, filepath.Join(root, "Chihiro (2001)"))
 	if n := len(filmeMitDateien(t, st, lib.ID)); n != 1 {
 		t.Fatalf("%d Filme nach dem Zusammenlegen, erwartet 1", n)
+	}
+}
+
+// Sammelordner „_Police Academy": Deutsch und Englisch mit derselben
+// TMDb-Kennung werden nach dem Durchlauf ein Film mit zwei Fassungen —
+// auch ohne eigenen Filmordner. Verschiedene Kennungen bleiben getrennt.
+func TestSammelordnerSprachfassungenGleicheKennung(t *testing.T) {
+	root := t.TempDir()
+	faelleAnlegen(t, root,
+		"_Police Academy/Police Academy 2 (1985) (de).mkv",
+		"_Police Academy/Police Academy 2 - Their First Assignment (1985) (en).mkv",
+		"_Police Academy/Police Academy 3 (1986) (de).mkv",
+	)
+	st := faelleStore(t)
+	ctx := context.Background()
+	lib, _ := st.CreateLibrary(ctx, "Filme", "movie", root, "de")
+	sc := New(st, nil)
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	filme := filmeMitDateien(t, st, lib.ID)
+	if len(filme) != 3 {
+		t.Fatalf("%d Filme nach dem ersten Durchlauf, erwartet 3: %v", len(filme), filme)
+	}
+	all, _ := st.Query(ctx, store.Query{Libraries: []string{lib.ID}, Kinds: []string{"movie"}, Limit: 10})
+	for _, f := range all {
+		dateien, _ := st.FilesFor(ctx, f.ID)
+		kennung, sprache := "10157", "de"
+		for _, d := range dateien {
+			if strings.Contains(d.Path, "(en)") {
+				sprache = "en"
+			}
+			if strings.Contains(d.Path, "Academy 3") {
+				kennung = "10587"
+			}
+			d.DurationMS = 5_220_000
+			_ = st.UpsertFile(ctx, &d)
+			_ = st.SpurenSetzen(ctx, d.ID, []store.Track{{Index: 1, Kind: "audio", Language: sprache}}, nil)
+		}
+		_ = st.SetSourceID(ctx, f.ID, "tmdb", kennung)
+	}
+	if _, err := sc.Scan(ctx, *lib); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(filmeMitDateien(t, st, lib.ID)); n != 2 {
+		t.Fatalf("%d Filme nach dem zweiten Durchlauf, erwartet 2 (PA2 mit zwei Fassungen, PA3)", n)
 	}
 }

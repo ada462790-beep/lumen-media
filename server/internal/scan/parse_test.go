@@ -361,3 +361,17 @@ func TestSpecialsUndTippfehlerImFolgennamen(t *testing.T) {
 		}
 	}
 }
+
+func TestFolgeIstKeinBeiwerk(t *testing.T) {
+	for stem, soll := range map[string]bool{
+		"The Big Bang Theory S01E00 - Extra": false,
+		"Serie s02e05-trailer":               false,
+		"Film (2001)-trailer":                true,
+		"sample":                             true,
+		"Film-extra":                         true,
+	} {
+		if ist := IstBeiwerkName(stem); ist != soll {
+			t.Errorf("IstBeiwerkName(%q) = %v, erwartet %v", stem, ist, soll)
+		}
+	}
+}

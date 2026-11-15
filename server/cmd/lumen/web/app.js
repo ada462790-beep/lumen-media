@@ -6099,7 +6099,8 @@ function viewCleanup() {
       <span class="auslass-pfadtext">${zeile}</span>
       <span class="auslass-dateiinfo">
         <span class="t-caption c-2 tnum">${groesse(datei.sizeBytes)}</span>
-        ${klein ? `<span class="badge badge--rot">${tr('vermutlich abgebrochener Download')}</span>` : ''}
+        ${klein ? `<span class="badge badge--rot">${tr('vermutlich abgebrochener Download')}</span>`
+          : datei.nullen ? `<span class="badge badge--rot" title="${esc(tr('Die Datei hat die volle Grösse, enthält aber an der geprüften Stelle nur Nullen – der Download wurde nie fertig.'))}">${tr('unvollständiger Download')}</span>` : ''}
         ${anspielbar ? anspielKnopf({ id: datei.fileId, path: pfad }, tr('Trotzdem anspielen')) : ''}
       </span></li>`;
   };
