@@ -2451,15 +2451,24 @@ function spurenMerken(p, teil) {
 function spurenVorbelegen(p) {
   const serie = serienSpuren(p.seriesId) || {};
   const profil = S.me?.prefs || {};
-  const tonWunsch = serie.ton ?? profil.tonSprache;
   const ton = tonspuren(p), text = textspuren(p), bild = bildspuren(p);
+  const eigen = sprache().slice(0, 2);
+  // Ohne Handwahl: Ton in der Sprache des Profils, wenn es ihn gibt —
+  // oder, wer „Originalton" eingestellt hat, die als Original markierte
+  // (sonst die erste) Spur. Gibt es beides nicht, bleibt die Standardspur.
+  let tonWunsch = serie.ton ?? profil.tonSprache;
+  if (!tonWunsch && profil.tonWahl === 'original') {
+    const o = ton.find(x => /\boriginal|\bOV\b|\bO-?Ton\b/i.test(x.title || '')) || ton[0];
+    if (o) p.spur = o.index;
+  } else if (!tonWunsch) {
+    tonWunsch = eigen;
+  }
   if (tonWunsch) {
     const t = ton.find(x => x.language === tonWunsch);
     if (t) p.spur = t.index;
   }
   const aktuell = ton.find(x => x.index === p.spur) || ton[0];
   const tonSprache = aktuell?.language && aktuell.language !== 'und' ? aktuell.language : '';
-  const eigen = sprache().slice(0, 2);
   // Text vor Bild: Text stellt der Browser selbst dar, Bild muss der
   // Server neu rechnen. Bild nur, wenn es die Sprache als Text nicht gibt.
   const finden = lang => text.find(x => x.language === lang && !x.forced)
@@ -4556,6 +4565,10 @@ function viewSettings() {
           swRow(tr('Folgen automatisch weiter'), prefs.autoplay !== '0', null, 'autoplay') +
           swRow(tr('Vorspann überspringen'), prefs.skipIntro === '1', null, 'skipIntro') +
           swRow(tr('Nach drei Folgen fragen, ob du noch schaust'), prefs.nochDaFrage !== '0', null, 'nochDaFrage') +
+          `<div class="row" style="min-height:54px;flex-wrap:wrap"><span class="t-body" style="flex:1">${tr('Tonsprache')}</span>
+            ${segment(tr('Tonsprache'), [['profil', tr('Profilsprache')], ['original', tr('Originalton')]].map(([v, n]) =>
+              ({ name: n, an: (prefs.tonWahl === 'original' ? 'original' : 'profil') === v, attr: `data-prefwert="tonWahl:${v}"` })))}
+            </div>` +
           swRow(tr('Qualität unterwegs'), null, lim.remoteQuality === 'original' ? tr('Original') : lim.remoteQuality || '1080p'))}
         ${grp(tr('Profilbild'), `<div class="avatar-wahl">
             ${['av-a', 'av-b', 'av-c', 'av-d', 'av-k'].map(c => `<button class="avatar ${c}${a.avatar === c ? ' gewaehlt' : ''}" style="--av:44px;border:0" data-avatar="${c}" aria-label="${tr('Farbe {nr}', { nr: c.slice(3).toUpperCase() })}">${esc(a.name[0])}</button>`).join('')}
@@ -6752,8 +6765,11 @@ app.addEventListener('click', async e => {
   }
   if ((n = hit('data-prefwert'))) {
     const [key, wert] = n.dataset.prefwert.split(':');
-    S.me.prefs = { ...(S.me.prefs || {}), [key]: wert };
-    api.updateMe({ prefs: { [key]: wert } }).catch(err => toast(err.message));
+    // Eine neue Tonwahl gilt ab jetzt — die zuletzt im Player gewählte
+    // Sprache (tonSprache) ginge ihr sonst vor.
+    const neu = key === 'tonWahl' ? { tonWahl: wert, tonSprache: '' } : { [key]: wert };
+    S.me.prefs = { ...(S.me.prefs || {}), ...neu };
+    api.updateMe({ prefs: neu }).catch(err => toast(err.message));
     return render();
   }
   if ((n = hit('data-grpedit'))) { S.gruppe = (S.data?.groups || []).find(x => x.id === n.dataset.grpedit) || null; render(); document.getElementById('gname')?.focus(); return; }
