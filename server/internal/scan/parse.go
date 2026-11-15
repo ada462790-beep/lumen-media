@@ -1341,8 +1341,9 @@ var beiwerkEndungen = []string{
 func IstBeiwerkName(stem string) bool {
 	stem = strings.ToLower(strings.TrimSpace(stem))
 	// „Serie S01E00 - Extra": Eine Folgennummer macht daraus eine Folge
-	// (ein Special), kein Beiwerk.
-	if reFolgeImBeiwerk.MatchString(stem) {
+	// (ein Special), kein Beiwerk — ausser bei Trailern und Samples
+	// („dark.s01e01-sample" ist das Sample einer Folge).
+	if reFolgeImBeiwerk.MatchString(stem) && !strings.HasSuffix(stem, "sample") && !strings.HasSuffix(stem, "trailer") {
 		return false
 	}
 	switch stem {
