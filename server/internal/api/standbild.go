@@ -410,7 +410,7 @@ func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *sto
 		return
 	}
 	vermerk, _ := os.ReadFile(pfad + ".quelle")
-	bildAufbewahren(w, it.ID+":"+string(vermerk), info)
+	bildAufbewahren(w, r, it.ID+":"+string(vermerk), info)
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeContent(w, r, "standbild.jpg", info.ModTime(), f)
 }

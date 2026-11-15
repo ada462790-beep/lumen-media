@@ -144,7 +144,7 @@ func (s *Server) sammlungAntwortBauen(r *http.Request, x *store.Sammlung, items 
 		Anzahl: len(items), Items: items, ZuletztNeu: zuletztNeu(items)}
 	if x.Bild != "" {
 		// Unter /art/, damit Bilder-Tags es mit dem Medienschlüssel laden.
-		a.Bild = "/api/v1/art/" + x.ID + "/poster"
+		a.Bild = bildAdresse(x.ID, "poster", dateiStand(x.Bild))
 	}
 	if !alle && len(a.Items) > 4 {
 		// In der Übersicht reichen die ersten für den Stapel.
@@ -234,7 +234,7 @@ func (s *Server) sammlungBildZeigen(w http.ResponseWriter, r *http.Request) {
 	}
 	// Der Name wechselt mit jedem neuen Bild; die Adresse bleibt aber
 	// gleich. Darum kurz zwischenspeichern und dann nachfragen.
-	bildAufbewahren(w, x.Bild, info)
+	bildAufbewahren(w, r, x.Bild, info)
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeContent(w, r, x.Bild, info.ModTime(), f)
 }

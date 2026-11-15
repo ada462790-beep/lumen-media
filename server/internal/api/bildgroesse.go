@@ -194,7 +194,7 @@ func (s *Server) bildAusSpeicher(w http.ResponseWriter, r *http.Request) bool {
 
 func bildEintragSenden(w http.ResponseWriter, r *http.Request, e *bildEintrag) {
 	w.Header().Set("ETag", e.etag)
-	w.Header().Set("Cache-Control", "private, max-age=600, stale-while-revalidate=2592000")
+	w.Header().Set("Cache-Control", bildHaltbarkeit(r))
 	w.Header().Set("Content-Type", e.art)
 	http.ServeContent(w, r, "", e.zeit, bytes.NewReader(e.inhalt))
 }
@@ -293,6 +293,53 @@ func (s *Server) bildInBreite(ctx context.Context, path, name string, info os.Fi
 		}
 	}
 	return out.Bytes(), "image/jpeg", nil
+}
+
+// kleineFassungenWeg löscht die verkleinerten Fassungen eines Bildes
+// (bilder-klein/<Breite>/<Name>.jpg), wenn es nicht mehr gilt — sonst
+// blieben sie nach jedem neuen Poster liegen.
+func (s *Server) kleineFassungenWeg(name string) {
+	if name == "" || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") || s.dataDir == "" {
+		return
+	}
+	stamm := strings.TrimSuffix(name, filepath.Ext(name)) + ".jpg"
+	for _, b := range bildBreiten {
+		_ = os.Remove(filepath.Join(s.dataDir, kleinOrdner, strconv.Itoa(b), stamm))
+	}
+}
+
+// verwaisteKleineWeg löscht verkleinerte Bilder, deren Original es im
+// Bilderordner nicht mehr gibt (Hausmeister nach dem Durchlauf).
+func (s *Server) verwaisteKleineWeg() int {
+	if s.meta == nil || s.dataDir == "" {
+		return 0
+	}
+	originale, err := os.ReadDir(s.meta.ArtDir())
+	if err != nil {
+		return 0
+	}
+	da := map[string]bool{}
+	for _, e := range originale {
+		da[strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))] = true
+	}
+	n := 0
+	breiten, _ := os.ReadDir(filepath.Join(s.dataDir, kleinOrdner))
+	for _, b := range breiten {
+		if !b.IsDir() {
+			continue
+		}
+		ordner := filepath.Join(s.dataDir, kleinOrdner, b.Name())
+		eintraege, _ := os.ReadDir(ordner)
+		for _, e := range eintraege {
+			if !e.Type().IsRegular() || da[strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))] {
+				continue
+			}
+			if os.Remove(filepath.Join(ordner, e.Name())) == nil {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // verkleinern rechnet src auf b × h herunter: Jeder Zielpunkt ist der

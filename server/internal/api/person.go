@@ -112,7 +112,7 @@ func (s *Server) personBild(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "kein bild")
 		return
 	}
-	bildAufbewahren(w, mitBild.BildDatei, info)
+	bildAufbewahren(w, r, mitBild.BildDatei, info)
 	http.ServeContent(w, r, "bild.jpg", info.ModTime(), f)
 }
 

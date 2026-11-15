@@ -580,7 +580,7 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 		favorit[id] = true
 	}
 
-	art, err := s.st.ArtworkFor(r.Context(), ids)
+	art, artStand, err := s.st.ArtworkMitStand(r.Context(), ids)
 	if err != nil {
 		return nil, err
 	}
@@ -635,16 +635,16 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 		}
 		if a := art[it.ID]; a != nil {
 			if a["poster"] != "" {
-				v.Poster = "/api/v1/art/" + it.ID + "/poster"
+				v.Poster = bildAdresse(it.ID, "poster", artStand[it.ID]["poster"])
 			}
 			if a["backdrop"] != "" {
-				v.Backdrop = "/api/v1/art/" + it.ID + "/backdrop"
+				v.Backdrop = bildAdresse(it.ID, "backdrop", artStand[it.ID]["backdrop"])
 			}
 			if a["logo"] != "" {
-				v.Logo = "/api/v1/art/" + it.ID + "/logo"
+				v.Logo = bildAdresse(it.ID, "logo", artStand[it.ID]["logo"])
 			}
 			if a["landscape"] != "" {
-				v.Landscape = "/api/v1/art/" + it.ID + "/landscape"
+				v.Landscape = bildAdresse(it.ID, "landscape", artStand[it.ID]["landscape"])
 			}
 		}
 		v.EpisodeNoEnd = bisFolge[it.ID]

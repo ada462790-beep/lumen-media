@@ -310,7 +310,8 @@ func (s *Server) Hausmeister(ctx context.Context) {
 }
 
 // verwaisteBilderWeg löscht Standbilder und Vorschau-Clips von Titeln, die
-// es nicht mehr gibt. Sonst wächst der Ordner mit jedem gelöschten Film.
+// es nicht mehr gibt, und verkleinerte Poster ohne Original. Sonst wächst
+// der Ordner mit jedem gelöschten Film und jedem neuen Poster.
 func (s *Server) verwaisteBilderWeg(ctx context.Context) int {
 	n := 0
 	for _, ordner := range []string{s.standbildOrdner(), s.vorschauOrdner()} {
@@ -330,5 +331,5 @@ func (s *Server) verwaisteBilderWeg(ctx context.Context) int {
 			}
 		}
 	}
-	return n
+	return n + s.verwaisteKleineWeg()
 }
