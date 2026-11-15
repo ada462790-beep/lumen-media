@@ -250,9 +250,17 @@ function trefferAnsagen() {
   const q = S.query.trim();
   if (!q || S.busy || S.error) return;
   const d = S.data || {};
-  const n = (d.items || []).length + (d.folgen || []).length;
+  // Alles, was die Trefferliste zeigt — auch Personen, Reihen, Sammlungen.
+  const n = ['items', 'folgen', 'personen', 'reihen', 'sammlungen'].reduce((a, k) => a + (d[k] || []).length, 0);
   const text = n ? tr('{n} Treffer', { n }) : tr('Keine Treffer für „{q}“', { q });
   ansageZeit = setTimeout(() => { if (text !== letzteAnsage) { letzteAnsage = text; ansagen(text); } }, 500);
+}
+// Beim Seitenwechsel: keine verspätete Trefferzahl auf der neuen Seite.
+function ansageLeeren() {
+  clearTimeout(ansageZeit);
+  letzteAnsage = '';
+  const el = document.getElementById('ansage');
+  if (el) el.textContent = '';
 }
 
 function toast(msg) {
@@ -770,6 +778,7 @@ async function go(view, opts = {}) {
   // „Zurück" soll genau dorthin führen.
   standMerken();
   const vorher = S.view;
+  if (view !== vorher) ansageLeeren();
   S.view = view;
   S.id = opts.id ?? null;
   S.error = '';

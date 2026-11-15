@@ -106,3 +106,34 @@ console.log(wahl({}));
 		t.Errorf("Spurwahl:\n%s\nerwartet:\n%s", out, soll)
 	}
 }
+
+// Die Suche sagt auch Personen, Filmreihen und Sammlungen als Treffer an
+// — nicht „Keine Treffer", wenn nur eine Person passt. Beim Seitenwechsel
+// wird eine anstehende Ansage verworfen.
+func TestWebTrefferAnsage(t *testing.T) {
+	out := jsAusfuehren(t, `
+let S = { query: 'hanks', busy: false, error: null, data: {} };
+const tr = (s, w) => s.replace(/\{(\w+)\}/g, (_, k) => w && w[k] != null ? w[k] : '');
+const gesagt = [];
+const ansagen = text => gesagt.push(text);
+let ansageZeit = null, letzteAnsage = '';
+globalThis.document = { getElementById: () => null };
+`, []string{"trefferAnsagen", "ansageLeeren"}, `
+S.data = { items: [], folgen: [], personen: [{ name: 'Tom Hanks' }] };
+trefferAnsagen();
+await new Promise(r => setTimeout(r, 600));
+S.data = { items: [], reihen: [{}], sammlungen: [{}, {}] };
+S.query = 'reihe';
+trefferAnsagen();
+await new Promise(r => setTimeout(r, 600));
+S.query = 'weg';
+S.data = {};
+trefferAnsagen();
+ansageLeeren();
+await new Promise(r => setTimeout(r, 600));
+console.log(gesagt.join('|'));
+`)
+	if soll := "1 Treffer|3 Treffer"; out != soll {
+		t.Errorf("Ansagen %q, erwartet %q", out, soll)
+	}
+}
