@@ -221,8 +221,8 @@ button.row:hover, .orow-link:focus-visible { background:rgba(255,255,255,.05) }
 .hint { color:var(--label-2); font-size:.8125rem; line-height:1.45 }
 
 /* ---- Laden -------------------------------------------------------------- */
-.spin { width:22px; height:22px; border-radius:50%; border:2px solid rgba(255,255,255,.18);
-        border-top-color:rgba(255,255,255,.75); animation:spin .8s linear infinite }
+.spin { width:22px; height:22px; border-radius:50%; border:2px solid var(--fill-2);
+        border-top-color:var(--label-2); animation:spin .8s linear infinite; flex:none }
 @keyframes spin { to { transform:rotate(360deg) } }
 .spin--s { width:13px; height:13px; border-width:2px }
 /* Solange nicht bekannt ist, wie viele Dateien es gibt, zeigt der Balken
@@ -621,7 +621,7 @@ a.nav:hover:not([aria-current=page]) { background:var(--fill) }
 
 /* Knopf, der aussieht wie ein Link („Meintest du …?") */
 .link-knopf { border:0; background:none; padding:0; font:inherit; color:var(--accent); cursor:pointer; font-weight:600 }
-.link-knopf:hover { text-decoration:underline }
+.link-knopf:hover, .link-knopf:focus-visible { text-decoration:underline; text-underline-offset:2px }
 
 /* Geräte unter „Ich" */
 .dieses-geraet { font-size:.6875rem; font-weight:600; padding:2px 7px; border-radius:6px; background:var(--fill-2); color:var(--label-2) }
@@ -728,9 +728,9 @@ p.t-sub[style*="flex-start"] > svg:first-child { margin-top:.2em }
 .thumb:has(> .watched) .abz-rechts { margin-top:28px }
 
 /* ---- Links im Fliesstext: nicht nur an der Farbe erkennbar ------------- */
-.link { color:var(--accent); text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:1px;
+.link { color:var(--accent); text-decoration:none; font-weight:600; text-underline-offset:2px;
         display:inline-block; min-height:24px; line-height:24px }
-.link:hover { color:var(--accent); text-decoration-thickness:2px }
+.link:hover, .link:focus-visible { color:var(--accent); text-decoration:underline }
 /* Plaketten mit Farbe: Farbe und Fläche als Token, im Hellen dunkler. */
 .badge--gruen { border:0; background:var(--tint-gruen); color:var(--text-gruen) }
 .badge--blau { border:0; background:var(--tint-blau); color:var(--text-blau) }
@@ -757,7 +757,9 @@ p.t-sub[style*="flex-start"] > svg:first-child { margin-top:.2em }
 /* Links mitten im Text: unterstrichen, damit man sie nicht nur an der
    Farbe erkennt (WCAG 1.4.1). Knöpfe und Navigation bleiben, wie sie sind. */
 .lumen :is(p, .hint, .t-sub, .t-caption, .t-body, .field span) a:not(.btn):not(.nav):not(.card):not(.tab):not(.titel-link) {
-  color:var(--accent); text-decoration:underline; text-underline-offset:2px }
+  color:var(--accent); text-decoration:none; font-weight:600; text-underline-offset:2px }
+.lumen :is(p, .hint, .t-sub, .t-caption, .t-body, .field span) a:not(.btn):not(.nav):not(.card):not(.tab):not(.titel-link):is(:hover, :focus-visible) {
+  text-decoration:underline }
 .sfield input[type=search]::-webkit-search-cancel-button { -webkit-appearance:none; display:none }
 /* Eigenes Profilbild: das Dateifeld ist unsichtbar, aber per Tab erreichbar. */
 .avatar-hochladen:focus-within { outline:3px solid var(--fokus); outline-offset:3px }
@@ -823,10 +825,9 @@ a.aktion, a.aktion:hover, a.aktion:visited { color:var(--label) }
 .wrap--verwaltung { max-width:calc(800px + 160px + var(--verschub, 0px)) }
 @media (max-width: 860px) { .wrap--verwaltung { max-width:calc(800px + 132px + var(--verschub, 0px)) } }
 
-/* Häkchen und Auswahlknöpfe: Akzentfarbe statt Chrome-Blau, gross genug
-   zum Treffen (wie die Schalter daneben). */
-.lumen input[type=checkbox], .lumen input[type=radio], dialog.lumen input[type=checkbox], dialog.lumen input[type=radio] {
-  accent-color:var(--accent); width:20px; height:20px; margin:0 4px 0 0; flex:none; cursor:pointer }
+/* Häkchen und Auswahlknöpfe: siehe „Einheitliche Bedienelemente" unten —
+   Schalter wie auf der Profilseite und Häkchen-Kreise statt der
+   Systemoptik. */
 
 /* Fokusrahmen der Karten in Reihen: oben nicht abgeschnitten. */
 .rail { padding-top:8px; margin-top:-6px }
@@ -992,8 +993,8 @@ svg.wertung-rt { margin-left:6px; color:#c58a4b }
 .auslass-tat p { margin:0 }
 .auslass-fortschritt { height:4px; border-radius:2px; background:var(--fill-2); overflow:hidden }
 .auslass-fortschritt span { display:block; height:100%; background:var(--accent); transition:width .6s ease }
-.auslass-ok { color:#30d158 }
-.auslass-fehler { color:var(--rot, #ff6961) }
+.auslass-ok { color:var(--text-gruen) }
+.auslass-fehler { color:var(--text-rot) }
 /* Defekte Dateien: Pfad, daneben Grösse, Hinweis und „Trotzdem anspielen". */
 .auslass-pfad--datei { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px }
 .auslass-pfadtext { flex:1 1 280px; min-width:0 }
@@ -1002,3 +1003,313 @@ svg.wertung-rt { margin-left:6px; color:#c58a4b }
 /* Fehlende Dateien: der ganze Pfad, umbrochen statt abgeschnitten. */
 .fehlend-pfad { font-size:.75rem; line-height:1.5; overflow-wrap:anywhere; word-break:break-all; margin-top:2px }
 @media (max-width: 600px) { .auslass-inhalt { padding-left:16px } .auslass-ort { display:none } }
+
+/* ======================================================================
+   Einheitliche Bedienelemente — statt der Systemoptik dieselben ruhigen
+   Formen wie überall in Lumen. Darunter stecken echte Eingabefelder:
+   Tastatur, Fokusring und Bildschirmleser bleiben, wie sie sind.
+   ====================================================================== */
+
+/* Auswahllisten: eine Pille mit eigenem Pfeil. Die aufklappende Liste
+   zeichnet weiter das System (oben eingefärbt). */
+.lumen { --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23ebebf5' stroke-opacity='.7' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") }
+.lumen.light { --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%233c3c43' stroke-opacity='.85' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") }
+.lumen select { appearance:none; -webkit-appearance:none; min-height:36px; padding:0 34px 0 12px; border:0; border-radius:10px;
+  background-color:var(--fill); background-image:var(--chev); background-repeat:no-repeat; background-position:right 12px center; background-size:14px;
+  color:var(--label); font:inherit; font-size:.9375rem; cursor:pointer; text-overflow:ellipsis; max-width:100% }
+.lumen select:hover { background-color:var(--fill-2) }
+.lumen select:focus-visible { outline:none; box-shadow:0 0 0 3px var(--fokus) }
+.lumen select:disabled { opacity:.5; cursor:default }
+/* Wo der Pfeil schon als eigenes Symbol daneben steht: keinen zweiten. */
+.lumen .sortier-wahl select, .lumen .staffel-wahl select { background-image:none; background-color:transparent }
+.lumen .staffel-wahl select { background-color:var(--fill) }
+.lumen .field select { height:46px; border-radius:12px; padding:0 38px 0 15px; background-position:right 15px center; font-size:1rem }
+/* Die kleine Auswahl in Zeilen (Sprache, „Von selbst nachsehen"):
+   früher 25 px hoch, jetzt wie „Sortieren". */
+.lumen select.takt { min-height:36px; padding:0 30px 0 12px; border-radius:10px; font-size:.875rem; font-weight:600; background-position:right 10px center }
+.reihen-sort select { height:auto }
+@media (pointer: coarse), (max-width: 600px) {
+  .lumen select, .lumen select.takt, .staffel-wahl select, .reihen-sort select { min-height:44px }
+}
+
+/* Uhrzeit: Stunde und Minute als zwei Auswahllisten. */
+.zeit-wahl { display:inline-flex; align-items:center; gap:4px; flex:none }
+.zeit-wahl select { padding-right:30px; background-position:right 10px center; font-variant-numeric:tabular-nums }
+.zeit-trenner { color:var(--label-2); font-weight:600 }
+.field .zeit-wahl select, .ff .zeit-wahl select { flex:1; min-width:0; width:auto }
+.field .zeit-wahl, .ff .zeit-wahl { display:flex }
+
+/* Zahlen: ohne die winzigen Pfeile des Systems, dafür − und +. */
+.lumen input[type=number] { -moz-appearance:textfield; appearance:textfield }
+.lumen input[type=number]::-webkit-inner-spin-button, .lumen input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0 }
+.zahl-feld { display:flex; align-items:stretch; min-height:44px; border-radius:12px; background:var(--fill); overflow:hidden }
+.zahl-feld input[type=number] { flex:1; min-width:3ch; width:100%; height:auto !important; margin:0; padding:0 4px !important; border:0 !important;
+  background:transparent !important; box-shadow:none !important; border-radius:0 !important; text-align:center; color:var(--label);
+  font:inherit; font-size:1rem; font-variant-numeric:tabular-nums }
+.zahl-knopf { flex:none; width:44px; border:0; background:none; color:var(--label-2); font:inherit; font-size:1.25rem; line-height:1; cursor:pointer }
+.zahl-knopf:hover { background:var(--fill); color:var(--label) }
+.zahl-knopf:active { background:var(--fill-2) }
+.zahl-feld:focus-within { box-shadow:0 0 0 2px var(--accent) inset }
+.field .zahl-feld { min-height:46px }
+
+/* Datum im Format der Region */
+.datum-feld { display:block }
+.datum-feld input[aria-invalid=true] { box-shadow:0 0 0 2px var(--text-rot) inset !important }
+
+/* Häkchen: als Schalter wie auf der Profilseite. */
+.lumen input[type=checkbox], dialog.lumen input[type=checkbox] {
+  appearance:none; -webkit-appearance:none; position:relative; flex:none; width:52px; height:28px; margin:0; padding:0;
+  border:0; border-radius:999px; background:rgba(120,120,128,.32); cursor:pointer; vertical-align:middle;
+  transition:background-color .25s var(--ease) }
+.lumen input[type=checkbox]::before { content:""; position:absolute; top:2px; left:2px; width:32px; height:24px; border-radius:999px;
+  background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.22); transition:left .25s var(--ease) }
+.lumen input[type=checkbox]:checked { background:var(--green) }
+.lumen input[type=checkbox]:checked::before { left:18px }
+.lumen input[type=checkbox]:indeterminate::before { left:10px }
+.lumen.light input[type=checkbox]:not(:checked), dialog.lumen.light input[type=checkbox]:not(:checked) { background:rgba(120,120,128,.20) }
+/* Auswahlknöpfe: ein Kreis, gewählt mit Haken in der Akzentfarbe —
+   wie die Auswahl in Listen auf dem iPhone. */
+.lumen input[type=radio], dialog.lumen input[type=radio] {
+  appearance:none; -webkit-appearance:none; position:relative; flex:none; width:24px; height:24px; margin:0; padding:0;
+  border:0; border-radius:50%; background:transparent; box-shadow:inset 0 0 0 1.5px var(--label-3); cursor:pointer; vertical-align:middle }
+.lumen input[type=radio]:checked { background:var(--accent); box-shadow:none }
+.lumen input[type=radio]:checked::before { content:""; position:absolute; left:8px; top:4.5px; width:6px; height:11px;
+  border:solid #fff; border-width:0 2.2px 2.2px 0; transform:rotate(45deg) }
+.lumen :is(input[type=checkbox], input[type=radio]):disabled { opacity:.45; cursor:default }
+.lumen :is(input[type=checkbox], input[type=radio]):focus-visible { outline:3px solid var(--fokus); outline-offset:3px }
+@media (prefers-reduced-motion:reduce) { .lumen input[type=checkbox], .lumen input[type=checkbox]::before { transition:none } }
+/* In einer Listenzeile steht die Wahl rechts, wie in den Einstellungen. */
+label.row > input:is([type=checkbox], [type=radio]):first-child, label.orow > input:is([type=checkbox], [type=radio]):first-child { order:9; margin-left:auto }
+
+/* Textfelder: kein Ziehgriff; sie wachsen mit dem Text. */
+.lumen textarea { resize:none; field-sizing:content; max-height:60vh; overflow-y:auto }
+
+/* Lautstärke: dünne Spur, runder Knopf — wie die Zeitleiste. */
+.pl-laut { -webkit-appearance:none; appearance:none; width:96px; height:20px; margin:0; background:transparent; cursor:pointer; --wert:100% }
+.pl-laut::-webkit-slider-runnable-track { height:4px; border-radius:2px;
+  background:linear-gradient(90deg, #fff var(--wert), rgba(255,255,255,.32) var(--wert)) }
+.pl-laut::-moz-range-track { height:4px; border-radius:2px; background:rgba(255,255,255,.32) }
+.pl-laut::-moz-range-progress { height:4px; border-radius:2px; background:#fff }
+.pl-laut::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; margin-top:-5px; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.5) }
+.pl-laut::-moz-range-thumb { width:14px; height:14px; border:0; border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.5) }
+.pl-laut:focus-visible { outline:2px solid #fff; outline-offset:4px; border-radius:4px }
+
+/* Eigene Fehlermeldung unter einem Feld (fenster.js, feldFehler) */
+.feld-fehler { display:block; margin-top:2px; color:var(--text-rot); font-size:.8125rem; line-height:1.35 }
+.lumen :is(input, select, textarea)[aria-invalid=true] { box-shadow:0 0 0 2px var(--text-rot) inset !important }
+.zahl-feld:has([aria-invalid=true]) { box-shadow:0 0 0 2px var(--text-rot) inset }
+
+/* ======================================================================
+   Grosses Bild (Start- und Titelseite)
+   ====================================================================== */
+/* Helles Design: Das Bild läuft unten weich in den hellen Grund aus. Die
+   Schrift bleibt hell — darum steht sie jetzt ganz über dem dunklen Teil:
+   kurzer Auslauf, und der Text rückt um dessen Höhe nach oben. Vorher lag
+   „Mehr Infos" und die Zeile „Merken · Favorit · …" weiss auf fast Weiss. */
+.lumen.light .hero > :is(.art-img, .art-none, .hero-scrim, .hero-video, picture) {
+  -webkit-mask-image:linear-gradient(180deg, #000 calc(100% - 72px), rgba(0,0,0,.6) calc(100% - 36px), transparent);
+          mask-image:linear-gradient(180deg, #000 calc(100% - 72px), rgba(0,0,0,.6) calc(100% - 36px), transparent) }
+.lumen.light .hero:not(.hero--ohnebild) > .hero-text { bottom:calc(48px + 64px) }
+.lumen.light .hero:not(.hero--ohnebild) > .hero-ton { bottom:calc(48px + 64px) }
+.lumen.light .hero:not(.hero--ohnebild) { height:calc(min(62vh, 620px) + 64px) }
+/* Unter dem Text etwas mehr Dunkel, damit auch helle Bilder tragen. */
+.lumen.light .hero-scrim { background:
+  linear-gradient(90deg, rgba(0,0,0,.62), rgba(0,0,0,.48) calc(var(--verschub, 0px) + 120px), rgba(0,0,0,.08) 72%),
+  linear-gradient(180deg, rgba(0,0,0,0) 26%, rgba(0,0,0,.66) calc(100% - 72px)) }
+/* Hauptknopf und „Mehr Infos" gleich hoch. */
+.hero-text .btn-pill { height:44px; padding:0 22px; font-size:.9375rem }
+
+/* Titelseite: Titel nie unter dem runden Zurück-Knopf, höchstens drei
+   Zeilen; lange Titel etwas kleiner. */
+.hero--detail h1.t-hero { margin:0 0 .3em; font-size:2rem; line-height:1.15; letter-spacing:-.02em;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere }
+.hero--detail h1.t-hero.t-hero--lang { font-size:1.625rem }
+.hero--detail h1.t-hero.t-hero--sehrlang { font-size:1.375rem }
+@media (min-width: 601px) { .hero--detail h1.t-hero { font-size:2.5rem } .hero--detail h1.t-hero.t-hero--lang { font-size:2rem } .hero--detail h1.t-hero.t-hero--sehrlang { font-size:1.75rem } }
+@media (max-width: 600px) {
+  /* Das Bild wächst mit dem Text: oben Platz für den Zurück-Knopf
+     (44 px + Rand), unten der Text — nichts überlappt mehr. */
+  .hero--detail { height:auto; min-height:62vh; display:flex; flex-direction:column; justify-content:flex-end }
+  .hero--detail > .hero-text { position:relative; left:auto !important; right:auto; bottom:auto !important; max-width:none;
+    padding:calc(84px + env(safe-area-inset-top)) 16px 28px }
+  .lumen.light .hero--detail:not(.hero--ohnebild) { height:auto }
+  .lumen.light .hero--detail:not(.hero--ohnebild) > .hero-text { padding-bottom:calc(28px + 64px) }
+}
+
+/* ======================================================================
+   Knöpfe, Formulare, Listen — eine Regel für alle Verwaltungsseiten
+   ====================================================================== */
+/* Formulare: die Hauptaktion rechts unten als btn-primary (44 px),
+   Nebenaktionen links daneben als gefüllte Pille. */
+.form-fuss { display:flex; justify-content:flex-end; align-items:center; flex-wrap:wrap; gap:10px; margin-top:18px }
+.form-fuss .btn-pill { height:44px; padding:0 20px; font-size:.9375rem }
+/* Gefährliche Nebenaktion: rote Schrift auf neutraler Fläche; die rote
+   Fläche gehört dem Bestätigen in der Rückfrage. */
+.btn-pill--gefahr, .btn-round--gefahr { color:var(--text-rot) !important }
+.btn-round--fill.btn-round--gefahr:hover, .btn-pill--gefahr:hover { background:var(--tint-rot) }
+/* Schalterzeilen: Text links, Schalter rechts, wie in den Einstellungen. */
+.schalter-liste { display:flex; flex-direction:column; border-radius:12px; background:var(--fill); overflow:hidden }
+.schalter-zeile { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:48px; padding:6px 14px; cursor:pointer; color:var(--label); font-size:.9375rem }
+.schalter-zeile + .schalter-zeile { box-shadow:inset 0 .5px 0 var(--hair) }
+.schalter-zeile > input { order:9 }
+.lumen.light .group .schalter-liste { background:var(--fill) }
+/* Segment mit echten Auswahlknöpfen (Einladen: Erwachsen/Kind). */
+.segment--wahl .segment-knopf { display:inline-flex; align-items:center; position:relative; cursor:pointer }
+.segment--wahl input[type=radio] { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; box-shadow:none; background:none }
+.segment--wahl input[type=radio]::before { display:none }
+.segment--wahl .segment-knopf:has(input:checked) { background:rgba(255,255,255,.2); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.25) }
+.lumen.light .segment--wahl .segment-knopf:has(input:checked) { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04) }
+.segment--wahl .segment-knopf:has(input:focus-visible) { outline:3px solid var(--fokus); outline-offset:2px }
+.segment--wahl input[type=radio]:focus-visible { outline:none }
+
+/* Blätter für „Zur Liste" und „Anderen Titel zuweisen" (blattOeffnen) */
+dialog.fenster.blatt { width:min(520px, calc(100vw - 32px)) }
+.blatt .listen-panel { margin:0; max-width:none }
+.blatt .fenster-inhalt { padding-bottom:24px }
+.blatt .listen-panel .btn-pill { flex:none }
+@media (max-width: 640px) {
+  /* Am Handy von unten, wie ein Blatt auf dem iPhone. */
+  dialog.fenster.blatt { width:100vw; height:auto; max-height:88dvh; margin:auto 0 0; border-radius:22px 22px 0 0;
+    padding-bottom:env(safe-area-inset-bottom) }
+}
+
+/* Wunschkarte: „Löschen" rechts unter dem Stand, nicht in eigener Zeile. */
+.wunsch-zeile { align-items:flex-start }
+.wunsch-rechts .btn-pill, .wunsch-aktionen .btn-pill { height:32px; font-size:.8125rem; flex:none }
+.wunsch-aktionen { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; flex:none; align-self:center }
+@media (pointer: coarse) { .wunsch-rechts .btn-pill, .wunsch-aktionen .btn-pill { height:44px } }
+
+/* Profilseite: der Name bricht nicht in grosser Schrift neben
+   „Abmelden" um — er wird gekürzt (ganz im Tooltip) und am Handy kleiner. */
+.profil-kopf { display:flex; align-items:center; gap:18px }
+.profil-kopf-name { flex:1; min-width:0 }
+.profil-kopf-name h1 { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+@media (max-width: 600px) {
+  .profil-kopf { gap:12px }
+  .profil-kopf .avatar { --av:52px !important }
+  .profil-kopf-name h1 { font-size:1.5rem; line-height:1.9rem }
+}
+/* Segment-Zeilen: Beschriftung links, Segment rechts — überall gleich;
+   reicht der Platz nicht, rutscht das Segment unter die Beschriftung. */
+.segment-zeile { flex-wrap:wrap; row-gap:8px }
+.segment-zeile .segment { margin:0 0 0 auto }
+
+/* Protokoll: Zeit · Stufe · Bereich, darunter (am Handy) der Text. */
+.log-filter { margin:24px 0 14px }
+.log-liste { padding:6px 16px }
+.log-zeile { display:grid; grid-template-columns:72px 78px 104px minmax(0,1fr); gap:4px 12px; align-items:baseline; padding:7px 0; font-size:.8125rem }
+.log-zeile + .log-zeile { box-shadow:inset 0 .5px 0 var(--hair) }
+.log-stufe { border:0; justify-content:center; font-size:.6875rem }
+.log-bereich { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.log-text { overflow-wrap:anywhere; line-height:1.4 }
+@media (max-width: 760px) {
+  .log-zeile { grid-template-columns:auto auto minmax(0,1fr) }
+  .log-text { grid-column:1 / -1 }
+}
+
+/* Konten: jede Zeile gleich gebaut — Name, Rechte, „…"-Menü. */
+.konto-zeile { height:auto; padding:12px 16px; gap:12px; align-items:center }
+.konto-knoepfe { flex-wrap:nowrap; gap:10px }
+.konto-rolle { min-width:150px; text-align:left }
+span.konto-rolle { display:inline-block; padding-left:12px }
+.konto-mehr-platz { width:36px; flex:none }
+@media (pointer: coarse) { .konto-mehr-platz { width:44px } }
+.mehr-menue--rechts { left:auto; right:0 }
+.mehr-eintrag--gefahr { color:var(--text-rot) }
+@media (max-width: 760px) {
+  .konto-zeile { flex-wrap:wrap }
+  .konto-knoepfe { width:100%; justify-content:flex-end; padding-left:46px }
+}
+.group:has(.mehr-menue:not([hidden])) { overflow:visible }
+
+/* Aktionen in Zeilen (Aufräumen, Bibliotheken, Konten …): überall gleich. */
+.zeilen-knopf { height:32px; padding:0 14px; font-size:.8125rem; flex:none; white-space:nowrap }
+@media (pointer: coarse) { .zeilen-knopf { height:44px } }
+.pfad-kurz { flex:1; min-width:0; font-size:.75rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; user-select:all }
+
+/* Folgenliste: Bild, Text, Aktionen — alle Knöpfe 36 px (am Finger 44). */
+.orow.folge { height:auto; padding:12px 16px; gap:14px; align-items:center }
+.folge-text { flex:1; min-width:0 }
+.folge-aktionen { display:flex; align-items:center; gap:8px; flex:none }
+.folge-aktionen .folge-ansehen { height:36px }
+.folge-haken.btn-round.folge-knopf, .folge-knopf.btn-round { width:36px; height:36px; flex:none }
+.btn-round--fill.folge-knopf { color:var(--label-2) }
+@media (pointer: coarse) { .folge-haken.btn-round.folge-knopf, .folge-knopf.btn-round, .folge-aktionen .folge-ansehen { width:44px; height:44px } .folge-aktionen .folge-ansehen { width:auto } }
+@media (max-width: 600px) {
+  /* Wie in der TV-App von Apple: oben Bild und Knöpfe, darunter Titel und
+     Beschreibung über die ganze Breite — nichts wird mehr abgeschnitten. */
+  .orow.folge { flex-wrap:wrap; align-items:flex-start; row-gap:10px }
+  .folge .thumb { width:150px !important; height:84px !important }
+  .folge-aktionen { margin-left:auto; align-self:center }
+  .folge-text { order:5; flex:1 1 100% }
+  .folge-text .clamp-1 { white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical }
+}
+
+/* ======================================================================
+   Player
+   ====================================================================== */
+/* Oben ein kräftigerer Verlauf, damit Titel und Zurück-Knopf auch auf
+   hellen Szenen stehen. */
+.pl-scrim { background:
+    linear-gradient(180deg, rgba(0,0,0,.78) 0, rgba(0,0,0,.42) 96px, rgba(0,0,0,0) 200px),
+    linear-gradient(0deg,  rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 12%, rgba(0,0,0,0) 32%) }
+/* „Als Nächstes": breiter, Serie und Folge lesbar, zwei gleichwertige Knöpfe. */
+.naechster { width:min(560px, calc(100% - 32px)); align-items:center; gap:14px; padding:14px }
+.naechster-text { flex:1; min-width:0 }
+.naechster-titel { font-weight:600; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden }
+.naechster-knoepfe { display:flex; gap:8px; flex:none }
+.naechster-knoepfe .btn { height:44px; padding:0 18px; font-size:.9375rem; min-width:96px }
+@media (max-width: 600px) {
+  .naechster { flex-wrap:wrap }
+  .naechster-knoepfe { flex:1 1 100% }
+  .naechster-knoepfe .btn { flex:1 }
+}
+/* Karte und Menüs teilen sich die Ecke: ist ein Menü offen, tritt die
+   Karte zurück (umgekehrt schliesst die Karte die Menüs, naechstesAnbieten). */
+.player:has(.spuren) .naechster { opacity:0; visibility:hidden; pointer-events:none }
+/* Tempo so gross wie die runden Knöpfe daneben. */
+.pl-knopf--tempo { width:44px; min-width:44px; padding:0; font-size:.8125rem; border-radius:50% }
+@media (max-width: 600px) { .pl-knopf--tempo { width:40px; min-width:40px; height:40px; padding:0 } }
+.person-bild--gross { width:150px; height:150px; margin:0; flex:none; font-size:3rem; letter-spacing:.02em }
+@media (max-width: 600px) { .person-bild--gross { width:96px; height:96px; font-size:2rem } }
+
+/* Filmreihen am Handy: der Stapel nutzt die Breite der Spalte. */
+@media (max-width: 600px) {
+  .reihen-grid .reihe-stapel { aspect-ratio:5/6 }
+  .reihen-grid .reihe-blatt { width:80% }
+  .reihen-grid .reihe-blatt--1 { left:10% }
+  .reihen-grid .reihe-blatt--2 { left:20% }
+}
+/* Kopf von Reihe, Liste, Sammlung: alle Aktionen gleich hoch. */
+.kopf-aktionen { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px }
+.kopf-aktionen .btn-pill { height:44px; padding:0 20px; font-size:.9375rem }
+
+/* Platzhalter beim Laden (ladeSkelett) */
+.hero--skelett .sk { background:var(--fill) }
+.hero--skelett .hero-text .sk { background:var(--fill-2) }
+.lumen.light .hero--skelett > .sk { background:rgba(0,0,0,.06) }
+.lumen.light .hero--skelett { --fill-2:rgba(0,0,0,.08) }
+.leer-knoepfe { display:flex; gap:10px; flex-wrap:wrap; justify-content:center }
+.leer-knoepfe .btn-pill { height:44px; padding:0 20px; font-size:.9375rem }
+.group > .leer { padding:36px 16px }
+
+/* Technische Angaben: Dateiname, aufklappbar zum ganzen Pfad, Kopieren daneben. */
+.pfad-klapp { flex:1; min-width:0 }
+.pfad-klapp > summary { list-style:none; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.75rem }
+.pfad-klapp > summary::-webkit-details-marker { display:none }
+.pfad-klapp > summary::before { content:""; display:inline-block; width:5px; height:5px; margin:0 8px 2px 1px; border-right:1.6px solid currentColor;
+  border-bottom:1.6px solid currentColor; transform:rotate(-45deg); transition:transform .2s var(--ease) }
+.pfad-klapp[open] > summary::before { transform:rotate(45deg) }
+.pfad-ganz { display:block; margin-top:4px; font-size:.75rem; overflow-wrap:anywhere; user-select:all }
+.pfad-kopieren { flex:none; width:32px !important; height:32px !important }
+@media (pointer: coarse) { .pfad-kopieren { width:44px !important; height:44px !important } }
+
+/* Verwaltung: Zeilen, die weiterführen — einzeilig, Chevron bündig. */
+.link-zeile { width:100%; min-height:50px; text-align:left; gap:10px }
+.link-zeile-name { flex:none; white-space:nowrap }
+.link-zeile-wert { flex:1; min-width:0; text-align:right; color:var(--label-2); font-size:.9375rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.link-zeile > svg { flex:none; color:var(--label-3) }
+/* In den Fenstern (Bearbeiten, Bildschirmzeit …) so hoch wie die Textfelder daneben. */
+.ff .zahl-feld { min-height:41px }
+.ff .zahl-feld input[type=number] { font-size:.9375rem }
+.ff .zahl-knopf { width:40px }

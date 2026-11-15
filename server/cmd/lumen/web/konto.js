@@ -16,7 +16,7 @@
 
 import { api } from './api.js';
 import { tr } from './sprache.js';
-import { U, escH, fenster, meldung, fehlerText, beschaeftigt } from './fenster.js';
+import { U, escH, fenster, meldung, fehlerText, beschaeftigt, zahlFeld } from './fenster.js';
 import { altersOptionen, ALTERSSTUFEN, KINDERSTUFEN } from './schutz.js';
 
 const QUALITAETEN = [['480p', '480p'], ['720p', '720p'], ['1080p', '1080p'], ['original', 'Original']];
@@ -41,7 +41,7 @@ function formular(konto, bibliotheken, kind) {
           : `<span class="ff-hinweis">${tr('Noch keine Bibliotheken.')}</span>`}</fieldset>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
         <div class="ff"><div class="ff-kopf"><label for="gz-streams">${tr('Gleichzeitig')}</label></div>
-          <input id="gz-streams" name="maxStreams" type="number" min="1" max="20" value="${Number(lim.maxStreams) || 2}"></div>
+          ${zahlFeld(`<input id="gz-streams" name="maxStreams" type="number" min="1" max="20" value="${Number(lim.maxStreams) || 2}">`)}</div>
         <div class="ff"><div class="ff-kopf"><label for="gz-qual">${tr('Qualität unterwegs')}</label></div>
           <select id="gz-qual" name="remoteQuality">${QUALITAETEN.map(([v, n]) => `<option value="${v}"${(lim.remoteQuality || '1080p') === v ? ' selected' : ''}>${v === 'original' ? tr('Original') : n}</option>`).join('')}</select></div>
       </div>
@@ -49,7 +49,7 @@ function formular(konto, bibliotheken, kind) {
         <label class="wahl-check"><input type="checkbox" name="allowUnrated"${lim.allowUnrated ? ' checked' : ''}><span>${tr('Ungeprüfte Titel')}</span></label>
         <label class="wahl-check"><input type="checkbox" name="allowDownload"${lim.allowDownload ? ' checked' : ''}><span>${tr('Herunterladen')}</span></label>
         <div class="ff"><div class="ff-kopf"><label for="gz-dl">${tr('Downloads')}</label></div>
-          <input id="gz-dl" name="maxDownloads" type="number" min="0" max="500" value="${Number(lim.maxDownloads) || 0}"></div>
+          ${zahlFeld(`<input id="gz-dl" name="maxDownloads" type="number" min="0" max="500" value="${Number(lim.maxDownloads) || 0}">`)}</div>
       </div>
       <label class="wahl-check"><input type="checkbox" name="allowTranscode"${lim.allowTranscode !== false ? ' checked' : ''}><span>${tr('Umwandeln')}</span></label>
       <label class="wahl-check"><input type="checkbox" name="haushalt"${konto.gast ? '' : ' checked'}><span>${tr('Gehört zum Haushalt')}</span></label>

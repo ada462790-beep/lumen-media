@@ -29,6 +29,8 @@ import { grenzenBearbeiten } from './konto.js';
 import { bzKontoText, bzBearbeiten, bzLaden, bzStand, bzIchZeile, bzBeimSchauen, bzSchluss, bzBand, bzTagText } from './bildschirmzeit.js';
 import { sammlungKarte } from './sammlungen.js';
 import { tastaturEinrichten } from './tastatur.js';
+// Eigene Bedienelemente (Uhrzeit, Zahl) statt der Systemoptik.
+import { zeitWahl, zahlFeld } from './fenster.js';
 import { wunschFeld, wunschFeldEinrichten, wunschBild, wunschZusatz, wunschVerweise } from './wuensche.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
@@ -105,7 +107,6 @@ const S = {
   playing: null,
   logFilter: 'all',
   hello: null,
-  delLib: null,      // Bibliothek, die auf die Bestätigung wartet
   bearbeiten: null,  // was gerade umbenannt wird: 'reihe' | 'liste'
   warteschlange: null, // { name, ids, i } — eine Liste, die am Stück läuft
   listeWeg: false,   // Rückfrage beim Löschen einer Liste
@@ -154,6 +155,10 @@ const svg = (d, s = 18, w = 1.8) =>
 
 const I = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>',
+  kopieren: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M15.5 8.5V6.2a1.7 1.7 0 0 0-1.7-1.7H6.2a1.7 1.7 0 0 0-1.7 1.7v7.6a1.7 1.7 0 0 0 1.7 1.7h2.3"/>',
+  wolkeAus: '<path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.2 9.6 4.2 4.2 0 0 0 7 18z"/><path d="M4 4l16 16"/>',
+  wiedergabe: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.8v6.4l5.2-3.2z"/>',
+  sicherung: '<path d="M12 3a9 9 0 1 1-8.5 6"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>',
   home: '<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/>',
   film: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4"/>',
   tv: '<rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M8 20h8"/>',
@@ -722,11 +727,13 @@ const TABS = () => [
 function tabbar() {
   const p = S.me?.account;
   if (!p) return '';
-  const ich = ['settings', 'wishes', 'news', 'favorites', 'collections', 'collection', 'sammlungen', 'sammlung', 'playlists', 'playlist',
+  // Listen gehören zur Merkliste (Reiter Merkliste · Gesehen · Listen),
+  // nicht zu „Ich".
+  const ich = ['settings', 'wishes', 'news', 'favorites', 'collections', 'collection', 'sammlungen', 'sammlung',
     ...ADMIN_VIEWS].includes(S.view);
   return `<nav class="tabbar glass glass--regular" aria-label="${tr('Navigation')}">
     ${TABS().map(([v, d, label]) => `<a href="${adresseFuer(v) || '#'}" class="tab" data-go="${v}"${
-      S.view === v || (v === 'watchlist' && S.view === 'gesehen') ? ' aria-current="page"' : ''}>${svg(d, 22)}<span>${label}</span></a>`).join('')}
+      S.view === v || (v === 'watchlist' && ['gesehen', 'playlists', 'playlist'].includes(S.view)) ? ' aria-current="page"' : ''}>${svg(d, 22)}<span>${label}</span></a>`).join('')}
     <a href="${adresseFuer('settings') || '#'}" class="tab" data-go="settings"${ich ? ' aria-current="page"' : ''} style="position:relative">
       ${avatar(p, 24)}${S.me.neuigkeiten ? '<span class="punkt punkt--tab" aria-hidden="true"></span>' : ''}
       <span>${tr('Ich')}</span></a>
@@ -735,6 +742,35 @@ function tabbar() {
 
 const shell = inner => `<a href="#inhalt" class="skip-link" data-skip>${tr('Zum Inhalt springen')}</a>${sidebar()}<main class="page" id="inhalt">${inner}</main>${tabbar()}`;
 const loading = text => `<div class="loading"><span class="spin"></span>${esc(text || tr('Einen Moment …'))}</div>`;
+
+/* Ladezustand als Platzhalter: der feste Titel der Seite steht schon da,
+   darunter ruhige Flächen in der Form dessen, was kommt — der Inhalt
+   springt nicht, wenn er eintrifft. */
+const SEITEN_TITEL = () => ({ movies: tr('Filme'), series: tr('Serien'), watchlist: tr('Merkliste'), gesehen: tr('Merkliste'),
+  playlists: tr('Listen'), favorites: tr('Favoriten'), collections: tr('Filmreihen'), sammlungen: tr('Filmreihen'), wishes: tr('Wünsche'),
+  news: tr('Neuigkeiten'), search: tr('Suchen'), admin: tr('Verwaltung'), adminLibraries: tr('Bibliotheken'), accounts: tr('Konten und Rechte'),
+  adminGroups: tr('Gruppen'), logs: tr('Protokoll'), cleanup: tr('Aufräumen'), metadata: tr('Poster und Beschreibungen'),
+  adminUpdate: tr('Updates'), adminBackups: tr('Sicherung'), adminUmwandlung: tr('Umwandeln'), sessions: tr('Aktive Wiedergaben'),
+  adminWishes: tr('Wünsche'), adminLock: tr('Verwaltung sperren') });
+function ladeSkelett() {
+  const v = S.view;
+  const titel = SEITEN_TITEL()[v];
+  const sk = (st, k = '') => `<div class="sk${k ? ' ' + k : ''}" style="${st}"></div>`;
+  const karten = n => Array.from({ length: n }, () => `<div>${sk('aspect-ratio:2/3;border-radius:12px')}${sk('height:12px;width:72%;margin-top:10px;border-radius:6px')}${sk('height:10px;width:40%;margin-top:6px;border-radius:5px')}</div>`).join('');
+  const zeilen = n => `<div class="group group--inset">${Array.from({ length: n }, () =>
+    `<div class="row" style="min-height:60px;gap:14px">${sk('width:36px;height:36px;border-radius:50%;flex:none')}<div style="flex:1">${sk('height:12px;width:46%;border-radius:6px')}${sk('height:10px;width:68%;margin-top:8px;border-radius:5px')}</div></div>`).join('')}</div>`;
+  const status = `<span class="sr-only" role="status">${tr('Einen Moment …')}</span>`;
+  if (v === 'home' || v === 'detail') {
+    return `<div class="wrap" aria-busy="true">${status}<div class="hero hero--skelett${v === 'detail' ? ' hero--detail' : ''}">${sk('position:absolute;inset:0;border-radius:0')}
+      <div class="hero-text">${sk('height:34px;width:min(420px,70%);border-radius:10px')}${sk('height:12px;width:min(300px,50%);margin-top:14px;border-radius:6px')}
+        <div style="display:flex;gap:12px;margin-top:22px">${sk('width:132px;height:44px;border-radius:999px')}${sk('width:110px;height:44px;border-radius:999px')}</div></div></div>
+      ${v === 'home' ? `<div class="sec">${sk('height:18px;width:180px;border-radius:6px;margin-bottom:14px')}<div class="rail">${karten(6).replace(/<div>/g, '<div class="poster">')}</div></div>` : ''}</div>`;
+  }
+  const kopf = titel ? `<h1 class="t-large"${ADMIN_VIEWS.includes(v) ? ' style="margin:46px 0 0"' : ''}>${esc(titel)}</h1>` : sk('height:34px;width:240px;border-radius:10px');
+  const inhalt = ['movies', 'series', 'watchlist', 'gesehen', 'favorites', 'collections', 'sammlungen', 'person', 'collection', 'playlists', 'sammlung'].includes(v)
+    ? `<div class="grid" style="margin-top:58px">${karten(12)}</div>` : `<div style="margin-top:28px">${zeilen(5)}</div>`;
+  return `<div class="wrap wrap--flat${ADMIN_VIEWS.includes(v) ? ' wrap--verwaltung' : ''}" aria-busy="true">${status}${kopf}${inhalt}</div>`;
+}
 
 /* ---------------------------------------------------------------- Router */
 
@@ -773,7 +809,6 @@ async function go(view, opts = {}) {
   S.view = view;
   S.id = opts.id ?? null;
   S.error = '';
-  S.delLib = null;
   S.browse = null;
   S.bearbeiten = null;
   S.listeWeg = false;
@@ -1015,20 +1050,20 @@ function render() {
   if (S.me?.sprache && S.me.sprache !== sprache()) sprachWechseln(S.me.sprache);
   let html;
   if (S.busy && S.view !== 'player') {
-    html = S.me ? shell(`<div class="wrap">${loading()}</div>`) : `<div class="center">${loading()}</div>`;
+    html = S.me ? shell(ladeSkelett()) : `<div class="center">${loading()}</div>`;
   } else if (S.error && S.fehlerStatus === 404 && MIT_KENNUNG.includes(S.view)) {
     // Ein alter Link, ein gelöschter Titel: kein roher Serverfehler und
     // kein „Nochmal versuchen" (es käme dasselbe), sondern ein Weg zurück.
-    html = shell(`<div class="wrap">${leer({ symbol: S.view === 'detail' ? I.film : I.search, h1: true,
+    html = shell(`<div class="wrap wrap--flat">${leer({ symbol: S.view === 'detail' ? I.film : I.search, h1: true,
       titel: S.view === 'detail' ? tr('Diesen Titel gibt es nicht (mehr)') : tr('Das gibt es hier nicht (mehr)'),
       text: esc(tr('Vielleicht wurde der Eintrag gelöscht, oder der Link ist nicht vollständig.')),
-      aktion: `<button class="btn btn-pill btn-pill--fill" data-go="home">${tr('Zur Startseite')}</button>` })}</div>`);
+      aktion: `<div class="leer-knoepfe">${verlaufTiefe > 0 ? `<button class="btn btn-pill btn-pill--fill" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>` : ''}
+        <button class="btn btn-primary" data-go="home">${tr('Zur Startseite')}</button></div>` })}</div>`);
   } else if (S.error && !['profiles', 'unlock', 'setup', 'redeem', 'start'].includes(S.view)) {
-    html = shell(`<div class="wrap"><div style="padding-top:80px;max-width:520px">
-      <h1 class="t-large">${tr('Das hat nicht geklappt')}</h1>
-      <p class="t-body c-2" style="margin-top:10px">${esc(S.error)}</p>
-      <button class="btn btn-primary" style="margin-top:20px" data-retry>${tr('Nochmal versuchen')}</button>
-    </div></div>`);
+    // Dasselbe Muster wie jeder leere Zustand: Symbol, Titel, Satz, Knopf.
+    html = shell(`<div class="wrap wrap--flat">${leer({ symbol: I.wolkeAus, h1: true, titel: tr('Das hat nicht geklappt'), text: esc(S.error),
+      aktion: `<div class="leer-knoepfe">${verlaufTiefe > 0 ? `<button class="btn btn-pill btn-pill--fill" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>` : ''}
+        <button class="btn btn-primary" data-retry>${tr('Nochmal versuchen')}</button></div>` })}</div>`);
   } else {
     switch (S.view) {
       case 'start':     html = `<div class="center">${loading(tr('Lumen wird geladen …'))}</div>`; break;
@@ -1217,12 +1252,12 @@ function viewSetup() {
                minlength="8" required>
         <span class="hint">${tr('Mindestens acht Zeichen. Damit meldest du dich auf allen Geräten an.')}</span></div>
       <div class="field"><span class="hint">${tr('Sprache und Region: {name}', { name: esc(sprachNameVon(sprache())) })} ·
-        <a href="#" class="link" data-setupsprache-zurueck>${tr('Ändern')}</a></span></div>
+        <button type="button" class="link-knopf" data-setupsprache-zurueck>${tr('Ändern')}</button></span></div>
       <div class="err">${esc(S.error)}</div>
       <button class="btn btn-primary" style="height:46px">${tr('Server einrichten')}</button>
     </form>
     <p class="hint" style="text-align:center">
-      ${tr('Du wurdest eingeladen?')} <a href="#" class="link" data-go="redeem">${tr('Einladung einlösen')}</a></p>
+      ${tr('Du wurdest eingeladen?')} <button type="button" class="link-knopf" data-go="redeem">${tr('Einladung einlösen')}</button></p>
   </div></div>`;
 }
 
@@ -1278,7 +1313,7 @@ function viewRedeem() {
       <button class="btn btn-primary" style="height:46px">${tr('Profil anlegen')}</button>
     </form>
     <p class="hint" style="text-align:center">
-      ${tr('Schon ein Profil?')} <a href="#" class="link" data-go="profiles">${tr('Zur Übersicht')}</a></p>
+      ${tr('Schon ein Profil?')} <button type="button" class="link-knopf" data-go="profiles">${tr('Zur Übersicht')}</button></p>
   </div></div>`;
 }
 
@@ -1718,7 +1753,7 @@ function viewNews() {
       : n.art === 'server' && verwaltungHier() ? 'data-go="admin"' : '';
     const symbol = n.art === 'folgen' ? I.tv : n.art === 'reihe' ? I.reihe : I.film;
     const kopf = `
-      <span style="width:38px;height:38px;border-radius:12px;background:${neu ? 'rgba(10,132,255,.18)' : 'var(--fill)'};color:${neu ? '#4aa3ff' : 'var(--label-2)'};display:inline-flex;align-items:center;justify-content:center;flex:none">${svg(symbol, 18)}</span>
+      <span style="width:38px;height:38px;border-radius:12px;background:${neu ? 'var(--tint-blau)' : 'var(--fill)'};color:${neu ? 'var(--text-blau)' : 'var(--label-2)'};display:inline-flex;align-items:center;justify-content:center;flex:none">${svg(symbol, 18)}</span>
       <span style="flex:1;min-width:0">
         <span class="t-body clamp-1" style="display:block${neu ? ';font-weight:600' : ''}">${esc(n.titel)}</span>
         <span class="t-caption c-2 clamp-1" style="display:block">${esc(n.text)} · ${new Date(n.at).toLocaleDateString(sprache(), { day: 'numeric', month: 'short' })}</span></span>
@@ -1745,6 +1780,11 @@ function viewNews() {
 /* Alles mit einer Person — die Seite hinter dem Porträt in der Suche. */
 // Personenseite: Foto, Lebensdaten, Biografie mit Quelle — und
 // darunter, worin die Person in der eigenen Mediathek mitspielt.
+// „Leonardo DiCaprio" → „LD", „Cher" → „C".
+const initialen = name => {
+  const w = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  return ((w[0]?.[0] || '?') + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
+};
 function viewPerson() {
   const items = S.data?.items || [];
   const p = S.data?.info || {};
@@ -1757,7 +1797,9 @@ function viewPerson() {
     <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
     <div style="display:flex;gap:24px;align-items:flex-start;margin-top:14px;flex-wrap:wrap">
       ${p.bild ? `<img src="${esc(p.bild)}${tokenSuffix(p.bild)}" alt="" data-weg
-        style="width:150px;height:200px;object-fit:cover;border-radius:16px;flex:none;background:var(--fill)">` : ''}
+        style="width:150px;height:200px;object-fit:cover;border-radius:16px;flex:none;background:var(--fill)">`
+        // Ohne Bild ein Kreis mit Initialen — wie bei der Besetzung.
+        : `<div class="person-bild person-bild--gross" aria-hidden="true"><span>${esc(initialen(S.id))}</span></div>`}
       <div style="flex:1;min-width:260px;max-width:760px">
         <h1 class="t-large" style="margin:0">${esc(S.id || '')}</h1>
         ${leben ? `<div class="t-sub c-2" style="margin-top:4px">${leben}</div>` : ''}
@@ -1767,7 +1809,8 @@ function viewPerson() {
       </div>
     </div>
     <div class="t-sub c-2" style="margin:22px 0 20px">${tr('{n} Titel in deiner Mediathek', { n: items.length })}</div>
-    <div class="grid">${items.map(posterCard).join('') || `<p class="hint">${tr('Zu dieser Person gibt es hier keine Titel.')}</p>`}</div>
+    ${items.length ? `<div class="grid">${items.map(posterCard).join('')}</div>`
+      : leer({ symbol: I.film, titel: tr('Keine Titel'), text: esc(tr('Zu dieser Person gibt es hier keine Titel.')) })}
     <div style="height:40px"></div></div>`);
 }
 
@@ -1893,8 +1936,11 @@ function viewDetail() {
     // Bild-Untertitel zählen mit: der Player bietet sie an (eingebrannt).
     const ton = spuren.filter(t => t.kind === 'audio'), text = spuren.filter(t => t.kind === 'subtitle' && (!t.bitmap || !t.external));
     const kanaele = Math.max(0, ...ton.map(t => t.channels || 0));
-    const sprachen = [...new Set(ton.map(t => (t.language || 'und').toUpperCase()).filter(x => x !== 'UND'))];
-    const utSprachen = [...new Set(text.map(t => (t.language || 'und').toUpperCase()).filter(x => x !== 'UND'))];
+    // Sprachen ausgeschrieben („Englisch" statt „EN"); viele als Anzahl.
+    const sprName = c => { try { return new Intl.DisplayNames([sprache()], { type: 'language' }).of(c) || c.toUpperCase(); } catch { return c.toUpperCase(); } };
+    const namen = l => l.length > 3 ? [tr('{n} Sprachen', { n: l.length })] : l.map(sprName);
+    const sprachen = namen([...new Set(ton.map(t => (t.language || 'und').toLowerCase()).filter(x => x !== 'und'))]);
+    const utSprachen = namen([...new Set(text.map(t => (t.language || 'und').toLowerCase()).filter(x => x !== 'und'))]);
     const q = it.qualitaet || '';
     const hdr = it.hdr === 'DV' ? 'Dolby Vision' : it.hdr || '';
     const kan = kanaele || it.kanaele || 0;
@@ -1909,7 +1955,7 @@ function viewDetail() {
 
   const stars = [1, 2, 3, 4, 5].map(n =>
     `<button class="btn btn-round stern" data-rate="${n}" aria-label="${tr('{n} von 5 Sternen', { n })}"
-      aria-pressed="${(it.myRating || 0) === n}" style="color:${(it.myRating || 0) >= n ? '#ffd60a' : 'var(--label-3)'}">★</button>`).join('');
+      aria-pressed="${(it.myRating || 0) === n}" style="color:${(it.myRating || 0) >= n ? 'var(--stern)' : 'var(--label-3)'}">★</button>`).join('');
 
   // Staffeln als Reiter, darunter die Folgen der gewählten — wie man es
   // von Emby kennt: Bild, Nummer und Name, Länge, kurze Beschreibung,
@@ -1917,7 +1963,7 @@ function viewDetail() {
   const seasons = staffelLeiste(d);
 
   const episodes = (d.episodes || []).map(e => `
-    <div class="orow folge" style="height:auto;padding:12px 16px;gap:14px">
+    <div class="orow folge">
       <button class="card folge-bild" data-play="${esc(e.id)}" aria-label="${esc(tr('{titel} ansehen', { titel: e.title }))}">
         <div class="thumb" style="position:relative;width:160px;height:90px;border-radius:8px;overflow:hidden;flex:none">
           ${artOf(e, 'wide', '160px')}
@@ -1925,7 +1971,7 @@ function viewDetail() {
           ${e.progress > 1 && !e.finished ? `<div class="progress progress--onart"><i style="width:${e.progress}%"></i></div>` : ''}
         </div>
       </button>
-      <div style="flex:1;min-width:0">
+      <div class="folge-text">
         <div class="t-body" style="display:flex;align-items:center;gap:8px">
           <span class="c-2 tnum" style="flex:none">${folgenNr(e)}</span>
           <span class="clamp-1">${esc(e.title === 'Special' && istSpecial(e) ? tr('Special') : e.title)}</span>
@@ -1934,20 +1980,22 @@ function viewDetail() {
         <div class="t-caption c-2">${[mins(e.runtimeMs), e.premiered ? new Date(e.premiered).toLocaleDateString(sprache()) : ''].filter(Boolean).join(' · ')}</div>
         ${e.overview ? `<p class="t-sub c-2 clamp-2" style="margin-top:4px">${esc(e.overview)}</p>` : ''}
       </div>
-      <button class="btn btn-pill btn-pill--fill nur-breit" style="flex:none" data-play="${esc(e.id)}">
+      <div class="folge-aktionen">
+      <button class="btn btn-pill btn-pill--fill nur-breit folge-ansehen" data-play="${esc(e.id)}">
         ${e.progress > 1 && !e.finished ? tr('Weiter') : tr('Ansehen')}</button>
       ${folgeBearbeiten(e)}
-      <button class="btn btn-round sm folge-haken${e.finished ? ' folge-haken--an' : ''}" style="flex:none"
+      <button class="btn btn-round sm folge-haken folge-knopf${e.finished ? ' folge-haken--an' : ''}"
         data-folge-gesehen="${esc(e.id)}" aria-pressed="${!!e.finished}"
         aria-label="${esc(e.title)}: ${e.finished ? tr('gesehen') : tr('als gesehen markieren')}"
         title="${e.finished ? tr('Gesehen – nochmal tippen zum Zurücknehmen') : tr('Als gesehen markieren')}">${svg(I.check, 16, 2.6)}</button>
+      </div>
     </div>`).join('');
 
   // Die gewählte Staffel: ganz gesehen oder nicht — ein Knopf für alle Folgen darin.
   const staffelJetzt = (d.seasons || []).find(x => x.id === d.staffel);
   const staffelFertig = (d.episodes || []).length > 0 && d.episodes.every(e => e.finished);
   const staffelKnopf = staffelJetzt && (d.episodes || []).length ? `
-    <button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-staffel-gesehen="${esc(staffelJetzt.id)}" aria-pressed="${staffelFertig}">
+    <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-staffel-gesehen="${esc(staffelJetzt.id)}" aria-pressed="${staffelFertig}">
       ${svg(I.check, 14, 2.6)} ${staffelFertig ? tr('Staffel nicht mehr als gesehen') : tr('Staffel als gesehen markieren')}</button>` : '';
   // Nach einem Haken an einer späten Folge: auch die davor?
   const vorherFrage = d.vorherigeFrage ? `
@@ -2000,7 +2048,12 @@ function viewDetail() {
     return `
     <div class="datei-info" style="padding:12px 16px;display:flex;flex-direction:column;gap:5px">
       <div style="display:flex;gap:10px;align-items:center">
-        <span class="mono c-2" style="overflow-wrap:anywhere;flex:1;min-width:0">${/* Verwalter bekommen vom Server den vollen Pfad, alle anderen nur den Dateinamen */ ''}${esc(f.path)}${f.missing ? ' · ' + tr('fehlt') : ''}</span>
+        ${/* Verwalter bekommen vom Server den vollen Pfad, alle anderen nur den Dateinamen.
+             Gezeigt wird der Dateiname; aufgeklappt der ganze Pfad, daneben Kopieren. */ ''}
+        <details class="pfad-klapp"><summary class="mono c-2" title="${esc(f.path)}">${esc(f.path.split('/').pop())}${f.missing ? ' · ' + tr('fehlt') : ''}</summary>
+          <span class="mono c-3 pfad-ganz">${esc(f.path)}</span></details>
+        ${f.path.includes('/') ? `<button type="button" class="btn btn-round sm btn-round--fill pfad-kopieren" data-kopieren="${esc(f.path)}"
+          aria-label="${tr('Pfad kopieren')}" title="${tr('Pfad kopieren')}">${svg(I.kopieren, 15, 1.9)}</button>` : ''}
         ${standardZeile(f)}</div>
       <div class="t-caption" style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
         ${zeile(tr('Bild'), [f.width && f.height ? `${f.width}×${f.height}` : (f.height ? f.height + 'p' : ''), codecN(f.videoCodec), f.hdr].filter(Boolean).join(' · '))}
@@ -2013,8 +2066,11 @@ function viewDetail() {
     </div>`;
   }).join('');
 
+  // Lange Titel etwas kleiner (app.css, .t-hero--lang), höchstens drei Zeilen.
+  const titelLaenge = (it.title || '').length;
+  const titelKlasse = titelLaenge > 60 ? ' t-hero--sehrlang' : titelLaenge > 32 ? ' t-hero--lang' : '';
   return shell(`<div class="wrap">
-    <div class="hero">
+    <div class="hero hero--detail">
       ${artOf(it, 'wide', '100vw')}
       <div class="hero-scrim"></div>
       <button class="btn btn-round sm glass glass--regular" style="position:absolute;top:28px;width:44px;height:44px;z-index:3"
@@ -2026,7 +2082,7 @@ function viewDetail() {
           ? `<h1 class="t-hero hero-logo" style="margin:0"><img src="${esc(it.logo)}${tokenSuffix(it.logo)}" alt="${esc(it.title)}"
               style="display:block;max-width:min(460px,70%);max-height:150px;width:auto;height:auto;object-fit:contain;object-position:left bottom"
               data-ersatz="${esc(it.title)}"></h1>`
-          : `<h1 class="t-hero">${esc(it.title)}</h1>`}
+          : `<h1 class="t-hero${titelKlasse}" title="${esc(it.title)}">${esc(it.title)}</h1>`}
         ${it.originalTitle && it.originalTitle !== it.title
           ? `<div class="t-sub c-2" style="margin-top:4px">${esc(it.originalTitle)}</div>` : ''}
         ${d.nfo?.tagline ? `<div class="t-sub" style="margin-top:6px;font-style:italic">${esc(d.nfo.tagline)}</div>` : ''}
@@ -2091,7 +2147,7 @@ function viewDetail() {
           </div></div>
         ${it.matchState === 'manual' ? `<span class="t-caption c-2">${tr('von Hand zugewiesen')}</span>`
           : it.matchState === 'lokal' ? `<span class="t-caption c-2">${tr('aus der NFO-Datei neben der Datei')}</span>`
-          : it.matchState === 'unmatched' ? `<span class="t-caption" style="color:#ffb340">${tr('nicht erkannt — Lumen war sich nicht sicher')}</span>` : ''}
+          : it.matchState === 'unmatched' ? `<span class="t-caption" style="color:var(--text-orange)">${tr('nicht erkannt — Lumen war sich nicht sicher')}</span>` : ''}
       </div>
       <div id="zuweisen"></div>` : ''}
     <div class="detail-spalten${it.overview || (d.cast || []).length || seasons ? '' : ' detail-spalten--schmal'}" style="margin-top:34px">
@@ -2130,7 +2186,7 @@ function viewDetail() {
               <div class="row" style="min-height:44px">
                 ${avatar(r, 26)}
                 <span class="t-body" style="flex:1">${esc(r.name)}</span>
-                <span style="color:#ffd60a">${'★'.repeat(r.stars)}</span></div>`).join('')}</div></section>` : ''}
+                <span style="color:var(--stern)">${'★'.repeat(r.stars)}</span></div>`).join('')}</div></section>` : ''}
         ${fileRows ? `<details class="technik-klapp" style="margin-top:22px"${verwaltungHier() ? ' open' : ''}>
             <summary class="section-h">${tr('Technische Angaben')}</summary>
             <div class="group group--inset">${fileRows}</div></details>` : ''}
@@ -3042,7 +3098,7 @@ function viewPlayer() {
         <span class="pl-laut-gruppe">
           <button class="btn btn-round sm glass glass--clear pl-knopf" data-stumm aria-pressed="${stumm}"
             aria-label="${stumm ? tr('Ton an') : tr('Stumm')}">${svg(stumm || laut === 0 ? I.stumm : I.lautsprecher, 20, 2)}</button>
-          ${lautRegler() ? `<input type="range" class="pl-laut" data-laut min="0" max="1" step="0.05" value="${stumm ? 0 : laut}"
+          ${lautRegler() ? `<input type="range" class="pl-laut" data-laut min="0" max="1" step="0.05" value="${stumm ? 0 : laut}" style="--wert:${Math.round((stumm ? 0 : laut) * 100)}%"
             aria-label="${tr('Lautstärke')}" aria-valuetext="${Math.round((stumm ? 0 : laut) * 100)} %">` : ''}
         </span>
         <span style="flex:1"></span>
@@ -3664,6 +3720,8 @@ function patchLautstaerke() {
   const regler = app.querySelector('[data-laut]');
   if (regler && document.activeElement !== regler) regler.value = String(v.muted ? 0 : v.volume);
   if (regler) regler.setAttribute('aria-valuetext', `${Math.round((v.muted ? 0 : v.volume) * 100)} %`);
+  // Die gefüllte Spur (app.css, .pl-laut): bis zum Knopf weiss.
+  if (regler) regler.style.setProperty('--wert', `${Math.round(Number(regler.value) * 100)}%`);
 }
 function lautstaerkeAendern(delta) {
   const v = $('#v');
@@ -4063,11 +4121,13 @@ async function naechstesAnbieten(p, sekunden) {
   box.className = 'naechster glass glass--regular';
   box.dataset.id = n.id;
   box.innerHTML = `${n.id ? `<img class="naechster-bild" src="${api.artURL(n.id, 'frame')}" alt="" data-weg>` : ''}
-    <div style="min-width:0;flex:1">
+    <div class="naechster-text">
       <div class="t-caption c-2">${tr('Als Nächstes · in')} <span data-rest>${rest}</span> s</div>
-      <div class="t-body clamp-1">${esc(n.title)}</div></div>
-    <button class="btn btn-pill btn-pill--fill" style="height:34px" data-naechster-jetzt>${tr('Jetzt')}</button>
-    <button class="btn btn-pill" style="height:34px" data-naechster-nein>${tr('Abbrechen')}</button>`;
+      <div class="t-body naechster-titel">${esc(n.kind === 'episode' && n.seriesTitle ? n.seriesTitle : n.title)}</div>
+      ${n.kind === 'episode' && n.seriesTitle ? `<div class="t-sub c-2 clamp-1">${esc(folgenName(n))}</div>` : ''}</div>
+    <div class="naechster-knoepfe">
+      <button class="btn btn-pill btn-pill--fill" data-naechster-jetzt>${tr('Jetzt')}</button>
+      <button class="btn btn-pill btn-pill--fill" data-naechster-nein>${tr('Abbrechen')}</button></div>`;
   document.querySelector('.player')?.appendChild(box);
   showChrome(true);
   naechsterTimer = setInterval(() => {
@@ -4165,7 +4225,7 @@ const kopf = (titel, unter, aktionen = '') => `
       ${svg(I.back, 16, 2)}${tr('Zurück')}</button>
     <h1 class="t-large" style="margin:14px 0 0">${titel}</h1>
     <div class="t-sub c-2" style="margin-top:4px">${unter}</div>
-    ${aktionen ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">${aktionen}</div>` : ''}
+    ${aktionen ? `<div class="kopf-aktionen">${aktionen}</div>` : ''}
   </header>`;
 
 function viewCollections() {
@@ -4208,7 +4268,7 @@ function viewCollection() {
       ? `<button class="btn btn-pill btn-pill--fill" data-bearbeiten="reihe">${tr('Umbenennen')}</button>` : '',
     besitzer ? (r.hidden
       ? `<button class="btn btn-pill btn-pill--fill" data-reihe-zeigen>${tr('Wiederherstellen')}</button>`
-      : `<button class="btn btn-pill" style="color:#ff6961" data-reihe-aufloesen>${tr('Reihe auflösen')}</button>`) : '',
+      : `<button class="btn btn-pill btn-pill--fill btn-pill--gefahr" data-reihe-aufloesen>${tr('Reihe auflösen')}</button>`) : '',
   ].join('');
 
   // Mit eigenem Hintergrund der Reihe wird aus der Seite ein Kopf wie
@@ -4220,7 +4280,7 @@ function viewCollection() {
           ${svg(I.back, 16, 2)}${tr('Zurück')}</button>
         <h1 class="t-hero">${titel}</h1>
         <div class="t-sub c-2" style="margin-top:6px">${esc(unter)}</div>
-        ${aktionen ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">${aktionen}</div>` : ''}
+        ${aktionen ? `<div class="kopf-aktionen">${aktionen}</div>` : ''}
       </div></div>` : '';
   return shell(`<div class="wrap${r.backdrop ? '' : ' wrap--flat'}">
     ${kopfbild || kopf(titel, esc(unter), aktionen)}
@@ -4259,12 +4319,12 @@ function viewPlaylists() {
     ${merkReiter('playlists')}
     <div class="t-sub c-2" style="margin:4px 0 22px">${tr('Eigene Zusammenstellungen — für dich oder mit anderen im Haushalt')}</div>
     <form id="listeform" class="sfield" style="max-width:520px" autocomplete="off">
-      ${svg(I.plus, 18, 2)}<input name="name" placeholder="${tr('Neue Liste, etwa „Filmabend“')}" maxlength="80"
+      ${svg(I.plus, 18, 2)}<input name="name" placeholder="${tr('Neue Liste …')}" maxlength="80"
         aria-label="${tr('Name der neuen Liste')}">
       <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem">${tr('Anlegen')}</button></form>
     <section style="margin-top:30px"><div class="section-h" style="padding-left:0">${tr('Meine Listen')}</div>
       ${meine.length ? `<div class="listen-grid">${meine.map(listeKarte).join('')}</div>`
-        : `<p class="hint">${tr('Noch keine. Leg oben eine an, oder auf einer Titelseite mit „Zur Liste“.')}</p>`}</section>
+        : leer({ symbol: I.liste, titel: tr('Noch keine Listen'), text: esc(tr('Noch keine. Leg oben eine an, oder auf einer Titelseite mit „Zur Liste“.')) })}</section>
     ${andere.length ? `<section style="margin-top:34px"><div class="section-h" style="padding-left:0">${tr('Im Haushalt geteilt')}</div>
       <div class="listen-grid">${andere.map(listeKarte).join('')}</div></section>` : ''}
     <p class="t-sub c-2" style="margin:30px 2px 0;display:flex;align-items:flex-start;gap:8px;max-width:640px">
@@ -4294,10 +4354,7 @@ function viewPlaylist() {
     items.length ? `<button class="btn btn-primary" data-liste-abspielen>${PLAY(16)} ${tr('Ansehen')}</button>` : '',
     l.meine && S.bearbeiten !== 'liste'
       ? `<button class="btn btn-pill btn-pill--fill" data-bearbeiten="liste">${tr('Umbenennen')}</button>` : '',
-    l.meine ? (S.listeWeg
-      ? `<button class="btn btn-pill" style="background:rgba(255,69,58,.16);color:#ff6961" data-liste-weg-ok>${tr('Wirklich löschen')}</button>
-         <button class="btn btn-pill" data-liste-weg-nein>${tr('Abbrechen')}</button>`
-      : `<button class="btn btn-pill" style="color:#ff6961" data-liste-weg>${tr('Löschen')}</button>`) : '',
+    l.meine ? `<button class="btn btn-pill btn-pill--fill btn-pill--gefahr" data-liste-weg>${tr('Löschen')}</button>` : '',
   ].join('');
 
   const zeilen = items.map((x, i) => `
@@ -4314,7 +4371,7 @@ function viewPlaylist() {
       ${l.darfAendern ? `<div style="display:flex;gap:4px;flex:none">
         <button class="btn btn-round sm" data-lhoch="${esc(x.id)}" aria-label="${tr('Nach oben')}" ${i === 0 ? 'disabled' : ''}>${svg(I.hoch, 16, 2.2)}</button>
         <button class="btn btn-round sm" data-lrunter="${esc(x.id)}" aria-label="${tr('Nach unten')}" ${i === items.length - 1 ? 'disabled' : ''}>${svg(I.runter, 16, 2.2)}</button>
-        <button class="btn btn-round sm" style="color:#ff6961" data-lweg="${esc(x.id)}" aria-label="${tr('Aus der Liste nehmen')}">${svg(I.x, 15, 2.2)}</button>
+        <button class="btn btn-round sm" style="color:var(--text-rot)" data-lweg="${esc(x.id)}" aria-label="${tr('Aus der Liste nehmen')}">${svg(I.x, 15, 2.2)}</button>
       </div>` : ''}
     </div>`).join('');
 
@@ -4326,7 +4383,7 @@ function viewPlaylist() {
         l.geteilt ? tr('Wer sie sieht, sieht nur die Titel, die er ohnehin sehen darf.')
                   : offenesProfil() ? tr('Alle in diesem Profil sehen diese Liste.') : tr('Nur du siehst diese Liste.'))}</section>` : ''}
     <section style="margin-top:${l.meine ? 4 : 28}px"><div class="group group--inset">
-      ${zeilen || `<p class="hint" style="padding:18px 16px;margin:0">${tr('Noch leer. Auf einer Titelseite legst du mit „Zur Liste“ etwas hinein.')}</p>`}</div></section>
+      ${zeilen || leer({ symbol: I.liste, titel: tr('Noch leer'), text: esc(tr('Auf einer Titelseite legst du mit „Zur Liste“ etwas hinein.')) })}</div></section>
     <div style="height:40px"></div></div>`);
 }
 
@@ -4335,6 +4392,30 @@ function viewPlaylist() {
    dem jeweiligen Titel. modus 'id': gleich für eine Kennung oder einen
    Link (IMDb, TMDb, TheTVDB) — die Antwort ist dann genau ein Eintrag
    als Vorschau, der mit „Nehmen" zugewiesen wird. */
+/* Ein Blatt (modaler Dialog) für „Zur Liste" und „Anderen Titel zuweisen":
+   Es legt sich über die Seite, statt sie im Fluss aufzuklappen — nichts
+   springt. Es steckt in #app, damit die Klicks und Formulare darin von
+   denselben Zuhörern bedient werden wie die Seite. */
+function blattOeffnen(box, titel, inhalt, zurueckAuf) {
+  const offen = box.querySelector('dialog.blatt');
+  if (offen) { offen.querySelector('.fenster-inhalt').innerHTML = inhalt; return offen; }
+  const id = 'blatt-t-' + (blattOeffnen.n = (blattOeffnen.n || 0) + 1);
+  box.innerHTML = `<dialog class="lumen fenster blatt${app.classList.contains('light') ? ' light' : ''}" aria-labelledby="${id}">
+    <div class="fenster-kopf"><h2 class="fenster-titel" id="${id}">${esc(titel)}</h2>
+      <button type="button" class="btn btn-round sm fenster-zu" data-blatt-zu aria-label="${tr('Schliessen')}">${svg(I.x, 16, 2.2)}</button></div>
+    <div class="fenster-inhalt">${inhalt}</div></dialog>`;
+  const d = box.querySelector('dialog');
+  d.addEventListener('click', e => { if (e.target === d) d.close(); });
+  d.addEventListener('close', () => {
+    if (d.isConnected) box.innerHTML = '';
+    const k = typeof zurueckAuf === 'function' ? zurueckAuf() : zurueckAuf;
+    k?.setAttribute?.('aria-expanded', 'false');
+    if (k?.isConnected) k.focus({ preventScroll: true });
+  });
+  d.showModal();
+  return d;
+}
+
 function zuweisenBox(itemId) {
   return document.querySelector(`[data-zuo-box="${CSS.escape(itemId)}"]`) || document.getElementById('zuweisen');
 }
@@ -4342,19 +4423,20 @@ async function zuweisenPanel(itemId, suche, modus = 'suche') {
   const box = zuweisenBox(itemId);
   if (!box) return;
   const idModus = modus === 'id';
-  box.innerHTML = `<div class="group group--inset listen-panel" style="max-width:640px">
+  blattOeffnen(box, idModus ? tr('Kennung eingeben') : tr('Anderen Titel zuweisen'), `<div class="group group--inset listen-panel">
     <form data-zuweisenform data-item="${esc(itemId)}" class="row" style="min-height:52px;gap:10px" autocomplete="off">
       <span style="color:var(--label-2);display:flex">${svg(I.search, 16, 2)}</span>
       <input name="q" value="${esc(idModus ? '' : suche)}" placeholder="${idModus ? tr('tt0133093, TMDb-Nummer oder Link einfügen …') : tr('Titel suchen, oder Link/Kennung von TMDb, IMDb, TheTVDB einfügen …')}" aria-label="${idModus ? tr('Kennung oder Link') : tr('Suchen')}"
         style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:1rem">
       ${idModus ? '' : `<input name="year" placeholder="${tr('Jahr')}" inputmode="numeric" aria-label="${tr('Jahr')}"
         style="width:64px;border:0;outline:0;background:var(--fill);border-radius:8px;padding:4px 8px;color:var(--label);font:inherit;font-size:.875rem">`}
-      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem">${idModus ? tr('Laden') : tr('Suchen')}</button>
-      <button type="button" class="btn btn-pill" style="height:30px;font-size:.8125rem" data-zuweisen-aus="${esc(itemId)}">${tr('Zu')}</button></form>
+      <button class="btn btn-pill btn-pill--fill">${idModus ? tr('Laden') : tr('Suchen')}</button></form>
     <div data-treffer-box>${idModus
       ? `<p class="t-caption c-2" style="padding:10px 16px;margin:0;line-height:1.5">${tr('Möglich sind: IMDb-Kennung (tt…), TMDb-Nummer, TheTVDB-Nummer (tvdb:121361) oder ein Link von imdb.com, themoviedb.org oder thetvdb.com. Bei TheTVDB steht die Nummer auf der Seite der Serie unter „TheTVDB.com Series ID“.')}</p>`
-      : `<p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p>`}</div></div>`;
-  if (idModus) { box.querySelector('input[name=q]')?.focus(); return; }
+      : `<p class="hint" style="padding:12px 16px;margin:0">${loading(tr('Suche …'))}</p>`}</div></div>`,
+    () => app.querySelector(`[data-zuo-id="${CSS.escape(itemId)}"], [data-zuo-suchen="${CSS.escape(itemId)}"]`) || app.querySelector('[data-mehrmenue]'));
+  box.querySelector('input[name=q]')?.focus();
+  if (idModus) return;
   return zuweisenSuchen(itemId, suche, '');
 }
 async function zuweisenSuchen(itemId, q, year) {
@@ -4395,7 +4477,7 @@ async function listenPanel(itemId) {
   let listen;
   try { listen = (await api.playlists(itemId)).filter(l => l.darfAendern); }
   catch (err) { return toast(err.message); }
-  box.innerHTML = `<div class="group group--inset listen-panel">
+  blattOeffnen(box, tr('Zur Liste'), `<div class="group group--inset listen-panel">
     ${listen.map(l => `<button class="row orow-link" style="width:100%;min-height:50px;text-align:left"
         data-lpanel="${esc(l.id)}" data-drin="${l.enthaelt ? '1' : ''}" aria-pressed="${!!l.enthaelt}">
         <span class="haken${l.enthaelt ? ' haken--an' : ''}" aria-hidden="true">${l.enthaelt ? svg(I.check, 13, 2.8) : ''}</span>
@@ -4405,12 +4487,12 @@ async function listenPanel(itemId) {
       <span style="color:var(--label-2);display:flex">${svg(I.plus, 16, 2)}</span>
       <input name="name" placeholder="${tr('Neue Liste …')}" maxlength="80" aria-label="${tr('Neue Liste')}"
         style="flex:1;min-width:0;border:0;outline:0;background:none;color:var(--label);font:inherit;font-size:1rem">
-      <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem">${tr('Anlegen')}</button></form>
+      <button class="btn btn-pill btn-pill--fill">${tr('Anlegen')}</button></form>
     ${S.me?.account?.isAdmin ? `<button class="row orow-link" style="width:100%;min-height:50px;text-align:left" data-fk-sammlung="${esc(itemId)}">
         <span style="color:var(--label-2);display:flex">${svg(I.plus, 16, 2)}</span>
         <span class="t-body" style="flex:1;color:var(--accent)">${tr('Zu Sammlung hinzufügen')}</span></button>` : ''}
-  </div>`;
-  document.querySelector('[data-zurliste]')?.setAttribute('aria-expanded', 'true');
+  </div>`, () => app.querySelector('[data-zurliste]'));
+  app.querySelector('[data-zurliste]')?.setAttribute('aria-expanded', 'true');
 }
 
 /* ---------------------------------------------------------------- Wünsche */
@@ -4420,15 +4502,15 @@ async function listenPanel(itemId) {
 function wunschWegKnopf(w, verwaltung) {
   const art = verwaltung && !w.dabei ? 'verwaltung' : w.dabei ? 'dabei' : w.mine && w.state === 'open' ? 'eigen' : '';
   if (!art) return '';
-  return `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem;flex:none" data-wunschweg="${esc(w.id)}:${art}"
+  return `<button class="btn btn-pill btn-pill--fill wunsch-weg${art === 'dabei' ? '' : ' btn-pill--gefahr'}" data-wunschweg="${esc(w.id)}:${art}"
     aria-label="${esc(tr('„{titel}“ löschen', { titel: w.title }))}">${art === 'dabei' ? tr('Nicht mehr wünschen') : tr('Löschen')}</button>`;
 }
 
 function viewWishes() {
   const list = S.data?.wishes || [];
   const owner = S.me.account.isAdmin;
-  const COL = { open: ['rgba(120,120,128,.24)', 'var(--label-2)'], working: ['rgba(10,132,255,.16)', '#4aa3ff'],
-    done: ['rgba(48,209,88,.16)', '#30d158'], declined: ['rgba(255,69,58,.14)', '#ff6961'] };
+  const COL = { open: ['rgba(120,120,128,.24)', 'var(--label-2)'], working: ['var(--tint-blau)', 'var(--text-blau)'],
+    done: ['var(--tint-gruen)', 'var(--text-gruen)'], declined: ['var(--tint-rot)', 'var(--text-rot)'] };
   const NAME = { open: tr('offen'), working: tr('in Arbeit'), done: tr('erfüllt'), declined: tr('abgelehnt') };
 
   const rows = list.map(w => `
@@ -4446,12 +4528,13 @@ function viewWishes() {
       <div class="wunsch-rechts">
       <span class="badge" style="border:0;background:${COL[w.state][0]};color:${COL[w.state][1]};flex:none">${NAME[w.state]}</span>
       ${wunschVerweise(w, { extern: false })}
+      ${owner && w.state !== 'done' ? '' : wunschWegKnopf(w, owner)}
       </div>
-      ${owner && w.state !== 'done' ? `<div style="display:flex;gap:8px;flex:none">
-          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
+      ${owner && w.state !== 'done' ? `<div class="wunsch-aktionen">
+          <button class="btn btn-pill btn-pill--fill" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
+          <button class="btn btn-pill btn-pill--fill btn-pill--gefahr" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
+          ${wunschWegKnopf(w, owner)}
         </div>` : ''}
-      ${wunschWegKnopf(w, owner)}
     </div>`).join('');
 
   return shell(`<div class="wrap wrap--flat" style="max-width:820px">
@@ -4502,15 +4585,17 @@ function quelle() {
  * Namensnennung verlangen. Die vollständige Liste der Drittsoftware steht
  * in DRITTSOFTWARE.md bzw. THIRD_PARTY.md im Quelltext. */
 function datenquellenZeilen() {
-  const zeile = (name, text) => `<div class="row" style="min-height:50px;gap:12px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
-      <span class="t-body" style="flex:none;min-width:96px">${esc(name)}</span>
-      <span style="flex:1;color:var(--label-2);font-size:.9375rem;line-height:1.4">${esc(text)}</span></div>`;
+  // Name oben, Erklärung als Zweittext darunter (kleiner, gedämpft) —
+  // wie eine Zeile in den Einstellungen.
+  const zeile = (name, text) => `<div class="row" style="min-height:50px;padding-top:10px;padding-bottom:10px">
+      <span style="flex:1;min-width:0"><span class="t-body" style="display:block">${esc(name)}</span>
+      <span class="t-sub c-2" style="display:block;margin-top:2px">${esc(text)}</span></span></div>`;
   return zeile('TMDB', tr('Poster, Beschreibungen, Besetzung und Folgen — The Movie Database (themoviedb.org)')) +
     zeile('OMDb', tr('IMDb- und Rotten-Tomatoes-Wertungen über omdbapi.com, Inhalte unter CC BY-NC 4.0')) +
     zeile('Wikipedia', tr('Biografien, wo TMDB keine hat — Texte unter CC BY-SA 4.0, Quelle steht bei der Person')) +
     zeile('OpenSubtitles', tr('Untertitel aus opensubtitles.com, wenn die Verwaltung einen Schlüssel hinterlegt hat')) +
     zeile('FFmpeg', tr('Umwandeln und Abspielen, unter der GPL — im Docker-Abbild aus den Paketen von Alpine Linux')) +
-    `<div class="row" style="min-height:50px"><span style="flex:1;color:var(--label-2);font-size:.9375rem;line-height:1.4">${
+    `<div class="row" style="min-height:50px"><span class="t-sub c-2" style="flex:1">${
       tr('Die vollständige Liste mit Lizenzen steht in DRITTSOFTWARE.md im Quelltext.')}</span></div>` +
     // TMDb verlangt sein Logo im „Über"-Teil, unverändert und kleiner als
     // Lumens eigenes. Die Datei ist TMDbs offizielles Logo (Primary short).
@@ -4528,16 +4613,15 @@ function viewSettings() {
     <div class="row" style="min-height:52px;gap:12px">
       <span style="flex:1;min-width:0"><span class="t-body">${esc(p.deviceName)}</span>
         <span class="t-caption c-2" style="display:block">${p.mode === 'direct' ? tr('direkt') : tr('wird umgewandelt')}${p.detail ? ' · ' + esc(p.detail) : ''}</span></span>
-      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:var(--tint-rot);color:var(--text-rot);flex:none"
         data-meinstop="${esc(p.id)}">${tr('Beenden')}</button></div>`).join('');
 
   return shell(`<div class="wrap wrap--flat" style="max-width:1100px">
-    <header style="display:flex;align-items:center;gap:18px">
+    <header class="profil-kopf">
       ${avatar(a, 64)}
-      <div><h1 class="t-large" style="margin:0">${esc(a.name)}</h1>
+      <div class="profil-kopf-name"><h1 class="t-large" style="margin:0" title="${esc(a.name)}">${esc(a.name)}</h1>
         <div class="t-sub c-2" style="margin-top:2px">${a.isOwner ? tr('Besitzer dieses Servers') : a.vollzugriff ? tr('Vollzugriff') : a.isAdmin ? tr('Mitverwalter') + (a.groupName ? ' · ' + esc(a.groupName) : '') : a.isKid ? tr('Kinderprofil') : a.groupName ? esc(a.groupName) : tr('Haushalt')}</div></div>
-      <span style="flex:1"></span>
-      <button class="btn btn-pill btn-pill--fill" data-signout>${tr('Abmelden')}</button>
+      <button class="btn btn-pill btn-pill--fill" style="flex:none" data-signout>${tr('Abmelden')}</button>
     </header>
     ${S.schutzNoetig ? `<div class="surface" role="alert" style="margin-top:22px;padding:16px 18px;border-radius:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
       ${svg(I.lock, 18, 2.2)}<span class="t-body" style="flex:1;min-width:220px">${esc(T.verwaltungBrauchtSchutz)}</span>
@@ -4566,7 +4650,7 @@ function viewSettings() {
               ${a.avatar === 'bild' ? `<img src="/api/v1/avatar/${esc(a.id)}?v=${S.avatarStand || 0}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : svg('<path d="M12 5v14M5 12h14"/>', 18, 2.2)}
               <input type="file" accept="image/*" data-avatarbild class="sr-only"></label>
           </div>`, tr('Eine Farbe, eine Figur oder ein eigenes Bild — Lumen verkleinert es auf 256 Pixel.'))}
-        ${grp(tr('Untertitel'), `<div class="row" style="min-height:54px"><span class="t-body" style="flex:1" id="ut-groesse">${tr('Grösse')}</span>
+        ${grp(tr('Untertitel'), `<div class="row segment-zeile" style="min-height:54px"><span class="t-body" style="flex:1" id="ut-groesse">${tr('Grösse')}</span>
             ${segment(tr('Grösse der Untertitel'), [['klein', tr('Klein')], ['normal', tr('Normal')], ['gross', tr('Gross')]].map(([v, n]) =>
               ({ name: n, an: (prefs.utGroesse || 'normal') === v, attr: `data-prefwert="utGroesse:${v}"` })))}
             </div>`
@@ -4578,11 +4662,11 @@ function viewSettings() {
               <option value="">${tr('Wie der Server – {name}', { name: esc(sprachNameVon(S.hello?.sprache || 'de-CH')) })}</option>
               ${sprachWahl().map(s => `<option value="${esc(s.id)}" lang="${esc(s.id)}"${prefs.sprache === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}
             </select></div>`, tr('Gilt für dein Profil auf allen Geräten.'))}
-        ${grp(tr('Darstellung'), `<div class="row" style="min-height:54px">
+        ${grp(tr('Darstellung'), `<div class="row segment-zeile" style="min-height:54px"><span class="t-body" style="flex:1">${tr('Erscheinungsbild')}</span>
             ${segment(tr('Darstellung'), [['dunkel', tr('Dunkel')], ['hell', tr('Hell')], ['auto', tr('Wie das Gerät')]].map(([v, n]) =>
               ({ name: n, an: darstellung() === v, attr: `data-darstellung="${v}"` })))}
             </div>
-            <div class="row" style="min-height:54px;flex-wrap:wrap"><span class="t-body" style="flex:1">${tr('Textgrösse')}</span>
+            <div class="row segment-zeile" style="min-height:54px"><span class="t-body" style="flex:1">${tr('Textgrösse')}</span>
             ${segment(tr('Textgrösse'), [['normal', tr('Normal')], ['gross', tr('Gross')], ['sehrgross', tr('Sehr gross')]].map(([v, n]) =>
               ({ name: n, an: textgroesse() === v, attr: `data-textgroesse="${v}"` })))}
             </div>`, tr('Gilt für diesen Browser. Die Schrift wächst auch mit der Textgrösse von Browser und System.'))}
@@ -4622,7 +4706,7 @@ function viewSettings() {
           (quelle() ? `<a class="row orow-link" style="min-height:50px;text-decoration:none;color:inherit"
               href="${esc(quelle())}" target="_blank" rel="noopener noreferrer">
              <span class="t-body" style="flex:1">${tr('Quelltext')}</span>
-             <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:.9375rem">
+             <span style="display:inline-flex;align-items:center;gap:6px;color:var(--text-blau);font-size:.9375rem">
                ${tr('ansehen')}${svg(I.chev, 14, 2.4)}</span></a>` : ''),
           tr('Lumen ist freie Software. Du darfst sie benutzen, verändern und weitergeben — wer sie verändert und betreibt, muss seine Änderungen ebenfalls offenlegen.'))}
         ${grp(tr('Datenquellen und Drittsoftware'), datenquellenZeilen(),
@@ -4651,10 +4735,12 @@ const stat = (t, v, sub, bar) => `
     ${bar != null ? `<div class="progress" style="margin-top:12px;height:4px"><i style="width:${bar}%"></i></div>` : ''}
     <div class="t-caption c-2" style="margin-top:${bar != null ? 8 : 6}px">${esc(sub)}</div></div>`;
 
+// Eine Zeile, die weiterführt: Name links, Stand rechts (eine Zeile,
+// notfalls gekürzt), Chevron immer an derselben Stelle.
 const linkRow = (label, value, view) =>
-  `<button class="row orow-link" data-go="${view}" style="width:100%;min-height:50px;text-align:left">
-     <span class="t-body" style="flex:1">${esc(label)}</span>
-     <span style="display:inline-flex;align-items:center;gap:6px;color:var(--label-2);font-size:.9375rem">${esc(value)}${svg(I.chev, 14, 2.4)}</span></button>`;
+  `<button class="row orow-link link-zeile" data-go="${view}">
+     <span class="t-body link-zeile-name">${esc(label)}</span>
+     <span class="link-zeile-wert" title="${esc(value)}">${esc(value)}</span>${svg(I.chev, 14, 2.4)}</button>`;
 
 /* Der Fernzugriff in der Verwaltung.
  *
@@ -4676,7 +4762,7 @@ function fernzugriffGruppe(f) {
     : '';
   return grp(tr('Von aussen erreichbar'),
     `<div class="row" style="min-height:52px">
-       <span style="color:${steht ? '#30d158' : '#ff9f0a'};display:flex">
+       <span style="color:${steht ? 'var(--text-gruen)' : 'var(--text-orange)'};display:flex">
          ${svg(steht ? I.check : '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 18)}</span>
        <div style="flex:1;min-width:0">
          <div class="t-body">${steht ? tr('Verbunden') : tr('Getrennt')}</div>
@@ -4722,7 +4808,7 @@ function netzGruppe(n) {
   const g = n.geraet;
   const warn = '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>';
   const hinweis = (titel, text) => `<div class="row" style="min-height:62px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
-      <span style="color:#ff9f0a;display:flex;margin-top:2px">${svg(warn, 18)}</span>
+      <span style="color:var(--text-orange);display:flex;margin-top:2px">${svg(warn, 18)}</span>
       <div style="flex:1;min-width:0"><div class="t-body">${esc(titel)}</div>
         <div class="t-sub c-2" style="margin-top:4px;line-height:1.45">${text}</div></div></div>`;
   let extra = '';
@@ -4747,7 +4833,7 @@ function netzGruppe(n) {
   }
   return grp(tr('Dieses Gerät'),
     `<div class="row" style="min-height:62px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
-       <span style="color:${g.zuHause ? '#30d158' : '#ff9f0a'};display:flex;margin-top:2px">
+       <span style="color:${g.zuHause ? 'var(--text-gruen)' : 'var(--text-orange)'};display:flex;margin-top:2px">
          ${svg(g.zuHause ? I.check : warn, 18)}</span>
        <div style="flex:1;min-width:0">
          <div class="t-body">${g.zuHause ? tr('Gilt als zu Hause') : tr('Gilt als unterwegs')}</div>
@@ -4772,7 +4858,7 @@ function quelltextZeile(q) {
     `<a class="row orow-link" style="min-height:50px;text-decoration:none;color:inherit"
         href="${esc(q.url)}" target="_blank" rel="noopener noreferrer">
        <span class="t-body" style="flex:1">${q.eigen ? tr('Deine Fassung') : tr('Unverändert')}</span>
-       <span style="display:inline-flex;align-items:center;gap:6px;color:#4aa3ff;font-size:.9375rem">
+       <span style="display:inline-flex;align-items:center;gap:6px;color:var(--text-blau);font-size:.9375rem">
          ${esc(wo)}${svg(I.chev, 14, 2.4)}</span></a>`,
     q.eigen
       ? tr('Diese Adresse bekommen alle zu sehen, die den Server benutzen.')
@@ -4831,19 +4917,20 @@ function viewAdmin() {
             : tr('ansehen'), 'adminWishes') +
           linkRow(tr('Aufräumen'),
             tr('{doppel} in Teilen · {fehlen} fehlen', { doppel: c.duplicates || 0, fehlen: c.missing || 0 }), 'cleanup'))}
+        ${grp(tr('Haushalt'),
+          linkRow(tr('Konten und Rechte'), tr('{n} Personen', { n: d.accounts || 0 }), 'accounts') +
+          (voll() ? linkRow(tr('Gruppen'), d.gruppen ? tr('{n} Gruppen', { n: d.gruppen.length }) : tr('Rechte bündeln'), 'adminGroups') : '') +
+          linkRow(tr('Verwaltungssperre'), sperreName(S.me.account.adminLock), 'adminLock'))}
+        ${fernzugriffGruppe(d.fern)}
+        ${netzGruppe(d.netz)}
       </div>
       <div>
         ${grp(tr('System'),
           linkRow(tr('Aktive Wiedergaben'), tr('{n} laufen', { n: load.total || 0 }), 'sessions') +
           linkRow(tr('Protokoll'), tr('ansehen'), 'logs') +
-          linkRow(tr('Konten und Rechte'), tr('{n} Personen', { n: d.accounts || 0 }), 'accounts') +
-          (voll() ? linkRow(tr('Gruppen'), d.gruppen ? tr('{n} Gruppen', { n: d.gruppen.length }) : tr('Rechte bündeln'), 'adminGroups') : '') +
-          linkRow(tr('Verwaltungssperre'), sperreName(S.me.account.adminLock), 'adminLock') +
           (voll() ? linkRow(tr('Updates'), updateKurz(d.update, d.version), 'adminUpdate') : '') +
           (voll() ? linkRow(tr('Sicherung'), d.sicherung ? tr('zuletzt {wann}', { wann: tagText(d.sicherung) }) : tr('noch keine'), 'adminBackups') : '') +
           (voll() ? linkRow(tr('Umwandeln'), tr('Hardware, Vorschaubilder'), 'adminUmwandlung') : ''))}
-        ${fernzugriffGruppe(d.fern)}
-        ${netzGruppe(d.netz)}
         ${voll() ? grp(tr('Name dieses Servers'), `<form id="servernameform" class="row" style="min-height:54px;gap:10px">
             <label for="servername" class="sr-only">${tr('Name dieses Servers')}</label>
             <input id="servername" name="name" maxlength="40" value="${esc(S.hello?.name || '')}" placeholder="${tr('z. B. Mein NAS')}"
@@ -4859,7 +4946,7 @@ function viewAdmin() {
         ${quelltextZeile(d.source)}
         ${d.meta && (!d.meta.tmdb?.configured || d.meta.schluessel === 'abgelehnt') ? grp(tr('Hinweis'),
           `<div class="row" style="min-height:52px">
-             <span style="color:${d.meta.schluessel === 'abgelehnt' ? '#ff6961' : '#ff9f0a'};display:flex">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20)}</span>
+             <span style="color:${d.meta.schluessel === 'abgelehnt' ? 'var(--text-rot)' : 'var(--text-orange)'};display:flex">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20)}</span>
              <div style="flex:1"><div class="t-body">${d.meta.schluessel === 'abgelehnt' ? tr('TMDb lehnt den Schlüssel ab') : tr('Kein TMDb-Schlüssel hinterlegt')}</div>
                <div class="t-sub c-2">${d.meta.schluessel === 'abgelehnt'
                  ? tr('Bitte den langen API Read Access Token eintragen')
@@ -4869,7 +4956,7 @@ function viewAdmin() {
              <button class="btn btn-pill btn-pill--fill" data-go="metadata">${d.meta.schluessel === 'abgelehnt' ? tr('Schlüssel ändern') : tr('Eintragen')}</button></div>`) : ''}
         ${c.pending && d.meta?.tmdb?.configured && d.meta.schluessel !== 'abgelehnt' ? grp(tr('Hinweis'),
           `<div class="row" style="min-height:52px">
-             <span style="color:#ff9f0a;display:flex">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20)}</span>
+             <span style="color:var(--text-orange);display:flex">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20)}</span>
              <div style="flex:1"><div class="t-body">${tr('{pending} Titel ohne Metadaten', { pending: c.pending })}</div>
                <div class="t-sub c-2">${tr('Beschreibungen und Poster fehlen noch')}</div></div>
              <button class="btn btn-pill btn-pill--fill" data-resolve>${tr('Jetzt holen')}</button></div>`) : ''}
@@ -4882,7 +4969,7 @@ function viewAdmin() {
    neu zu zeichnen — sonst verlöre das Formular darunter, was jemand
    gerade eingetippt hat. */
 const hinweisZeile = text => `
-  <div class="t-caption" style="margin-top:8px;color:#ffb340;display:flex;gap:7px">
+  <div class="t-caption" style="margin-top:8px;color:var(--text-orange);display:flex;gap:7px">
     ${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 14, 2.2)}
     <span>${esc(text)}</span></div>`;
 
@@ -4902,8 +4989,8 @@ function bibZeile(l) {
     [120, tr('alle 2 Stunden')], [360, tr('alle 6 Stunden')], [720, tr('alle 12 Stunden')], [1440, tr('alle 24 Stunden')],
     ['zeit', tr('täglich um …')]].map(([m, n]) =>
     `<option value="${m}"${(fest ? m === 'zeit' : l.intervalMin === m) ? ' selected' : ''}>${n}</option>`).join('');
-  const uhrzeit = `<input type="time" class="takt" data-taktzeit="${esc(l.id)}" value="${esc(l.scanAt || '04:00')}"
-    aria-label="${tr('Uhrzeit, zu der Lumen täglich nachsieht')}" style="${fest ? '' : 'display:none'}">`;
+  const uhrzeit = zeitWahl({ wert: l.scanAt || '04:00', klasse: 'takt', versteckt: !fest,
+    label: tr('Uhrzeit, zu der Lumen täglich nachsieht'), attrs: `data-taktzeit="${esc(l.id)}"` });
 
   let mitte = '';
   if (st.laeuft) {
@@ -4950,13 +5037,9 @@ function bibZeile(l) {
     mitte = hinweisZeile(tr('Geprüft, aber nichts gefunden. Liegen die Dateien wirklich hier — und sind es Videodateien? Unterordner liest Lumen mit.'));
   }
 
-  const knoepfe = S.delLib === l.id
-    ? `<button class="btn btn-pill" style="flex:none;background:rgba(255,69,58,.16);color:#ff6961"
-         data-delok="${esc(l.id)}">${tr('Wirklich löschen')}</button>
-       <button class="btn btn-pill" style="flex:none" data-delno>${tr('Abbrechen')}</button>`
-    : `<button class="btn btn-pill btn-pill--fill" style="flex:none" data-scan="${esc(l.id)}"
+  const knoepfe = `<button class="btn btn-pill btn-pill--fill zeilen-knopf" data-scan="${esc(l.id)}"
          ${st.laeuft || l.wartet ? 'disabled' : ''}>${st.laeuft ? tr('läuft …') : l.wartet ? tr('wartet …') : tr('Prüfen')}</button>
-       <button class="btn btn-pill" style="flex:none;color:#ff6961" data-del="${esc(l.id)}"
+       <button class="btn btn-round sm btn-round--fill btn-round--gefahr" style="flex:none" data-del="${esc(l.id)}"
          aria-label="${tr('Bibliothek löschen')}" title="${tr('Löschen')}">${svg(I.trash, 16)}</button>`;
 
   return `<div style="display:flex;align-items:flex-start;gap:12px">
@@ -4971,7 +5054,7 @@ function bibZeile(l) {
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
         <label class="t-caption c-2" style="display:inline-flex;align-items:center;gap:6px">${tr('Von selbst nachsehen')}
           <select class="takt" data-takt="${esc(l.id)}" aria-label="${tr('Wie oft Lumen von selbst nachsieht')}">${takt}</select>${uhrzeit}</label>
-        <button class="btn btn-pill" style="height:28px;font-size:.75rem" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>
+        <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-metaneu="${esc(l.id)}">${tr('Metadaten neu laden')}</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;flex:none;padding-top:2px">${knoepfe}</div>
@@ -5007,7 +5090,7 @@ function bibWaehler() {
         <span class="t-body clamp-1" style="display:block">${esc(o.name)}</span>
         ${o.freigabe ? `<span class="t-caption c-2">${tr('für Lumen freigegeben')}</span>` : ''}</span>
       ${o.gesperrt
-        ? `<span class="t-caption" style="flex:none;color:#ffb340">${tr('kein Zugriff')}</span>`
+        ? `<span class="t-caption" style="flex:none;color:var(--text-orange)">${tr('kein Zugriff')}</span>`
         : o.filme
         // Farbig: Das schlichte Abzeichen ist für dunkle Flächen gemacht
         // und verschwand im hellen Wähler.
@@ -5044,7 +5127,7 @@ function viewAdminLibraries() {
     <section style="margin-top:28px"><div class="group group--inset" id="biblist">
       ${bibListe(libs)}</div></section>
     ${libs.length ? `<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-      <button class="btn btn-pill btn-pill--fill" data-metaneu="">${tr('Alle Metadaten neu laden')}</button>
+      <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-metaneu="">${tr('Alle Metadaten neu laden')}</button>
       <span class="t-caption c-2" style="align-self:center">${tr('Holt Beschreibungen, Besetzung und Bilder für alle Titel noch einmal. Von Hand zugewiesene bleiben.')}</span></div>` : ''}
     ${voll() ? `<section style="margin-top:26px"><div class="section-h">${tr('Neue Bibliothek')}</div>
       <form id="libform" class="group group--inset" style="padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px">
@@ -5058,11 +5141,11 @@ function viewAdminLibraries() {
           <div style="display:flex;gap:8px">
             <input id="lpath" name="path" class="mono" style="flex:1;min-width:0"
               placeholder="${tr('/volume1/video/Filme')}" required>
-            <button type="button" class="btn btn-pill" style="flex:none" data-browse>${tr('Durchsuchen')}</button>
+            <button type="button" class="btn btn-pill btn-pill--fill" style="flex:none;height:46px;padding:0 18px" data-browse>${tr('Durchsuchen …')}</button>
           </div>
           <span class="hint">${tr('Der Pfad, unter dem der Server die Dateien sieht — bei Docker der Pfad im Container. Unterordner werden mitgelesen.')}</span></div>
         <div id="bibwaehler">${bibWaehler()}</div>
-        <button class="btn btn-primary" style="height:44px">${tr('Anlegen und prüfen')}</button>
+        <div class="form-fuss" style="margin-top:0"><button class="btn btn-primary">${tr('Anlegen und prüfen')}</button></div>
       </form></section>` : ''}
     <div style="height:40px"></div></div>`);
 }
@@ -5135,13 +5218,13 @@ function bibTaktAn() {
  */
 function viewAdminWishes() {
   const alle = S.data?.wishes || [];
-  const COL = { open: ['rgba(120,120,128,.24)', 'var(--label-2)'], working: ['rgba(10,132,255,.16)', '#4aa3ff'],
-    done: ['rgba(48,209,88,.16)', '#30d158'], declined: ['rgba(255,69,58,.14)', '#ff6961'] };
+  const COL = { open: ['rgba(120,120,128,.24)', 'var(--label-2)'], working: ['var(--tint-blau)', 'var(--text-blau)'],
+    done: ['var(--tint-gruen)', 'var(--text-gruen)'], declined: ['var(--tint-rot)', 'var(--text-rot)'] };
   const NAME = { open: tr('offen'), working: tr('in Arbeit'), done: tr('erfüllt'), declined: tr('abgelehnt') };
 
   const knopf = (id, zu, text, rot) =>
     `<button class="btn btn-pill${rot ? '' : ' btn-pill--fill'}" style="height:30px;font-size:.8125rem;flex:none${
-      rot ? ';background:rgba(255,69,58,.14);color:#ff6961' : ''}"
+      rot ? ';background:var(--tint-rot);color:var(--text-rot)' : ''}"
       data-wishstate="${esc(id)}:${zu}">${text}</button>`;
 
   const zeile = w => `
@@ -5291,7 +5374,7 @@ function viewAdminUpdate() {
   const e = u.einstellung || {};
   const warn = svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 20);
   const haken = svg('<path d="M4 12.5 9.5 18 20 6.5"/>', 20);
-  const uhr = (name, wert) => `<input type="time" name="${name}" value="${esc(wert || '')}" style="width:auto">`;
+  const uhr = (name, wert) => zeitWahl({ name, wert: wert || '03:00', label: name === 'fensterVon' ? tr('Von') : tr('Bis') });
 
   // Im Container: mit Aktualisierer ein Knopf, ohne ihn ein Hinweis, wie
   // er sich einrichten lässt.
@@ -5302,7 +5385,7 @@ function viewAdminUpdate() {
   const ohneAkt = `<div class="t-caption c-2" style="margin-top:8px" data-aktanleitung>${
     tr('Im Container tauscht man das Abbild als Ganzes. Mit dem Aktualisierer — einmal in der docker-compose.yml eingerichtet — gibt es hier den Knopf „Jetzt aktualisieren“: {anleitung}.',
       { anleitung: `<a href="${esc(aktAnleitung(u))}" target="_blank" rel="noopener" class="link">${tr('so geht’s')}</a>` })}
-    ${u.aktualisiererHalb ? `<br><span style="color:#ff9f0a">${tr('LUMEN_AKTUALISIERER_URL (als http://…) und LUMEN_AKTUALISIERER_TOKEN müssen beide gesetzt sein.')}</span>` : ''}
+    ${u.aktualisiererHalb ? `<br><span style="color:var(--text-orange)">${tr('LUMEN_AKTUALISIERER_URL (als http://…) und LUMEN_AKTUALISIERER_TOKEN müssen beide gesetzt sein.')}</span>` : ''}
     <br>${tr('Ohne ihn: im Container Manager Projekt › Aktion › Erstellen (mit „pull_policy: always“), sonst docker compose pull && docker compose up -d.')}</div>`;
 
   let stand;
@@ -5312,25 +5395,25 @@ function viewAdminUpdate() {
       <div style="flex:1;min-width:0">
         <div class="t-body">${tr('Wird aktualisiert — Lumen startet gleich neu')}</div>
         <div class="t-sub c-2">${tr('Der Aktualisierer holt das neue Abbild. Diese Seite meldet sich, sobald Lumen wieder da ist.')}</div>
-        ${aktWarten?.hinweis ? `<div class="t-caption" style="margin-top:8px;color:#ff9f0a" data-akthinweis>${
+        ${aktWarten?.hinweis ? `<div class="t-caption" style="margin-top:8px;color:var(--text-orange)" data-akthinweis>${
           tr('Nach zehn Minuten läuft noch immer {version}. Ist der Aktualisierer erreichbar, und gibt es das neue Abbild schon? Näheres im Protokoll unten und im Container Manager.', { version: esc(u.installiert) })}</div>` : ''}
       </div></div>`;
   } else if (u.neuer) {
     stand = `<div class="row" style="min-height:52px;align-items:flex-start;padding-top:12px;padding-bottom:12px">
-      <span style="color:#ff9f0a;display:flex;flex:none">${warn}</span>
+      <span style="color:var(--text-orange);display:flex;flex:none">${warn}</span>
       <div style="flex:1;min-width:0">
         <div class="t-body">${tr('Lumen {version} ist da — du hast {installiert}', { version: esc(u.neueste.version), installiert: esc(u.installiert) })}</div>
         <div class="t-sub c-2">${tr('veröffentlicht {wann}', { wann: zeit(u.neueste.published) })} ·
           <a href="${esc(u.neueste.url)}" target="_blank" rel="noopener" class="link">${tr('Was sich geändert hat')}</a></div>
         ${u.container && !akt ? ohneAkt : ''}
-        ${aktFehler ? `<div class="t-caption" style="margin-top:8px;color:#ff6961" data-aktfehler>${aktFehlerText(aktFehler)}</div>` : ''}
+        ${aktFehler ? `<div class="t-caption" style="margin-top:8px;color:var(--text-rot)" data-aktfehler>${aktFehlerText(aktFehler)}</div>` : ''}
       </div>
       ${u.container && !akt ? '' : `<button class="btn btn-pill btn-pill--fill" ${akt ? 'data-updcontainer' : 'data-updjetzt'} style="flex:none"${u.laeuft ? ' disabled' : ''}>
         ${u.laeuft ? tr('Läuft …') : tr('Jetzt aktualisieren')}</button>`}
     </div>`;
   } else {
     stand = `<div class="row" style="min-height:52px">
-      <span style="color:${u.fehler ? '#ff6961' : '#30d158'};display:flex;flex:none">${u.fehler ? warn : haken}</span>
+      <span style="color:${u.fehler ? 'var(--text-rot)' : 'var(--text-gruen)'};display:flex;flex:none">${u.fehler ? warn : haken}</span>
       <div style="flex:1;min-width:0">
         <div class="t-body">Lumen ${esc(u.installiert)}${u.fehler || !u.neueste ? ''
           : u.installiert === 'dev' ? ` ${tr('— aus dem Quelltext gebaut, neueste Veröffentlichung ist {version}', { version: esc(u.neueste.version) })}` : ` ${tr('— auf dem neuesten Stand')}`}</div>
@@ -5342,8 +5425,8 @@ function viewAdminUpdate() {
     <div class="row" style="min-height:44px">
       <span class="t-caption c-2 tnum" style="flex:none;width:130px">${zeit(p.at)}</span>
       <span class="t-body" style="flex:1">${esc(p.von)} → ${esc(p.nach)}${p.auto ? ` <span class="t-caption c-2">${tr('von selbst')}</span>` : ''}</span>
-      <span class="badge" style="border:0;flex:none;background:${p.ergebnis === 'ok' ? 'rgba(48,209,88,.16)' : p.ergebnis === 'fehler' ? 'rgba(255,69,58,.14)' : 'rgba(120,120,128,.24)'};
-        color:${p.ergebnis === 'ok' ? '#30d158' : p.ergebnis === 'fehler' ? '#ff6961' : 'var(--label-2)'}" title="${esc(p.notiz || '')}">
+      <span class="badge" style="border:0;flex:none;background:${p.ergebnis === 'ok' ? 'var(--tint-gruen)' : p.ergebnis === 'fehler' ? 'var(--tint-rot)' : 'rgba(120,120,128,.24)'};
+        color:${p.ergebnis === 'ok' ? 'var(--text-gruen)' : p.ergebnis === 'fehler' ? 'var(--text-rot)' : 'var(--label-2)'}" title="${esc(p.notiz || '')}">
         ${p.ergebnis === 'ok' ? tr('eingesetzt') : p.ergebnis === 'fehler' ? tr('fehlgeschlagen') : p.ergebnis === 'angestossen' ? tr('angestossen') : tr('verschoben')}</span>
     </div>${p.notiz ? `<div class="t-caption c-2" style="padding:0 16px 10px 146px">${esc(p.notiz)}</div>` : ''}`).join('')
     : `<p class="hint" style="padding:16px;margin:0">${tr('Noch keine Aktualisierung.')}</p>`;
@@ -5353,8 +5436,8 @@ function viewAdminUpdate() {
     <section style="margin-top:28px"><div class="section-h">${tr('Stand')}</div>
       <div class="group group--inset">${stand}
         <div class="row" style="min-height:48px;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-updpruefen>${tr('Jetzt prüfen')}</button>
-          <a class="btn btn-pill" style="height:30px;font-size:.8125rem;text-decoration:none" href="${esc(u.releaseSeite)}" target="_blank" rel="noopener">${tr('Alle Veröffentlichungen')}</a>
+          <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-updpruefen>${tr('Jetzt prüfen')}</button>
+          <a class="btn btn-pill btn-pill--fill zeilen-knopf" style="text-decoration:none" href="${esc(u.releaseSeite)}" target="_blank" rel="noopener">${tr('Alle Veröffentlichungen')}</a>
           <span class="t-caption c-2" style="margin-left:auto">${u.wiedergaben ? tr('{n} Wiedergaben laufen', { n: u.wiedergaben }) : tr('gerade schaut niemand')}</span>
         </div></div></section>
 
@@ -5376,7 +5459,7 @@ function viewAdminUpdate() {
             : tr('Im Container geht das nur mit dem Aktualisierer — siehe oben.')}` : ''}</span></div>
       </div></section>
     <section style="margin-top:24px"><div class="section-h">${tr('Zugang')}</div>
-      ${u.tokenUngueltig ? `<p class="t-body" style="color:#ff6961;margin:0 2px 10px">${tr('GitHub nimmt das Token nicht an — meist ist es abgelaufen. Trag hier ein neues ein, dann kommen die Updates wieder durch. Bist du nicht Besitzer des Repositorys, nimm ein {klassisches} Token mit dem Bereich „repo“ — feingranulare gelten nur für eigene Repositories.', { klassisches: `<b>${tr('klassisches')}</b>` })}</p>` : ''}
+      ${u.tokenUngueltig ? `<p class="t-body" style="color:var(--text-rot);margin:0 2px 10px">${tr('GitHub nimmt das Token nicht an — meist ist es abgelaufen. Trag hier ein neues ein, dann kommen die Updates wieder durch. Bist du nicht Besitzer des Repositorys, nimm ein {klassisches} Token mit dem Bereich „repo“ — feingranulare gelten nur für eigene Repositories.', { klassisches: `<b>${tr('klassisches')}</b>` })}</p>` : ''}
       <div class="group group--inset"><div class="row" style="min-height:52px;flex-wrap:wrap;gap:10px">
         <div style="flex:1;min-width:200px"><div class="t-body">${tr('GitHub-Token')}</div>
           <div class="t-caption c-2">${u.tokenQuelle === 'umgebung'
@@ -5385,10 +5468,10 @@ function viewAdminUpdate() {
               ? tr('Ist eingetragen. Ein neues ersetzt das alte; es wird gespeichert, aber nie wieder angezeigt.')
               : tr('Optional — nur nötig, wenn die Updates aus einem privaten Repository kommen. Wird gespeichert, aber nie wieder angezeigt.')}</div></div>
         <span class="field" style="width:min(320px,100%);margin:0"><input type="password" name="token" class="mono" aria-label="${tr('GitHub-Token')}" placeholder="${u.tokenGesetzt ? tr('neues Token, ghp_… oder github_pat_…') : tr('ghp_… oder github_pat_…')}" autocomplete="off" style="width:100%;box-sizing:border-box;height:40px"></span></div>
-        ${u.tokenQuelle === 'verwaltung' ? `<button type="button" class="btn row" style="width:100%;justify-content:flex-start;min-height:46px;color:#ff6961" data-tokenweg>
+        ${u.tokenQuelle === 'verwaltung' ? `<button type="button" class="btn row" style="width:100%;justify-content:flex-start;min-height:46px;color:var(--text-rot)" data-tokenweg>
           <span class="t-body">${tr('Token entfernen')}</span></button>` : ''}</div></section>
-    <div style="display:flex;justify-content:flex-end;margin-top:14px">
-      <button class="btn btn-pill btn-pill--fill" type="submit">${tr('Speichern')}</button></div>
+    <div class="form-fuss">
+      <button class="btn btn-primary" type="submit">${tr('Speichern')}</button></div>
     </form>
 
     <section style="margin-top:24px"><div class="section-h">${tr('Protokoll')}</div>
@@ -5400,7 +5483,7 @@ function viewAdminUpdate() {
 function updateFrage(n, container) {
   const b = document.getElementById('updfrage');
   if (!b) return;
-  b.innerHTML = `<div class="group group--inset" style="margin-top:16px;border:1px solid rgba(255,159,10,.5)">
+  b.innerHTML = `<div class="group group--inset" style="margin-top:16px;border:1px solid var(--text-orange)">
     <div class="row" style="min-height:56px;flex-wrap:wrap;gap:10px">
       <div style="flex:1;min-width:200px"><div class="t-body">${tr('{n} Wiedergaben laufen gerade', { n })}</div>
         <div class="t-caption c-2">${tr('Beim Neustart bricht sie ab. Trotzdem jetzt aktualisieren?')}</div></div>
@@ -5444,12 +5527,12 @@ function viewAdminLock() {
     <form id="lockform" style="margin-top:24px">
       ${grp(tr('Womit'), wahl.map(([k, n, h]) => `
         <label class="row" style="min-height:52px;cursor:pointer">
-          <input type="radio" name="kind" value="${k}"${k === art ? ' checked' : ''} style="margin-right:12px">
+          <input type="radio" name="kind" value="${k}"${k === art ? ' checked' : ''}>
           <div style="flex:1"><div class="t-body">${n}</div><div class="t-caption c-2">${h}</div></div></label>`).join(''))}
       <div id="lockdetail">${lockDetail(art)}</div>
-      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
-        ${art !== 'none' ? `<button class="btn btn-pill" type="button" data-relock>${tr('Jetzt sperren')}</button>` : ''}
-        <button class="btn btn-pill btn-pill--fill" type="submit">${tr('Speichern')}</button></div>
+      <div class="form-fuss">
+        ${art !== 'none' ? `<button class="btn btn-pill btn-pill--fill" type="button" data-relock>${tr('Jetzt sperren')}</button>` : ''}
+        <button class="btn btn-primary" type="submit">${tr('Speichern')}</button></div>
     </form>
     <div style="height:40px"></div></div>`);
 }
@@ -5481,12 +5564,12 @@ function viewAdminGroups() {
   const rows = eigene.map(x => `
     <div class="orow" style="height:auto;padding:14px 16px;gap:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:160px">
-        <div class="t-body">${esc(x.name)}${x.vollzugriff ? ` <span class="badge" style="border:0;background:rgba(255,159,10,.18);color:#ff9f0a">${tr('Vollzugriff')}</span>`
-          : x.verwaltung ? ` <span class="badge" style="border:0;background:rgba(10,132,255,.16);color:#4aa3ff">${tr('Verwaltung')}</span>` : ''}</div>
+        <div class="t-body">${esc(x.name)}${x.vollzugriff ? ` <span class="badge" style="border:0;background:var(--tint-orange);color:var(--text-orange)">${tr('Vollzugriff')}</span>`
+          : x.verwaltung ? ` <span class="badge" style="border:0;background:var(--tint-blau);color:var(--text-blau)">${tr('Verwaltung')}</span>` : ''}</div>
         <div class="t-caption c-2">${tr('{n} Personen', { n: x.mitglieder })} · ${tr('{n} Bibliotheken', { n: x.libraries.length })}
           · ${x.verwaltung || x.vollzugriff ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: x.limits.maxStreams })}</div></div>
       <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-grpedit="${esc(x.id)}">${tr('Bearbeiten')}</button>
-      <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961" data-grpdel="${esc(x.id)}">${tr('Auflösen')}</button>
+      <button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:var(--tint-rot);color:var(--text-rot)" data-grpdel="${esc(x.id)}">${tr('Auflösen')}</button>
     </div>`).join('');
   const zuweisung = accounts.map(a => `
     <label class="row" style="min-height:48px">
@@ -5511,23 +5594,23 @@ function viewAdminGroups() {
               <option value="voll"${g?.vollzugriff ? ' selected' : ''}>${tr('Vollzugriff — alles wie der Besitzer')}</option></select>
             <span class="hint">${tr('Wer was schaut, sieht auch hier niemand.')}</span></div>
           <div class="field"><label>${tr('Bibliotheken')}</label>
-            ${libs.length ? libs.map(l => `<label class="row" style="min-height:36px;padding:0;cursor:pointer"><input type="checkbox" name="lib" value="${esc(l.id)}"${(g ? (g.libraries || []).includes(l.id) : true) ? ' checked' : ''} style="margin-right:10px"><span class="t-body">${esc(l.name)}</span></label>`).join('')
+            ${libs.length ? libs.map(l => `<label class="schalter-zeile"><span class="t-body">${esc(l.name)}</span><input type="checkbox" name="lib" value="${esc(l.id)}"${(g ? (g.libraries || []).includes(l.id) : true) ? ' checked' : ''}></label>`).join('')
               : `<span class="hint">${tr('Noch keine Bibliotheken.')}</span>`}</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-            <div class="field"><label for="gstreams">${tr('Gleichzeitig')}</label><input id="gstreams" name="maxStreams" type="number" min="1" max="20" value="${lim.maxStreams}"></div>
+            <div class="field"><label for="gstreams">${tr('Gleichzeitig')}</label>${zahlFeld(`<input id="gstreams" name="maxStreams" type="number" min="1" max="20" value="${lim.maxStreams}">`)}</div>
             <div class="field"><label for="gage">${tr('Bis Altersfreigabe')}</label><select id="gage" name="maxAge">${altersOptionen(lim.maxAge)}</select></div>
-            <div class="field"><label for="gdl">${tr('Downloads')}</label><input id="gdl" name="maxDownloads" type="number" min="0" max="500" value="${lim.maxDownloads}"></div>
+            <div class="field"><label for="gdl">${tr('Downloads')}</label>${zahlFeld(`<input id="gdl" name="maxDownloads" type="number" min="0" max="500" value="${lim.maxDownloads}">`)}</div>
           </div>
-          <div style="display:flex;gap:18px;flex-wrap:wrap">
-            <label class="t-sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="allowUnrated"${lim.allowUnrated ? ' checked' : ''}>${tr('Ungeprüfte Titel')}</label>
-            <label class="t-sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="allowTranscode"${lim.allowTranscode ? ' checked' : ''}>${tr('Umwandeln')}</label>
-            <label class="t-sub" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="allowDownload"${lim.allowDownload ? ' checked' : ''}>${tr('Herunterladen')}</label>
+          <div class="schalter-liste">
+            <label class="schalter-zeile"><span>${tr('Ungeprüfte Titel')}</span><input type="checkbox" name="allowUnrated"${lim.allowUnrated ? ' checked' : ''}></label>
+            <label class="schalter-zeile"><span>${tr('Umwandeln')}</span><input type="checkbox" name="allowTranscode"${lim.allowTranscode ? ' checked' : ''}></label>
+            <label class="schalter-zeile"><span>${tr('Herunterladen')}</span><input type="checkbox" name="allowDownload"${lim.allowDownload ? ' checked' : ''}></label>
           </div>
           <span class="hint">${tr('Ohne „Herunterladen“ gibt es keinen Download-Knopf, und Lumen liefert Filme nur etwa doppelt so schnell aus, wie sie laufen (Kinderprofile mit Bildschirmzeit ungefähr in Echtzeit). Wer technisch versiert ist, kann einen Strom trotzdem mitschneiden.')}</span>
         </div>`)}
-      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:-10px">
-        ${g ? `<button class="btn btn-pill" type="button" data-grpneu>${tr('Abbrechen')}</button>` : ''}
-        <button class="btn btn-pill btn-pill--fill" type="submit">${g ? tr('Speichern') : tr('Anlegen')}</button></div>
+      <div class="form-fuss" style="margin-top:-6px">
+        ${g ? `<button class="btn btn-pill btn-pill--fill" type="button" data-grpneu>${tr('Abbrechen')}</button>` : ''}
+        <button class="btn btn-primary" type="submit">${g ? tr('Speichern') : tr('Anlegen')}</button></div>
     </form>`;
   return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Gruppen'), tr('Rechte bündeln und Konten zuordnen'))}
@@ -5613,7 +5696,7 @@ function viewAdminBackups() {
     ${ohead(tr('Sicherung'), tr('Einmal am Tag, nach 4:30 Uhr'))}
     ${d.fehler ? `<p class="t-body" style="color:var(--text-rot);margin-top:18px">${tr('Die letzte Sicherung ist gescheitert: {fehler}', { fehler: esc(d.fehler) })}</p>` : ''}
     <section style="margin-top:24px"><div class="group group--inset">
-      ${rows || `<p class="hint" style="padding:18px 16px">${tr('Noch keine Sicherung.')}</p>`}
+      ${rows || leer({ symbol: I.sicherung, titel: tr('Noch keine Sicherung.'), text: esc(tr('Die erste legt Lumen in der Nacht an — oder jetzt gleich mit „Jetzt sichern“.')) })}
       <button class="btn row" style="width:100%;justify-content:flex-start;min-height:48px" data-sichern>
         <span class="t-body" style="color:var(--accent)">${tr('Jetzt sichern')}</span></button>
     </div></section>
@@ -5678,7 +5761,7 @@ function viewAdminUmwandlung() {
       <p class="t-sub c-2" style="margin:16px 2px 0;max-width:760px">${esc(tonemap)}
         ${esc(tr('Höchstens {n} Umwandlungen laufen gleichzeitig.', { n: d.maxUmwandlungen || 2 }))}
         ${esc(tr('Vorbereitet wird mit niedrigster Priorität und nur, wenn gerade nichts umgewandelt wird.'))}</p>
-      <div style="margin-top:18px"><button class="btn btn-primary" type="submit">${tr('Speichern')}</button></div>
+      <div class="form-fuss"><button class="btn btn-primary" type="submit">${tr('Speichern')}</button></div>
     </form>
     <div style="height:40px"></div></div>`);
 }
@@ -5693,43 +5776,48 @@ function viewSessions() {
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span class="t-body">${tr('Wiedergabe {nr}', { nr: i + 1 })}</span>
-          <span class="badge" style="border:0;background:${s.mode === 'direct' ? 'rgba(48,209,88,.16)' : 'rgba(10,132,255,.16)'};color:${s.mode === 'direct' ? '#30d158' : '#4aa3ff'}">
+          <span class="badge" style="border:0;background:${s.mode === 'direct' ? 'var(--tint-gruen)' : 'var(--tint-blau)'};color:${s.mode === 'direct' ? 'var(--text-gruen)' : 'var(--text-blau)'}">
             ${s.mode === 'direct' ? tr('Direkt') : tr('Wird umgewandelt')}</span>
         </div>
       </div>
-      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:rgba(255,69,58,.14);color:#ff6961;flex:none"
+      <button class="btn btn-pill" style="height:32px;font-size:.8125rem;background:var(--tint-rot);color:var(--text-rot);flex:none"
         data-kill="${esc(s.id)}">${tr('Beenden')}</button>
     </div>`).join('');
 
   return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Aktive Wiedergaben'), tr('{n} laufen · Last {last} — beenden, wenn der Server zu viel rechnet', { n: (d.sessions || []).length, last: ({ gering: tr('gering'), mittel: tr('mittel'), hoch: tr('hoch') })[d.load?.last] || tr('gering') }))}
     <section style="margin-top:28px"><div class="group group--inset">
-      ${rows || `<p class="hint" style="padding:18px 16px">${tr('Gerade läuft nichts.')}</p>`}</div></section>
+      ${rows || leer({ symbol: I.wiedergabe, titel: tr('Gerade läuft nichts.'), text: esc(tr('Sobald jemand schaut, steht die Wiedergabe hier.')) })}</div></section>
     <p class="t-sub c-2" style="margin:16px 2px 0;display:flex;align-items:flex-start;gap:8px;max-width:760px">
       ${svg(I.lock, 14, 2.2)}<span>${esc(d.note || '')}</span></p>
     <div style="height:40px"></div></div>`);
 }
 
+// Stufe und Bereich der Protokollzeilen, in der Sprache der Oberfläche.
+const LOG_STUFE = () => ({ info: tr('Info'), warn: tr('Warnung'), error: tr('Fehler') });
+const LOG_BEREICH = () => ({ scan: tr('Log|Einlesen'), library: tr('Bibliothek'), metadaten: tr('Metadaten'), verwaltung: tr('Verwaltung'),
+  aufraeumen: tr('Aufräumen'), stream: tr('Wiedergabe'), vorbereiten: tr('Vorbereiten'), wuensche: tr('Wünsche'), untertitel: tr('Untertitel'),
+  umwandlung: tr('Umwandlung'), sicherung: tr('Sicherung'), start: tr('Log|Start'), server: tr('Server'), anmeldung: tr('Anmeldung'),
+  sprache: tr('Sprache'), setup: tr('Einrichtung'), reihen: tr('Filmreihen'), update: tr('Update'), test: tr('Test') });
 function viewLogs() {
-  const COL = { info: 'var(--label-2)', warn: '#ffb340', error: '#ff6961' };
-  const TAG = { info: 'rgba(120,120,128,.2)', warn: 'rgba(255,159,10,.18)', error: 'rgba(255,69,58,.18)' };
+  const COL = { info: 'var(--label-2)', warn: 'var(--text-orange)', error: 'var(--text-rot)' };
+  const TAG = { info: 'rgba(120,120,128,.2)', warn: 'var(--tint-orange)', error: 'var(--tint-rot)' };
+  const stufe = LOG_STUFE(), bereich = LOG_BEREICH();
   const lines = (S.data?.lines || []).map(l => `
-    <div style="display:flex;gap:12px;align-items:baseline;min-height:28px;padding:3px 0">
-      <span class="mono tnum c-3" style="flex:none;width:118px">${l.area === 'stream'
+    <div class="log-zeile">
+      <span class="tnum c-3 log-zeit">${l.area === 'stream'
         // Störungen beim Abspielen kommen als Tageszahl, ohne Uhrzeit.
         ? datum(l.at)
         : uhrzeitText(l.at, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
-      <span class="badge" style="border:0;flex:none;width:56px;justify-content:center;background:${TAG[l.level]};color:${COL[l.level]};text-transform:uppercase;font-size:.625rem">${l.level}</span>
-      <span class="mono" style="flex:none;width:86px;color:var(--label-3)">${esc(l.area)}</span>
-      <span class="mono" style="color:${l.level === 'info' ? 'var(--label-2)' : COL[l.level]};flex:1">${esc(l.message)}</span></div>`).join('');
+      <span class="badge log-stufe" style="background:${TAG[l.level] || TAG.info};color:${COL[l.level] || COL.info}">${esc(stufe[l.level] || l.level)}</span>
+      <span class="log-bereich c-3">${esc(bereich[l.area] || l.area)}</span>
+      <span class="log-text" style="color:${l.level === 'info' ? 'var(--label)' : COL[l.level]}">${esc(l.message)}</span></div>`).join('');
 
-  const tabs = [['all', tr('Alles')], ['error', tr('Fehler')], ['warn', tr('Warnung')], ['info', tr('Info')]].map(([v, n]) =>
-    `<button class="tab-pill" role="tab" aria-selected="${S.logFilter === v}" data-logf="${v}" style="height:30px;font-size:.8125rem">${n}</button>`).join('');
-
-  return shell(`<div class="wrap wrap--flat">
+  return shell(`<div class="wrap wrap--flat wrap--verwaltung">
     ${ohead(tr('Protokoll'), tr('Was der Server tut — und wo es hakt'))}
-    <div role="tablist" style="display:inline-flex;padding:3px;border-radius:999px;background:var(--fill);gap:2px;margin:24px 0 14px">${tabs}</div>
-    <div class="group group--inset" style="padding:10px 16px">
+    ${segment(tr('Protokoll filtern'), [['all', tr('Alles')], ['error', tr('Fehler')], ['warn', tr('Warnung')], ['info', tr('Info')]].map(([v, n]) =>
+      ({ name: n, an: S.logFilter === v, attr: `data-logf="${v}"` })), 'log-filter')}
+    <div class="group group--inset log-liste">
       ${lines || `<p class="hint" style="padding:10px 0">${tr('Keine Einträge.')}</p>`}</div>
     <p class="t-caption c-2" style="margin:10px 2px 0">
       ${tr('Hier steht, was der Server macht — Geräte, Platten, Umwandlungen. Nie, welcher Titel läuft.')}</p>
@@ -5789,7 +5877,10 @@ function viewCleanup() {
     (x.art === 'verschieden' || x.art === 'identisch'));
   // ▶ Anspielen: genau diese Datei, ohne Stand (wie ein Extra) — damit man
   // sieht, was drin ist, bevor man etwas abtrennt oder zusammenfügt.
-  const knopfKlein = 'class="btn btn-pill" style="height:28px;font-size:.75rem;flex:none;background:var(--fill)"';
+  // Alle Aktionen in den Zeilen gleich: gefüllte Pille, 32 px (am Finger 44).
+  // Pfade überall gleich gekürzt: die letzten drei Teile, ganz im Tooltip.
+  const kurzPfad = p => { const t = String(p || '').split('/').filter(Boolean); return esc((t.length > 3 ? '… / ' : '') + t.slice(-3).join(' / ')); };
+  const knopfKlein = 'class="btn btn-pill btn-pill--fill zeilen-knopf"';
   const anspielKnopf = (f, text = tr('Anspielen')) => `<button ${knopfKlein} data-anspielen="${esc(f.id)}" data-anspielen-titel="${esc(f.path.split('/').pop())}"
     title="${esc(tr('Spielt genau diese Datei ab, ohne den Stand zu speichern'))}"><span aria-hidden="true">▶</span> ${esc(text)}</button>`;
   const doppelZeile = x => {
@@ -5805,14 +5896,14 @@ function viewCleanup() {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="t-body" style="flex:1 1 200px">${esc(x.title)}${x.year ? ` (${x.year})` : ''}
           <span class="t-caption c-2"> ${art}</span></div>
-        ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
-        ${teile ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:rgba(120,120,128,.2)" data-teile-trennen="${esc(x.itemId)}"
+        ${teile && voll() ? `<button class="btn btn-pill btn-pill--fill zeilen-knopf" data-teile="${esc(x.itemId)}">${tr('Zu einer Datei zusammenführen')}</button>` : ''}
+        ${teile ? `<button class="btn btn-pill btn-pill--fill zeilen-knopf" data-teile-trennen="${esc(x.itemId)}"
           title="${esc(tr('Teil 1 bleibt, jeder weitere Teil wird ein eigener Film'))}">${tr('Sind verschiedene Filme')}</button>` : ''}
-        ${x.art === 'verschieden' ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;background:var(--fill)" data-als-teile="${esc(x.itemId)}" data-dateien="${esc(ids)}"
+        ${x.art === 'verschieden' ? `<button class="btn btn-pill btn-pill--fill zeilen-knopf" data-als-teile="${esc(x.itemId)}" data-dateien="${esc(ids)}"
           title="${esc(tr('Ein Film in Teilen: laufen nacheinander, der Scan trennt sie nicht wieder'))}">${tr('Als Teile zusammenfügen')}</button>` : ''}
       </div>
       ${x.files.map(f => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
-        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(f.path)}</span>
+        <span class="mono c-2 pfad-kurz" title="${esc(f.path)}">${kurzPfad(f.path)}</span>
         <span class="t-caption c-2 tnum">${[teile ? tr('Teil {nr}', { nr: f.partNo }) : '', f.height ? f.height + 'p' : '', f.container ? f.container.toUpperCase() : '',
           groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
         ${gleich.has(f.id) ? `<span class="badge badge--rot">${tr('doppelt — eine kann weg')}</span>` : ''}
@@ -5821,7 +5912,7 @@ function viewCleanup() {
           ? `<span class="badge badge--gruen" title="${esc(tr('Lumen spielt diese Datei zuerst ab'))}">${tr('Standard')}</span>`
           : `<button ${knopfKlein} data-fassung="${esc(x.itemId)}:${esc(f.id)}"
               title="${esc(tr('Lumen spielt diese Datei zuerst ab. Die anderen bleiben als Fassungen am Titel – nichts wird gelöscht oder abgetrennt.'))}">${tr('Als Standard')}</button>`}
-        ${teile || x.art === 'identisch' ? '' : `<button class="btn btn-pill" style="height:28px;font-size:.75rem;background:rgba(120,120,128,.2)" data-abtrennen="${esc(f.id)}"
+        ${teile || x.art === 'identisch' ? '' : `<button class="btn btn-pill btn-pill--fill zeilen-knopf" data-abtrennen="${esc(f.id)}"
           title="${tr('Ist ein anderer Film — als eigenen Titel führen')}">${tr('Abtrennen')}</button>`}
       </div>`).join('')}
     </div>`;
@@ -5834,10 +5925,10 @@ function viewCleanup() {
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="t-body" style="flex:1 1 200px">${esc(k.title)}${k.year ? ` (${k.year})` : ''}
           <span class="t-caption c-2"> ${tr('· {n} Einträge, vielleicht Teile eines Films', { n: new Set(k.files.map(f => f.itemId)).size })}</span></div>
-        <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-als-teile="${esc(k.itemId)}" data-dateien="${esc(k.files.map(f => f.id).join(','))}">${tr('Als Teile zusammenfügen')}</button>
+        <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-als-teile="${esc(k.itemId)}" data-dateien="${esc(k.files.map(f => f.id).join(','))}">${tr('Als Teile zusammenfügen')}</button>
       </div>
       ${k.files.map(f => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
-        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(f.path)}</span>
+        <span class="mono c-2 pfad-kurz" title="${esc(f.path)}">${kurzPfad(f.path)}</span>
         <span class="t-caption c-2 tnum">${[esc(f.titel), f.height ? f.height + 'p' : '', groesse(f.sizeBytes)].filter(Boolean).join(' · ')}</span>
         ${anspielKnopf(f)}
       </div>`).join('')}
@@ -5859,15 +5950,15 @@ function viewCleanup() {
     const ersatz = !!a?.ersatz;
     return `
     <div class="orow" style="height:auto;padding:12px 16px;align-items:flex-start;gap:12px">
-      <span style="color:${ersatz ? 'var(--label-3)' : '#ff9f0a'};display:flex;flex:none;margin-top:2px">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
+      <span style="color:${ersatz ? 'var(--label-3)' : 'var(--text-orange)'};display:flex;flex:none;margin-top:2px">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
       <div style="flex:1;min-width:0">
         ${a ? `<div class="t-body">${fehlendWas(a)}</div>` : ''}
-        <div class="mono c-2 fehlend-pfad">${esc(f.path)}</div>
+        <div class="mono c-2 pfad-kurz" title="${esc(f.path)}">${kurzPfad(f.path)}</div>
         ${ersatz ? `<div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${a.kind === 'episode'
           ? tr('Wurde vermutlich umbenannt – die Folge ist weiterhin da.')
           : tr('Wurde vermutlich umbenannt – der Film ist weiterhin da.')} ${tr('Lumen trägt den alten Eintrag beim nächsten Durchlauf selbst aus; Stand und Haken bleiben.')}</div>` : ''}
       </div>
-      ${voll() && !ersatz ? `<button class="btn btn-pill" style="height:28px;font-size:.75rem;flex:none;background:rgba(120,120,128,.2)" data-fehlend-weg="${esc(f.id)}">${tr('Endgültig entfernen')}</button>` : ''}</div>`;
+      ${voll() && !ersatz ? `<button class="btn btn-pill btn-pill--fill btn-pill--gefahr zeilen-knopf" data-fehlend-weg="${esc(f.id)}">${tr('Endgültig entfernen')}</button>` : ''}</div>`;
   }).join('');
   const nFehlend = d.offen?.missing ?? (d.missing || []).length;
 
@@ -5886,7 +5977,6 @@ function viewCleanup() {
   const schl = d.schluessel || 'ok';
   const offenText = schl === 'fehlt' ? tr('Wartet auf einen TMDb-Schlüssel.')
     : schl === 'abgelehnt' ? GRUND.schluessel : tr('Noch nicht geprüft.');
-  const kurzPfad = p => esc(p.split('/').filter(Boolean).slice(-4).join(' / '));
   const zeileOffen = i => {
     const g = i.grund || null;
     const gesucht = (g?.gesucht || []).slice(0, 4).map(x => `„${esc(x)}“`).join(', ');
@@ -5896,24 +5986,30 @@ function viewCleanup() {
         <div style="flex:1;min-width:220px">
           <div class="t-body">${esc(i.title)}${i.year ? ` <span class="c-2">(${i.year})</span>` : ''}
             <span class="t-caption c-2">· ${i.kind === 'movie' ? tr('Film') : i.kind === 'series' ? tr('Serie') : esc(i.kind)}</span></div>
-          ${i.pfad ? `<div class="t-caption c-3" style="font-family:ui-monospace,Menlo,monospace;font-size:.7188rem;margin-top:3px;overflow-wrap:anywhere" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
+          ${i.pfad ? `<div class="mono c-2 pfad-kurz" style="margin-top:3px" title="${esc(i.pfad)}">${kurzPfad(i.pfad)}</div>` : ''}
           <div class="t-caption c-2" style="margin-top:4px;line-height:1.45">${g
             ? `${(g.art === 'fehler' && schl === 'abgelehnt' ? GRUND.schluessel : GRUND[g.art]) || ''}${gesucht ? ' ' + tr('Gesucht: {was}.', { was: gesucht }) : ''}${g.vorschlag ? ' ' + tr('Am nächsten: {titel} ({prozent} %).', { titel: esc(g.vorschlag), prozent: Math.round((g.wert || 0) * 100) }) : ''}`
             : i.matchState === 'pending' ? offenText : tr('TMDb lieferte keinen sicheren Treffer. Mit „Suchen“ oder „ID eingeben“ zuordnen.')}</div>
         </div>
         <div style="display:flex;gap:8px;flex:none;flex-wrap:wrap">
-          <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-zuo-id="${esc(i.id)}">${tr('ID eingeben')}</button>
-          <button class="btn btn-pill" style="height:30px;font-size:.8125rem" data-go="detail" data-id="${esc(i.id)}">${tr('Öffnen')}</button>
+          <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-zuo-suchen="${esc(i.id)}" data-titel="${esc(i.title)}">${tr('Suchen …')}</button>
+          <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-zuo-id="${esc(i.id)}">${tr('ID eingeben …')}</button>
+          <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-go="detail" data-id="${esc(i.id)}">${tr('Öffnen')}</button>
         </div>
       </div>
-      <div data-zuo-box="${esc(i.id)}" style="margin-top:6px"></div>
+      <div data-zuo-box="${esc(i.id)}"></div>
     </div>`;
   };
-  const unmatched = (d.unmatched || []).map(zeileOffen).join('');
-  const ausstehend = (d.ausstehend || []).map(zeileOffen).join('');
-  const nUnmatched = d.offen?.unmatched ?? (d.unmatched || []).length;
-  const nAusstehend = d.offen?.pending ?? (d.ausstehend || []).length;
+  // Titel, deren Datei leer, defekt oder gesperrt ist, stehen unten unter
+  // „Ausgelassene Dateien" — nicht zusätzlich als „wartet" oder „nicht
+  // erkannt": Zuordnen hilft dort nicht.
+  const defekt = new Set((d.ausgelassen || []).flatMap(b => (b.liste || []).filter(a => /^defekt_/.test(a.grund)).flatMap(a => a.pfade || [])));
+  const ohneDefekt = l => (l || []).filter(i => !i.pfad || !defekt.has(i.pfad));
+  const listeUnm = ohneDefekt(d.unmatched), listeAus = ohneDefekt(d.ausstehend);
+  const unmatched = listeUnm.map(zeileOffen).join('');
+  const ausstehend = listeAus.map(zeileOffen).join('');
+  const nUnmatched = (d.offen?.unmatched ?? (d.unmatched || []).length) - ((d.unmatched || []).length - listeUnm.length);
+  const nAusstehend = (d.offen?.pending ?? (d.ausstehend || []).length) - ((d.ausstehend || []).length - listeAus.length);
 
   // Was der letzte Durchlauf mit Absicht ausgelassen hat.
   const AUSLASS = {
@@ -5976,7 +6072,7 @@ function viewCleanup() {
   const schluesselHinweis = schl === 'ok' ? '' : `
     <div class="group group--inset" style="margin-top:22px">
       <div class="row" style="min-height:56px;gap:12px;align-items:flex-start;padding:12px 16px">
-        <span style="color:${schl === 'abgelehnt' ? '#ff6961' : '#ff9f0a'};display:flex;flex:none;margin-top:2px">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
+        <span style="color:${schl === 'abgelehnt' ? 'var(--text-rot)' : 'var(--text-orange)'};display:flex;flex:none;margin-top:2px">${svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17v.01"/>', 19)}</span>
         <div style="flex:1;min-width:0">
           <div class="t-body">${schl === 'abgelehnt' ? tr('TMDb lehnt den Schlüssel ab') : tr('Kein TMDb-Schlüssel eingetragen')}</div>
           <div class="t-caption c-2" style="line-height:1.5;margin-top:2px">${schl === 'abgelehnt'
@@ -6001,12 +6097,12 @@ function viewCleanup() {
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>
-      ${voll() ? `<div style="margin:10px 16px 0"><button class="btn btn-pill" style="height:32px;font-size:.8125rem" data-fehlende-weg-alle>${tr('Alle entfernen, die länger als einen Tag fehlen')}</button></div>` : ''}</section>` : ''}
+      ${voll() ? `<div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill btn-pill--gefahr zeilen-knopf" data-fehlende-weg-alle>${tr('Alle entfernen, die länger als einen Tag fehlen')}</button></div>` : ''}</section>` : ''}
     ${unmatched ? `<section style="margin-top:22px"><div class="section-h">${tr('Nicht erkannt · {n}', { n: nUnmatched })}</div>
       <div class="group group--inset">${unmatched}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0;line-height:1.5">${tr('Hier war die Zuordnung zu unsicher. Lieber nichts als der falsche Film. „Suchen“ sucht frei bei TMDb, „ID eingeben“ nimmt eine IMDb-, TMDb- oder TheTVDB-Kennung oder einen Link. Zugewiesenes gilt als von Hand zugeordnet und bleibt so.')}
         ${tr('Tipp: Eine Kennung im Ordner- oder Dateinamen, etwa „Matrix (1999) {imdb-tt0133093}“, ordnet beim nächsten Durchlauf ohne Suche zu.')}</p>
-      <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
+      <div style="margin:10px 16px 0"><button class="btn btn-pill btn-pill--fill zeilen-knopf" data-fk-uebernahme>${tr('Zuordnungen aus Emby oder Jellyfin übernehmen …')}</button></div></section>` : ''}
     ${ausstehend ? `<section style="margin-top:22px"><div class="section-h">${tr('Wartet auf die Zuordnung · {n}', { n: nAusstehend })}</div>
       <div class="group group--inset">${ausstehend}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${schl === 'ok' ? tr('Diese Titel prüft der nächste Metadaten-Durchgang.')
@@ -6019,44 +6115,64 @@ function viewCleanup() {
         <div class="orow" style="height:auto;padding:12px 16px">
           <div style="flex:1;min-width:0"><div class="t-body">${esc(r.name)}</div>
             <div class="t-caption c-2">${tr('{n} Filme', { n: r.anzahl })}</div></div>
-          <button class="btn btn-pill btn-pill--fill" style="flex:none" data-reihe-zurueck="${esc(r.id)}">${tr('Wiederherstellen')}</button>
+          <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-reihe-zurueck="${esc(r.id)}">${tr('Wiederherstellen')}</button>
         </div>`).join('')}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Lumen bildet sie nicht wieder, bis du sie zurückholst.')}</p></section>` : ''}
     ${!dup && !dupFassungen && !dupKandidaten && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length && !schluesselHinweis ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
     <div style="height:40px"></div></div>`);
 }
 
+/* Was man mit einem Konto tun kann, in einem „…"-Menü — in jeder Zeile
+   an derselben Stelle, statt einer wechselnden Reihe verschiedener Knöpfe.
+   Ohne Möglichkeiten ein gleich breiter Platzhalter, damit die Spalten
+   stehen bleiben. */
+function kontoMenue(a) {
+  const ich = S.me?.account?.id;
+  const darfPin = !a.isOwner && a.id !== ich && (voll() || !a.isAdmin) && a.verwaltbar !== false && (a.lockKind || 'none') !== 'none';
+  const eintraege = [
+    !a.isOwner && !a.isAdmin && a.id !== ich && a.verwaltbar !== false
+      ? `<button role="menuitem" tabindex="-1" class="mehr-eintrag" data-grenzen="${esc(a.id)}">${tr('Was {name} darf …', { name: esc(a.name) })}</button>` : '',
+    a.bildschirmzeit && a.verwaltbar !== false
+      ? `<button role="menuitem" tabindex="-1" class="mehr-eintrag" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit …')}</button>` : '',
+    darfPin ? `<button role="menuitem" tabindex="-1" class="mehr-eintrag" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen …')}</button>` : '',
+    !a.isOwner && a.id !== ich && voll()
+      ? `<button role="menuitem" tabindex="-1" class="mehr-eintrag mehr-eintrag--gefahr" data-kontoweg="${esc(a.id)}">${tr('Profil entfernen …')}</button>` : '',
+  ].filter(Boolean);
+  if (!eintraege.length) return '<span class="konto-mehr-platz" aria-hidden="true"></span>';
+  const id = 'konto-mehr-' + a.id;
+  return `<div class="mehr-huelle">
+    <button class="btn btn-round sm btn-round--fill" data-mehrmenue aria-haspopup="menu" aria-expanded="false" aria-controls="${esc(id)}"
+      aria-label="${tr('Weitere Aktionen für {name}', { name: esc(a.name) })}">${svg('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>', 18, 2)}</button>
+    <div class="mehr-menue mehr-menue--rechts popover glass" id="${esc(id)}" role="menu" aria-label="${esc(a.name)}" hidden>${eintraege.join('')}</div></div>`;
+}
+
 function viewAccounts() {
   // Rechte direkt am Konto: nur schauen, mitverwalten oder Vollzugriff
   // (alles wie der Besitzer). Ändern verlangt den Code noch einmal.
   const rolle = a => a.vollzugriff ? 'voll' : a.isAdmin ? 'verwalten' : 'schauen';
-  const ich = S.me?.account?.id;
-  // PIN zurücksetzen: nie beim Besitzer, nicht beim eigenen Profil (das
-  // geht unter „Ich"), und ein Mitverwalter nur bei Konten ohne Verwaltung.
+  // PIN zurücksetzen (kontoMenue): nie beim Besitzer, nicht beim eigenen
+  // Profil (das geht unter „Ich"), ein Mitverwalter nur bei Konten ohne
+  // Verwaltung — und nur, wo es eine PIN oder ein Passwort gibt.
   // verwaltbar: Mitverwaltende mit nur einem Teil der Bibliotheken
   // ändern nur Konten ganz innerhalb ihres Bereichs (der Server prüft es).
-  const darfPin = a => !a.isOwner && a.id !== ich && (voll() || !a.isAdmin) && a.verwaltbar !== false;
   const rows = (S.data?.accounts || []).map(a => `
-    <div class="orow" style="height:auto;padding:14px 16px;gap:12px;flex-wrap:wrap">
+    <div class="orow konto-zeile">
       ${avatar(a, 34, 'flex:none')}
-      <div style="flex:1;min-width:180px">
+      <div style="flex:1;min-width:0">
         <div class="t-body">${esc(a.name)}</div>
         <div class="t-caption c-2">${a.isOwner ? tr('Besitzer') : ROLLEN_GRUPPEN[a.groupId] ? esc(rollenName(a.groupId)) : a.isKid ? esc(tr(T.kinderprofilBis, { n: a.limits.maxAge })) : tr('Haushalt')}${a.groupName && !ROLLEN_GRUPPEN[a.groupId] ? ` ${tr('· Gruppe „{groupName}“', { groupName: esc(a.groupName) })}` : ''}
           · ${tr('{n} Bibliotheken', { n: a.libraries.length })} · ${tr('{n} Geräte', { n: a.devices })} · ${a.isOwner || a.isAdmin ? tr('ohne Grenzen') : tr('höchstens {maxStreams} gleichzeitig', { maxStreams: a.limits.maxStreams })} · ${esc(schutzText(a.lockKind, true))}${bzKontoText(a) ? ` · ${esc(bzKontoText(a))}` : ''}</div>
       </div>
       <div class="konto-knoepfe">
-      ${!a.isOwner && !a.isAdmin && a.id !== ich && a.verwaltbar !== false ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-grenzen="${esc(a.id)}" aria-label="${tr('Was {name} darf', { name: esc(a.name) })}">${tr('Bearbeiten')}</button>` : ''}
-      ${a.bildschirmzeit && a.verwaltbar !== false ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-bildschirmzeit="${esc(a.id)}">${tr('Bildschirmzeit')}</button>` : ''}
-      ${darfPin(a) ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none" data-pinreset="${esc(a.id)}">${tr('PIN zurücksetzen')}</button>` : ''}
-      ${!a.isOwner && a.id !== ich && voll() ? `<button class="btn btn-pill" style="height:30px;font-size:.8125rem;flex:none;background:rgba(255,69,58,.14);color:#ff6961" data-kontoweg="${esc(a.id)}">${tr('Entfernen')}</button>` : ''}
-      ${a.isOwner ? `<span class="t-caption c-2">${tr('alle Rechte')}</span>` : voll() ? `
-        <select class="takt" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
+      ${a.isOwner ? `<span class="t-caption c-2 konto-rolle">${tr('alle Rechte')}</span>` : voll() ? `
+        <select class="takt konto-rolle" data-rolle="${esc(a.id)}" aria-label="${tr('Rechte von {name}', { name: esc(a.name) })}">
           ${[['schauen', tr('Nur schauen')], ['verwalten', tr('Verwaltet mit')], ['voll', tr('Vollzugriff')]]
             // Ein Kinderprofil bekommt keine Verwaltung (der Server lehnt
             // es ab) – dann gar nicht erst anbieten.
             .filter(([k]) => !a.isKid || k === 'schauen' || rolle(a) === k).map(([k, n]) =>
             `<option value="${k}"${rolle(a) === k ? ' selected' : ''}>${n}</option>`).join('')}</select>`
-        : `<span class="t-caption c-2">${{ schauen: tr('Nur schauen'), verwalten: tr('Verwaltet mit'), voll: tr('Vollzugriff') }[rolle(a)]}</span>`}
+        : `<span class="t-caption c-2 konto-rolle">${{ schauen: tr('Nur schauen'), verwalten: tr('Verwaltet mit'), voll: tr('Vollzugriff') }[rolle(a)]}</span>`}
+      ${kontoMenue(a)}
       </div>
     </div>`).join('');
   return shell(`<div class="wrap wrap--flat wrap--verwaltung">
@@ -6107,7 +6223,7 @@ function viewMetadata() {
         `<div style="padding:16px" class="field">
           <label for="tmdb">${tr('Schlüssel (API Read Access Token)')}</label>
           <input id="tmdb" name="tmdbKey" class="mono" placeholder="${d.tmdb?.configured ? tr('•••••••• — hinterlegt') : tr('eyJhbGciOi…')}">
-          ${d.schluessel === 'abgelehnt' ? `<span class="hint" role="status" style="color:#ff6961">${tr('TMDb lehnt den hinterlegten Schlüssel ab. Bitte neu eintragen.')}</span>` : ''}
+          ${d.schluessel === 'abgelehnt' ? `<span class="hint" role="status" style="color:var(--text-rot)">${tr('TMDb lehnt den hinterlegten Schlüssel ab. Bitte neu eintragen.')}</span>` : ''}
           <span class="hint">${tr('Ohne diesen Schlüssel kommen Poster und Beschreibungen nur aus NFO-Dateien und Bildern neben den Filmen. Kostenlos: auf {seite} anmelden, dann unter {menue} den {token} kopieren — den langen, der mit {anfang} anfängt, nicht die kurze API-Kennung.', {
               seite: '<a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener noreferrer">themoviedb.org</a>',
               menue: `<span class="mono">${tr('Einstellungen → API')}</span>`, token: '<b>API Read Access Token</b>',
@@ -6133,11 +6249,11 @@ function viewMetadata() {
         tr('Die Region entscheidet, welche Altersfreigabe gilt — in der Schweiz eine andere als in den USA.'))}
       ${grp(tr('Lokale Metadaten'),
         `<label class="row" style="padding:12px 16px;gap:12px;cursor:pointer;align-items:flex-start">
-          <input type="checkbox" name="nfoBevorzugen"${d.nfoBevorzugen !== false ? ' checked' : ''} style="margin-top:3px">
+          <input type="checkbox" name="nfoBevorzugen"${d.nfoBevorzugen !== false ? ' checked' : ''}>
           <span><span class="t-body">${tr('Lokale Metadaten (NFO) bevorzugen')}</span>
             <span class="t-caption c-2" style="display:block;margin-top:2px">${tr('Liegen neben den Dateien NFO-Dateien (Kodi, Emby, Jellyfin, tinyMediaManager), gelten Titel, Beschreibung, Genres und Freigabe daraus vor denen von TMDb. Eine Kennung in der NFO wird immer genutzt.')}</span></span></label>`,
         tr('Poster, Hintergründe und Logos neben den Dateien (poster.jpg, fanart.jpg …) gehen immer vor.'))}
-      <button class="btn btn-primary" style="height:46px;width:100%">${tr('Speichern')}</button>
+      <div class="form-fuss"><button class="btn btn-primary" type="submit">${tr('Speichern')}</button></div>
     </form>
     ${d.ready ? `<button class="btn btn-pill btn-pill--fill" style="margin-top:18px" data-resolve>
         ${tr('Fehlende Metadaten jetzt holen')}</button>` : ''}
@@ -6235,6 +6351,8 @@ app.addEventListener('click', async e => {
   /* Filmreihen */
   if (hit('data-reihe-aufloesen') || hit('data-reihe-zeigen')) {
     const weg = !!hit('data-reihe-aufloesen');
+    if (weg && !(await rueckfrage({ titel: tr('Reihe auflösen?'), text: tr('Die Filme bleiben, sie stehen danach nur nicht mehr als Reihe zusammen. Unter Verwaltung › Aufräumen lässt sich das zurücknehmen.'),
+      ja: tr('Auflösen'), gefaehrlich: true }))) return;
     try { await api.adminSetCollection(S.id, { aufgeloest: weg }); }
     catch (err) { return toast(err.message); }
     toast(weg ? tr('Reihe aufgelöst — die Filme bleiben') : tr('Reihe wiederhergestellt'));
@@ -6254,9 +6372,9 @@ app.addEventListener('click', async e => {
     catch (err) { return toast(err.message); }
     return load();
   }
-  if (hit('data-liste-weg')) { S.listeWeg = true; return render(); }
-  if (hit('data-liste-weg-nein')) { S.listeWeg = false; return render(); }
-  if (hit('data-liste-weg-ok')) {
+  if (hit('data-liste-weg')) {
+    if (!(await rueckfrage({ titel: tr('Liste „{name}“ löschen?', { name: S.data?.name || '' }), text: tr('Die Titel darin bleiben in der Mediathek.'),
+      ja: tr('Löschen'), gefaehrlich: true }))) return;
     try { await api.deletePlaylist(S.id); } catch (err) { return toast(err.message); }
     toast(tr('Liste gelöscht'));
     return go('playlists', { ersetzen: true });
@@ -6314,9 +6432,10 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-kontoweg'))) {
     const a = (S.data?.accounts || []).find(x => x.id === n.dataset.kontoweg);
     if (!a) return;
-    const ok = await frage(tr('{name} entfernen?', { name: a.name }),
-      tr('Das Profil verschwindet von allen Geräten, samt Verlauf, Merkliste, Bewertungen und eigenen Listen. Was {name} in geteilte Listen anderer gelegt hat, bleibt dort. Das lässt sich nicht rückgängig machen.', { name: a.name }),
-      tr('Entfernen'));
+    // Unumkehrbar: roter Knopf, der Fokus steht auf „Abbrechen".
+    const ok = await rueckfrage({ titel: tr('{name} entfernen?', { name: a.name }),
+      text: tr('Das Profil verschwindet von allen Geräten, samt Verlauf, Merkliste, Bewertungen und eigenen Listen. Was {name} in geteilte Listen anderer gelegt hat, bleibt dort. Das lässt sich nicht rückgängig machen.', { name: a.name }),
+      ja: tr('Entfernen'), gefaehrlich: true });
     if (!ok) return;
     try { await api.adminDeleteAccount(a.id); toast(tr('{name} ist entfernt', { name: a.name })); return load(); }
     catch (err) { if (!err?.abgebrochen) toast(err.message); return; }
@@ -6683,7 +6802,8 @@ app.addEventListener('click', async e => {
     toast(tr('Kennung gespeichert — Poster und Beschreibungen kommen, sobald ein gültiger TMDb-Schlüssel eingetragen ist.'));
     return load();
   }
-  if ((n = hit('data-zuweisen-aus'))) { const b = zuweisenBox(n.dataset.zuweisenAus); if (b) b.innerHTML = ''; return; }
+  if ((n = hit('data-zuweisen-aus'))) { const b = zuweisenBox(n.dataset.zuweisenAus); b?.querySelector('dialog')?.close(); return; }
+  if ((n = hit('data-blatt-zu'))) { n.closest('dialog')?.close(); return; }
   if ((n = hit('data-treffer'))) {
     toast(tr('Wird zugewiesen …'));
     try { await api.adminItemAssign(n.dataset.item || S.id, n.dataset.treffer); } catch (err) { return toast(err.message); }
@@ -6759,6 +6879,9 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-grpedit'))) { S.gruppe = (S.data?.groups || []).find(x => x.id === n.dataset.grpedit) || null; render(); document.getElementById('gname')?.focus(); return; }
   if (hit('data-grpneu')) { S.gruppe = null; return render(); }
   if ((n = hit('data-grpdel'))) {
+    const g = (S.data?.groups || []).find(x => x.id === n.dataset.grpdel);
+    if (!(await rueckfrage({ titel: tr('Gruppe „{name}“ auflösen?', { name: g?.name || '' }),
+      text: tr('Die Konten darin behalten ihre eigenen Einträge, gehören danach aber keiner Gruppe mehr an.'), ja: tr('Auflösen'), gefaehrlich: true }))) return;
     try { await api.adminDeleteGroup(n.dataset.grpdel); toast(tr('Gruppe aufgelöst — die Konten behalten ihre eigenen Einträge')); }
     catch (err) { return toast(err.message); }
     S.gruppe = null; return load();
@@ -6791,14 +6914,14 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-pl-staffel'))) { if (S.playing) folgenLaden(S.playing, n.dataset.plStaffel); return; }
   if (hit('data-updnein')) { const b = document.getElementById('updfrage'); if (b) b.innerHTML = ''; return; }
 
-  /* Bibliothek löschen — in zwei Schritten. Kein Browser-Dialog: der
-     fragt mitten über der Seite und sagt nicht, um welche es geht. */
-  if ((n = hit('data-del'))) { S.delLib = n.dataset.del; return bibMalen(); }
-  if (hit('data-delno')) { S.delLib = null; return bibMalen(); }
-  if ((n = hit('data-delok'))) {
-    const id = n.dataset.delok;
-    S.delLib = null;
-    try { await api.adminDeleteLibrary(id); } catch (err) { S.delLib = null; bibMalen(); return toast(err.message); }
+  /* Bibliothek löschen — mit der Rückfrage der App (roter Knopf, Fokus auf
+     „Abbrechen"), die sagt, um welche es geht. Kein Browser-Dialog. */
+  if ((n = hit('data-del'))) {
+    const id = n.dataset.del;
+    const lib = (S.data?.libraries || []).find(x => x.id === id);
+    if (!(await rueckfrage({ titel: tr('Bibliothek „{name}“ löschen?', { name: lib?.name || '' }),
+      text: tr('Ihre Titel verschwinden aus Lumen. Die Dateien bleiben liegen.'), ja: tr('Löschen'), gefaehrlich: true }))) return;
+    try { await api.adminDeleteLibrary(id); } catch (err) { return toast(err.message); }
     toast(tr('Bibliothek gelöscht — die Dateien bleiben liegen'));
     return load();
   }
@@ -6885,6 +7008,7 @@ app.addEventListener('click', async e => {
     return;
   }
   if (hit('data-tokenweg')) {
+    if (!(await rueckfrage({ titel: tr('Token entfernen?'), text: tr('Updates aus einem privaten Repository kommen danach nicht mehr durch.'), ja: tr('Entfernen'), gefaehrlich: true }))) return;
     try { S.data = await api.adminUpdateSettings({ ...(S.data?.einstellung || {}), token: '' }); toast(tr('Token entfernt')); return render(); }
     catch (err) { return toast(err.message); }
   }
@@ -7047,7 +7171,7 @@ async function formularAbschicken(e) {
       api.verwaltungsToken(r.token); S.sperreFehler = '';
       const z = S.sperre || {}; S.sperre = null;
       return go(z.zurueck || 'admin', { id: z.id, ersetzen: true });
-    } catch (err) { S.sperreFehler = err.message; return render(); }
+    } catch (err) { S.sperreFehler = err.code === 'falsch' ? falschMeldung(err, S.me?.account?.name || '') : err.message; return render(); }
   }
   if (f.id === 'lockform') {
     const kind = f.kind.value;
@@ -7124,7 +7248,7 @@ async function formularAbschicken(e) {
       return anmeldeHinweis();
     } catch (err) {
       if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlockName(name, geheim, neu), err.art);
-      S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
+      S.error = err.code === 'falsch' ? falschMeldung(err, name) : err.message; return render();
     }
   }
   if (f.id === 'unlockform') {
@@ -7136,7 +7260,7 @@ async function formularAbschicken(e) {
       return anmeldeHinweis();
     } catch (err) {
       if (err.code === 'neue_pin_noetig') return eigenePinFestlegen(err.message, neu => api.unlock(id, geheim, neu), err.art);
-      S.error = err.code === 'falsch' ? falschMeldung(err) : err.message; return render();
+      S.error = err.code === 'falsch' ? falschMeldung(err, (S.data?.profiles || []).find(x => x.id === id)?.name || '') : err.message; return render();
     }
   }
 
@@ -7260,7 +7384,7 @@ app.addEventListener('change', async e => {
     const wahl = z.closest('label').querySelector('select[data-takt]');
     const uhr = z.closest('label').querySelector('input[data-taktzeit]');
     const fest = wahl.value === 'zeit';
-    uhr.style.display = fest ? '' : 'none';
+    (uhr.closest('.zeit-wahl') || uhr).style.display = fest ? '' : 'none';
     try {
       await api.adminSetLibrary(id, { intervalMin: fest ? 1440 : Number(wahl.value), scanAt: fest ? uhr.value : '' });
       toast(fest ? tr('Lumen sieht täglich um {value} nach', { value: uhr.value }) : Number(wahl.value) ? tr('Lumen sieht von selbst nach') : tr('Nur noch auf Knopfdruck'));
@@ -7827,19 +7951,9 @@ function mehrMenueAuf(k) {
 function escAufTitelseite() {
   if (mehrMenueZu(true)) return;
   if (hoverKarte) { hoverKarteWeg(); return; }
-  const liste = document.getElementById('listenpanel');
-  if (liste && liste.innerHTML.trim()) {
-    liste.innerHTML = '';
-    const k = app.querySelector('[data-zurliste]');
-    k?.setAttribute('aria-expanded', 'false'); k?.focus();
-    return;
-  }
-  const zuweisen = document.getElementById('zuweisen');
-  if (zuweisen && zuweisen.innerHTML.trim()) {
-    zuweisen.innerHTML = '';
-    app.querySelector('[data-mehrmenue]')?.focus();
-    return;
-  }
+  // Ein offenes Blatt schliesst Esc selbst (Dialog); dann nicht zurück.
+  const blatt = app.querySelector('dialog.blatt[open]');
+  if (blatt) { blatt.close(); return; }
   zurueck();
 }
 
@@ -8000,7 +8114,7 @@ async function boot() {
 }
 
 // Die Hilfen dieser Datei für die Module der Fenster (fenster.js).
-Object.assign(FU, { S, esc, svg, I, toast, artOf, posterCard, shell, loading, go, load, render, PLAY });
+Object.assign(FU, { S, esc, svg, I, toast, artOf, posterCard, shell, loading, go, load, render, PLAY, rueckfrage, leer });
 
 // Wechselt die Sprache (Ich › Einstellungen, ein anderes Profil, die
 // Verwaltung), zeichnet die Oberfläche neu – ohne die Seite neu zu laden.

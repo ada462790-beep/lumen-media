@@ -34,6 +34,7 @@ export const T = texte({
   schutzPasswortKurz: 'mit Passwort',
   falschHilfePin: 'Falls du sie vergessen hast, kann {name} sie in der Verwaltung zurücksetzen.',
   falschHilfePasswort: 'Falls du es vergessen hast, kann {name} es in der Verwaltung zurücksetzen.',
+  falschHilfeBesitzer: 'Du bist selbst der Besitzer — deine PIN lässt sich nur auf dem Server zurücksetzen: mit „lumen zuruecksetzen“, auf einer Synology über eine Aufgabe im Aufgabenplaner (Anleitung, Abschnitt „PIN vergessen“).',
   verwaltungBrauchtSchutz: 'Bevor du die Verwaltung öffnest, schütze dein Profil mit einer PIN oder einem Passwort. Sonst könnte jeder im Haushalt mit einem Klick hinein.',
   unterwegsFrage: 'Diese Anmeldung kommt von unterwegs, nicht aus deinem Heimnetz. Gib den Code nur frei, wenn „{geraet}“ wirklich dein Gerät ist – niemand von Lumen fragt dich je nach so einem Code.',
 });
@@ -61,9 +62,14 @@ export function schutzText(art, kurz = false) {
 }
 
 /* Die Meldung bei falschem PIN: was nicht stimmt, und wer helfen kann. */
-export function falschMeldung(err) {
+/* wer: der Name des Profils, das entsperrt werden soll. Ist es der
+   Besitzer selbst, hilft „{Besitzer} kann es zurücksetzen" nicht — dann
+   der Weg über den Server. */
+export function falschMeldung(err, wer = '') {
   let msg = err.message || '';
-  if (err.hilfe) msg += ' ' + tr(err.art === 'password' ? T.falschHilfePasswort : T.falschHilfePin, { name: err.hilfe });
+  const selbst = wer && err.hilfe && wer.trim().toLocaleLowerCase() === String(err.hilfe).trim().toLocaleLowerCase();
+  if (selbst) msg += ' ' + T.falschHilfeBesitzer;
+  else if (err.hilfe) msg += ' ' + tr(err.art === 'password' ? T.falschHilfePasswort : T.falschHilfePin, { name: err.hilfe });
   return msg;
 }
 
@@ -139,7 +145,7 @@ export function schutzDialog({ titel, hinweis = '', warnung = '', mitAlt = false
       d.innerHTML = `<form method="dialog" style="display:flex;flex-direction:column;gap:12px">
         <div id="schutz-t" class="t-title" style="font-size:1.1875rem;font-weight:700">${esc(titel)}</div>
         ${hinweis ? `<div class="t-caption c-2">${esc(hinweis)}</div>` : ''}
-        ${warnung ? `<div class="t-caption" role="note" style="color:var(--red,#ff453a);font-weight:600">${esc(warnung)}</div>` : ''}
+        ${warnung ? `<div class="t-caption" role="note" style="color:var(--text-rot);font-weight:600">${esc(warnung)}</div>` : ''}
         ${mitAlt && altArt !== 'none' ? `<label class="t-caption c-2">${altArt === 'password' ? tr('Bisheriges Passwort') : tr('Bisherige PIN')}
           <input type="password" name="alt" autocomplete="current-password" required style="${FELD};margin-top:6px"
             inputmode="${altArt === 'pin' ? 'numeric' : 'text'}"></label>` : ''}
@@ -194,18 +200,18 @@ export function schutzDialog({ titel, hinweis = '', warnung = '', mitAlt = false
    Rückfrage alles frei und legte immer ein Erwachsenenkonto an. */
 export function einladungsFormular(bibliotheken, kind) {
   return `<form id="inviteform" style="display:grid;gap:14px">
-    <div role="radiogroup" aria-label="${tr('Art des Profils')}" style="display:flex;gap:18px;flex-wrap:wrap">
-      <label class="t-body" style="display:flex;gap:8px;align-items:center"><input type="radio" name="art" value="erwachsen"${kind ? '' : ' checked'} data-einladungsart>${tr('Erwachsenes Profil')}</label>
-      <label class="t-body" style="display:flex;gap:8px;align-items:center"><input type="radio" name="art" value="kind"${kind ? ' checked' : ''} data-einladungsart>${esc(T.kinderprofil)}</label>
+    <div role="radiogroup" aria-label="${tr('Art des Profils')}" class="segment segment--wahl" style="margin:0">
+      <label class="segment-knopf"><input type="radio" name="art" value="erwachsen"${kind ? '' : ' checked'} data-einladungsart>${tr('Erwachsenes Profil')}</label>
+      <label class="segment-knopf"><input type="radio" name="art" value="kind"${kind ? ' checked' : ''} data-einladungsart>${esc(T.kinderprofil)}</label>
     </div>
     <div class="field" data-einladung-alter${kind ? '' : ' hidden'}><label for="ialter">${tr('Altersgrenze')}</label>
       <select id="ialter" name="alter">${altersOptionen(12, KINDERSTUFEN)}</select>
       <span class="hint">${tr('Ein Kinderprofil sieht nur Titel mit passender Freigabe – ungeprüfte Titel bleiben verborgen, Herunterladen ist aus.')}</span></div>
     <div class="field"><label>${tr('Bibliotheken')}</label>
-      ${bibliotheken.length ? bibliotheken.map(l => `<label class="row" style="min-height:36px;padding:0;cursor:pointer">
-        <input type="checkbox" name="lib" value="${esc(l.id)}" checked style="margin-right:10px"><span class="t-body">${esc(l.name)}</span></label>`).join('')
+      ${bibliotheken.length ? `<div class="schalter-liste">${bibliotheken.map(l => `<label class="schalter-zeile">
+        <span class="t-body">${esc(l.name)}</span><input type="checkbox" name="lib" value="${esc(l.id)}" checked></label>`).join('')}</div>`
         : `<span class="hint">${tr('Noch keine Bibliotheken.')}</span>`}</div>
-    <div><button class="btn btn-primary" type="submit">${tr('Einladungslink erzeugen')}</button></div>
+    <div class="form-fuss" style="margin-top:0"><button class="btn btn-primary" type="submit">${tr('Einladungslink erzeugen')}</button></div>
   </form>`;
 }
 

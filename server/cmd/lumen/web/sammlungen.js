@@ -14,7 +14,7 @@
  * Schreibtisch (Verwaltung). */
 
 import { api } from './api.js';
-import { U, escH, fenster, ladeHinweis, meldung, fehlerText, beschaeftigt, hochladen, amSchreibtisch } from './fenster.js';
+import { U, escH, fenster, ladeHinweis, meldung, fehlerText, beschaeftigt, hochladen, amSchreibtisch, zahlFeld } from './fenster.js';
 import { tr, texte } from './sprache.js';
 
 export const sammlungenLaden = () => api.call('/sammlungen');
@@ -113,10 +113,9 @@ export function sammlungenSeite() {
     ${verwalten() ? `<div style="margin:-6px 0 24px"><button class="btn btn-pill btn-pill--fill" data-sam-neu>${tr('+ Neue Sammlung')}</button></div>` : ''}
     ${reihenWerkzeug('sammlungen', liste.length)}
     ${liste.length ? `<div id="reihen-gitter">${reihenGitter(liste, 'sammlungen', sammlungKarte)}</div>`
-      : `<div class="group group--inset" style="max-width:620px"><p class="hint" style="padding:18px 16px;margin:0">
-          ${tr('Noch keine Sammlungen.')} ${S.me?.account?.isAdmin
+      : U.leer({ symbol: U.I.reihe, titel: tr('Noch keine Sammlungen.'), text: escH(S.me?.account?.isAdmin
             ? tr('Leg eine an — etwa „Weihnachtsfilme“ oder „Marvel in Reihenfolge“ — und füge Filme auf ihrer Seite unter „Zur Liste“ → „Zu Sammlung hinzufügen“ dazu.')
-            : tr('Die Verwaltung kann hier Filme und Serien zusammenstellen, etwa „Weihnachtsfilme“.')}</p></div>`}
+            : tr('Die Verwaltung kann hier Filme und Serien zusammenstellen, etwa „Weihnachtsfilme“.')) })}
     <div style="height:40px"></div></div>`);
 }
 
@@ -138,7 +137,7 @@ export function sammlungSeite() {
     const knoepfe = hand ? `<div class="sammlung-zeile-knoepfe" style="margin-top:6px">
         ${x.sortierung === 'hand' ? `<button class="btn" data-sam-hoch="${escH(t.id)}" aria-label="${tr('{title} nach vorn', { title: escH(t.title) })}"${i <= 0 ? ' disabled' : ''}>${svg(I.back, 14, 2.2)}</button>
         <button class="btn" data-sam-runter="${escH(t.id)}" aria-label="${tr('{title} nach hinten', { title: escH(t.title) })}"${i >= handIds.length - 1 ? ' disabled' : ''}>${svg(I.chev, 14, 2.2)}</button>` : ''}
-        <button class="btn" data-sam-weg="${escH(t.id)}" aria-label="${tr('{title} aus der Sammlung nehmen', { title: escH(t.title) })}" style="color:#ff6961">${svg(I.x, 14, 2.2)}</button></div>`
+        <button class="btn" data-sam-weg="${escH(t.id)}" aria-label="${tr('{title} aus der Sammlung nehmen', { title: escH(t.title) })}" style="color:var(--text-rot)">${svg(I.x, 14, 2.2)}</button></div>`
       : `<div class="durch-regel" style="margin-top:6px">${tr('durch die Regel')}</div>`;
     return `<div>${posterCard(t)}${knoepfe}</div>`;
   };
@@ -154,13 +153,12 @@ export function sammlungSeite() {
         <button class="btn btn-pill btn-pill--fill" style="height:32px;font-size:.8125rem;gap:6px" data-back>${svg(I.back, 16, 2)}${tr('Zurück')}</button>
         <h1 class="t-large" style="margin:14px 0 0">${escH(x.name)}</h1>
         <div class="t-sub c-2" style="margin-top:4px">${escH(unter)}</div>
-        ${aktionen ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">${aktionen}</div>` : ''}
+        ${aktionen ? `<div class="kopf-aktionen">${aktionen}</div>` : ''}
       </div>
     </header>
     ${x.beschreibung ? `<p class="t-body c-2" style="max-width:640px;line-height:1.6;margin-top:18px;white-space:pre-line">${escH(x.beschreibung)}</p>` : ''}
     ${x.items.length ? `<div class="grid" style="margin-top:30px">${x.items.map(karte).join('')}</div>`
-      : `<div class="group group--inset" style="max-width:620px;margin-top:26px"><p class="hint" style="padding:18px 16px;margin:0">
-          ${tr('Noch leer. Auf der Seite eines Films oder einer Serie: „Zur Liste“ → „Zu Sammlung hinzufügen“.')}</p></div>`}
+      : U.leer({ symbol: U.I.reihe, titel: tr('Noch leer'), text: escH(tr('Auf der Seite eines Films oder einer Serie: „Zur Liste“ → „Zu Sammlung hinzufügen“.')) })}
     <div style="height:40px"></div></div>`);
 }
 
@@ -227,9 +225,9 @@ export async function sammlungBearbeiten(x) {
           <input id="sam-genre" name="genre" list="sam-genres" value="${escH(r.genre || '')}" maxlength="40">
           <datalist id="sam-genres">${genres.map(g => `<option value="${escH(g)}">`).join('')}</datalist></div>
         <div class="ff"><div class="ff-kopf"><label for="sam-von">${tr('Jahr von')}</label></div>
-          <input id="sam-von" name="jahrVon" type="number" inputmode="numeric" min="1870" max="2100" value="${r.jahrVon || ''}"></div>
+          ${zahlFeld(`<input id="sam-von" name="jahrVon" type="number" inputmode="numeric" min="1870" max="2100" value="${r.jahrVon || ''}" placeholder="${tr('Jahr')}">`)}</div>
         <div class="ff"><div class="ff-kopf"><label for="sam-bis">${tr('Jahr bis')}</label></div>
-          <input id="sam-bis" name="jahrBis" type="number" inputmode="numeric" min="1870" max="2100" value="${r.jahrBis || ''}"></div>
+          ${zahlFeld(`<input id="sam-bis" name="jahrBis" type="number" inputmode="numeric" min="1870" max="2100" value="${r.jahrBis || ''}" placeholder="${tr('Jahr')}">`)}</div>
       </div>
       <div class="ff"><div class="ff-kopf"><label for="sam-wort">${tr('Stichwort im Titel')}</label></div>
         <input id="sam-wort" name="stichwort" maxlength="80" value="${escH(r.stichwort || '')}" placeholder="${tr('z. B. Weihnacht')}"></div>
@@ -244,7 +242,7 @@ export async function sammlungBearbeiten(x) {
       <span class="ff-hinweis">${tr('Ohne eigenes Bild zeigt Lumen die Poster der ersten Titel.')}</span></div>` : ''}
     <div data-meldung hidden></div>
     <div class="fenster-fuss">
-      ${x ? `<button type="button" class="btn btn-pill" style="height:40px;color:#ff6961;margin-right:auto" data-sam-loeschen>${tr('Löschen')}</button>` : ''}
+      ${x ? `<button type="button" class="btn btn-pill btn-pill--fill btn-pill--gefahr" style="height:40px;margin-right:auto" data-sam-loeschen>${tr('Löschen')}</button>` : ''}
       <button type="button" class="btn btn-pill btn-pill--fill" style="height:40px" data-fenster-zu>${tr('Abbrechen')}</button>
       <button type="submit" class="btn btn-primary" style="height:40px" data-laeuft="${tr('Speichert …')}">${x ? tr('Speichern') : tr('Anlegen')}</button>
     </div></form>`;
@@ -295,12 +293,10 @@ export async function sammlungBearbeiten(x) {
     }
     const weg = e.target.closest('[data-sam-loeschen]');
     if (weg) {
-      if (weg.dataset.sicher !== '1') {
-        weg.dataset.sicher = '1';
-        weg.textContent = tr('Wirklich löschen?');
-        meldung(d.inhalt, tr('Gelöscht wird nur die Sammlung — kein Film, keine Datei.'), 'info');
-        return;
-      }
+      // Wie überall: eine Rückfrage mit rotem Knopf, nicht ein Knopf,
+      // der beim zweiten Druck etwas anderes tut.
+      if (!(await U.rueckfrage({ titel: tr('Sammlung „{name}“ löschen?', { name: x.name || '' }),
+        text: tr('Gelöscht wird nur die Sammlung — kein Film, keine Datei.'), ja: tr('Löschen'), gefaehrlich: true }))) return;
       try {
         await api.call('/admin/sammlungen/' + encodeURIComponent(x.id), { method: 'DELETE' });
         geaendert = false;

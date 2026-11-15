@@ -14,7 +14,7 @@
  * sie auf. */
 
 import { api } from './api.js';
-import { U, escH, fenster, ladeHinweis, meldung, fehlerText, beschaeftigt, hochladen, bildAuffrischen } from './fenster.js';
+import { U, escH, fenster, ladeHinweis, meldung, fehlerText, beschaeftigt, hochladen, bildAuffrischen, zahlFeld, datumFeld, datumsMuster } from './fenster.js';
 import { tr, texte } from './sprache.js';
 
 // Eine Funktion: Beschriftungen in der Sprache, die gerade gilt.
@@ -112,6 +112,8 @@ export async function bearbeitenOeffnen(itemId, nachher) {
       const a = aenderungen();
       if (!Object.keys(a).length) { d.close(); return; }
       if ('title' in a && !a.title) { meldung(d.inhalt, tr('Der Titel darf nicht leer sein.')); return; }
+      const falsch = d.inhalt.querySelector('[data-datum-text][aria-invalid="true"]');
+      if (falsch) { meldung(d.inhalt, tr('Bitte ein Datum wie {muster} eingeben.', { muster: datumsMuster() })); falsch.focus(); return; }
       meldung(d.inhalt, '');
       try {
         await beschaeftigt(d.inhalt.querySelector('[data-speichern]'), async () => {
@@ -268,10 +270,11 @@ function feldHtml(stand, feld) {
   let eingabe;
   switch (f.art) {
     case 'zahl':
-      eingabe = `<input id="${id}" name="${feld}" type="number" inputmode="numeric" min="${f.min}" max="${f.max}" value="${wert || wert === 0 && feld !== 'year' ? escH(wert) : ''}">`;
+      eingabe = zahlFeld(`<input id="${id}" name="${feld}" type="number" inputmode="numeric" min="${f.min}" max="${f.max}" value="${wert || wert === 0 && feld !== 'year' ? escH(wert) : ''}">`);
       break;
     case 'datum':
-      eingabe = `<input id="${id}" name="${feld}" type="date" value="${escH(wert || '')}">`;
+      // Im Format der Region (TT.MM.JJJJ); gespeichert wird ISO.
+      eingabe = datumFeld({ id, name: feld, wert });
       break;
     case 'lang':
       eingabe = `<textarea id="${id}" name="${feld}" maxlength="10000">${escH(wert || '')}</textarea>`;

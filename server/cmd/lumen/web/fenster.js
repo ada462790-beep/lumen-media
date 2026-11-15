@@ -18,7 +18,7 @@
  * trägt app.js beim Start ein, damit es sie nur einmal gibt. */
 
 import { api, ApiError } from './api.js';
-import { tr } from './sprache.js';
+import { tr, sprache } from './sprache.js';
 
 export const U = {};
 
@@ -131,4 +131,201 @@ export async function hochladen(pfad, datei) {
 export function bildAuffrischen(url) {
   if (!url) return;
   try { fetch(url + (url.includes('?') ? '&' : '?') + api.bildParam(), { cache: 'reload' }).catch(() => {}); } catch {}
+}
+
+/* ---- Eigene Bedienelemente im Stil der App ------------------------------
+   Statt der Systemoptik (Uhrzeitfeld mit AM/PM, Zahlenfeld mit winzigen
+   Pfeilen, Kalender in Browserfarben) dieselben ruhigen Felder wie überall
+   sonst. Darunter stecken echte Eingabefelder — Formulare lesen sie wie
+   vorher, Tastatur und Bildschirmleser bleiben erhalten. */
+
+const zwei = n => String(n).padStart(2, '0');
+
+/* Zahlenfeld mit − und +. Die Knöpfe sind für Maus und Finger; mit der
+   Tastatur gehen die Pfeiltasten im Feld selbst (darum tabindex -1). */
+export function zahlFeld(eingabe) {
+  return `<span class="zahl-feld">
+    <button type="button" class="zahl-knopf" data-zahl-schritt="-1" tabindex="-1" aria-label="${tr('Weniger')}">−</button>
+    ${eingabe}
+    <button type="button" class="zahl-knopf" data-zahl-schritt="1" tabindex="-1" aria-label="${tr('Mehr')}">+</button></span>`;
+}
+
+/* 24 oder 12 Stunden — wie in der eingestellten Sprache und Region üblich. */
+const zwoelfStunden = () => {
+  try { return new Intl.DateTimeFormat(sprache(), { hour: 'numeric' }).resolvedOptions().hourCycle?.startsWith('h1'); }
+  catch { return false; }
+};
+
+/* Uhrzeit als zwei Auswahllisten (Stunde, Minute in Viertelstunden). Ein
+   verstecktes Feld trägt den Wert „HH:MM" für das Formular und meldet
+   jede Änderung (change) wie das alte Uhrzeitfeld. */
+export function zeitWahl({ id = '', name = '', wert = '', label = '', attrs = '', versteckt = false, klasse = '' }) {
+  const [h0, m0] = (/^\d{1,2}:\d{2}$/.test(wert) ? wert : '00:00').split(':').map(Number);
+  const h12 = zwoelfStunden();
+  const stunde = h => h12 ? new Date(2000, 0, 1, h).toLocaleTimeString(sprache(), { hour: 'numeric' }) : zwei(h);
+  const minuten = [0, 15, 30, 45];
+  if (!minuten.includes(m0)) { minuten.push(m0); minuten.sort((a, b) => a - b); }
+  const stOpt = Array.from({ length: 24 }, (_, h) => `<option value="${h}"${h === h0 ? ' selected' : ''}>${stunde(h)}</option>`).join('');
+  const miOpt = minuten.map(m => `<option value="${m}"${m === m0 ? ' selected' : ''}>${zwei(m)}</option>`).join('');
+  const k = klasse ? ` class="${escH(klasse)}"` : '';
+  return `<span class="zeit-wahl" role="group"${label ? ` aria-label="${escH(label)}"` : ''}${versteckt ? ' style="display:none"' : ''}>
+    <input type="hidden"${name ? ` name="${escH(name)}"` : ''} value="${zwei(h0)}:${zwei(m0)}" ${attrs}>
+    <select data-zeit-teil="h"${k}${id ? ` id="${escH(id)}"` : ''} aria-label="${tr('Stunde')}">${stOpt}</select>
+    <span class="zeit-trenner" aria-hidden="true">:</span>
+    <select data-zeit-teil="m"${k} aria-label="${tr('Minute')}">${miOpt}</select></span>`;
+}
+
+/* Datum als Textfeld im Format der Region (TT.MM.JJJJ, MM/DD/YYYY …).
+   Gespeichert wird weiter ISO (JJJJ-MM-TT) im versteckten Feld. */
+const datumsTeile = () => {
+  try {
+    return new Intl.DateTimeFormat(sprache(), { year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(new Date(2000, 10, 22)).map(t => t.type === 'literal' ? { type: 'literal', value: t.value } : { type: t.type });
+  } catch { return [{ type: 'day' }, { type: 'literal', value: '.' }, { type: 'month' }, { type: 'literal', value: '.' }, { type: 'year' }]; }
+};
+export function datumsMuster() {
+  const n = { day: tr('Datum|TT'), month: tr('Datum|MM'), year: tr('Datum|JJJJ') };
+  return datumsTeile().map(t => t.type === 'literal' ? t.value : n[t.type]).join('');
+}
+export function datumAnzeigen(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  if (!m) return '';
+  const w = { year: m[1], month: m[2], day: m[3] };
+  return datumsTeile().map(t => t.type === 'literal' ? t.value : w[t.type]).join('');
+}
+/* Liest, was getippt ist; '' bei leer, null bei ungültig. */
+export function datumLesen(text) {
+  const t = String(text || '').trim();
+  if (!t) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const zahlen = t.split(/\D+/).filter(Boolean);
+  const reihe = datumsTeile().filter(x => x.type !== 'literal').map(x => x.type);
+  if (zahlen.length !== 3) return null;
+  const w = {};
+  reihe.forEach((r, i) => { w[r] = Number(zahlen[i]); });
+  if (w.year < 100) w.year += w.year < 50 ? 2000 : 1900;
+  const d = new Date(Date.UTC(w.year, w.month - 1, w.day));
+  if (!w.year || d.getUTCMonth() !== w.month - 1 || d.getUTCDate() !== w.day) return null;
+  return `${String(w.year).padStart(4, '0')}-${zwei(w.month)}-${zwei(w.day)}`;
+}
+export function datumFeld({ id = '', name = '', wert = '' }) {
+  return `<span class="datum-feld">
+    <input type="hidden" name="${escH(name)}" value="${escH(wert || '')}">
+    <input type="text" data-datum-text${id ? ` id="${escH(id)}"` : ''} inputmode="numeric" autocomplete="off"
+      placeholder="${escH(datumsMuster())}" value="${escH(datumAnzeigen(wert))}"></span>`;
+}
+
+/* Ein Mal für alles, was diese Felder brauchen (auch in Dialogen, die am
+   body hängen). Im Einfangen, damit der versteckte Wert stimmt, bevor
+   andere Zuhörer das Formular lesen. */
+(() => {
+  if (typeof document === 'undefined' || !document.addEventListener) return;
+  const melden = el => el.dispatchEvent(new Event('change', { bubbles: true }));
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t?.matches?.('[data-zeit-teil]')) {
+      const huelle = t.closest('.zeit-wahl');
+      const h = huelle.querySelector('[data-zeit-teil="h"]').value, m = huelle.querySelector('[data-zeit-teil="m"]').value;
+      const feld = huelle.querySelector('input[type=hidden]');
+      feld.value = `${zwei(h)}:${zwei(m)}`;
+      queueMicrotask(() => melden(feld));
+    }
+  }, true);
+  const datumPruefen = t => {
+    const iso = datumLesen(t.value);
+    const feld = t.closest('.datum-feld')?.querySelector('input[type=hidden]');
+    if (!feld) return;
+    if (iso === null) {
+      t.setCustomValidity(tr('Bitte ein Datum wie {muster} eingeben.', { muster: datumsMuster() }));
+      t.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    t.setCustomValidity('');
+    t.removeAttribute('aria-invalid');
+    if (feld.value !== iso) { feld.value = iso; melden(feld); }
+  };
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (t?.matches?.('[data-datum-text]')) datumPruefen(t);
+    // Textfelder wachsen mit dem Text, statt einen Ziehgriff zu zeigen.
+    if (t?.tagName === 'TEXTAREA') hoeheAnpassen(t);
+    // Eine Fehlermeldung unter dem Feld verschwindet, sobald es stimmt.
+    if (t?.getAttribute?.('aria-invalid') === 'true' && t.checkValidity?.()) feldFehler(t, '');
+  }, true);
+  document.addEventListener('focusout', e => {
+    const t = e.target;
+    if (!t?.matches?.('[data-datum-text]')) return;
+    datumPruefen(t);
+    const iso = datumLesen(t.value);
+    if (iso) t.value = datumAnzeigen(iso);
+  }, true);
+  /* Statt der Blase des Browsers („Please fill out this field.", in der
+     Sprache des Browsers) eine eigene, übersetzte Zeile unter dem Feld.
+     Der Browser hält das Formular weiter an — nur die Blase entfällt. */
+  document.addEventListener('invalid', e => {
+    const el = e.target;
+    if (!el?.form && !el?.closest?.('.lumen')) return;
+    e.preventDefault();
+    feldFehler(el, pruefText(el));
+    const erstes = el.form?.querySelector(':invalid:not(fieldset)');
+    if (!erstes || erstes === el) el.focus();
+  }, true);
+  document.addEventListener('click', e => {
+    const k = e.target?.closest?.('[data-zahl-schritt]');
+    if (!k) return;
+    const feld = k.parentElement.querySelector('input[type=number]');
+    if (!feld || feld.disabled) return;
+    if (feld.value === '') feld.value = feld.min || '0';
+    else if (k.dataset.zahlSchritt === '1') feld.stepUp(); else feld.stepDown();
+    feld.dispatchEvent(new Event('input', { bubbles: true }));
+    melden(feld);
+  });
+})();
+
+/* Höhe eines Textfelds nach seinem Inhalt (bis höchstens 60 % des Bildes). */
+export function hoeheAnpassen(t) {
+  if (!t || CSS.supports?.('field-sizing', 'content')) return;
+  t.style.height = 'auto';
+  t.style.height = Math.min(t.scrollHeight + 2, innerHeight * 0.6) + 'px';
+}
+
+/* Der Text zu einem ungültigen Feld, in der Sprache der Oberfläche. */
+function pruefText(el) {
+  const v = el.validity || {};
+  if (v.customError) return el.validationMessage;
+  if (v.valueMissing) return el.type === 'checkbox' ? tr('Bitte einschalten, um fortzufahren.') : tr('Bitte ausfüllen.');
+  if (v.tooShort) return tr('Mindestens {n} Zeichen.', { n: el.minLength });
+  if (v.tooLong) return tr('Höchstens {n} Zeichen.', { n: el.maxLength });
+  if (v.typeMismatch) return el.type === 'email' ? tr('Bitte eine gültige E-Mail-Adresse eingeben.') : el.type === 'url'
+    ? tr('Bitte eine vollständige Adresse eingeben, etwa https://…') : tr('Dieser Wert passt nicht.');
+  if (v.rangeUnderflow) return tr('Mindestens {n}.', { n: el.min });
+  if (v.rangeOverflow) return tr('Höchstens {n}.', { n: el.max });
+  if (v.stepMismatch || v.badInput) return el.type === 'number' ? tr('Bitte eine ganze Zahl eingeben.') : tr('Dieser Wert passt nicht.');
+  return el.title || tr('Dieser Wert passt nicht.');
+}
+
+/* Fehlerzeile unter einem Feld zeigen ('' = entfernen). */
+export function feldFehler(el, text) {
+  if (!el) return;
+  const anker = el.closest('.zahl-feld, .zeit-wahl, .datum-feld, .marken') || el;
+  const id = (el.id || el.name || 'feld') + '-fehler';
+  let zeile = anker.parentElement?.querySelector(`:scope > .feld-fehler[data-fuer="${CSS.escape(id)}"]`);
+  if (!text) {
+    zeile?.remove();
+    el.removeAttribute('aria-invalid');
+    return;
+  }
+  if (!zeile) {
+    zeile = document.createElement('span');
+    zeile.className = 'feld-fehler';
+    zeile.dataset.fuer = id;
+    zeile.id = id + '-' + (feldFehler.n = (feldFehler.n || 0) + 1);
+    zeile.setAttribute('role', 'alert');
+    anker.insertAdjacentElement('afterend', zeile);
+  }
+  zeile.textContent = text;
+  el.setAttribute('aria-invalid', 'true');
+  const ids = new Set((el.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+  ids.add(zeile.id);
+  el.setAttribute('aria-describedby', [...ids].join(' '));
 }

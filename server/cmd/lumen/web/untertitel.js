@@ -13,7 +13,7 @@
  * Spurenliste zurück (nachher). */
 
 import { api } from './api.js';
-import { U, escH, fenster, ladeHinweis, meldung, fehlerText, beschaeftigt } from './fenster.js';
+import { U, escH, fenster, ladeHinweis, meldung, fehlerText, beschaeftigt, zahlFeld } from './fenster.js';
 import { tr, sprachName, sprache } from './sprache.js';
 
 /* Ob OpenSubtitles eingerichtet ist — einmal gefragt, dann gemerkt. */
@@ -154,7 +154,7 @@ export async function untertitelVerwaltung() {
       <div class="ff" style="margin-top:4px"><div class="ff-kopf"><label for="uta-spr">${tr('Sprachen')}</label></div>
         <input id="uta-spr" name="sprachen" value="${escH((st.sprachen || []).join(', '))}" placeholder="de, en"></div>
       <div class="ff" style="margin-top:4px"><div class="ff-kopf"><label for="uta-lim">${tr('Höchstens pro Tag')}</label></div>
-        <input id="uta-lim" name="tageslimit" type="number" min="0" max="1000" value="${st.tageslimit}"></div>
+        ${zahlFeld(`<input id="uta-lim" name="tageslimit" type="number" min="0" max="1000" value="${st.tageslimit}">`)}</div>
     </div>
     <span class="ff-hinweis">${tr('Läuft im Hintergrund, nie während etwas umgewandelt wird, und nimmt nur, was sicher passt. Heute automatisch geholt: {heuteGeholt}.', { heuteGeholt: st.heuteGeholt })}</span>
     <div data-meldung hidden></div>

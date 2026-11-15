@@ -50,12 +50,12 @@ export function detailUntertitel(it, files) {
 /* Bei Serien: Staffel und Folgen bearbeiten. */
 export function staffelBearbeiten(staffelId) {
   return verwalten() && staffelId
-    ? `<button ${klein} data-fk-bearbeiten="${escH(staffelId)}" style="height:30px;font-size:.8125rem;margin-left:8px">${tr('Staffel bearbeiten')}</button>` : '';
+    ? `<button ${klein} data-fk-bearbeiten="${escH(staffelId)}" style="height:32px;font-size:.8125rem">${tr('Staffel bearbeiten')}</button>` : '';
 }
 export function folgeBearbeiten(folge) {
   return verwalten()
-    ? `<button class="btn btn-round sm" style="width:30px;height:30px;flex:none;background:var(--fill);color:var(--label-2)" data-fk-bearbeiten="${escH(folge.id)}"
-        aria-label="${!folge.seasonNo && folge.episodeNo >= 1000 ? tr('Special bearbeiten') : tr('Folge {episodeNo} bearbeiten', { episodeNo: escH(folge.episodeNo) })}" title="${tr('Bearbeiten')}">${U.svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>', 14, 1.8)}</button>` : '';
+    ? `<button class="btn btn-round sm btn-round--fill folge-knopf" data-fk-bearbeiten="${escH(folge.id)}"
+        aria-label="${!folge.seasonNo && folge.episodeNo >= 1000 ? tr('Special bearbeiten') : tr('Folge {episodeNo} bearbeiten', { episodeNo: escH(folge.episodeNo) })}" title="${tr('Bearbeiten')}">${U.svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>', 16, 1.8)}</button>` : '';
 }
 
 /* Ich-Bereich: Umzug von Emby/Jellyfin. */

@@ -22,7 +22,7 @@
 
 import { api } from './api.js';
 import { tr } from './sprache.js';
-import { U, escH, fenster, meldung, fehlerText, beschaeftigt } from './fenster.js';
+import { U, escH, fenster, meldung, fehlerText, beschaeftigt, zeitWahl, zahlFeld } from './fenster.js';
 
 /* ---------------------------------------------------------- Verwaltung */
 
@@ -38,18 +38,19 @@ export function bzKontoText(a) {
 
 function tagesart(name, titel, r) {
   const ganz = !r.von;
+  const feldVon = name + '-von', feldBis = name + '-bis'; // sprache: fest (Feldnamen)
   return `<fieldset class="bz-art" data-art="${name}">
     <legend class="t-body" style="font-weight:600">${escH(titel)}</legend>
     <label class="wahl-check"><input type="checkbox" name="${name}-ganz"${ganz ? ' checked' : ''} data-bz-ganz>
       <span>${tr('Den ganzen Tag')}</span></label>
     <div class="bz-zeiten"${ganz ? ' hidden' : ''}>
       <div class="ff"><div class="ff-kopf"><label for="bz-${name}-von">${tr('Ab')}</label></div>
-        <input id="bz-${name}-von" name="${name}-von" type="time" value="${escH(r.von || '07:00')}"></div>
+        ${zeitWahl({ id: 'bz-' + feldVon, name: feldVon, wert: r.von || '07:00' })}</div>
       <div class="ff"><div class="ff-kopf"><label for="bz-${name}-bis">${tr('Bis')}</label></div>
-        <input id="bz-${name}-bis" name="${name}-bis" type="time" value="${escH(r.bis === '24:00' ? '00:00' : r.bis || '19:30')}"></div>
+        ${zeitWahl({ id: 'bz-' + feldBis, name: feldBis, wert: r.bis === '24:00' ? '00:00' : r.bis || '19:30' })}</div>
     </div>
     <div class="ff"><div class="ff-kopf"><label for="bz-${name}-min">${tr('Höchstens Minuten am Tag')}</label></div>
-      <input id="bz-${name}-min" name="${name}-min" type="number" min="0" max="1440" step="1" value="${Number(r.minuten) || 0}">
+      ${zahlFeld(`<input id="bz-${name}-min" name="${name}-min" type="number" min="0" max="1440" step="15" value="${Number(r.minuten) || 0}">`)}
       <span class="ff-hinweis">${tr('0 heisst: ohne Tagesgrenze.')}</span></div>
   </fieldset>`;
 }
