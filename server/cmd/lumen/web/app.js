@@ -1817,7 +1817,7 @@ const fassungenVon = files => (files || []).filter(f => !f.missing && !f.defekt 
 function fassungTeile(f) {
   // Alle Tonsprachen („Deutsch, Englisch"), nicht nur die erste.
   const sprachen = [...new Set((f.tracks || []).filter(t => t.kind === 'audio' && t.language && t.language !== 'und')
-    .map(t => t.language))].map(sprachName).join(', ');
+    .map(t => t.language))].map(l => sprachName(l)).join(', ');
   return [aufloesungVon(f).name, sprachen, (f.container || '').toUpperCase(), f.edition || ''].filter(Boolean);
 }
 /* Der Hinweis „· 2 Fassungen" auf „Ansehen": Unterscheiden sich die
@@ -5881,6 +5881,21 @@ function viewCleanup() {
       </div>`).join('')}
     </div>`;
   const dupKandidaten = kandidaten.map(kandidatZeile).join('');
+  // Vielleicht Fassungen desselben Films: verschiedene Titel, gleicher
+  // Ordner, gleiches Jahr, andere Tonsprache, gleiche Laufzeit (±5 %).
+  const fassungVorschlaege = d.fassungKandidaten || [];
+  const fassungVorschlag = k => `
+    <div class="orow" style="height:auto;padding:14px 16px;display:block">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="t-body" style="flex:1 1 200px">${k.items.map(x => `${esc(x.title)}${x.year ? ` (${x.year})` : ''}`).join(' / ')}</div>
+        <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-fassungen-zusammen="${esc(k.items.map(x => x.itemId).join(','))}">${tr('Als Fassungen zusammenlegen')}</button>
+      </div>
+      ${k.items.map(x => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
+        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(x.path)}</span>
+        <span class="t-caption c-2 tnum">${[sprachName(x.sprache), mins(x.dauerMs)].filter(Boolean).join(' · ')}</span>
+      </div>`).join('')}
+    </div>`;
+  const fassungVorschlagListe = fassungVorschlaege.map(fassungVorschlag).join('');
   const dup = nurTeile.map(doppelZeile).join('');
   const dupFassungen = fassungen.map(doppelZeile).join('');
 
@@ -6036,6 +6051,9 @@ function viewCleanup() {
     ${dupKandidaten ? `<section style="margin-top:22px"><div class="section-h">${tr('Vielleicht Teile eines Films · {n}', { n: kandidaten.length })}</div>
       <div class="group group--inset">${dupKandidaten}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Gleicher Name mit „Teil 1“, „Teil 2“ im selben Ordner, aber als eigene Filme geführt – meist, weil das Jahr nur bei einem steht. Zusammengefügt laufen die Teile nacheinander, und der Scan trennt sie nicht wieder. Fortsetzungen mit verschiedenen Jahren stehen hier nicht.')}</p></section>` : ''}
+    ${fassungVorschlagListe ? `<section style="margin-top:22px"><div class="section-h">${tr('Vielleicht Fassungen desselben Films · {n}', { n: fassungVorschlaege.length })}</div>
+      <div class="group group--inset">${fassungVorschlagListe}</div>
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Verschiedene Titel im selben Ordner, gleiches Jahr, andere Tonsprache und gleiche Laufzeit – vielleicht derselbe Film in zwei Sprachen. Zusammengelegt wählt man die Sprache im Player, und der Scan trennt sie nicht wieder. „Abtrennen“ macht es rückgängig.')}</p></section>` : ''}
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>
@@ -6884,6 +6902,12 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-als-teile'))) {
     const ids = (n.dataset.dateien || '').split(',').filter(Boolean);
     try { await api.call(`/admin/items/${encodeURIComponent(n.dataset.alsTeile)}/als-teile`, { method: 'POST', body: { fileIds: ids } }); toast(tr('Als Teile eines Films zusammengefügt')); }
+    catch (err) { toast(err.message); }
+    return load();
+  }
+  if ((n = hit('data-fassungen-zusammen'))) {
+    const ids = (n.dataset.fassungenZusammen || '').split(',').filter(Boolean);
+    try { await api.call('/admin/cleanup/fassungen-zusammenlegen', { method: 'POST', body: { itemIds: ids } }); toast(tr('Als Fassungen eines Films zusammengelegt')); }
     catch (err) { toast(err.message); }
     return load();
   }

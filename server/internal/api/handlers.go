@@ -1977,7 +1977,8 @@ func (s *Server) adminCleanup(w http.ResponseWriter, r *http.Request) {
 	// Zu fehlenden Dateien ihr Titel; Teile eines Films, die als getrennte
 	// Filme dastehen (aufraeumen_teile.go).
 	ok(w, map[string]any{"duplicates": dups, "missing": s.fehlendeMitAngaben(r.Context(), missing),
-		"teileKandidaten": s.teileKandidaten(r.Context(), darf), "unmatched": anreichern(unmatched), "ausstehend": anreichern(ausstehend),
+		"teileKandidaten": s.teileKandidaten(r.Context(), darf), "fassungKandidaten": s.fassungKandidaten(r.Context(), darf),
+		"unmatched": anreichern(unmatched), "ausstehend": anreichern(ausstehend),
 		"ausgelassen": ausgelassen, "umgewandelt": umgewandelt,
 		// Gesamtzahlen (die Listen sind begrenzt). Für einen
 		// beschränkten Mitverwalter zählen nur die eigenen.

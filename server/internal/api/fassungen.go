@@ -65,6 +65,9 @@ func (s *Server) adminDateiAbtrennen(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Von Hand als eigener Film bestimmt: Aufräumen schlägt ihn nicht
+	// wieder als Fassung vor (fassung_vorschlag.go).
+	_ = s.st.KeineFassungSetzen(r.Context(), neu.ID)
 	ok(w, neu)
 }
 
