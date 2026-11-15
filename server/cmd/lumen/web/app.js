@@ -350,9 +350,14 @@ function bildQuellen(url, hoch, sizes) {
 // antwortet dann gleich mit 503, statt die Verbindung zu belegen), wird
 // es später noch einmal geladen.
 function standbild(it, hoch) {
+  const u = spaeterAdresse(it.frame);
   return `<img class="art-img art-frame${hoch ? ' art-frame--poster' : ''}"
-      src="${esc(it.frame)}${tokenSuffix(it.frame)}" alt="" loading="lazy" data-weg data-nochmal="0">`;
+      src="${esc(u)}${tokenSuffix(u)}" alt="" loading="lazy" data-weg data-nochmal="0">`;
 }
+// ?spaeter=1: Entsteht das Bild noch, kommt statt 503 ein durchsichtiger
+// Platzhalter von 2×1 Punkten (standbild.go) — keine roten Zeilen in der
+// Konsole; nachgeladen wird wie bisher (NOCHMAL_SEK).
+const spaeterAdresse = url => url + (url.includes('?') ? '&' : '?') + 'spaeter=1';
 // Das Jahr eines Titels — bei Serien der Zeitraum: „2014–2020" für eine
 // abgeschlossene, „seit 2014" für eine, die noch läuft.
 function jahre(it) {
@@ -4080,7 +4085,7 @@ async function naechstesAnbieten(p, sekunden) {
   box.id = 'naechster';
   box.className = 'naechster glass glass--regular';
   box.dataset.id = n.id;
-  box.innerHTML = `${n.id ? `<img class="naechster-bild" src="${api.artURL(n.id, 'frame')}" alt="" data-weg>` : ''}
+  box.innerHTML = `${n.id ? `<img class="naechster-bild" src="${spaeterAdresse(api.artURL(n.id, 'frame'))}" alt="" data-weg>` : ''}
     <div style="min-width:0;flex:1">
       <div class="t-caption c-2">${tr('Als Nächstes · in')} <span data-rest>${rest}</span> s</div>
       <div class="t-body clamp-1">${esc(n.title)}</div></div>
@@ -8061,24 +8066,32 @@ setInterval(() => { if (api.signedIn) api.medienSchluessel().catch(() => {}); },
 // wachsendem Abstand (zusammen rund anderthalb Minuten): Sie entstehen
 // erst, wenn jemand sie sehen will, eins nach dem anderen.
 const NOCHMAL_SEK = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
+// Noch einmal laden — mit einer Zählung in der Adresse, sonst nähme der
+// Browser den Platzhalter aus seiner Bilderliste statt neu zu fragen.
+function nochmalLaden(el) {
+  const n = Number(el.getAttribute('data-nochmal'));
+  if (!el.hasAttribute('data-nochmal') || n >= NOCHMAL_SEK.length) return false;
+  el.setAttribute('data-nochmal', String(n + 1));
+  const src = el.getAttribute('src').replace(/([?&])nochmal=\d+&?/, '$1').replace(/[?&]$/, '');
+  const neu = src + (src.includes('?') ? '&' : '?') + 'nochmal=' + (n + 1);
+  setTimeout(() => { if (el.isConnected) el.setAttribute('src', neu); }, NOCHMAL_SEK[n] * 1000);
+  return true;
+}
 document.addEventListener('error', e => {
   const el = e.target;
   if (!(el instanceof Element)) return;
   if (el.hasAttribute('data-ersatz')) { el.parentNode.textContent = el.getAttribute('data-ersatz'); return; }
-  const n = Number(el.getAttribute('data-nochmal'));
-  if (el.hasAttribute('data-nochmal') && n < NOCHMAL_SEK.length) {
-    el.setAttribute('data-nochmal', String(n + 1));
-    const src = el.getAttribute('src');
-    setTimeout(() => { if (el.isConnected) el.setAttribute('src', src); }, NOCHMAL_SEK[n] * 1000);
-    return;
-  }
+  if (nochmalLaden(el)) return;
   if (el.hasAttribute('data-weg')) el.remove();
 }, true);
 // „Kein Bild möglich" (Datei defekt) schickt der Server als
 // durchsichtigen Punkt statt als Fehler — dann bleibt der Titel stehen.
+// „Noch nicht fertig" als Platzhalter von 2×1 Punkten: später nochmal.
 document.addEventListener('load', e => {
   const el = e.target;
-  if (el instanceof HTMLImageElement && (el.hasAttribute('data-nochmal') || el.hasAttribute('data-weg')) && el.naturalWidth <= 1 && el.naturalHeight <= 1) el.remove();
+  if (!(el instanceof HTMLImageElement) || !(el.hasAttribute('data-nochmal') || el.hasAttribute('data-weg'))) return;
+  if (el.naturalWidth === 2 && el.naturalHeight === 1 && nochmalLaden(el)) return;
+  if (el.naturalWidth <= 2 && el.naturalHeight <= 1) el.remove();
 }, true);
 document.addEventListener('click', e => {
   const el = e.target instanceof Element && e.target.closest('[data-auswahl]');

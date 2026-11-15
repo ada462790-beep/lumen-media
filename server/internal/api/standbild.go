@@ -8,9 +8,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"net/http"
 	"os"
 	"os/exec"
@@ -390,9 +393,7 @@ func (s *Server) standbildSenden(w http.ResponseWriter, r *http.Request, it *sto
 	pfad, warte, err := s.standbild(r.Context(), it)
 	if err != nil {
 		if warte {
-			w.Header().Set("Retry-After", "2")
-			w.Header().Set("Cache-Control", "no-store")
-			fail(w, http.StatusServiceUnavailable, "kein bild")
+			standbildNochNicht(w, r)
 			return
 		}
 		standbildErsatz(w)
@@ -422,6 +423,33 @@ var leerPNG = []byte{
 	0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
 	0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
 	0x42, 0x60, 0x82,
+}
+
+// spaeterPNG: durchsichtig, 2×1 Punkte — „noch nicht fertig". An der
+// Breite unterscheidet die Web-App ihn vom Ersatz (1×1, „geht nicht"),
+// denn die Köpfe der Antwort sieht ein <img> nicht.
+var spaeterPNG = func() []byte {
+	var b bytes.Buffer
+	_ = png.Encode(&b, image.NewNRGBA(image.Rect(0, 0, 2, 1)))
+	return b.Bytes()
+}()
+
+// standbildNochNicht: Das Bild entsteht noch. Die Web-App fragt mit
+// ?spaeter=1 und bekommt 200 mit dem Platzhalter (X-Lumen-Ersatz:
+// spaeter) — vorher füllte sich beim ersten Laden die Konsole mit 503.
+// Ohne den Parameter, wie die Apps fragen, bleibt es bei 503. Beide Male
+// mit Retry-After und nie aufbewahrt.
+func standbildNochNicht(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Retry-After", "2")
+	w.Header().Set("Cache-Control", "no-store")
+	if r.URL.Query().Get("spaeter") != "1" {
+		fail(w, http.StatusServiceUnavailable, "kein bild")
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("X-Lumen-Ersatz", "spaeter")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(spaeterPNG)
 }
 
 // standbildErsatz: „kein Bild" ohne Fehler — der durchsichtige Punkt,
