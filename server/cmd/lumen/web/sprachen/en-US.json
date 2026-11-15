@@ -1654,5 +1654,11 @@
  "„Dieselbe Datei mehrfach“: gleiche Grösse und Laufzeit in zwei Ordnern – eine Kopie kann weg (Lumen löscht keine Dateien). „Verschiedene Filme“: Die Dateien heissen nach verschiedenen Filmen – trenne die falsche ab, oder füge sie als Teile eines Films zusammen. Echte Fassungen (Sprache, Qualität) stehen hier nicht; man wählt sie im Player unter „Qualität“.": "“Same file more than once”: same size and running time in two folders – one copy can go (Lumen doesn’t delete files). “Different films”: the files are named after different films – split off the wrong one, or join them as parts of one film. Real versions (language, quality) aren’t listed here; you choose them in the player under “Quality”.",
  "Tonsprache": "Audio language",
  "Profilsprache": "Profile language",
- "Originalton": "Original audio"
+ "Originalton": "Original audio",
+ "Fehlende Datei endgültig entfernen?": "Remove missing file permanently?",
+ "Alle fehlenden Dateien endgültig entfernen?": "Remove all missing files permanently?",
+ "Lumen vergisst die Datei. Taucht sie wieder auf, wird sie neu eingelesen – das lässt sich nicht rückgängig machen.": "Lumen forgets the file. If it turns up again, it will be read in anew – this cannot be undone.",
+ "Zu einer Datei zusammenführen?": "Merge into one file?",
+ "Lumen hängt die Teile ohne neu zu rechnen zu einer MKV-Datei aneinander. Die Teile wandern in den Unterordner „.lumen-teile“.": "Lumen joins the parts into one MKV file without re-encoding. The parts are moved to the subfolder “.lumen-teile”.",
+ "Kopie {n}": "Copy {n}"
 }

@@ -137,3 +137,26 @@ console.log(gesagt.join('|'));
 		t.Errorf("Ansagen %q, erwartet %q", out, soll)
 	}
 }
+
+// Fassungen im Player-Menü: alle Tonsprachen einer Datei, und zwei
+// gleiche Kopien (gleiche Grösse) unterscheidet der Ordner.
+func TestWebFassungNamen(t *testing.T) {
+	out := jsAusfuehren(t, `
+const tr = (s, w) => s.replace(/\{(\w+)\}/g, (_, k) => w && w[k] != null ? w[k] : '');
+const sprachName = l => ({ de: 'Deutsch', en: 'Englisch' })[l] || l;
+const aufloesungVon = () => ({ name: '1080p' });
+const groesse = b => b + ' B';
+`, []string{"fassungTeile", "fassungNamen"}, `
+const ton = (...l) => l.map(x => ({ kind: 'audio', language: x }));
+console.log(fassungNamen([
+  { tracks: ton('de', 'en', 'de'), container: 'mkv', sizeBytes: 5, path: '/m/Film (2000)/Film.mkv' },
+  { tracks: ton('de'), container: 'mkv', sizeBytes: 7, path: '/m/Kopie/Film.mkv' },
+  { tracks: ton('de'), container: 'mkv', sizeBytes: 7, path: '/m/Sicherung/Film.mkv' },
+  { tracks: ton('de'), container: 'mkv', sizeBytes: 7 },
+]).join('|'));
+`)
+	soll := "1080p · Deutsch, Englisch · MKV|1080p · Deutsch · MKV · 7 B · Kopie|1080p · Deutsch · MKV · 7 B · Sicherung|1080p · Deutsch · MKV · 7 B · Kopie 4"
+	if out != soll {
+		t.Errorf("Fassungen:\n%s\nerwartet:\n%s", out, soll)
+	}
+}

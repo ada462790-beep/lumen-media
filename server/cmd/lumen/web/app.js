@@ -1815,9 +1815,10 @@ const mbit = b => `${zahl(b / 1e6, { maximumFractionDigits: 1 })} ${tr('Mbit/s')
    Edition. Teile eines Films (CD1, CD2) sind keine Fassungen. */
 const fassungenVon = files => (files || []).filter(f => !f.missing && !f.defekt && (f.partNo || 1) === 1);
 function fassungTeile(f) {
-  const ton = (f.tracks || []).find(t => t.kind === 'audio');
-  const sprache = ton?.language && ton.language !== 'und' ? sprachName(ton.language) : '';
-  return [aufloesungVon(f).name, sprache, (f.container || '').toUpperCase(), f.edition || ''].filter(Boolean);
+  // Alle Tonsprachen („Deutsch, Englisch"), nicht nur die erste.
+  const sprachen = [...new Set((f.tracks || []).filter(t => t.kind === 'audio' && t.language && t.language !== 'und')
+    .map(t => t.language))].map(sprachName).join(', ');
+  return [aufloesungVon(f).name, sprachen, (f.container || '').toUpperCase(), f.edition || ''].filter(Boolean);
 }
 /* Der Hinweis „· 2 Fassungen" auf „Ansehen": Unterscheiden sich die
    Fassungen nur in der Tonsprache, heisst es „· 2 Sprachen", nur in der
@@ -1835,10 +1836,18 @@ function fassungenHinweis(fassungen) {
   return tr('· {n} Fassungen', { n });
 }
 function fassungNamen(fassungen) {
-  const namen = fassungen.map(f => fassungTeile(f).join(' · '));
-  // Zwei gleich beschriftete Fassungen: die Grösse unterscheidet sie.
-  return namen.map((n, i) => (namen.indexOf(n) !== namen.lastIndexOf(n) && fassungen[i].sizeBytes
-    ? [n, groesse(fassungen[i].sizeBytes)].filter(Boolean).join(' · ') : n) || tr('Fassung {n}', { n: i + 1 }));
+  const doppelt = (liste, i) => liste.indexOf(liste[i]) !== liste.lastIndexOf(liste[i]);
+  let namen = fassungen.map(f => fassungTeile(f).join(' · '));
+  // Zwei gleich beschriftete Fassungen: die Grösse unterscheidet sie —
+  // und bei gleichen Kopien der Ordner (oder eine Nummer).
+  namen = namen.map((n, i) => (doppelt(namen, i) && fassungen[i].sizeBytes
+    ? [n, groesse(fassungen[i].sizeBytes)].filter(Boolean).join(' · ') : n));
+  namen = namen.map((n, i) => {
+    if (!doppelt(namen, i)) return n;
+    const ordner = (fassungen[i].path || '').split(/[\\/]/).slice(-2, -1)[0];
+    return [n, ordner || tr('Kopie {n}', { n: i + 1 })].filter(Boolean).join(' · ');
+  });
+  return namen.map((n, i) => n || tr('Fassung {n}', { n: i + 1 }));
 }
 
 /* Stufen fürs Umwandeln, wie man sie von YouTube kennt. Angeboten wird,
@@ -6892,6 +6901,9 @@ app.addEventListener('click', async e => {
   }
   if ((n = hit('data-fehlend-weg')) || (n = hit('data-fehlende-weg-alle'))) {
     const ids = n.dataset.fehlendWeg ? [n.dataset.fehlendWeg] : [];
+    if (!await rueckfrage({ titel: ids.length ? tr('Fehlende Datei endgültig entfernen?') : tr('Alle fehlenden Dateien endgültig entfernen?'),
+      text: tr('Lumen vergisst die Datei. Taucht sie wieder auf, wird sie neu eingelesen – das lässt sich nicht rückgängig machen.'),
+      ja: tr('Endgültig entfernen'), gefaehrlich: true })) return;
     try { await api.call('/admin/cleanup/fehlende-entfernen', { method: 'POST', body: { fileIds: ids } }); toast(tr('Endgültig entfernt')); }
     catch (err) { toast(err.message); }
     return load();
@@ -6912,6 +6924,9 @@ app.addEventListener('click', async e => {
     return load();
   }
   if ((n = hit('data-teile'))) {
+    if (!await rueckfrage({ titel: tr('Zu einer Datei zusammenführen?'),
+      text: tr('Lumen hängt die Teile ohne neu zu rechnen zu einer MKV-Datei aneinander. Die Teile wandern in den Unterordner „.lumen-teile“.'),
+      ja: tr('Zusammenführen') })) return;
     try { const r = await api.call(`/admin/items/${encodeURIComponent(n.dataset.teile)}/teile-zusammenfuehren`, { method: 'POST' }); toast(r?.status || tr('Läuft …')); }
     catch (err) { toast(err.message); }
     return;
