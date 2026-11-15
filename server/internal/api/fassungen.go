@@ -278,6 +278,16 @@ func (s *Server) teileZusammenfuehren(ctx context.Context, it *store.Item, teile
 	for _, f := range teile {
 		_ = s.st.DateiAustragen(ctx, f.ID)
 	}
+	// Fehlende Dateien desselben Titels mit einer dieser Teilnummern sind
+	// alte Fassungen dieser Teile — die neue Datei ersetzt auch sie. Sonst
+	// blieben sie als „fehlend" am Film.
+	if alle, err := s.st.FilesFor(ctx, it.ID); err == nil {
+		for _, f := range alle {
+			if f.Missing && f.PartNo >= 1 && f.PartNo <= len(teile) {
+				_ = s.st.DateiAustragen(ctx, f.ID)
+			}
+		}
+	}
 	// Der Durchlauf danach am Hintergrund-Kontext: Der ctx dieser
 	// Funktion endet mit ihr (WithTimeout oben, defer cancel), und ein
 	// Durchlauf mit beendetem Kontext fängt gar nicht erst an — darum

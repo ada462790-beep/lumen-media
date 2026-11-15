@@ -428,6 +428,9 @@ func (s *Server) scheibeUmwandeln(ctx context.Context, q *scheibenQuelle, sieben
 	if err := os.Rename(tmp, q.ziel); err != nil {
 		return "", err
 	}
+	if q.inhalt != "" {
+		s.scheibeEintragen(ctx, q)
+	}
 	was := "DVD"
 	if art == scheibe.BluRay {
 		was = "Blu-ray"
@@ -446,6 +449,33 @@ func (s *Server) scheibeUmwandeln(ctx context.Context, q *scheibenQuelle, sieben
 	}
 	return fmt.Sprintf("%s, %d Min., %d Tonspuren, %d Untertitel, %d Kapitel",
 		was, (plan.DauerMS+30000)/60000, ton, unter, len(plan.Kapitel)), nil
+}
+
+// scheibeEintragen hängt die neue MKV gleich an den Film der Scheibe und
+// trägt alle Dateien der Scheibe aus (VTS_01_1..3.VOB, nicht nur Teil 1):
+// Hier steht sicher fest, dass die MKV sie ersetzt. Vorher blieben Teil 2
+// und 3 für immer als „fehlend" am Film stehen. Gleich ausgemessen wie
+// beim Zusammenführen der Teile.
+func (s *Server) scheibeEintragen(ctx context.Context, q *scheibenQuelle) {
+	info, err := os.Stat(q.ziel)
+	if err != nil {
+		return
+	}
+	neu := &store.MediaFile{Path: q.ziel, SizeBytes: info.Size(), MTime: info.ModTime().Unix(),
+		PartNo: 1, Container: "mkv"}
+	if s.ff != nil && s.ff.Available() {
+		mctx, mab := context.WithTimeout(ctx, 30*time.Second)
+		if p, err := s.ff.Probe(mctx, q.ziel); err == nil {
+			neu.DurationMS, neu.Bitrate = p.DurationMS, p.Bitrate
+			neu.Width, neu.Height, neu.VideoCodec, neu.HDR = p.Width, p.Height, p.VideoCodec, p.HDR
+			neu.Spuren = scan.SpurenFuerStore(append(p.Tracks, scan.SidecarSubtitles(q.ziel)...))
+			neu.Kapitel = scan.KapitelFuerStore(p.Chapters)
+		}
+		mab()
+	}
+	if _, err := s.st.ScheibeErsetzen(ctx, q.lib.ID, q.inhalt, neu); err != nil {
+		s.st.Log(ctx, "warn", "aufraeumen", "Dateien der Scheibe liessen sich nicht austragen: "+stream.Bereinigt(err.Error()))
+	}
 }
 
 // isoVorbereiten listet die ISO, packt die Steuerdateien aus und plant.
