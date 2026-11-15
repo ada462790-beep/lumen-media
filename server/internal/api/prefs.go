@@ -37,7 +37,7 @@ const (
 // prefsBekannt: was Web und Apps heute schreiben.
 var prefsBekannt = map[string]bool{
 	"sprache": true, "tonSprache": true, "untertitel": true, "utGroesse": true, "utHintergrund": true,
-	"autoplay": true, "skipIntro": true, "shareRatings": true, "nochDaFrage": true,
+	"autoplay": true, "skipIntro": true, "tonWahl": true, "shareRatings": true, "nochDaFrage": true,
 	"utSuchSprachen": true, "newsSeen": true,
 	// Die gewählte Sortierung je Ansicht, als „schlüssel:richtung"
 	// („title:asc", „added:desc").

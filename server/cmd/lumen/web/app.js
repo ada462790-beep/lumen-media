@@ -255,9 +255,17 @@ function trefferAnsagen() {
   const q = S.query.trim();
   if (!q || S.busy || S.error) return;
   const d = S.data || {};
-  const n = (d.items || []).length + (d.folgen || []).length;
+  // Alles, was die Trefferliste zeigt — auch Personen, Reihen, Sammlungen.
+  const n = ['items', 'folgen', 'personen', 'reihen', 'sammlungen'].reduce((a, k) => a + (d[k] || []).length, 0);
   const text = n ? tr('{n} Treffer', { n }) : tr('Keine Treffer für „{q}“', { q });
   ansageZeit = setTimeout(() => { if (text !== letzteAnsage) { letzteAnsage = text; ansagen(text); } }, 500);
+}
+// Beim Seitenwechsel: keine verspätete Trefferzahl auf der neuen Seite.
+function ansageLeeren() {
+  clearTimeout(ansageZeit);
+  letzteAnsage = '';
+  const el = document.getElementById('ansage');
+  if (el) el.textContent = '';
 }
 
 function toast(msg) {
@@ -347,9 +355,14 @@ function bildQuellen(url, hoch, sizes) {
 // antwortet dann gleich mit 503, statt die Verbindung zu belegen), wird
 // es später noch einmal geladen.
 function standbild(it, hoch) {
+  const u = spaeterAdresse(it.frame);
   return `<img class="art-img art-frame${hoch ? ' art-frame--poster' : ''}"
-      src="${esc(it.frame)}${tokenSuffix(it.frame)}" alt="" loading="lazy" data-weg data-nochmal="0">`;
+      src="${esc(u)}${tokenSuffix(u)}" alt="" loading="lazy" data-weg data-nochmal="0">`;
 }
+// ?spaeter=1: Entsteht das Bild noch, kommt statt 503 ein durchsichtiger
+// Platzhalter von 2×1 Punkten (standbild.go) — keine roten Zeilen in der
+// Konsole; nachgeladen wird wie bisher (NOCHMAL_SEK).
+const spaeterAdresse = url => url + (url.includes('?') ? '&' : '?') + 'spaeter=1';
 // Das Jahr eines Titels — bei Serien der Zeitraum: „2014–2020" für eine
 // abgeschlossene, „seit 2014" für eine, die noch läuft.
 function jahre(it) {
@@ -498,7 +511,9 @@ let hoverTimer = null, hoverKarte = null, hoverFuer = null;
 const kannH264 = () => document.createElement('video').canPlayType('video/mp4; codecs="avc1.42E01E"') !== '';
 function vorschauVideo(id, klass) {
   // Ohne H.264 (manche Linux-Browser) gibt es denselben Schnipsel als VP9.
-  const src = api.artURL(id, 'vorschau') + (kannH264() ? '' : '&f=webm');
+  // spaeter=1: Gibt es ihn noch nicht, entsteht er im Hintergrund, und der
+  // Server sagt das mit 204 statt mit einem Fehler — das Bild bleibt.
+  const src = api.artURL(id, 'vorschau') + (kannH264() ? '' : '&f=webm') + '&spaeter=1';
   return `<video class="${klass}" muted autoplay loop playsinline preload="none"
     src="${src}" data-weg></video>`;
 }
@@ -806,6 +821,7 @@ async function go(view, opts = {}) {
   // „Zurück" soll genau dorthin führen.
   standMerken();
   const vorher = S.view;
+  if (view !== vorher) ansageLeeren();
   S.view = view;
   S.id = opts.id ?? null;
   S.error = '';
@@ -1842,9 +1858,10 @@ const mbit = b => `${zahl(b / 1e6, { maximumFractionDigits: 1 })} ${tr('Mbit/s')
    Edition. Teile eines Films (CD1, CD2) sind keine Fassungen. */
 const fassungenVon = files => (files || []).filter(f => !f.missing && !f.defekt && (f.partNo || 1) === 1);
 function fassungTeile(f) {
-  const ton = (f.tracks || []).find(t => t.kind === 'audio');
-  const sprache = ton?.language && ton.language !== 'und' ? sprachName(ton.language) : '';
-  return [aufloesungVon(f).name, sprache, (f.container || '').toUpperCase(), f.edition || ''].filter(Boolean);
+  // Alle Tonsprachen („Deutsch, Englisch"), nicht nur die erste.
+  const sprachen = [...new Set((f.tracks || []).filter(t => t.kind === 'audio' && t.language && t.language !== 'und')
+    .map(t => t.language))].map(l => sprachName(l)).join(', ');
+  return [aufloesungVon(f).name, sprachen, (f.container || '').toUpperCase(), f.edition || ''].filter(Boolean);
 }
 /* Der Hinweis „· 2 Fassungen" auf „Ansehen": Unterscheiden sich die
    Fassungen nur in der Tonsprache, heisst es „· 2 Sprachen", nur in der
@@ -1862,10 +1879,18 @@ function fassungenHinweis(fassungen) {
   return tr('· {n} Fassungen', { n });
 }
 function fassungNamen(fassungen) {
-  const namen = fassungen.map(f => fassungTeile(f).join(' · '));
-  // Zwei gleich beschriftete Fassungen: die Grösse unterscheidet sie.
-  return namen.map((n, i) => (namen.indexOf(n) !== namen.lastIndexOf(n) && fassungen[i].sizeBytes
-    ? [n, groesse(fassungen[i].sizeBytes)].filter(Boolean).join(' · ') : n) || tr('Fassung {n}', { n: i + 1 }));
+  const doppelt = (liste, i) => liste.indexOf(liste[i]) !== liste.lastIndexOf(liste[i]);
+  let namen = fassungen.map(f => fassungTeile(f).join(' · '));
+  // Zwei gleich beschriftete Fassungen: die Grösse unterscheidet sie —
+  // und bei gleichen Kopien der Ordner (oder eine Nummer).
+  namen = namen.map((n, i) => (doppelt(namen, i) && fassungen[i].sizeBytes
+    ? [n, groesse(fassungen[i].sizeBytes)].filter(Boolean).join(' · ') : n));
+  namen = namen.map((n, i) => {
+    if (!doppelt(namen, i)) return n;
+    const ordner = (fassungen[i].path || '').split(/[\\/]/).slice(-2, -1)[0];
+    return [n, ordner || tr('Kopie {n}', { n: i + 1 })].filter(Boolean).join(' · ');
+  });
+  return namen.map((n, i) => n || tr('Fassung {n}', { n: i + 1 }));
 }
 
 /* Stufen fürs Umwandeln, wie man sie von YouTube kennt. Angeboten wird,
@@ -2507,15 +2532,24 @@ function spurenMerken(p, teil) {
 function spurenVorbelegen(p) {
   const serie = serienSpuren(p.seriesId) || {};
   const profil = S.me?.prefs || {};
-  const tonWunsch = serie.ton ?? profil.tonSprache;
   const ton = tonspuren(p), text = textspuren(p), bild = bildspuren(p);
+  const eigen = sprache().slice(0, 2);
+  // Ohne Handwahl: Ton in der Sprache des Profils, wenn es ihn gibt —
+  // oder, wer „Originalton" eingestellt hat, die als Original markierte
+  // (sonst die erste) Spur. Gibt es beides nicht, bleibt die Standardspur.
+  let tonWunsch = serie.ton ?? profil.tonSprache;
+  if (!tonWunsch && profil.tonWahl === 'original') {
+    const o = ton.find(x => /\boriginal|\bOV\b|\bO-?Ton\b/i.test(x.title || '')) || ton[0];
+    if (o) p.spur = o.index;
+  } else if (!tonWunsch) {
+    tonWunsch = eigen;
+  }
   if (tonWunsch) {
     const t = ton.find(x => x.language === tonWunsch);
     if (t) p.spur = t.index;
   }
   const aktuell = ton.find(x => x.index === p.spur) || ton[0];
   const tonSprache = aktuell?.language && aktuell.language !== 'und' ? aktuell.language : '';
-  const eigen = sprache().slice(0, 2);
   // Text vor Bild: Text stellt der Browser selbst dar, Bild muss der
   // Server neu rechnen. Bild nur, wenn es die Sprache als Text nicht gibt.
   const finden = lang => text.find(x => x.language === lang && !x.forced)
@@ -3173,6 +3207,13 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
     // Ist die Bildschirmzeit um, sagt es schon der Plan — dann gar nicht
     // erst den Player öffnen.
     const quellHoehe = aufloesungVon(file).hoehe;
+    // Was sich vorher weiss, nicht erst den Server fragen — seine Absage
+    // (422 defekt, 403 Bildschirmzeit) stünde rot in der Konsole.
+    if (file.defekt) throw Object.assign(new Error(tr('Die Datei ist defekt und lässt sich nicht abspielen.')), { code: 'datei_defekt' });
+    if (S.me?.account?.isKid) {
+      const bz = await bzLaden();
+      if (bz?.aktiv && bz.erlaubt === false) throw Object.assign(new Error(bz.meldung || tr('Für heute ist Schluss.')), { code: 'bildschirmzeit' });
+    }
     // Eine defekte oder verschwundene Datei: gleich sagen, statt einen
     // schwarzen Player zu öffnen.
     const plan = await api.plan(file.id, qualitaetParameter(quellHoehe)).catch(e => {
@@ -4120,7 +4161,7 @@ async function naechstesAnbieten(p, sekunden) {
   box.id = 'naechster';
   box.className = 'naechster glass glass--regular';
   box.dataset.id = n.id;
-  box.innerHTML = `${n.id ? `<img class="naechster-bild" src="${api.artURL(n.id, 'frame')}" alt="" data-weg>` : ''}
+  box.innerHTML = `${n.id ? `<img class="naechster-bild" src="${spaeterAdresse(api.artURL(n.id, 'frame'))}" alt="" data-weg>` : ''}
     <div class="naechster-text">
       <div class="t-caption c-2">${tr('Als Nächstes · in')} <span data-rest>${rest}</span> s</div>
       <div class="t-body naechster-titel">${esc(n.kind === 'episode' && n.seriesTitle ? n.seriesTitle : n.title)}</div>
@@ -4640,6 +4681,10 @@ function viewSettings() {
           swRow(tr('Folgen automatisch weiter'), prefs.autoplay !== '0', null, 'autoplay') +
           swRow(tr('Vorspann überspringen'), prefs.skipIntro === '1', null, 'skipIntro') +
           swRow(tr('Nach drei Folgen fragen, ob du noch schaust'), prefs.nochDaFrage !== '0', null, 'nochDaFrage') +
+          `<div class="row" style="min-height:54px;flex-wrap:wrap"><span class="t-body" style="flex:1">${tr('Tonsprache')}</span>
+            ${segment(tr('Tonsprache'), [['profil', tr('Profilsprache')], ['original', tr('Originalton')]].map(([v, n]) =>
+              ({ name: n, an: (prefs.tonWahl === 'original' ? 'original' : 'profil') === v, attr: `data-prefwert="tonWahl:${v}"` })))}
+            </div>` +
           swRow(tr('Qualität unterwegs'), null, lim.remoteQuality === 'original' ? tr('Original') : lim.remoteQuality || '1080p'))}
         ${grp(tr('Profilbild'), `<div class="avatar-wahl">
             ${['av-a', 'av-b', 'av-c', 'av-d', 'av-k'].map(c => `<button class="avatar ${c}${a.avatar === c ? ' gewaehlt' : ''}" style="--av:44px;border:0" data-avatar="${c}" aria-label="${tr('Farbe {nr}', { nr: c.slice(3).toUpperCase() })}">${esc(a.name[0])}</button>`).join('')}
@@ -5934,6 +5979,21 @@ function viewCleanup() {
       </div>`).join('')}
     </div>`;
   const dupKandidaten = kandidaten.map(kandidatZeile).join('');
+  // Vielleicht Fassungen desselben Films: verschiedene Titel, gleicher
+  // Ordner, gleiches Jahr, andere Tonsprache, gleiche Laufzeit (±5 %).
+  const fassungVorschlaege = d.fassungKandidaten || [];
+  const fassungVorschlag = k => `
+    <div class="orow" style="height:auto;padding:14px 16px;display:block">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="t-body" style="flex:1 1 200px">${k.items.map(x => `${esc(x.title)}${x.year ? ` (${x.year})` : ''}`).join(' / ')}</div>
+        <button class="btn btn-pill btn-pill--fill" style="height:30px;font-size:.8125rem" data-fassungen-zusammen="${esc(k.items.map(x => x.itemId).join(','))}">${tr('Als Fassungen zusammenlegen')}</button>
+      </div>
+      ${k.items.map(x => `<div style="display:flex;gap:10px;align-items:center;min-height:40px;flex-wrap:wrap">
+        <span class="mono c-2" style="flex:1;min-width:240px;word-break:break-all;font-size:.75rem">${esc(x.path)}</span>
+        <span class="t-caption c-2 tnum">${[sprachName(x.sprache), mins(x.dauerMs)].filter(Boolean).join(' · ')}</span>
+      </div>`).join('')}
+    </div>`;
+  const fassungVorschlagListe = fassungVorschlaege.map(fassungVorschlag).join('');
   const dup = nurTeile.map(doppelZeile).join('');
   const dupFassungen = fassungen.map(doppelZeile).join('');
 
@@ -6094,6 +6154,9 @@ function viewCleanup() {
     ${dupKandidaten ? `<section style="margin-top:22px"><div class="section-h">${tr('Vielleicht Teile eines Films · {n}', { n: kandidaten.length })}</div>
       <div class="group group--inset">${dupKandidaten}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Gleicher Name mit „Teil 1“, „Teil 2“ im selben Ordner, aber als eigene Filme geführt – meist, weil das Jahr nur bei einem steht. Zusammengefügt laufen die Teile nacheinander, und der Scan trennt sie nicht wieder. Fortsetzungen mit verschiedenen Jahren stehen hier nicht.')}</p></section>` : ''}
+    ${fassungVorschlagListe ? `<section style="margin-top:22px"><div class="section-h">${tr('Vielleicht Fassungen desselben Films · {n}', { n: fassungVorschlaege.length })}</div>
+      <div class="group group--inset">${fassungVorschlagListe}</div>
+      <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Verschiedene Titel im selben Ordner, gleiches Jahr, andere Tonsprache und gleiche Laufzeit – vielleicht derselbe Film in zwei Sprachen. Zusammengelegt wählt man die Sprache im Player, und der Scan trennt sie nicht wieder. „Abtrennen“ macht es rückgängig.')}</p></section>` : ''}
     ${missing ? `<section style="margin-top:22px"><div class="section-h">${tr('Fehlende Dateien · {n}', { n: nFehlend })}</div>
       <div class="group group--inset">${missing}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Die Titel bleiben einen Tag lang stehen – eine abgehängte Platte soll die Mediathek nicht leeren. Danach blendet Lumen sie aus; hier lassen sie sich endgültig entfernen. Die Dateien selbst bleiben unberührt.')}</p>
@@ -6872,8 +6935,11 @@ app.addEventListener('click', async e => {
   }
   if ((n = hit('data-prefwert'))) {
     const [key, wert] = n.dataset.prefwert.split(':');
-    S.me.prefs = { ...(S.me.prefs || {}), [key]: wert };
-    api.updateMe({ prefs: { [key]: wert } }).catch(err => toast(err.message));
+    // Eine neue Tonwahl gilt ab jetzt — die zuletzt im Player gewählte
+    // Sprache (tonSprache) ginge ihr sonst vor.
+    const neu = key === 'tonWahl' ? { tonWahl: wert, tonSprache: '' } : { [key]: wert };
+    S.me.prefs = { ...(S.me.prefs || {}), ...neu };
+    api.updateMe({ prefs: neu }).catch(err => toast(err.message));
     return render();
   }
   if ((n = hit('data-grpedit'))) { S.gruppe = (S.data?.groups || []).find(x => x.id === n.dataset.grpedit) || null; render(); document.getElementById('gname')?.focus(); return; }
@@ -6969,6 +7035,12 @@ app.addEventListener('click', async e => {
     catch (err) { toast(err.message); }
     return load();
   }
+  if ((n = hit('data-fassungen-zusammen'))) {
+    const ids = (n.dataset.fassungenZusammen || '').split(',').filter(Boolean);
+    try { await api.call('/admin/cleanup/fassungen-zusammenlegen', { method: 'POST', body: { itemIds: ids } }); toast(tr('Als Fassungen eines Films zusammengelegt')); }
+    catch (err) { toast(err.message); }
+    return load();
+  }
   if ((n = hit('data-teile-trennen'))) {
     if (!(await rueckfrage({ titel: tr('Sind das verschiedene Filme?'), text: tr('Teil 1 bleibt an diesem Eintrag, jeder weitere Teil wird ein eigener Film. Der Scan legt sie danach nicht wieder zusammen.'), ja: tr('Trennen') }))) return;
     try { await api.call(`/admin/items/${encodeURIComponent(n.dataset.teileTrennen)}/teile-trennen`, { method: 'POST' }); toast(tr('Als verschiedene Filme geführt')); }
@@ -6983,6 +7055,9 @@ app.addEventListener('click', async e => {
   }
   if ((n = hit('data-fehlend-weg')) || (n = hit('data-fehlende-weg-alle'))) {
     const ids = n.dataset.fehlendWeg ? [n.dataset.fehlendWeg] : [];
+    if (!await rueckfrage({ titel: ids.length ? tr('Fehlende Datei endgültig entfernen?') : tr('Alle fehlenden Dateien endgültig entfernen?'),
+      text: tr('Lumen vergisst die Datei. Taucht sie wieder auf, wird sie neu eingelesen – das lässt sich nicht rückgängig machen.'),
+      ja: tr('Endgültig entfernen'), gefaehrlich: true })) return;
     try { await api.call('/admin/cleanup/fehlende-entfernen', { method: 'POST', body: { fileIds: ids } }); toast(tr('Endgültig entfernt')); }
     catch (err) { toast(err.message); }
     return load();
@@ -7003,6 +7078,9 @@ app.addEventListener('click', async e => {
     return load();
   }
   if ((n = hit('data-teile'))) {
+    if (!await rueckfrage({ titel: tr('Zu einer Datei zusammenführen?'),
+      text: tr('Lumen hängt die Teile ohne neu zu rechnen zu einer MKV-Datei aneinander. Die Teile wandern in den Unterordner „.lumen-teile“.'),
+      ja: tr('Zusammenführen') })) return;
     try { const r = await api.call(`/admin/items/${encodeURIComponent(n.dataset.teile)}/teile-zusammenfuehren`, { method: 'POST' }); toast(r?.status || tr('Läuft …')); }
     catch (err) { toast(err.message); }
     return;
@@ -8150,24 +8228,32 @@ setInterval(() => { if (api.signedIn) api.medienSchluessel().catch(() => {}); },
 // wachsendem Abstand (zusammen rund anderthalb Minuten): Sie entstehen
 // erst, wenn jemand sie sehen will, eins nach dem anderen.
 const NOCHMAL_SEK = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
+// Noch einmal laden — mit einer Zählung in der Adresse, sonst nähme der
+// Browser den Platzhalter aus seiner Bilderliste statt neu zu fragen.
+function nochmalLaden(el) {
+  const n = Number(el.getAttribute('data-nochmal'));
+  if (!el.hasAttribute('data-nochmal') || n >= NOCHMAL_SEK.length) return false;
+  el.setAttribute('data-nochmal', String(n + 1));
+  const src = el.getAttribute('src').replace(/([?&])nochmal=\d+&?/, '$1').replace(/[?&]$/, '');
+  const neu = src + (src.includes('?') ? '&' : '?') + 'nochmal=' + (n + 1);
+  setTimeout(() => { if (el.isConnected) el.setAttribute('src', neu); }, NOCHMAL_SEK[n] * 1000);
+  return true;
+}
 document.addEventListener('error', e => {
   const el = e.target;
   if (!(el instanceof Element)) return;
   if (el.hasAttribute('data-ersatz')) { el.parentNode.textContent = el.getAttribute('data-ersatz'); return; }
-  const n = Number(el.getAttribute('data-nochmal'));
-  if (el.hasAttribute('data-nochmal') && n < NOCHMAL_SEK.length) {
-    el.setAttribute('data-nochmal', String(n + 1));
-    const src = el.getAttribute('src');
-    setTimeout(() => { if (el.isConnected) el.setAttribute('src', src); }, NOCHMAL_SEK[n] * 1000);
-    return;
-  }
+  if (nochmalLaden(el)) return;
   if (el.hasAttribute('data-weg')) el.remove();
 }, true);
 // „Kein Bild möglich" (Datei defekt) schickt der Server als
 // durchsichtigen Punkt statt als Fehler — dann bleibt der Titel stehen.
+// „Noch nicht fertig" als Platzhalter von 2×1 Punkten: später nochmal.
 document.addEventListener('load', e => {
   const el = e.target;
-  if (el instanceof HTMLImageElement && (el.hasAttribute('data-nochmal') || el.hasAttribute('data-weg')) && el.naturalWidth <= 1 && el.naturalHeight <= 1) el.remove();
+  if (!(el instanceof HTMLImageElement) || !(el.hasAttribute('data-nochmal') || el.hasAttribute('data-weg'))) return;
+  if (el.naturalWidth === 2 && el.naturalHeight === 1 && nochmalLaden(el)) return;
+  if (el.naturalWidth <= 2 && el.naturalHeight <= 1) el.remove();
 }, true);
 document.addEventListener('click', e => {
   const el = e.target instanceof Element && e.target.closest('[data-auswahl]');

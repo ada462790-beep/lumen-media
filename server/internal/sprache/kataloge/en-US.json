@@ -345,5 +345,8 @@
   "es braucht mindestens zwei dateien": "At least two files are needed.",
   "teile gibt es nur bei filmen": "Only movies can have parts.",
   "eine datei steht zweimal in der liste": "A file is listed twice.",
-  "die dateien gehören nicht zu filmen derselben bibliothek": "The files don’t belong to movies in the same library."
+  "die dateien gehören nicht zu filmen derselben bibliothek": "The files don’t belong to movies in the same library.",
+  "die einträge liegen in verschiedenen mediatheken": "the entries are in different libraries",
+  "es braucht genau zwei einträge": "exactly two entries are needed",
+  "zusammenlegen geht nur bei filmen": "merging only works for films"
 }

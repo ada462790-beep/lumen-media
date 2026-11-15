@@ -13,7 +13,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -1233,29 +1235,44 @@ func (s *Store) BildQuelle(ctx context.Context, itemID, kind string) string {
 }
 
 func (s *Store) ArtworkFor(ctx context.Context, itemIDs []string) (map[string]map[string]string, error) {
-	out := map[string]map[string]string{}
+	namen, _, err := s.ArtworkMitStand(ctx, itemIDs)
+	return namen, err
+}
+
+// ArtworkMitStand ist ArtworkFor samt einem kurzen Stand je Bild: Er
+// ändert sich, sobald ein anderes Bild gilt (anderer Dateiname, andere
+// Quelle bei TMDb, eine geänderte lokale Datei). Er kommt als ?v=… in die
+// Adresse des Bildes — so zeigt jede Liste ein neues Poster sofort, und
+// der Browser darf das Bild unter dieser Adresse lange behalten.
+func (s *Store) ArtworkMitStand(ctx context.Context, itemIDs []string) (namen, staende map[string]map[string]string, err error) {
+	namen, staende = map[string]map[string]string{}, map[string]map[string]string{}
 	if len(itemIDs) == 0 {
-		return out, nil
+		return namen, staende, nil
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT item_id, kind, path FROM artwork WHERE item_id IN (`+
-			placeholders(len(itemIDs))+`)`, toAny(itemIDs)...)
+		`SELECT a.item_id, a.kind, a.path, COALESCE(a.source_url,''),
+		        COALESCE(lb.mtime,0), COALESCE(lb.groesse,0)
+		   FROM artwork a LEFT JOIN lokal_bild lb ON lb.item_id = a.item_id AND lb.art = a.kind
+		  WHERE a.item_id IN (`+placeholders(len(itemIDs))+`)`, toAny(itemIDs)...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
-
 	for rows.Next() {
-		var id, kind, path string
-		if err := rows.Scan(&id, &kind, &path); err != nil {
-			return nil, err
+		var id, kind, path, quelle string
+		var mtime, groesse int64
+		if err := rows.Scan(&id, &kind, &path, &quelle, &mtime, &groesse); err != nil {
+			return nil, nil, err
 		}
-		if out[id] == nil {
-			out[id] = map[string]string{}
+		if namen[id] == nil {
+			namen[id], staende[id] = map[string]string{}, map[string]string{}
 		}
-		out[id][kind] = path
+		namen[id][kind] = path
+		h := fnv.New64a()
+		fmt.Fprintf(h, "%s\x00%s\x00%d\x00%d", path, quelle, mtime, groesse)
+		staende[id][kind] = strconv.FormatUint(h.Sum64()%(1<<40), 36)
 	}
-	return out, rows.Err()
+	return namen, staende, rows.Err()
 }
 
 // UnmatchedItems sind die Titel, die der Besitzer von Hand zuordnen muss —
@@ -1480,6 +1497,11 @@ func (s *Store) DateiAbtrennen(ctx context.Context, fileID, titel string, jahr i
 		return nil, err
 	}
 	_, _ = s.db.ExecContext(ctx, `UPDATE item SET bevorzugte_datei = NULL WHERE id = ? AND bevorzugte_datei = ?`, alt.ID, fileID)
+	// Frisch gelesen: UpsertItem füllt addedAt nicht in die Struktur, und
+	// die Antwort trug sonst „0001-01-01".
+	if gelesen, err := s.Item(ctx, neu.ID); err == nil {
+		return gelesen, nil
+	}
 	return neu, nil
 }
 

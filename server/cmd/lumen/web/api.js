@@ -35,6 +35,21 @@ function gesehenFrage(wo) {
   return t ? '?' + t : '';
 }
 
+/* Wege, die der Server nur mit dem Code noch einmal annimmt (Rechte
+   ändern, Konto entfernen, Sicherung zurückspielen — s.bestaetigt in
+   api.go). Die Web-App fragt dort gleich vorher, statt erst eine 428 zu
+   bekommen (rot in der Konsole). Ein Test hält die Liste bei api.go
+   (cmd/lumen/web_logik_test.go). */
+export const BESTAETIGEN = [
+  ['POST', /^\/admin\/groups$/],
+  ['PUT', /^\/admin\/groups\/[^/]+$/],
+  ['DELETE', /^\/admin\/groups\/[^/]+$/],
+  ['PUT', /^\/admin\/accounts\/[^/]+\/(group|rolle|limits|bildschirmzeit|sperre)$/],
+  ['DELETE', /^\/admin\/accounts\/[^/]+$/],
+  ['POST', /^\/admin\/backups\/[^/]+\/restore$/],
+];
+const brauchtBestaetigung = (method, path) => BESTAETIGEN.some(([m, re]) => m === method && re.test(path.split('?')[0]));
+
 export const api = {
   token: read(TOKEN_KEY),
 
@@ -82,6 +97,10 @@ export const api = {
   /* ---------------------------------------------------------- Grundlage */
 
   async call(path, { method = 'GET', body, raw = false, bestaetigung = '', signal = null } = {}) {
+    if (!bestaetigung && this.bestaetigen && brauchtBestaetigung(method, path)) {
+      bestaetigung = await this.bestaetigen('');
+      if (!bestaetigung) { const e = new ApiError(tr('Abgebrochen.'), 0); e.abgebrochen = true; throw e; }
+    }
     const headers = {};
     // Rechte ändern (Gruppen, Einschränkungen) verlangt den Code noch einmal.
     if (bestaetigung) headers['X-Lumen-Bestaetigung'] = bestaetigung;

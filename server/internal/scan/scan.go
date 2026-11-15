@@ -489,10 +489,13 @@ func (s *Scanner) Scan(ctx context.Context, lib store.Library) (*Result, error) 
 		// wurde sie umbenannt oder ersetzt — auch wenn das nicht in diesem
 		// Durchlauf geschah oder die Grösse nicht passt. Die alte Zeile
 		// geht; Stand und Haken hängen am Titel (fehlendeMitErsatz).
-		if n := s.fehlendeMitErsatz(ctx, lib); n > 0 {
-			s.st.Log(ctx, "info", "scan", fmt.Sprintf(
-				"%s: %d fehlende Dateien ausgetragen — ihr Titel ist mit einer anderen Datei da (umbenannt oder ersetzt)", lib.Name, n))
+		if n, umbenannt := s.fehlendeMitErsatz(ctx, lib); n > 0 {
+			if n > umbenannt {
+				s.st.Log(ctx, "info", "scan", fmt.Sprintf(
+					"%s: %d fehlende Dateien ausgetragen — ihr Titel ist mit einer anderen Datei da (umbenannt oder ersetzt)", lib.Name, n-umbenannt))
+			}
 			res.Missing = max(0, res.Missing-n)
+			res.Renamed += umbenannt
 		}
 	}
 	// Welche Titel keine abspielbare Datei mehr haben (fehlt_seit): Nach
@@ -841,7 +844,7 @@ func (s *Scanner) upsertMovieGemessen(ctx context.Context, lib store.Library, g 
 // abgehängte Platte nicht als Umbenennung gilt, nur wenn der Ordner der
 // fehlenden Datei noch da ist oder beide Dateien im selben obersten
 // Ordner der Bibliothek liegen (dieselbe Serie, derselbe Filmordner).
-func (s *Scanner) fehlendeMitErsatz(ctx context.Context, lib store.Library) int {
+func (s *Scanner) fehlendeMitErsatz(ctx context.Context, lib store.Library) (int, int) {
 	oberster := func(p string) string {
 		rel, err := filepath.Rel(lib.Path, p)
 		if err != nil || strings.HasPrefix(rel, "..") {
@@ -853,7 +856,7 @@ func (s *Scanner) fehlendeMitErsatz(ctx context.Context, lib store.Library) int 
 		}
 		return teile[0]
 	}
-	n, err := s.st.FehlendeMitErsatzAustragen(ctx, lib.ID, func(fehlt, da string) bool {
+	n, umbenannt, err := s.st.FehlendeMitErsatzAustragen(ctx, lib.ID, func(fehlt, da string) bool {
 		if info, err := os.Stat(filepath.Dir(fehlt)); err == nil && info.IsDir() {
 			return true
 		}
@@ -863,7 +866,22 @@ func (s *Scanner) fehlendeMitErsatz(ctx context.Context, lib store.Library) int 
 	if err != nil {
 		s.st.Log(ctx, "warn", "scan", "fehlende Dateien liessen sich nicht austragen: "+ohnePfad(err))
 	}
-	return n
+	// Gleich gross im selben Ordner: umbenannt, nicht ersetzt — der Titel
+	// zählt dann nicht als „aktualisiert".
+	for _, id := range umbenannt {
+		umbenanntGezaehlt(ctx, id)
+	}
+	return n, len(umbenannt)
+}
+
+// umbenanntGezaehlt: Der Titel hat nur eine umbenannte Datei — er zählt
+// im Ergebnis als „umbenannt", nicht zusätzlich als „aktualisiert".
+func umbenanntGezaehlt(ctx context.Context, itemID string) {
+	if m := merkerVon(ctx); m != nil {
+		m.mu.Lock()
+		delete(m.aktualisiert, itemID)
+		m.mu.Unlock()
+	}
 }
 
 // teilEintrag: der Eintrag, an dem der erste Teil dieses Films hängt — unter

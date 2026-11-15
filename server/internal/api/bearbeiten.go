@@ -115,12 +115,12 @@ func (s *Server) bearbeitenStand(r *http.Request, it *store.Item) (*bearbeitenAn
 			}{p.Name, p.Rolle})
 		}
 	}
-	if art, err := s.st.ArtworkFor(ctx, []string{it.ID}); err == nil {
+	if art, stand, err := s.st.ArtworkMitStand(ctx, []string{it.ID}); err == nil {
 		if n := art[it.ID]["poster"]; n != "" {
-			a.Poster = "/api/v1/art/" + it.ID + "/poster"
+			a.Poster = bildAdresse(it.ID, "poster", stand[it.ID]["poster"])
 		}
 		if n := art[it.ID]["backdrop"]; n != "" {
-			a.Backdrop = "/api/v1/art/" + it.ID + "/backdrop"
+			a.Backdrop = bildAdresse(it.ID, "backdrop", stand[it.ID]["backdrop"])
 		}
 	}
 	sperren, err := s.st.Sperren(ctx, it.ID)
@@ -433,6 +433,7 @@ func (s *Server) adminBildSetzen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	eigenesBildWeg(s.meta.ArtDir(), vorher)
+	s.kleineFassungenWeg(vorher)
 	neu, _ := s.st.Item(r.Context(), it.ID)
 	a, err := s.bearbeitenStand(r, neu)
 	if err != nil {

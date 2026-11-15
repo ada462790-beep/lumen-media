@@ -1704,5 +1704,19 @@
  "Weitere Aktionen für {name}": "More actions for {name}",
  "Weniger": "Less",
  "{n} Sprachen": "{n} languages",
- "Ihre Titel verschwinden aus Lumen. Die Dateien bleiben liegen.": "Its titles disappear from Lumen. The files stay where they are."
+ "Ihre Titel verschwinden aus Lumen. Die Dateien bleiben liegen.": "Its titles disappear from Lumen. The files stay where they are.",
+ "Tonsprache": "Audio language",
+ "Profilsprache": "Profile language",
+ "Originalton": "Original audio",
+ "Fehlende Datei endgültig entfernen?": "Remove missing file permanently?",
+ "Alle fehlenden Dateien endgültig entfernen?": "Remove all missing files permanently?",
+ "Lumen vergisst die Datei. Taucht sie wieder auf, wird sie neu eingelesen – das lässt sich nicht rückgängig machen.": "Lumen forgets the file. If it turns up again, it will be read in anew – this cannot be undone.",
+ "Zu einer Datei zusammenführen?": "Merge into one file?",
+ "Lumen hängt die Teile ohne neu zu rechnen zu einer MKV-Datei aneinander. Die Teile wandern in den Unterordner „.lumen-teile“.": "Lumen joins the parts into one MKV file without re-encoding. The parts are moved to the subfolder “.lumen-teile”.",
+ "Kopie {n}": "Copy {n}",
+ "Als Fassungen zusammenlegen": "Merge as versions",
+ "Vielleicht Fassungen desselben Films · {n}": "Maybe versions of the same film · {n}",
+ "Verschiedene Titel im selben Ordner, gleiches Jahr, andere Tonsprache und gleiche Laufzeit – vielleicht derselbe Film in zwei Sprachen. Zusammengelegt wählt man die Sprache im Player, und der Scan trennt sie nicht wieder. „Abtrennen“ macht es rückgängig.": "Different titles in the same folder, same year, different audio language and the same running time – perhaps the same film in two languages. Once merged, you choose the language in the player, and the scan won’t split them again. “Split off” undoes it.",
+ "Als Fassungen eines Films zusammengelegt": "Merged as versions of one film",
+ "Die Datei ist defekt und lässt sich nicht abspielen.": "The file is damaged and can’t be played."
 }

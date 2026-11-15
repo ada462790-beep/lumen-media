@@ -24,6 +24,8 @@ func (s *Server) routenFunktionen(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/stream/{fileId}/anspielen.mp4", auth(s.dateiAnspielen))
 	mux.Handle("POST /api/v1/admin/items/{id}/als-teile", admin(s.adminAlsTeile))
 	mux.Handle("POST /api/v1/admin/items/{id}/teile-trennen", admin(s.adminTeileTrennen))
+	// Vielleicht Fassungen desselben Films (fassung_vorschlag.go).
+	mux.Handle("POST /api/v1/admin/cleanup/fassungen-zusammenlegen", admin(s.adminFassungenZusammenlegen))
 	// Kennung ohne TMDb-Schlüssel speichern (kennung_vormerken.go).
 	mux.Handle("POST /api/v1/admin/items/{id}/metadata/kennung", admin(s.adminKennungVormerken))
 
