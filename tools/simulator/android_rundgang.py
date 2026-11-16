@@ -292,16 +292,34 @@ def foto(name: str, notiz: str = "", ok: bool = True):
     print(f"{time.strftime('%H:%M:%S')} [{'ok' if ok else '--'}] {datei} {notiz}", flush=True)
 
 
+def im_vordergrund() -> bool:
+    aus = sh("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'")
+    return PAKET in aus
+
+
+def app_starten():
+    sh(f"monkey -p {PAKET} -c android.intent.category.{'LEANBACK_LAUNCHER' if TV else 'LAUNCHER'} 1")
+    time.sleep(5)
+
+
+def sicherstellen():
+    """Hat ein „Zurück" zu viel die App verlassen: wieder hinein."""
+    if not im_vordergrund():
+        print("   App war nicht mehr vorne — neu geöffnet", flush=True)
+        app_starten()
+
+
 def waehle(muster: str, bereich: str = "", warten: float = 8) -> bool:
     """Ein Element öffnen: tippen am Telefon, Fokus und OK am Fernseher."""
+    sicherstellen()
     k = warte(muster, warten, bereich=bereich)
     if not k and not bereich:
-        # Vielleicht weiter unten: scrollen und noch einmal suchen.
-        for _ in range(4):
+        # Vielleicht weiter unten oder oben: scrollen und noch einmal suchen.
+        for richtung in ["hoch"] * 3 + ["runter"] * 6:
             if TV:
-                taste("KEYCODE_DPAD_DOWN")
+                taste("KEYCODE_DPAD_DOWN" if richtung == "hoch" else "KEYCODE_DPAD_UP")
             else:
-                wischen("hoch")
+                wischen(richtung)
             k = finde(muster)
             if k:
                 break
@@ -370,12 +388,16 @@ def anmelden():
         print("   Server vom Emulator aus:", sh(
             f"printf 'GET /api/v1/hello HTTP/1.0\\r\\n\\r\\n' | nc -w 5 {SERVER.replace(':', ' ')} | tail -1")[:200],
             flush=True)
-        # Nach „Verbinden" kann ein Ladekreis stehen: warten, bis er weg ist.
-        for _ in range(12):
-            if finde(r"Profil|Profile|Mit Code|With code|" + re.escape(NAME)):
+        # Nach „Verbinden" kann ein Ladekreis stehen bleiben (am Fernseher
+        # gesehen: der Ablauf, der den Stand übernehmen sollte, wird mit der
+        # Ansicht abgebrochen). Dann: Foto, App neu starten — der Server ist
+        # da schon gespeichert.
+        for versuch in range(3):
+            if warte(r"Profil|Profile|Mit Code|With code|" + re.escape(NAME), 20):
                 break
-            foto("verbinden-wartet", "noch keine Profilauswahl", False)
-            time.sleep(8)
+            foto("verbinden-haengt", "nach „Verbinden“ nach 20 s noch keine Profilauswahl — App neu gestartet", False)
+            sh(f"am force-stop {PAKET}")
+            app_starten()
     # Am Fernseher kommt zuerst „Mit Code anmelden"; das Profil steht daneben.
     if TV and warte(r"Profil hier wählen|Choose profile here|Pick a profile here", 10):
         foto("tv-code-anmelden")
@@ -466,7 +488,7 @@ def rundgang_handy():
             taste("KEYCODE_ENTER", pause=2)
             tastatur_zu()
         foto("suche-dark")
-        zurueck(2)
+        zurueck()
     else:
         foto("suche", "Suche nicht gefunden", False)
 

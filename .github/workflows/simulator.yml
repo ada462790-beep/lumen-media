@@ -44,10 +44,6 @@ on:
   push:
     branches: [arbeit/simulator]
 
-concurrency:
-  group: simulator-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   LUMEN_TEST_NAME: Admin
   LUMEN_TEST_PASSWORT: lumen-sim-2026
