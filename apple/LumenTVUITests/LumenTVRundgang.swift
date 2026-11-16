@@ -91,7 +91,7 @@ final class LumenTVRundgang: Rundgang {
             foto("suche-tastatur")
         }
 
-        if reiter("ich", "^(Ich|Me|Profil|Profile)$") {
+        if reiter("ich", "^(Ich|Me|Profil|Profile|Admin.*)$") {
             taste(.down, 3)
             foto("ich-runter")
             if schritt("filmreihen", "^(Filmreihen|Franchises|Collections)$") {

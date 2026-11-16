@@ -88,8 +88,10 @@ class Rundgang: XCTestCase {
     /// Alle Elemente, deren Beschriftung oder Kennung zum Muster passt
     /// (regulärer Ausdruck über den ganzen Text, ohne Gross/klein).
     func alle(_ muster: String, in wurzel: XCUIElement? = nil) -> XCUIElementQuery {
-        let p = NSPredicate(format: "label MATCHES[c] %@ OR identifier MATCHES[c] %@ OR title MATCHES[c] %@",
-                            muster, muster, muster)
+        // Am Mac steht der Text einer Seitenleisten-Zeile im Wert, nicht in
+        // der Beschriftung.
+        let p = NSPredicate(format: "label MATCHES[c] %@ OR identifier MATCHES[c] %@ OR title MATCHES[c] %@ OR value MATCHES[c] %@",
+                            muster, muster, muster, muster)
         return (wurzel ?? app).descendants(matching: .any).matching(p)
     }
 
@@ -121,18 +123,26 @@ class Rundgang: XCTestCase {
         _ = fokussieren(e)
         XCUIRemote.shared.press(.select)
         #else
-        // Liegt es ausserhalb des Bildschirms: hinscrollen.
+        // Liegt es ausserhalb des Bildschirms: hinscrollen. Nicht über
+        // `isHittable` — das lässt den Test scheitern, wenn das Element
+        // gerade keinen gültigen Rahmen hat (auf dem iPad gesehen).
         var n = 0
-        while !e.isHittable && n < 4 {
-            if e.frame.minY > app.frame.maxY * 0.5 { app.swipeUp() } else { app.swipeDown() }
+        while !sichtbar(e) && n < 4 {
+            if e.exists && e.frame.minY > app.frame.midY { app.swipeUp() } else { app.swipeDown() }
             n += 1
         }
-        if e.isHittable {
-            e.tap()
-        } else {
-            e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        if e.exists && !e.frame.isEmpty {
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: e.frame.midX, dy: e.frame.midY)).tap()
         }
         #endif
+    }
+
+    /// Ob die Mitte des Elements auf dem Bildschirm liegt.
+    func sichtbar(_ e: XCUIElement) -> Bool {
+        guard e.exists else { return false }
+        let f = e.frame
+        return !f.isEmpty && app.frame.contains(CGPoint(x: f.midX, y: f.midY))
     }
 
     /// Ein Schritt: finden, drücken, warten, Foto.
@@ -156,7 +166,7 @@ class Rundgang: XCTestCase {
         app.typeKey("[", modifierFlags: .command)
         #else
         let knopf = app.navigationBars.buttons.element(boundBy: 0)
-        if knopf.exists && knopf.isHittable {
+        if sichtbar(knopf) {
             knopf.tap()
         } else {
             // Wischen vom linken Rand, wie mit dem Daumen.

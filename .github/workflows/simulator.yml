@@ -349,10 +349,37 @@ jobs:
             mkdir -p "fotos/$g/xcresult"
             xcrun xcresulttool export attachments --path "$r" --output-path "fotos/$g/xcresult" \
               > /dev/null 2>&1 || echo "Anhänge aus $g nicht lesbar"
+            # Die Anhänge heissen nach Kennungen; manifest.json kennt die
+            # Namen. Was die UI-Tests nicht selbst ablegen konnten (am Mac
+            # läuft der Test in einer Sandbox), kommt so lesbar daneben.
+            python3 - "fotos/$g" <<'PY'
+          import json, os, re, shutil, sys
+          ziel = sys.argv[1]
+          quelle = os.path.join(ziel, "xcresult")
+          try:
+              manifest = json.load(open(os.path.join(quelle, "manifest.json")))
+          except (OSError, ValueError):
+              sys.exit(0)
+          for test in manifest:
+              for a in test.get("attachments", []):
+                  datei, name = a.get("exportedFileName"), a.get("suggestedHumanReadableName", "")
+                  if not datei:
+                      continue
+                  # „03-mac-filme_0_UUID.png" → „03-mac-filme.png"
+                  lesbar = re.sub(r"_\d+_[0-9A-F-]{36}", "", name)
+                  if not os.path.exists(os.path.join(ziel, lesbar)):
+                      shutil.copy(os.path.join(quelle, datei), os.path.join(ziel, lesbar))
+          shutil.rmtree(quelle)
+          PY
             # Die Zusammenfassung des Laufs (Fehler, Dauer) als Text daneben.
             xcrun xcresulttool get test-results summary --path "$r" > "fotos/$g/ergebnis.json" 2>/dev/null || true
           done
           cp "$SIM/server.log" fotos/server-mac.log 2>/dev/null || true
+          # Absturzberichte — von der Mac-App und aus den Simulatoren.
+          mkdir -p fotos/abstuerze
+          find ~/Library/Logs/DiagnosticReports -iname '*Lumen*' -newer bibliothek.tgz \
+            -exec cp {} fotos/abstuerze/ \; 2>/dev/null || true
+          ls fotos/abstuerze
           find fotos -name '*.png' | wc -l
 
       - name: Übersicht
