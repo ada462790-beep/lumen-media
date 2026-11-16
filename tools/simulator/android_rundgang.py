@@ -540,11 +540,16 @@ def serie_direkt():
             f = fokussiert(knoten)
             auf_s2 = bool(f and re.search(r"^(Staffel 2|Season 2|2)$", f.beschriftung)) or staffel_2_offen(knoten)
             foto("serie-direkt-staffel", f"Fokus: {f.beschriftung if f else 'keiner'}; Staffel 2 gewählt: {auf_s2}", auf_s2)
-            taste("KEYCODE_DPAD_DOWN", pause=1.2)
-            knoten = aufbau()
-            f = fokussiert(knoten)
-            t = finde(FOLGE_S2, knoten)
-            auf_folge = bool(f and (re.search(FOLGE_S2, f.beschriftung) or (t and f.enthaelt(*t.mitte))))
+            # Weiter hinunter (über „Staffel als gesehen“) bis in die Folgen.
+            auf_folge = False
+            for _ in range(3):
+                taste("KEYCODE_DPAD_DOWN", pause=1.2)
+                knoten = aufbau()
+                f = fokussiert(knoten)
+                t = finde(FOLGE_S2, knoten)
+                auf_folge = bool(f and (re.search(FOLGE_S2, f.beschriftung) or (t and f.enthaelt(*t.mitte))))
+                if auf_folge or (f and not re.search(r"gesehen|watched", f.beschriftung, re.I)):
+                    break
             foto("serie-direkt-folge", f"Fokus: {f.beschriftung if f else 'keiner'}", auf_folge)
         else:
             # Die Folge gibt es nur in Staffel 2 — steht sie in der Liste,
