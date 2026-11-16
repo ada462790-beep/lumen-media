@@ -84,6 +84,19 @@ def eingeben(text: str):
     time.sleep(0.8)
 
 
+def tastatur_offen() -> bool:
+    aus = sh("dumpsys input_method")
+    return "mInputShown=true" in aus or "mIsInputViewShown=true" in aus
+
+
+def tastatur_zu():
+    """Die Bildschirmtastatur schliessen, falls sie offen ist — sie liegt
+    sonst über den Knöpfen, und ein Tippen träfe eine Taste."""
+    if tastatur_offen():
+        sh("input keyevent KEYCODE_BACK")
+        time.sleep(1)
+
+
 def bildschirm() -> tuple[int, int]:
     m = re.search(r"(\d+)x(\d+)", sh("wm size"))
     return (int(m.group(1)), int(m.group(2))) if m else (1080, 1920)
@@ -171,6 +184,8 @@ def finde(muster: str, knoten: list[Knoten] | None = None, bereich: str = "",
     """Der beste Treffer für ein Muster (regulärer Ausdruck, ohne Gross/klein)."""
     knoten = aufbau() if knoten is None else knoten
     rx = re.compile(muster, re.I)
+    # Nur in der eigenen App suchen — sonst träfe „Home" den Launcher.
+    knoten = [k for k in knoten if k.paket in (PAKET, "")]
     treffer = [k for k in knoten if (k.text and rx.search(k.text)) or (k.desc and rx.search(k.desc))]
     if nur_sichtbar:
         treffer = [k for k in treffer if k.flaeche > 0 and k.y1 < HOEHE and k.x1 < BREITE and k.y2 > 0]
@@ -264,6 +279,10 @@ def foto(name: str, notiz: str = "", ok: bool = True):
     with open(os.path.join(AUS, datei + ".png"), "wb") as f:
         f.write(png)
     knoten = aufbau()
+    vorne = {k.paket for k in knoten if k.paket}
+    if knoten and PAKET not in vorne:
+        ok = False
+        notiz = (notiz + " " if notiz else "") + f"App nicht im Vordergrund ({', '.join(sorted(vorne))})"
     with open(os.path.join(AUS, datei + ".txt"), "w", encoding="utf-8") as f:
         for k in knoten:
             if k.beschriftung:
@@ -332,12 +351,9 @@ def anmelden():
             tippen_bei(*f.mitte)
         time.sleep(0.8)
         eingeben(SERVER)
-        if TV:
-            taste("KEYCODE_ENTER", pause=1)
+        tastatur_zu()
         foto("adresse")
         if finde(r"^Verbinden$|^Connect$"):
-            if TV:
-                taste("KEYCODE_BACK", pause=0.8)  # Tastatur zu
             waehle(r"^Verbinden$|^Connect$")
         time.sleep(4)
     # Am Fernseher kommt zuerst „Mit Code anmelden"; das Profil steht daneben.
@@ -361,8 +377,7 @@ def anmelden():
         foto("passwort")
         taste("KEYCODE_ENTER", pause=2)
         if not warte(r"^(Startseite|Home)$", 6):
-            if TV:
-                taste("KEYCODE_BACK", pause=0.8)
+            tastatur_zu()
             if finde(r"^(Anmelden|Sign In|Entsperren|Unlock|Weiter|Continue|OK)$"):
                 waehle(r"^(Anmelden|Sign In|Entsperren|Unlock|Weiter|Continue|OK)$")
     else:
@@ -375,16 +390,11 @@ def anmelden():
 
 def fokussiere_feld(feld: Knoten):
     """Am Fernseher ein Textfeld per Fokus erreichen und die Tastatur öffnen."""
-    for _ in range(12):
-        knoten = aufbau()
-        f = fokussiert(knoten)
-        if f and (f.enthaelt(*feld.mitte) or feld.enthaelt(*f.mitte)):
-            break
-        if f and f.mitte[1] > feld.mitte[1] + 20:
-            taste("KEYCODE_DPAD_UP", pause=0.4)
-        else:
-            taste("KEYCODE_DPAD_DOWN", pause=0.4)
-    taste("KEYCODE_DPAD_CENTER", pause=1)
+    # Die Pfeiltasten bringen den Fokus hin; OK öffnete die Tastatur, deren
+    # erste Taste dann den nächsten Druck schluckte. Ein Tippen aufs Feld
+    # fokussiert es ebenso und lässt sich zuverlässig wiederholen.
+    tippen_bei(*feld.mitte)
+    time.sleep(1.2)
 
 
 # ---------------------------------------------------------------- Rundgang
@@ -433,6 +443,7 @@ def rundgang_handy():
             tippen_bei(*felder[0].mitte)
             eingeben("Dark")
             taste("KEYCODE_ENTER", pause=2)
+            tastatur_zu()
         foto("suche-dark")
         zurueck(2)
     else:
@@ -495,7 +506,8 @@ def rundgang_tv():
         if felder:
             fokussiere_feld(felder[0])
             eingeben("Dark")
-            taste("KEYCODE_BACK", pause=1.5)
+            time.sleep(2)
+            tastatur_zu()
         foto("suche-dark")
 
     schritt("ich", r"^(Ich|Me)$", bereich="oben")
@@ -545,7 +557,13 @@ def main():
         rx = re.compile(r"FATAL|AndroidRuntime|ANR in|lumen|Lumen|" + re.escape(PAKET), re.I)
         with open(os.path.join(AUS, "logcat.txt"), "w", encoding="utf-8") as f:
             f.writelines(z + "\n" for z in log.splitlines() if rx.search(z))
-        absturz = [z for z in log.splitlines() if "FATAL EXCEPTION" in z or "ANR in" in z]
+        # Nur die eigenen: im Emulator stürzt auch mal der Launcher ab.
+        zeilen = log.splitlines()
+        absturz = []
+        for i, z in enumerate(zeilen):
+            if ("ANR in" in z and PAKET in z) or ("FATAL EXCEPTION" in z
+                                                 and any(PAKET in n for n in zeilen[i:i + 4])):
+                absturz.extend(zeilen[i:i + 12])
         with open(os.path.join(AUS, "bericht.json"), "w", encoding="utf-8") as f:
             json.dump({"art": ART, "schritte": BERICHT, "abstuerze": absturz}, f,
                       ensure_ascii=False, indent=1)
