@@ -1223,7 +1223,7 @@ private fun fassungenTests() {
     gleich("Fassungen ohne fehlende", listOf("mkv", "avi"), Fassungen.liste(listOf(mkv, avi, weg)).map { it.id })
     pruefe("zwei Fassungen: fragen", Fassungen.mehrere(listOf(mkv, avi)))
     pruefe("eine Fassung: nicht fragen", !Fassungen.mehrere(listOf(mkv, weg)))
-    gleich("Name 1080p", "1080p · MKV · 7,9 GB", Fassungen.name(mkv))
+    gleich("Name 1080p", "1080p · MKV · 7.9 GB", Fassungen.name(mkv))
     gleich("Name klein, in MB", "400p · AVI · 700 MB", Fassungen.name(avi))
     gleich("4K", "4K", Fassungen.aufloesung(2160))
     gleich("720p", "720p", Fassungen.aufloesung(720))
@@ -1362,7 +1362,7 @@ private fun titelseiteTests() {
         "runtimeMs":7080000,"genres":["Drama","Thriller","Krimi"],"imdbRating":7.8,"imdbVotes":12345,
         "resumeMs":4324000}""")
     gleich("Meta-Zeile wie im Browser",
-        "2019 · ab 12 · 1 Std. 58 Min. · Drama · Thriller · Krimi · IMDb 7,8 (12’345)",
+        "2019 · ab 12 · 1 Std. 58 Min. · Drama · Thriller · Krimi · IMDb 7.8 (12’345)",
         Titelseite.metaZeile(film))
     gleich("TMDb in der Meta-Zeile", "2019 · TMDb 75 %",
         Titelseite.metaZeile(titel("""{"id":"t","title":"T","year":2019,"tmdbRating":75,"tmdbVotes":1200}""")))
@@ -1394,7 +1394,7 @@ private fun titelseiteTests() {
 
     val datei = MediaFile.from(Json.parse("""{"id":"f","path":"/m/Film (2019).mkv","height":1080,
         "videoCodec":"hevc","hdr":"HDR10","sizeBytes":4200000000}"""))
-    gleich("Dateizeile", "1080p · hevc · HDR10 · 4,2 GB", Titelseite.dateiZeile(datei))
+    gleich("Dateizeile", "1080p · hevc · HDR10 · 4.2 GB", Titelseite.dateiZeile(datei))
     gleich("Dateiname ohne Pfad", "Film (2019).mkv", datei.fileName)
     gleich("fehlende Datei", "fehlt",
         Titelseite.dateiZeile(MediaFile.from(Json.parse("""{"id":"g","missing":true}"""))))
@@ -2523,7 +2523,7 @@ private fun herunterladenTests() {
     gleich("Gesamt ohne Range", 1100L, Herunterladen.gesamtGroesse(null, 1000, 100))
     gleich("Gesamt unbekannt", 0L, Herunterladen.gesamtGroesse("bytes 0-9/*", -1, 0))
     gleich("MB", "850 MB", Herunterladen.groesse(850_000_000))
-    gleich("GB mit Komma", "4,2 GB", Herunterladen.groesse(4_200_000_000))
+    gleich("GB mit Dezimalpunkt (de-CH)", "4.2 GB", Herunterladen.groesse(4_200_000_000))
     gleich("sicherer Name", "Der_Film_2020_.mkv", Herunterladen.sichererName("Der/Film:2020?.mkv"))
     pruefe("kein Punkt vorne", !Herunterladen.sichererName("..geheim").startsWith("."))
 
@@ -2533,7 +2533,7 @@ private fun herunterladenTests() {
     """))
     pruefe("erlaubt", info.erlaubt)
     gleich("Datei ohne Kennung fällt weg", 1, info.dateien.size)
-    gleich("Beschriftung", "1080p · 4,2 GB", info.dateien[0].beschriftung)
+    gleich("Beschriftung", "1080p · 4.2 GB", info.dateien[0].beschriftung)
     pruefe("ohne Angabe nicht erlaubt", !DownloadInfo.from(Json.parse("{}")).erlaubt)
 
     gleich("kein_download", "Für dieses Profil sind Downloads nicht freigegeben.",
@@ -2765,14 +2765,14 @@ private fun abgleichWebTests() {
     val w = Titelseite.wertungen(film)
     gleich("drei Wertungen", listOf(Titelseite.WertungArt.IMDB, Titelseite.WertungArt.TOMATE_FAUL, Titelseite.WertungArt.TMDB),
         w.map { it.art })
-    gleich("IMDb mit einer Nachkommastelle", "6,8", w[0].wert)
+    gleich("IMDb mit einer Nachkommastelle", "6.8", w[0].wert)
     gleich("IMDb-Stimmen", "12’345", w[0].zusatz)
     gleich("59 % ist faul", "Rotten Tomatoes: 59 % (faul)", w[1].beschreibung)
     gleich("60 % ist frisch", Titelseite.WertungArt.TOMATE_FRISCH,
         Titelseite.wertungen(titel("""{"id":"m","title":"M","rottenTomatoes":60}""")).single().art)
     gleich("NFO-Note ohne Quelle: neutral", Titelseite.WertungArt.NOTE, Titelseite.wertungen(film, neutral = true).first().art)
-    gleich("6.75 rundet wie der Browser auf", "6,8", Titelseite.komma(6.75))
-    gleich("Kachel: ★ mit einer Stelle", "★ 6,8", Titelseite.kachelNote(film))
+    gleich("6.75 rundet wie der Browser auf", "6.8", Titelseite.komma(6.75))
+    gleich("Kachel: ★ mit einer Stelle", "★ 6.8", Titelseite.kachelNote(film))
     pruefe("Eckdaten ohne Wertungen", !Titelseite.eckdaten(film).contains("IMDb"))
     gleich("Detail: bewertungQuelle nfo heisst neutral", Titelseite.WertungArt.NOTE,
         ItemDetail.from(Json.parse("""{"item":{"id":"m","title":"M","imdbRating":7.4},"bewertungQuelle":"nfo"}""")).wertungen.first().art)

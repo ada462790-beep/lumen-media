@@ -53,7 +53,7 @@ enum class Tx(val vorgabe: String) {
     // Zahlen und Daten
     MUSTER_TAG_MONAT("d. MMM"),
     MUSTER_DATUM("d.M.yyyy"),
-    DEZIMALZEICHEN(","),
+    DEZIMALZEICHEN("."),
     TAUSENDERZEICHEN("’"),
     ZITAT("„%1\$s“"),
 

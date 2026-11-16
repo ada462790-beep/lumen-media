@@ -25,7 +25,7 @@
     <string name="kern_groesse_gross">Gross</string>
     <string name="kern_muster_tag_monat">d. MMM</string>
     <string name="kern_muster_datum">d.M.yyyy</string>
-    <string name="kern_dezimalzeichen">,</string>
+    <string name="kern_dezimalzeichen">.</string>
     <string name="kern_tausenderzeichen">’</string>
     <string name="kern_zitat">„%1$s“</string>
     <string name="kern_fehler_allgemein">Das hat nicht geklappt.</string>
