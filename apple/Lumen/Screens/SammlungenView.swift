@@ -32,7 +32,7 @@ struct SammlungCard: View {
         }
         .frame(width: Theme.posterWidth, alignment: .leading)
         .task(id: sammlung.id) {
-            url = await session.client.sammlungBildURL(sammlung)
+            url = await session.client.sammlungBildURL(sammlung, breite: Bildbreite.karte)
         }
     }
 }

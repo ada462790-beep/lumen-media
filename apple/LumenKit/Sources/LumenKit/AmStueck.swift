@@ -595,8 +595,9 @@ public final class Folgenwahl {
         if staffel == id { folgen = neu }
     }
 
-    /// „Staffel 1" — so wie der Server sie nennt; Staffel 0 heisst Specials.
+    /// „Staffel 1" in der Sprache des Profils; Staffel 0 (und eine Staffel
+    /// ohne Nummer) heisst Specials — wie auf der Titelseite.
     public nonisolated static func name(_ staffel: Item) -> String {
-        (staffel.seasonNo ?? 0) == 0 ? String(localized: "Specials", bundle: .lumenKit, locale: .lumen) : staffel.title
+        Staffelleiste.name(staffel)
     }
 }

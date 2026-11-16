@@ -52,9 +52,28 @@ object AmStueck {
      */
     fun istSpecials(staffel: Item): Boolean = (staffel.seasonNo ?: 0) == 0
 
-    /** Wie eine Staffel im Folgen-Feld heisst: Staffel 0 sind die Specials. */
-    fun staffelName(staffel: Item): String =
-        if (istSpecials(staffel)) Texte.t(Tx.SPECIALS) else staffel.title
+    /**
+     * Wie im Browser (staffelLeiste): Staffel 0 sind die „Specials", eine
+     * mit Nummer heisst „Staffel 3" in der Sprache der App — der Titel von
+     * TMDb ist oft englisch („Season 3") oder fehlt. Nur ohne Nummer gilt
+     * der Titel.
+     */
+    fun staffelName(staffel: Item): String = when {
+        istSpecials(staffel) -> Texte.t(Tx.SPECIALS)
+        (staffel.seasonNo ?: 0) > 0 -> Texte.t(Tx.STAFFEL_N, staffel.seasonNo)
+        else -> staffel.title
+    }
+
+    /** Ab so vielen regulären Staffeln stehen nur noch die Zahlen da (Doctor Who, Die Simpsons) — wie im Browser. */
+    const val STAFFEL_KOMPAKT_AB = 7
+
+    /** Ob die Staffel-Leiste nur die Zahlen zeigt (unter der Überschrift „Staffeln"); „Specials" bleibt ausgeschrieben. */
+    fun staffelnKompakt(staffeln: List<Item>): Boolean = staffeln.count { !istSpecials(it) } >= STAFFEL_KOMPAKT_AB
+
+    /** Die Beschriftung eines Staffel-Knopfs: in der kompakten Leiste nur die Zahl. */
+    fun staffelKnopf(staffel: Item, kompakt: Boolean): String =
+        if (kompakt && !istSpecials(staffel) && (staffel.seasonNo ?: 0) > 0) staffel.seasonNo.toString()
+        else staffelName(staffel)
 
     /** Die Folgen einer Staffel nach Nummer; ohne Nummer (oder 0) ans Ende,
      *  bei Gleichstand in der Reihenfolge des Servers — wie überall. */

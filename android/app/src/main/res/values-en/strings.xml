@@ -294,10 +294,6 @@
         <item quantity="one">%1$d title in your library</item>
         <item quantity="other">%1$d titles in your library</item>
     </plurals>
-    <plurals name="qualitaeten_anzahl">
-        <item quantity="one">%1$d quality</item>
-        <item quantity="other">%1$d qualities</item>
-    </plurals>
     <string name="nicht_mehr_wuenschen">Withdraw request</string>
     <string name="nicht_mehr_wuenschen_frage">Withdraw request?</string>
     <string name="wunsch_loeschen_frage">Delete request?</string>

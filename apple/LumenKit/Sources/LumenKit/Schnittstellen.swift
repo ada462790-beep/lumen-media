@@ -47,6 +47,12 @@ extension APIClient {
         _ = try await request("POST", "/items/\(id)/finished", query: q)
     }
 
+    /// Eine Folge und alle davor (auch in früheren Staffeln, ohne Specials)
+    /// als gesehen markieren — „bis hier gesehen", wie im Browser.
+    public func markFinishedBisHier(_ id: String) async throws {
+        _ = try await request("POST", "/items/\(id)/finished", query: ["vorherige": "1"])
+    }
+
     /// Den Haken wieder wegnehmen — bei einer Serie für alle Folgen, mit
     /// `staffel` für die Folgen dieser Staffel.
     public func clearFinished(_ id: String, staffel: Int?) async throws {

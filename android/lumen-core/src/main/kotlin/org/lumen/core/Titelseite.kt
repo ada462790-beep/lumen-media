@@ -20,14 +20,70 @@ object Titelseite {
     /** Ab so viel gespeichertem Stand heisst der Knopf „Weiter bei …" — und es gibt „Von vorn". */
     const val WEITER_AB_SEKUNDEN = 60.0
 
-    /**
-     * Die Zeile unter dem Titel: „2019 · ab 12 · 1 Std. 58 Min. · Drama ·
-     * Thriller · IMDb 7,8 (12 345)". Alle Genres, nicht nur zwei — wie im
-     * Browser auf der Titelseite.
-     */
-    /** „🍅 93 % Rotten Tomatoes" — ab 60 % gilt ein Titel als frisch. */
-    fun tomaten(prozent: Int): String = (if (prozent >= 60) "🍅" else "🟢") + " " + Texte.t(Tx.TOMATEN, prozent)
+    /** „🍅 93 % Rotten Tomatoes" — ab 60 % gilt ein Titel als frisch (wie im Browser). */
+    fun tomaten(prozent: Int): String = (if (tomateFrisch(prozent)) "🍅" else "🟢") + " " + Texte.t(Tx.TOMATEN, prozent)
 
+    /** Ab so viel Prozent guter Kritiken ist ein Titel bei Rotten Tomatoes „frisch". */
+    const val TOMATE_FRISCH_AB = 60
+
+    fun tomateFrisch(prozent: Int): Boolean = prozent >= TOMATE_FRISCH_AB
+
+    /** Welche Wertung: IMDb, eine Note ohne Quelle (aus einer NFO), Rotten Tomatoes, TMDb. */
+    enum class WertungArt { IMDB, NOTE, TOMATE_FRISCH, TOMATE_FAUL, TMDB }
+
+    /**
+     * Eine Wertung in der eigenen Reihe unter dem Titel: [wert] gross
+     * („7,8", „93 %"), [zusatz] klein (Stimmen, „Rotten Tomatoes"),
+     * [beschreibung] für Vorleseprogramme.
+     */
+    data class Wertung(val art: WertungArt, val wert: String, val zusatz: String?, val beschreibung: String)
+
+    /**
+     * Die Wertungen eines Titels in der Reihenfolge des Browsers
+     * (wertungsReihe): IMDb, Rotten Tomatoes, TMDb. [neutral]: Die Note
+     * stammt aus einer NFO ohne Quelle (bewertungQuelle „nfo") — dann ohne
+     * IMDb-Schriftzug, nur „★ 7,4".
+     */
+    fun wertungen(item: Item, neutral: Boolean = false): List<Wertung> = buildList {
+        item.imdbRating?.takeIf { it > 0 }?.let { note ->
+            val n = komma(note)
+            if (neutral) {
+                add(Wertung(WertungArt.NOTE, n, null, Texte.t(Tx.WERTUNG_VON_ZEHN, n)))
+            } else {
+                val stimmen = item.imdbVotes?.takeIf { it > 0 }?.let { tausender(it) }
+                add(Wertung(WertungArt.IMDB, n, stimmen,
+                    if (stimmen != null) Texte.t(Tx.IMDB_VON_ZEHN_STIMMEN, n, stimmen) else Texte.t(Tx.IMDB_VON_ZEHN, n)))
+            }
+        }
+        item.rottenTomatoes?.takeIf { it in 0..100 }?.let { p ->
+            val frisch = tomateFrisch(p)
+            add(Wertung(if (frisch) WertungArt.TOMATE_FRISCH else WertungArt.TOMATE_FAUL, "$p %", "Rotten Tomatoes",
+                Texte.t(if (frisch) Tx.TOMATEN_FRISCH else Tx.TOMATEN_FAUL, p)))
+        }
+        item.tmdbRating?.takeIf { it > 0 }?.let { p ->
+            add(Wertung(WertungArt.TMDB, "$p %", null, Texte.t(Tx.TMDB_WERTUNG, p)))
+        }
+    }
+
+    /**
+     * Die ruhige Eckdatenzeile unter den Wertungen: „2019 · ab 12 · 1 Std.
+     * 58 Min. · Drama · Thriller" und bei einer Serie der eigene Stand.
+     * Die Wertungen stehen eigens darüber ([wertungen]) — vorher suchte man
+     * die Note in einer langen grauen Zeile (wie im Browser geändert).
+     */
+    fun eckdaten(item: Item): String = buildList {
+        item.jahresText?.let { add(it) }
+        item.ageYears?.let { add(Texte.t(Tx.AB_ALTER, it)) }
+        item.runtimeMs?.takeIf { it > 0 }?.let { add(Item.duration(it)) }
+        if (item.genres.isNotEmpty()) add(item.genres.joinToString(" · "))
+        item.serienStand?.let { add(it) }
+    }.joinToString(" · ")
+
+    /**
+     * Die Zeile unter dem Titel samt Wertungen in einem Satz: „2019 · ab 12 ·
+     * 1 Std. 58 Min. · Drama · IMDb 7,8 (12 345)" — für Stellen ohne Platz
+     * für eine eigene Wertungsreihe.
+     */
     fun metaZeile(item: Item): String = buildList {
         // Bei Serien der Zeitraum: „seit 2014", „2014–2020".
         item.jahresText?.let { add(it) }
@@ -44,6 +100,17 @@ object Titelseite {
         // Bei einer Serie der eigene Stand — nur der eigene.
         item.serienStand?.let { add(it) }
     }.joinToString(" · ")
+
+    /** Die Note auf einer Kachel: „★ 6,8" — genau eine Nachkommastelle, null ohne Note. */
+    fun kachelNote(item: Item): String? = item.imdbRating?.takeIf { it > 0 }?.let { "★ " + komma(it) }
+
+    /** „S1 F3" (en: „S1 E3") — bei einem Special ohne eigene Nummer „Special". */
+    fun folgenKennungKurz(folge: Item): String {
+        if (folge.specialOhneNummer) return Texte.t(Tx.SPECIAL)
+        val s = folge.seasonNo ?: 0
+        val f = folge.episodeNo ?: return ""
+        return Texte.t(Tx.STAFFEL_FOLGE_KURZ, s, f)
+    }
 
     /**
      * „Staffel 1, Folge 2" — bei einem Special ohne eigene Nummer schlicht
@@ -93,7 +160,16 @@ object Titelseite {
         f.hdr?.takeIf { it.isNotBlank() }?.let { add(it) }
         if (f.sizeBytes > 0) add(komma(f.sizeBytes / 1e9) + " GB")
         if (f.missing) add(Texte.t(Tx.DATEI_FEHLT))
+        else if (f.defekt != null) add(Texte.t(Tx.DATEI_DEFEKT))
     }.joinToString(" · ")
+
+    /**
+     * Warum es kein „Ansehen" gibt, wenn alle vorhandenen Dateien defekt
+     * sind — der Browser sagt es statt schwarz zu bleiben. Null, wenn sich
+     * etwas abspielen lässt oder keine Datei da ist.
+     */
+    fun nichtAbspielbar(d: ItemDetail): String? =
+        if (d.playable == null && d.files.any { !it.missing && it.defekt != null }) Texte.t(Tx.DATEI_DEFEKT_SATZ) else null
 
     /**
      * „2019-04-14" wird „14.4.2019" (de), „4/14/2019" (en-US) oder
@@ -114,7 +190,9 @@ object Titelseite {
 
     /** Eine Zahl mit einer Nachkommastelle: 7,8 auf Deutsch, 7.8 auf Englisch. */
     fun komma(x: Double): String =
-        "%.1f".format(java.util.Locale.ROOT, x).replace(".", Texte.t(Tx.DEZIMALZEICHEN))
+        // Erst auf eine Stelle runden wie der Browser (Math.round(x * 10) / 10),
+        // dann schreiben: 6.799 → „6,8", 6.75 → „6,8", nie „6,799".
+        "%.1f".format(java.util.Locale.ROOT, Math.round(x * 10) / 10.0).replace(".", Texte.t(Tx.DEZIMALZEICHEN))
 
     /** 12345 wird „12’345" (de-CH), „12.345" (de-DE) oder „12,345" (en). */
     fun tausender(n: Int): String {
@@ -186,18 +264,37 @@ object Einstellungen {
     private val SPRACHEN = listOf("de", "en", "fr", "it", "es", "pt", "nl", "sv", "da", "no",
                                   "fi", "pl", "cs", "ru", "tr", "ja", "ko", "zh")
 
-    /** Für die Tonspur: „Wie in der Datei" (leer) und die Sprachen. */
+    /**
+     * Für die Tonspur: „Profilsprache" (leer, Standard), „Originalton" und
+     * die Sprachen — wie Profil › Tonsprache im Browser. Ohne gemerkte
+     * Sprache läuft der Ton in der Sprache des Profils ([Spuren.vorbelegen]).
+     */
     val TON_WAHL: List<Pair<String, String>>
-        get() = listOf("" to Texte.t(Tx.WIE_IN_DER_DATEI)) + SPRACHEN.map { it to Spuren.sprache(it) }
+        get() = listOf("" to Texte.t(Tx.PROFILSPRACHE), Spuren.TON_ORIGINAL to Texte.t(Tx.ORIGINALTON)) +
+            SPRACHEN.map { it to Spuren.sprache(it) }
+
+    /** Was eine Wahl aus [TON_WAHL] ins Profil schreibt: Profilsprache und Originalton löschen die gemerkte Sprache. */
+    fun tonPrefs(wert: String): Map<String, String> = when (wert) {
+        "" -> mapOf(Spuren.PREF_TON to "", Spuren.PREF_TON_WAHL to "profil")
+        Spuren.TON_ORIGINAL -> mapOf(Spuren.PREF_TON to "", Spuren.PREF_TON_WAHL to Spuren.TON_ORIGINAL)
+        else -> mapOf(Spuren.PREF_TON to wert)
+    }
+
+    /** Welcher Eintrag aus [TON_WAHL] gerade gilt. */
+    fun tonAktuell(prefs: Map<String, String>): String {
+        val w = prefs[Spuren.PREF_TON]?.trim().orEmpty()
+        return if (w.isEmpty() && prefs[Spuren.PREF_TON_WAHL] == Spuren.TON_ORIGINAL) Spuren.TON_ORIGINAL else w
+    }
 
     /** Für Untertitel: „Aus" und die Sprachen. */
     val UNTERTITEL_WAHL: List<Pair<String, String>>
         get() = listOf(Spuren.AUS to Texte.t(Tx.AUS)) + SPRACHEN.map { it to Spuren.sprache(it) }
 
     /** Was gerade gilt, als Text — auch eine Sprache, die nicht in der Liste steht. */
-    fun tonText(prefs: Map<String, String>): String {
-        val w = prefs[Spuren.PREF_TON]?.trim().orEmpty()
-        return if (w.isEmpty()) Texte.t(Tx.WIE_IN_DER_DATEI) else Spuren.sprache(w)
+    fun tonText(prefs: Map<String, String>): String = when (val w = tonAktuell(prefs)) {
+        "" -> Texte.t(Tx.PROFILSPRACHE)
+        Spuren.TON_ORIGINAL -> Texte.t(Tx.ORIGINALTON)
+        else -> Spuren.sprache(w)
     }
 
     fun untertitelText(prefs: Map<String, String>): String {

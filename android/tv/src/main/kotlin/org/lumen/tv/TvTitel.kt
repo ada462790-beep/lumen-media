@@ -5,6 +5,8 @@
 // Der vollständige Text steht in der Datei LICENSE.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package org.lumen.tv
 
 import androidx.compose.foundation.background
@@ -31,6 +33,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -207,19 +212,35 @@ internal fun TvTitel(
             item(key = "lumen:kopf") {
                 Column(Modifier.fillParentMaxHeight(0.94f).padding(top = 48.dp),
                        verticalArrangement = Arrangement.Bottom) {
+                    // Eine Folge sagt, zu welcher Serie sie gehört.
+                    if (item.kind == "episode") {
+                        val kennung = Titelseite.folgenKennung(item)
+                        listOfNotNull(item.seriesTitle, kennung.takeIf { it.isNotBlank() })
+                            .takeIf { it.isNotEmpty() }?.let {
+                                Text(it.joinToString(" · "), color = Tv.label2, fontSize = 22.sp,
+                                     fontWeight = FontWeight.SemiBold)
+                            }
+                    }
                     Text(item.title, fontSize = 52.sp, fontWeight = FontWeight.Bold,
                          maxLines = 2, overflow = TextOverflow.Ellipsis,
                          modifier = Modifier.widthIn(max = 1000.dp))
                     item.originalTitle?.takeIf { it.isNotBlank() && it != item.title }?.let {
                         Text(it, color = Tv.label2, fontSize = 18.sp)
                     }
+                    // Die Wertungen gut sichtbar in einer eigenen Reihe, darunter
+                    // die ruhige Eckdatenzeile — wie im Browser.
+                    val wertungen = d?.wertungen ?: Titelseite.wertungen(item)
+                    if (wertungen.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        WertungenZeile(wertungen, gross = true)
+                    }
                     Spacer(Modifier.height(8.dp))
                     Text(
                         buildList {
-                            val zeile = Titelseite.metaZeile(item)
+                            val zeile = Titelseite.eckdaten(item)
                             if (zeile.isNotEmpty()) add(zeile)
                             if (item.kind == "series") add(tx(R.string.serie))
-                            if (item.kind != "series" && item.finished) add("gesehen")
+                            if (item.kind != "series" && item.finished) add(tx(R.string.gesehen))
                             if (l != null) add(tx(R.string.aus_x_x_von_x, l.name, platz + 1, l.items.size))
                         }.joinToString(" · "),
                         color = Tv.label2, fontSize = 18.sp)
@@ -244,7 +265,10 @@ internal fun TvTitel(
                                 when {
                                     l != null -> tx(R.string.ab_hier_abspielen)
                                     item.kind == "series" -> Titelseite.serienText(item, folgen ?: emptyList())
-                                    else -> Titelseite.abspielText(item)
+                                    // „· 2 Sprachen", „· 2 Qualitäten" oder „· 2 Fassungen";
+                                    // gewählt wird im Player.
+                                    else -> Titelseite.abspielText(item) +
+                                        (Fassungen.hinweis(Fassungen.liste(d?.files ?: emptyList()))?.let { " · $it" } ?: "")
                                 },
                                 gross = true,
                                 modifier = Modifier.focusRequester(anfang),
@@ -254,6 +278,21 @@ internal fun TvTitel(
                             item(key = "vonvorn") {
                                 TvButton(tx(R.string.von_vorn)) {
                                     abspielen(ab = 0.0)
+                                }
+                            }
+                        }
+                        // Bei einer Folge: zur Serie mit allen Staffeln.
+                        val serie = d?.seriesId ?: item.seriesId
+                        if (item.kind == "episode" && serie != null) {
+                            item(key = "serie") {
+                                TvButton(tx(R.string.serie)) {
+                                    scope.launch {
+                                        try {
+                                            onOpen(withContext(Dispatchers.IO) { client.item(serie) }.item)
+                                        } catch (e: LumenException) {
+                                            hinweis = e.message
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -296,7 +335,7 @@ internal fun TvTitel(
                         }
                         item(key = "schliessen") { TvButton(tx(R.string.zurueck)) { onClose() } }
                     }
-                    hinweis?.let {
+                    (hinweis ?: d?.let { Titelseite.nichtAbspielbar(it) })?.let {
                         Spacer(Modifier.height(12.dp))
                         Text(it, color = Tv.label2, fontSize = 17.sp)
                     }
@@ -309,13 +348,28 @@ internal fun TvTitel(
             if (staffeln.isNotEmpty()) {
                 item(key = "lumen:staffeln") {
                     Column(Modifier.padding(bottom = 30.dp)) {
-                        Text(tx(R.string.folgen_2), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                        // Viele Staffeln (ab sieben): nur die Zahlen, „Specials"
+                        // ausgeschrieben — wie im Browser. Mit der Fernbedienung
+                        // landet der Fokus beim Hineingehen auf der gewählten.
+                        val kompakt = AmStueck.staffelnKompakt(staffeln)
+                        Text(if (kompakt) Texte.t(Tx.STAFFELN) else tx(R.string.folgen_2),
+                             fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(12.dp))
                         if (staffeln.size > 1) {
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 2.dp)) {
+                            val gewaehlt = remember { FocusRequester() }
+                            val leiste = androidx.compose.foundation.lazy.rememberLazyListState()
+                            LaunchedEffect(staffel, staffeln.size) {
+                                val i = staffeln.indexOfFirst { it.id == staffel }
+                                if (i >= 0) leiste.scrollToItem(maxOf(0, i - 2))
+                            }
+                            LazyRow(state = leiste,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 2.dp),
+                                    modifier = Modifier.focusRestorer { gewaehlt }) {
                                 items(staffeln, key = { it.id }) { st ->
-                                    TvWahlPille(AmStueck.staffelName(st), st.id == staffel) {
+                                    TvWahlPille(AmStueck.staffelKnopf(st, kompakt), st.id == staffel,
+                                                modifier = (if (st.id == staffel) Modifier.focusRequester(gewaehlt) else Modifier)
+                                                    .semantics { contentDescription = AmStueck.staffelName(st) }) {
                                         if (staffel != st.id) { staffel = st.id; folgen = null }
                                     }
                                 }
@@ -324,7 +378,9 @@ internal fun TvTitel(
                         }
                         val f = folgen
                         // Die gewählte Staffel auf einmal — oder zurück, wenn alles gesehen ist.
-                        val staffelNr = staffeln.firstOrNull { it.id == staffel }?.seasonNo ?: f?.firstOrNull()?.seasonNo
+                        // Die Specials sind Staffel 0 (der Server lässt die 0 weg).
+                        val staffelNr = staffeln.firstOrNull { it.id == staffel }
+                            ?.let { if (AmStueck.istSpecials(it)) 0 else it.seasonNo } ?: f?.firstOrNull()?.seasonNo
                         if (!f.isNullOrEmpty() && staffelNr != null) {
                             val alle = f.all { it.finished }
                             Row(verticalAlignment = Alignment.CenterVertically,

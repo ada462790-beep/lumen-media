@@ -760,7 +760,8 @@ private fun LibraryScaffold(model: LumenViewModel) {
                          onOpen = titelOeffnen,
                          onPerson = { oeffnen(Ziel.Person(it)) },
                          onReihe = { oeffnen(Ziel.ReiheOffen(it)) },
-                         onDownloads = { oeffnen(Ziel.Downloads) })
+                         onDownloads = { oeffnen(Ziel.Downloads) },
+                         onSerie = { oeffnen(Ziel.Titel(it)) })
             return
         }
         is Ziel.ReiheOffen -> {
@@ -797,8 +798,7 @@ private fun LibraryScaffold(model: LumenViewModel) {
         }
         Ziel.Neuigkeiten -> {
             NeuigkeitenScreen(model, onBack = { zurueck() },
-                              onOpen = { oeffnen(Ziel.Titel(it)) },
-                              onHome = { stapel = emptyList(); tab = Tab.Home })
+                              onOpen = { oeffnen(Ziel.Titel(it)) })
             return
         }
         Ziel.Wuensche -> {
@@ -826,9 +826,10 @@ private fun LibraryScaffold(model: LumenViewModel) {
         val neuigkeiten = { oeffnen(Ziel.Neuigkeiten) }
         halter.SaveableStateProvider(tab.name) {
         when (tab) {
-            Tab.Home -> HomeScreen(model, heimListe, titelOeffnen, suchen, ungelesen, neuigkeiten,
+            Tab.Home -> HomeScreen(model, heimListe, { oeffnen(Ziel.Titel(it.seiteId)) }, suchen, ungelesen, neuigkeiten,
                 onReihe = { oeffnen(Ziel.ReiheOffen(it.id)) },
-                onReihen = { tab = Tab.Movies; reihenZeigen = true })
+                onReihen = { tab = Tab.Movies; reihenZeigen = true },
+                onPlay = { model.abspielen = it })
             // Filmreihen gehören zu den Filmen, Listen zur Merkliste —
             // die untere Leiste hat schon sechs Reiter, ein siebter
             // würde zu eng. Oben im Reiter wählt man die Ansicht.
@@ -1018,7 +1019,8 @@ private fun Dreiwahl(namen: List<String>, gewaehlt: Int, onChange: (Int) -> Unit
 private fun HomeScreen(model: LumenViewModel, liste: androidx.compose.foundation.lazy.LazyListState,
                        onOpen: (Item) -> Unit, onSearch: () -> Unit,
                        ungelesen: Int, onNeuigkeiten: () -> Unit,
-                       onReihe: (Reihe) -> Unit, onReihen: () -> Unit) {
+                       onReihe: (Reihe) -> Unit, onReihen: () -> Unit,
+                       onPlay: (Abspielen) -> Unit) {
     val vorher = model.startseite
     var rows by remember { mutableStateOf(vorher?.reihen ?: emptyList()) }
     var reihen by remember { mutableStateOf(vorher?.filmreihen ?: emptyList()) }
@@ -1034,7 +1036,7 @@ private fun HomeScreen(model: LumenViewModel, liste: androidx.compose.foundation
         fehler = if (rows.isEmpty()) antwort.fehler else null
         loading = false
         // Reihen sind eine Zugabe: klappt das nicht, bleibt die Startseite stehen.
-        withContext(Dispatchers.IO) { oderNull { model.client.collections() } }?.let { reihen = it }
+        withContext(Dispatchers.IO) { oderNull { model.client.collectionsStartseite() } }?.let { reihen = it }
         if (antwort.wert != null) model.startseite = Startseite(rows, reihen)
         // Den Zähler der Neuigkeiten nebenbei auffrischen, wie der Browser.
         model.refreshMe()
@@ -1062,7 +1064,22 @@ private fun HomeScreen(model: LumenViewModel, liste: androidx.compose.foundation
             }
         }
         if (erster != null) {
-            item(key = "lumen:hero") { Hero(model, erster) { onOpen(erster) } }
+            item(key = "lumen:hero") {
+                // „Ansehen" spielt ab, wie im Browser — bei einer Serie die
+                // Folge, an der man ist. Ein Tipp aufs Bild führt zur Titelseite
+                // (bei einer Folge zur Serie).
+                val scope = rememberCoroutineScope()
+                Hero(model, erster, onClick = { onOpen(erster) }, onAnsehen = {
+                    if (erster.kind == "series") {
+                        scope.launch {
+                            model.fetch { c -> Abspielfolge(c).naechstesInListe(listOf(erster), 0) }
+                                ?.let { onPlay(Abspielen(it.titel)) } ?: onOpen(erster)
+                        }
+                    } else {
+                        onPlay(Abspielen(erster))
+                    }
+                })
+            }
         }
         // Doppelte Titel in einer Reihe würden die Schlüssel der Liste
         // sprengen — „Zufällig" ist dafür nicht gefeit.
@@ -1095,7 +1112,7 @@ private fun HomeScreen(model: LumenViewModel, liste: androidx.compose.foundation
 
 /** Der erste Titel gross oben: Bild, Name, eine Zeile, der Anfang der Beschreibung. */
 @Composable
-private fun Hero(model: LumenViewModel, item: Item, onClick: () -> Unit) {
+private fun Hero(model: LumenViewModel, item: Item, onClick: () -> Unit, onAnsehen: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 22.dp)
             .clickableRow(onClick)) {
         Artwork(model.client.wideUrl(item), item.title,
@@ -1104,14 +1121,13 @@ private fun Hero(model: LumenViewModel, item: Item, onClick: () -> Unit) {
                 .background(androidx.compose.ui.graphics.Brush.verticalGradient(
                     listOf(Color.Transparent, Color(0xE6050507)))))
         Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
-            Text(item.title, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2,
+            Text(item.kartenTitel, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2,
                  overflow = TextOverflow.Ellipsis)
-            val zeile = buildList {
+            val zeile = item.folgenUnterzeile ?: buildList {
                 item.jahresText?.let { add(it) }
                 item.runtimeMs?.takeIf { it > 0 }?.let { add(Item.duration(it)) }
                 if (item.genres.isNotEmpty()) add(item.genres.take(2).joinToString(" · "))
-                item.imdbRating?.takeIf { it > 0 }?.let { add("★ " + Titelseite.komma(it)) }
-                item.rottenTomatoes?.let { add(Titelseite.tomaten(it)) }
+                Titelseite.kachelNote(item)?.let { add(it) }
             }.joinToString(" · ")
             if (zeile.isNotEmpty()) Text(zeile, color = Lumen.label2, fontSize = 13.sp)
             item.overview?.takeIf { it.isNotBlank() }?.let {
@@ -1120,7 +1136,11 @@ private fun Hero(model: LumenViewModel, item: Item, onClick: () -> Unit) {
                      overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.height(12.dp))
-            PrimaryButton(tx(R.string.ansehen), onClick = onClick)
+            PrimaryButton(when {
+                item.kind == "series" -> Titelseite.serienText(item)
+                item.naechsteFolge -> tx(R.string.ansehen)
+                else -> Titelseite.abspielText(item)
+            }, onClick = onAnsehen)
         }
     }
 }
@@ -1219,6 +1239,7 @@ private fun BrowseScreen(model: LumenViewModel, kind: String,
         }
         laedt = true
         val antwort = model.abfragen { holen(it) }
+        antwort.wert?.let { model.client.eigenenStandVergessen(it.items) }
         seite = antwort.wert
         fehler = antwort.fehler
         antwort.wert?.let { model.raster[cacheSchluessel] = it }
@@ -1293,7 +1314,9 @@ private fun BrowseScreen(model: LumenViewModel, kind: String,
                     }
                 }
             }
-            items(items, key = { it.id }) { item -> PosterCard(model, item, onOpen) }
+            // Mit dem eigenen Stand der zuletzt geöffneten Titel: Haken und
+            // Merkliste stimmen gleich, auch wenn das Raster aus dem Speicher kommt.
+            items(items, key = { it.id }) { item -> PosterCard(model, model.client.mitEigenemStand(item), onOpen) }
             if (seite?.weiter == true) {
                 item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
                      key = "lumen:mehr") {
@@ -1524,18 +1547,16 @@ fun PosterCard(model: LumenViewModel, item: Item, onOpen: (Item) -> Unit,
             }
         }
         Spacer(Modifier.height(7.dp))
-        Text(item.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        // Eine Folge steht unter dem Namen ihrer Serie, darunter „S1 F3 · Titel" — wie im Browser.
+        Text(item.kartenTitel, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
              fontWeight = if (hervorgehoben) FontWeight.SemiBold else FontWeight.Normal)
         Text(
             // „4 von 10 Folgen" bei einer angefangenen Serie — sonst Jahr und Wertung.
-            item.serienStand ?: buildString {
+            item.folgenUnterzeile ?: item.serienStand ?: listOfNotNull(
                 // Bei Serien der Zeitraum: „seit 2014", „2014–2020".
-                item.jahresText?.let { append(it) }
-                item.imdbRating?.takeIf { it > 0 }?.let {
-                    if (isNotEmpty()) append(" · ")
-                    append("★ " + Titelseite.komma(it))
-                }
-            },
+                item.jahresText,
+                Titelseite.kachelNote(item),
+            ).joinToString(" · "),
             fontSize = 12.sp, color = Lumen.label2, maxLines = 1,
         )
     }

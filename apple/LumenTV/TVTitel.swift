@@ -40,6 +40,8 @@ struct TVDetailView: View {
     @State private var folgen: [Item] = []
     /// Ob der Server „gesehen" für eine Staffel kennt — sonst kein Knopf.
     @State private var staffelGesehenGeht = true
+    /// Nach dem Haken an einer späten Folge: auch die davor?
+    @State private var vorherFrage: Item?
 
     private var item: Item? { detail?.item ?? vorschau }
 
@@ -98,9 +100,20 @@ struct TVDetailView: View {
         .fullScreenCover(item: $playing) { s in
             TVPlayerView(item: s.item, vonVorn: s.vonVorn, datei: s.datei).environment(session)
         }
+        .confirmationDialog("Auch alle Folgen davor als gesehen markieren?", isPresented: Binding(
+            get: { vorherFrage != nil }, set: { if !$0 { vorherFrage = nil } }),
+            titleVisibility: .visible, presenting: vorherFrage) { folge in
+            Button("Ja, alle davor") {
+                Task { await aendern { try await session.client.markFinishedBisHier(folge.id) } }
+            }
+            Button("Nein", role: .cancel) {}
+        }
         // Zurück aus dem Player: Stand, Haken und „Weiter bei" auffrischen.
         .onChange(of: playing == nil) { _, zu in
-            if zu { Task { await load() } }
+            if zu {
+                Task { await load() }
+                session.standGeaendert()
+            }
         }
     }
 
@@ -114,6 +127,9 @@ struct TVDetailView: View {
                original != item.title, !original.isEmpty {
                 Text(original).font(.title3).foregroundStyle(Theme.label2)
             }
+            // Die Wertungen gross und eigens, wie im Browser — vorher klein
+            // in der grauen Zeile.
+            WertungsReihe(wertungen: detail?.wertungen ?? Wertungen.liste(item), gross: true)
             Text(zeile(item)).font(.title3).foregroundStyle(Theme.label2)
             // 4K, Dolby Vision, 5.1, Sprachen, Untertitel —
             // kleine umrandete Abzeichen wie im Player.
@@ -131,17 +147,8 @@ struct TVDetailView: View {
         .padding(.top, 60)
     }
 
-    /// „2019 · 1 Std. 58 Min. · ab 16 · Drama · IMDb 7,8"
-    private func zeile(_ item: Item) -> String {
-        var parts: [String] = []
-        if !item.subtitleLine.isEmpty { parts.append(item.subtitleLine) }
-        if let rating = item.imdbRating, rating > 0 {
-            parts.append("IMDb " + rating.formatted(.number.precision(.fractionLength(1)).locale(.lumen)))
-        }
-        if let t = item.tomatenText { parts.append(t) }
-        if let t = item.tmdbText { parts.append(t) }
-        return parts.joined(separator: " · ")
-    }
+    /// „2019 · 1 Std. 58 Min. · ab 16 · Drama"
+    private func zeile(_ item: Item) -> String { item.subtitleLine }
 
     /// Abspielen, von vorn, zur Liste, merken, gesehen. Alles in einer
     /// Zeile, damit der Fokus nur nach rechts und links muss.
@@ -158,11 +165,15 @@ struct TVDetailView: View {
                 } label: {
                     Label(Titelseite.serieAbspielen(item), systemImage: "play.fill")
                 }
-            } else if detail?.playable != nil {
+            } else if let detail, detail.playable != nil {
+                // Mehrere Fassungen (Sprachen, Qualitäten): „Abspielen"
+                // spielt gleich die erste, gewählt wird im Player.
+                let hinweis = Fassungen.hinweis(Fassungen.liste(detail.files))
                 Button {
                     playing = Abspielstart(item: item)
                 } label: {
-                    Label(Titelseite.abspielen(item), systemImage: "play.fill")
+                    Label(hinweis.map { Titelseite.abspielen(item) + " · " + $0 } ?? Titelseite.abspielen(item),
+                          systemImage: "play.fill")
                 }
                 if Titelseite.kannVonVorn(item) {
                     Button {
@@ -214,6 +225,7 @@ struct TVDetailView: View {
             }
         }
         .font(.title3.weight(.semibold))
+        .focusSection()
     }
 
     // MARK: Besetzung
@@ -241,22 +253,33 @@ struct TVDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Folgen").font(.title2.weight(.semibold))
             if staffeln.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(staffeln) { st in
-                            Button {
-                                Task { await zeigeStaffel(st.id) }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    if staffel == st.id { Image(systemName: "checkmark") }
-                                    Text(Folgenwahl.name(st))
+                // Viele Staffeln: nur die Zahlen, Specials mit Namen — wie im
+                // Browser. Die gewählte rückt ins Bild; die Reihe ist ein
+                // eigener Fokus-Bereich, damit „nach unten" in die Folgen führt.
+                let art = Staffelleiste.art(staffeln)
+                ScrollViewReader { leiste in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 20) {
+                            ForEach(staffeln) { st in
+                                Button {
+                                    Task { await zeigeStaffel(st.id) }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        if staffel == st.id { Image(systemName: "checkmark") }
+                                        Text(Staffelleiste.knopf(st, art: art))
+                                    }
+                                    .font(.callout.weight(staffel == st.id ? .semibold : .regular))
                                 }
-                                .font(.callout.weight(staffel == st.id ? .semibold : .regular))
+                                .id(st.id)
+                                .accessibilityLabel(Staffelleiste.name(st))
+                                .accessibilityAddTraits(staffel == st.id ? .isSelected : [])
                             }
                         }
+                        .padding(.vertical, 16)
                     }
-                    .padding(.vertical, 16)
+                    .onAppear { if let staffel { leiste.scrollTo(staffel, anchor: .center) } }
                 }
+                .focusSection()
             }
             if folgen.isEmpty {
                 Text("In dieser Staffel liegt noch keine Folge.")
@@ -291,6 +314,7 @@ struct TVDetailView: View {
                     }
                     .padding(.vertical, 24)
                 }
+                .focusSection()
             }
         }
     }
@@ -364,29 +388,52 @@ struct TVDetailView: View {
             self.error = Session.text(error)
             return
         }
+        // Startseite und Merkliste ziehen nach.
+        session.standGeaendert()
         await load()
+    }
+
+    /// Den Knopf sofort umstellen, wie im Browser; `aendern` lädt danach
+    /// den wahren Stand.
+    private func sofort(_ aendern: (inout Item) -> Void) {
+        guard var d = detail else { return }
+        aendern(&d.item)
+        detail = d
     }
 
     private func merken(_ item: Item) async {
         TVMerker.shared.vergessen(item.id)
+        let neu = !item.isOnList
+        sofort { $0.onList = neu }
         await aendern {
-            if item.isOnList { try await session.client.removeFromWatchlist(item.id) }
-            else { try await session.client.addToWatchlist(item.id) }
+            if neu { try await session.client.addToWatchlist(item.id) }
+            else { try await session.client.removeFromWatchlist(item.id) }
         }
     }
 
     private func favorit(_ item: Item) async {
+        let neu = !item.isFavorite
+        sofort { $0.favorite = neu }
         await aendern {
-            if item.isFavorite { try await session.client.removeFavorite(item.id) }
-            else { try await session.client.addFavorite(item.id) }
+            if neu { try await session.client.addFavorite(item.id) }
+            else { try await session.client.removeFavorite(item.id) }
         }
     }
 
+    /// Für den Titel selbst und für eine Folge aus der Liste darunter.
     private func gesehen(_ item: Item) async {
-        await aendern {
-            if item.isSeen { try await session.client.clearFinished(item.id) }
-            else { try await session.client.markFinished(item.id) }
+        let neu = !item.isSeen
+        if item.id == detail?.item.id {
+            sofort { $0.finished = neu }
+        } else if let i = folgen.firstIndex(where: { $0.id == item.id }) {
+            folgen[i].finished = neu
         }
+        let davorOffen = neu && item.kind == "episode" && Titelseite.davorOffen(item, in: folgen)
+        await aendern {
+            if neu { try await session.client.markFinished(item.id) }
+            else { try await session.client.clearFinished(item.id) }
+        }
+        if davorOffen { vorherFrage = item }
     }
 
     /// Eine ganze Staffel. Kennt der Server das noch nicht (404), fällt
@@ -410,6 +457,7 @@ struct TVDetailView: View {
 
     private func bewerten(_ item: Item, sterne: Int) async {
         let teilen = session.me?.prefs["shareRatings"] == "1"
+        sofort { $0.myRating = sterne }
         await aendern { try await session.client.rate(item.id, stars: sterne, shared: teilen) }
     }
 }
@@ -444,7 +492,7 @@ struct TVFolgenKarte: View {
                             ? folge.folgeBarrierefrei + ", " + String(localized: "gesehen", bundle: .lumen, locale: .lumen)
                             : folge.folgeBarrierefrei)
         .task(id: folge.id) {
-            bild = await session.client.artworkURL(for: folge, wide: true)
+            bild = await session.client.artworkURL(for: folge, wide: true, breite: Bildbreite.breiteKarte)
         }
     }
 

@@ -32,13 +32,36 @@ object Fassungen {
     /** Ob „Ansehen" erst nach der Qualität fragen muss. */
     fun mehrere(dateien: List<MediaFile>): Boolean = liste(dateien).size > 1
 
-    /** Die Auflösung, wie man sie kennt: 4K, 1080p, 720p — sonst die Zeilen, etwa „400p". */
-    fun aufloesung(hoehe: Int?): String? {
-        val h = hoehe ?: 0
+    /**
+     * Der kleine Zusatz auf „Ansehen" bei mehreren Fassungen, wie im
+     * Browser (fassungenHinweis): Unterscheiden sie sich nur in der
+     * Tonsprache, heisst es „2 Sprachen" (deutsche und englische Datei,
+     * etwa Police Academy), nur in der Auflösung „2 Qualitäten" — sonst
+     * neutral „2 Fassungen". Null bei höchstens einer Fassung.
+     */
+    fun hinweis(fassungen: List<MediaFile>): String? {
+        val n = fassungen.size
+        if (n < 2) return null
+        fun verschieden(wert: (MediaFile) -> String) = fassungen.map(wert).toSet().size > 1
+        val sprache = verschieden { f -> f.tracks.firstOrNull { it.isAudio }?.language ?: "" }
+        val aufl = verschieden { f -> aufloesung(f.height, f.width) ?: "" }
+        val sonst = verschieden { f -> (f.container ?: "").lowercase() + "|" + (f.edition ?: "") }
         return when {
-            h >= 2000 -> "4K"
-            h >= 1000 -> "1080p"
-            h >= 700 -> "720p"
+            sprache && !aufl && !sonst -> Texte.n(TxN.SPRACHEN_ANZAHL, n)
+            aufl && !sprache && !sonst -> Texte.n(TxN.QUALITAETEN_ANZAHL, n)
+            else -> Texte.n(TxN.FASSUNGEN_ANZAHL, n)
+        }
+    }
+
+    /** Die Auflösung, wie man sie kennt: 4K, 1080p, 720p — sonst die Zeilen, etwa „400p". */
+    fun aufloesung(hoehe: Int?, breite: Int? = null): String? {
+        val h = hoehe ?: 0
+        // Breitformat (1920 × 800) ist trotzdem 1080p — wie im Browser (aufloesungVon).
+        val w = breite ?: 0
+        return when {
+            h >= 2000 || w >= 3400 -> "4K"
+            h >= 1000 || w >= 1800 -> "1080p"
+            h >= 700 || w >= 1200 -> "720p"
             h > 0 -> "${h}p"
             else -> null
         }
@@ -58,7 +81,7 @@ object Fassungen {
 
     /** Eine Fassung in der Auswahl: „1080p · MKV · 7,9 GB". */
     fun name(f: MediaFile): String = listOfNotNull(
-        aufloesung(f.height),
+        aufloesung(f.height, f.width),
         f.container?.takeIf { it.isNotBlank() }?.uppercase(),
         groesse(f.sizeBytes),
     ).joinToString(" · ")
@@ -74,7 +97,7 @@ object Fassungen {
             val ton = f.tracks.firstOrNull { it.isAudio }
             val sprache = ton?.language?.takeIf { it.isNotBlank() && it != "und" }?.let { Spuren.sprache(it) }
             listOfNotNull(
-                aufloesung(f.height),
+                aufloesung(f.height, f.width),
                 sprache,
                 f.container?.takeIf { it.isNotBlank() }?.uppercase(),
                 f.edition,

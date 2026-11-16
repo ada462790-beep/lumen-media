@@ -14,9 +14,11 @@ import Foundation
 /// Zwei Fälle, die beide mehrere Dateien zu einem Titel bedeuten:
 ///
 /// - **Fassungen**: mehrere Dateien mit Teil 1 — derselbe Film als MKV in
-///   1080p und als AVI in 400p. „Ansehen" fragt dann zuerst nach der
-///   Qualität. Der Server liefert sie schon geordnet: die bevorzugte vorn,
-///   dann die mit der höchsten Auflösung. Die erste ist darum der Standard.
+///   1080p und als AVI in 400p, oder eine deutsche und eine englische
+///   Datei. „Ansehen" spielt gleich die erste; eine andere wählt man im
+///   Player (Zahnrad) — die frühere Frage „In welcher Qualität?" vor dem
+///   Abspielen gibt es nicht mehr. Der Server liefert sie schon geordnet:
+///   die bevorzugte vorn, dann die mit der höchsten Auflösung.
 /// - **Teile**: Dateien mit Teil 1, 2, 3 … („Apocalypse Now (1979) a.avi",
 ///   „b.avi", „c.avi") — ein Film, der nacheinander läuft.
 ///
@@ -30,18 +32,29 @@ public enum Fassungen {
         dateien.filter { $0.nutzbar && $0.partNo <= 1 }
     }
 
-    /// Ob „Ansehen" erst nach der Qualität fragen muss.
+    /// Ob es mehr als eine Fassung gibt.
     public static func mehrere(_ dateien: [MediaFile]) -> Bool { liste(dateien).count > 1 }
 
     /// Die Auflösung, wie man sie kennt: 4K, 1080p, 720p — sonst die
     /// Zeilen, etwa „400p".
     public static func aufloesung(_ hoehe: Int?) -> String? {
-        let h = hoehe ?? 0
-        if h >= 2000 { return "4K" }
-        if h >= 1000 { return "1080p" }
-        if h >= 700 { return "720p" }
+        aufloesung(hoehe: hoehe, breite: nil)
+    }
+
+    /// Wie oben, aber Breitformat zählt nach der Breite: 1920×800 ist ein
+    /// 1080p-Film, 1280×536 einer in 720p — wie im Browser (aufloesungVon).
+    public static func aufloesung(hoehe: Int?, breite: Int?) -> String? {
+        let h = hoehe ?? 0, w = breite ?? 0
+        if h >= 2000 || w >= 3400 { return "4K" }
+        if h >= 1000 || w >= 1800 { return "1080p" }
+        if h >= 700 || w >= 1200 { return "720p" }
         if h > 0 { return "\(h)p" }
         return nil
+    }
+
+    /// Die Auflösung einer Datei, Breitformat nach der Breite.
+    public static func aufloesung(_ f: MediaFile) -> String? {
+        aufloesung(hoehe: f.height, breite: f.width)
     }
 
     /// Die Grösse wie im Browser (höchstens eine Nachkommastelle, in der
@@ -59,36 +72,77 @@ public enum Fassungen {
     /// Eine Fassung in der Auswahl: „1080p · MKV · 7,9 GB".
     public static func name(_ f: MediaFile) -> String {
         var teile: [String] = []
-        if let a = aufloesung(f.height) { teile.append(a) }
+        if let a = aufloesung(f) { teile.append(a) }
         if let c = f.container, !c.isEmpty { teile.append(c.uppercased()) }
         if let g = groesse(f.sizeBytes) { teile.append(g) }
         if teile.isEmpty { return (f.path as NSString).lastPathComponent }
         return teile.joined(separator: " · ")
     }
 
+    /// Alle Tonsprachen einer Datei, ohne „und", in der Reihenfolge der
+    /// Datei und jede nur einmal: „Deutsch, Englisch".
+    public static func tonsprachen(_ f: MediaFile) -> [String] {
+        var codes: [String] = []
+        for t in f.tonspuren {
+            guard let c = t.language, !c.isEmpty, c != "und", !codes.contains(c) else { continue }
+            codes.append(c)
+        }
+        return codes
+    }
+
     /// Die Fassungen beschriftet wie im Player des Browsers (app.js,
-    /// fassungNamen): Auflösung, Sprache der ersten Tonspur, Format und
-    /// gegebenenfalls die Edition — „1080p · Englisch · MKV". Zwei gleich
-    /// beschriftete unterscheidet die Grösse; ohne alles „Fassung 2".
+    /// fassungNamen): Auflösung, alle Tonsprachen, Format und
+    /// gegebenenfalls die Edition — „1080p · Deutsch · MKV". Zwei gleich
+    /// beschriftete unterscheidet die Grösse, gleiche Kopien der Ordner
+    /// (sonst „Kopie 2"); ohne alles „Fassung 2".
+    ///
+    /// Eine deutsche und eine englische Datei desselben Films (Police
+    /// Academy) heissen so „1080p · Deutsch · MKV" und „1080p · Englisch ·
+    /// MKV" — vorher stand nur die erste Tonspur da.
     public static func namen(_ fassungen: [MediaFile]) -> [String] {
-        let namen: [String] = fassungen.map { f in
+        var namen: [String] = fassungen.map { f in
             var teile: [String] = []
-            if let a = aufloesung(f.height) { teile.append(a) }
-            if let ton = f.tonspuren.first, let code = ton.language, !code.isEmpty, code != "und" {
-                teile.append(Spuren.sprachName(code))
-            }
+            if let a = aufloesung(f) { teile.append(a) }
+            let sprachen = tonsprachen(f).map { Spuren.sprachName($0) }
+            if !sprachen.isEmpty { teile.append(sprachen.joined(separator: ", ")) }
             if let c = f.container, !c.isEmpty { teile.append(c.uppercased()) }
             if let e = f.edition, !e.isEmpty { teile.append(e) }
             return teile.joined(separator: " · ")
         }
-        return namen.enumerated().map { i, n in
-            var name = n
-            if !n.isEmpty, namen.filter({ $0 == n }).count > 1, let g = groesse(fassungen[i].sizeBytes) {
-                name = n + " · " + g
-            }
-            let nummer: Int = i + 1
-            return name.isEmpty ? String(localized: "Fassung \(nummer)", bundle: .lumenKit, locale: .lumen) : name
+        func doppelt(_ liste: [String], _ i: Int) -> Bool { liste.filter { $0 == liste[i] }.count > 1 }
+        let mitGroesse: [String] = namen.indices.map { i in
+            guard !namen[i].isEmpty, doppelt(namen, i), let g = groesse(fassungen[i].sizeBytes) else { return namen[i] }
+            return namen[i] + " · " + g
         }
+        namen = mitGroesse
+        let mitOrdner: [String] = namen.indices.map { i in
+            guard !namen[i].isEmpty, doppelt(namen, i) else { return namen[i] }
+            let teile = fassungen[i].path.split(whereSeparator: { $0 == "/" || $0 == "\\" })
+            if teile.count >= 2 { return namen[i] + " · " + String(teile[teile.count - 2]) }
+            let nummer: Int = i + 1
+            return namen[i] + " · " + String(localized: "Kopie \(nummer)", bundle: .lumenKit, locale: .lumen)
+        }
+        return mitOrdner.enumerated().map { i, n in
+            let nummer: Int = i + 1
+            return n.isEmpty ? String(localized: "Fassung \(nummer)", bundle: .lumenKit, locale: .lumen) : n
+        }
+    }
+
+    /// Der Hinweis auf „Ansehen", wenn es mehrere Fassungen gibt: „2
+    /// Sprachen", wenn sie sich nur in der Tonsprache unterscheiden, „2
+    /// Qualitäten", wenn nur in der Auflösung, sonst „2 Fassungen" — wie im
+    /// Browser (fassungenHinweis). Vorher hiess eine deutsche und eine
+    /// englische Datei „2 Qualitäten". nil bei höchstens einer Fassung.
+    public static func hinweis(_ fassungen: [MediaFile]) -> String? {
+        let n = fassungen.count
+        guard n > 1 else { return nil }
+        func verschieden(_ wert: (MediaFile) -> String) -> Bool { Set(fassungen.map(wert)).count > 1 }
+        let sprache = verschieden { $0.tonspuren.first?.language ?? "" }
+        let aufl = verschieden { aufloesung($0) ?? "" }
+        let sonst = verschieden { ($0.container ?? "").lowercased() + "|" + ($0.edition ?? "") }
+        if sprache && !aufl && !sonst { return String(localized: "\(n) Sprachen", bundle: .lumenKit, locale: .lumen) }
+        if aufl && !sprache && !sonst { return String(localized: "\(n) Qualitäten", bundle: .lumenKit, locale: .lumen) }
+        return String(localized: "\(n) Fassungen", bundle: .lumenKit, locale: .lumen)
     }
 
     /// Welche Datei spielt: die gewählte, solange es sie noch gibt — sonst

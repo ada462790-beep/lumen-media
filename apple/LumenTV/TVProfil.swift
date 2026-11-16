@@ -81,11 +81,11 @@ struct TVProfilView: View {
             Section {
                 NavigationLink {
                     TVAuswahlView(titel: String(localized: "Ton", bundle: .lumen, locale: .lumen), optionen: Sprachwahl.ton,
-                                  gewaehlt: prefs[Sprachwahl.prefTon] ?? "") { wert in
-                        await setzen([Sprachwahl.prefTon: wert])
+                                  gewaehlt: Sprachwahl.tonWert(prefs)) { wert in
+                        await setzen(Sprachwahl.tonSetzen(wert))
                     }
                 } label: {
-                    LabeledContent("Ton", value: Sprachwahl.tonName(prefs[Sprachwahl.prefTon]))
+                    LabeledContent("Ton", value: Sprachwahl.tonName(Sprachwahl.tonWert(prefs)))
                 }
                 NavigationLink {
                     TVAuswahlView(titel: String(localized: "Untertitel", bundle: .lumen, locale: .lumen), optionen: Sprachwahl.untertitel,

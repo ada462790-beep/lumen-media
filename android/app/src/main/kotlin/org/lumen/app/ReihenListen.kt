@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,6 +57,9 @@ fun ReihenScreen(
     var reihen by remember { mutableStateOf<List<Reihe>>(emptyList()) }
     var sammlungen by remember { mutableStateOf<List<Sammlung>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var suche by rememberSaveable { mutableStateOf("") }
+    var sortierung by rememberSaveable { mutableStateOf(ReihenSortierung.NAME) }
+    val gezeigt = remember(reihen, suche, sortierung) { ReihenAuswahl.auswahl(reihen, suche, sortierung) }
     val error by model.error.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
@@ -85,11 +90,44 @@ fun ReihenScreen(
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
             if (reihen.isNotEmpty()) {
-                Text(tx(R.string.reihen_zeile, Texte.n(TxN.REIHEN_ANZAHL, reihen.size)),
-                     color = Lumen.label2, fontSize = 14.sp)
+                Column {
+                    Text(tx(R.string.reihen_zeile, Texte.n(TxN.REIHEN_ANZAHL, reihen.size)),
+                         color = Lumen.label2, fontSize = 14.sp)
+                    // Suchen und sortieren — wie im Browser (bei 240 Reihen nötig).
+                    if (reihen.size >= 2) {
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = suche, onValueChange = { suche = it }, singleLine = true,
+                            placeholder = { Text(Texte.t(Tx.REIHEN_DURCHSUCHEN), color = Lumen.label3) },
+                            leadingIcon = { Icon(Icons.Filled.Search, null, tint = Lumen.label3) },
+                            trailingIcon = {
+                                if (suche.isNotEmpty()) IconButton(onClick = { suche = "" }) {
+                                    Icon(Icons.Filled.Close, tx(R.string.leeren), tint = Lumen.label2)
+                                }
+                            },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Lumen.fill, unfocusedContainerColor = Lumen.fill,
+                                focusedBorderColor = Lumen.accent, unfocusedBorderColor = Color.Transparent),
+                            modifier = Modifier.fillMaxWidth())
+                        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ReihenSortierung.entries.forEach { art ->
+                                FilterChip(selected = sortierung == art, onClick = { sortierung = art },
+                                    label = { Text(art.text, maxLines = 1) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        labelColor = Lumen.label2, selectedContainerColor = Lumen.fill,
+                                        selectedLabelColor = Lumen.label))
+                            }
+                        }
+                        if (suche.isNotBlank() && gezeigt.isEmpty()) {
+                            Text(Texte.t(Tx.NICHTS_PASST, suche.trim()), color = Lumen.label2, fontSize = 14.sp,
+                                 modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                }
             }
         }
-        items(reihen, key = { it.id }) { reihe -> ReiheKarte(model, reihe) { onOpen(reihe) } }
+        items(gezeigt, key = { it.id }) { reihe -> ReiheKarte(model, reihe) { onOpen(reihe) } }
     }
     StateOverlay(loading && reihen.isEmpty(), error,
         reihen.isEmpty() && sammlungen.isEmpty() && !loading,

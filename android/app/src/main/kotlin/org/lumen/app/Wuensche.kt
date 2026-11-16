@@ -38,7 +38,8 @@ import org.lumen.core.WunschWeg
  * gewünscht hat, sonst nichts.
  *
  * Annehmen und Ablehnen gehören zur Verwaltung, und die gibt es nur im
- * Browser. Hier steht deshalb nur der Stand.
+ * Browser. Hier steht deshalb nur der Stand — löschen kann die Verwaltung
+ * einen Wunsch aber auch hier, wie im Browser.
  */
 @Composable
 fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
@@ -109,12 +110,13 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
                 }
             }
             liste.isEmpty() -> item { Text(tx(R.string.noch_keine_wuensche), color = Lumen.label2) }
-            else -> items(liste, key = { it.id }) { w -> WunschZeile(w) { weg = w } }
+            else -> items(liste, key = { it.id }) { w -> WunschZeile(w, model.isAdmin) { weg = w } }
         }
     }
 
     weg?.let { w ->
-        val austreten = w.wegArt == WunschWeg.AUSTRETEN
+        val art = w.wegArt(model.isAdmin) ?: WunschWeg.LOESCHEN
+        val austreten = art == WunschWeg.AUSTRETEN
         AlertDialog(
             onDismissRequest = { weg = null },
             title = { Text(tx(if (austreten) R.string.nicht_mehr_wuenschen_frage else R.string.wunsch_loeschen_frage)) },
@@ -127,7 +129,7 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
                     weg = null
                     hinweis = null
                     // 409 nicht_offen: Der Satz des Servers steht dann als Fehler da.
-                    model.send(onDone = { reload++ }) { it.wunschLoeschen(w.id) }
+                    model.send(onDone = { reload++ }) { it.wunschWeg(w.id, art) }
                 }) {
                     Text(tx(if (austreten) R.string.nicht_mehr_wuenschen else R.string.loeschen),
                          color = if (austreten) Lumen.accent else Lumen.bad)
@@ -139,7 +141,7 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun WunschZeile(w: Wish, onWeg: () -> Unit) {
+private fun WunschZeile(w: Wish, verwaltung: Boolean, onWeg: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(w.titelZeile, fontSize = 16.sp)
@@ -150,7 +152,8 @@ private fun WunschZeile(w: Wish, onWeg: () -> Unit) {
              modifier = Modifier.clip(CircleShape).background(grund)
                  .padding(horizontal = 10.dp, vertical = 4.dp))
         // Den eigenen offenen Wunsch löschen, einen angeschlossenen verlassen.
-        w.wegArt?.let { art ->
+        // Die Verwaltung löscht jeden Wunsch, wie im Browser.
+        w.wegArt(verwaltung)?.let { art ->
             TextButton(onClick = onWeg) {
                 Text(tx(if (art == WunschWeg.AUSTRETEN) R.string.nicht_mehr_wuenschen else R.string.loeschen),
                      color = Lumen.label2, fontSize = 13.sp)

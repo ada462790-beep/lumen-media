@@ -57,6 +57,11 @@ class LumenApplication : Application(), ImageLoaderFactory {
         // Zuerst die Sprache: alles danach, das Text braucht, soll ihn
         // schon in der richtigen bekommen.
         Sprachwahl.einrichten(this)
+        // Bilder in der Grösse, in der dieses Gerät sie zeigt (?w=): Kachel
+        // und längste Bildschirmseite — wie die Web-App mit srcset.
+        resources.displayMetrics.let { m ->
+            org.lumen.core.Bildgroesse.einrichten(150f, maxOf(m.widthPixels, m.heightPixels) / m.density, m.density)
+        }
         val sicher = sichereEinstellungen(this)
         speicherHinweis = sicher.hinweis
         val prefs = sicher.prefs

@@ -179,34 +179,6 @@
         }
       }
     },
-    "%lld %% Rotten Tomatoes": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld %% Rotten Tomatoes"
-          }
-        },
-        "de-AT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld %% Rotten Tomatoes"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld%% Rotten Tomatoes"
-          }
-        },
-        "en-GB": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld%% Rotten Tomatoes"
-          }
-        }
-      }
-    },
     "%lld Bibliotheken": {
       "localizations": {
         "de": {
@@ -2827,34 +2799,6 @@
         }
       }
     },
-    "Wie in der Datei": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wie in der Datei"
-          }
-        },
-        "de-AT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wie in der Datei"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As in File"
-          }
-        },
-        "en-GB": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As in File"
-          }
-        }
-      }
-    },
     "Wird umgewandelt": {
       "localizations": {
         "de": {
@@ -4405,34 +4349,6 @@
         }
       }
     },
-    "TMDb %lld %%": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TMDb %lld %%"
-          }
-        },
-        "de-AT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TMDb %lld %%"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TMDb %lld%%"
-          }
-        },
-        "en-GB": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TMDb %lld%%"
-          }
-        }
-      }
-    },
     "Schon gewünscht – du bist jetzt mit dabei": {
       "localizations": {
         "de": {
@@ -4709,6 +4625,762 @@
           "stringUnit": {
             "state": "translated",
             "value": "S%lld E%lld"
+          }
+        }
+      }
+    },
+    "Kopie %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopie %lld"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopie %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy %lld"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy %lld"
+          }
+        }
+      }
+    },
+    "%lld Sprachen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Sprachen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Sprachen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld languages"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld languages"
+          }
+        }
+      }
+    },
+    "%lld Qualitäten": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Qualitäten"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Qualitäten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld qualities"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld qualities"
+          }
+        }
+      }
+    },
+    "%lld Fassungen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Fassungen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Fassungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld versions"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld versions"
+          }
+        }
+      }
+    },
+    "Profilsprache": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profilsprache"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profilsprache"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile language"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile language"
+          }
+        }
+      }
+    },
+    "Originalton": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originalton"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originalton"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original audio"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original audio"
+          }
+        }
+      }
+    },
+    "Staffel %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Staffel %lld"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Staffel %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Season %lld"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Season %lld"
+          }
+        }
+      }
+    },
+    "%lld Staffeln": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Staffeln"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Staffeln"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld seasons"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld seasons"
+          }
+        }
+      }
+    },
+    "Wertung: %@ von 10": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wertung: %@ von 10"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wertung: %@ von 10"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rating: %@ out of 10"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rating: %@ out of 10"
+          }
+        }
+      }
+    },
+    "IMDb: %@ von 10, %@ Stimmen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ von 10, %@ Stimmen"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ von 10, %@ Stimmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ out of 10, %@ votes"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ out of 10, %@ votes"
+          }
+        }
+      }
+    },
+    "IMDb: %@ von 10": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ von 10"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ von 10"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ out of 10"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMDb: %@ out of 10"
+          }
+        }
+      }
+    },
+    "Rotten Tomatoes: %lld %% (frisch)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld %% (frisch)"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld %% (frisch)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld%% (fresh)"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld%% (fresh)"
+          }
+        }
+      }
+    },
+    "Rotten Tomatoes: %lld %% (faul)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld %% (faul)"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld %% (faul)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld%% (rotten)"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotten Tomatoes: %lld%% (rotten)"
+          }
+        }
+      }
+    },
+    "TMDb: %lld %% der Nutzer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb: %lld %% der Nutzer"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb: %lld %% der Nutzer"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb: %lld%% of users"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TMDb: %lld%% of users"
+          }
+        }
+      }
+    },
+    "Die Adresse steht in LUMEN_HEIMNETZ.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse steht in LUMEN_HEIMNETZ."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse steht in LUMEN_HEIMNETZ."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address is listed in LUMEN_HEIMNETZ."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address is listed in LUMEN_HEIMNETZ."
+          }
+        }
+      }
+    },
+    "Die Adresse steht nicht in LUMEN_HEIMNETZ.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse steht nicht in LUMEN_HEIMNETZ."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse steht nicht in LUMEN_HEIMNETZ."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address is not listed in LUMEN_HEIMNETZ."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address is not listed in LUMEN_HEIMNETZ."
+          }
+        }
+      }
+    },
+    "Die Anfrage kommt aus dem Container von Lumen selbst.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage kommt aus dem Container von Lumen selbst."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage kommt aus dem Container von Lumen selbst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request comes from Lumen’s own container."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request comes from Lumen’s own container."
+          }
+        }
+      }
+    },
+    "Die Anfrage kommt vom Rechner, auf dem Lumen läuft – etwa über einen Reverse-Proxy. Das zählt nur als zu Hause, wenn die Adresse einzeln in LUMEN_HEIMNETZ steht.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage kommt vom Rechner, auf dem Lumen läuft – etwa über einen Reverse-Proxy. Das zählt nur als zu Hause, wenn die Adresse einzeln in LUMEN_HEIMNETZ steht."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage kommt vom Rechner, auf dem Lumen läuft – etwa über einen Reverse-Proxy. Das zählt nur als zu Hause, wenn die Adresse einzeln in LUMEN_HEIMNETZ steht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request comes from the machine Lumen runs on – for example through a reverse proxy. It only counts as home if the address is listed on its own in LUMEN_HEIMNETZ."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request comes from the machine Lumen runs on – for example through a reverse proxy. It only counts as home if the address is listed on its own in LUMEN_HEIMNETZ."
+          }
+        }
+      }
+    },
+    "Die Anfrage kommt aus einem anderen Container auf dem NAS, etwa einem Reverse-Proxy.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage kommt aus einem anderen Container auf dem NAS, etwa einem Reverse-Proxy."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Anfrage kommt aus einem anderen Container auf dem NAS, etwa einem Reverse-Proxy."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request comes from another container on the NAS, such as a reverse proxy."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The request comes from another container on the NAS, such as a reverse proxy."
+          }
+        }
+      }
+    },
+    "Die Adresse ist das Gateway eines eigenen Netzes. Dahinter kann jedes Gerät stecken, auch eines aus dem Internet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse ist das Gateway eines eigenen Netzes. Dahinter kann jedes Gerät stecken, auch eines aus dem Internet."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse ist das Gateway eines eigenen Netzes. Dahinter kann jedes Gerät stecken, auch eines aus dem Internet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address is the gateway of one of the server’s own networks. Any device could be behind it, including one on the internet."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address is the gateway of one of the server’s own networks. Any device could be behind it, including one on the internet."
+          }
+        }
+      }
+    },
+    "Keine Adresse aus dem Heimnetz.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Adresse aus dem Heimnetz."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Adresse aus dem Heimnetz."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not an address from the home network."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not an address from the home network."
+          }
+        }
+      }
+    },
+    "Private Adresse im Heimnetz.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private Adresse im Heimnetz."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private Adresse im Heimnetz."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private address in the home network."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private address in the home network."
+          }
+        }
+      }
+    },
+    "Über den Vermittler (Fernzugriff).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Über den Vermittler (Fernzugriff)."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Über den Vermittler (Fernzugriff)."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Through the relay (remote access)."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Through the relay (remote access)."
+          }
+        }
+      }
+    },
+    "Die Adresse ist nicht lesbar.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse ist nicht lesbar."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Adresse ist nicht lesbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address can’t be read."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The address can’t be read."
+          }
+        }
+      }
+    },
+    "Ein Reverse-Proxy hat die Anfrage weitergereicht (%@).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Reverse-Proxy hat die Anfrage weitergereicht (%@)."
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Reverse-Proxy hat die Anfrage weitergereicht (%@)."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A reverse proxy forwarded the request (%@)."
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A reverse proxy forwarded the request (%@)."
+          }
+        }
+      }
+    },
+    "Serie": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Programme"
+          }
+        }
+      }
+    },
+    "Film": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Film"
+          }
+        },
+        "de-AT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Film"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Movie"
+          }
+        },
+        "en-GB": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Film"
           }
         }
       }

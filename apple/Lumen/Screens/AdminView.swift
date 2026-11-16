@@ -27,12 +27,15 @@ struct AdminView: View {
     @State private var uebersicht: Uebersicht?
     /// „1.4.0 verfügbar" oder „1.3.2 · aktuell" — nur für den Besitzer.
     @State private var updateKurz: String?
+    /// Zu Hause oder unterwegs, und warum — wie im Browser.
+    @State private var netz: NetzStand?
     #endif
 
     var body: some View {
         List {
             #if os(macOS)
             serverZustand
+            diesesGeraet
             #endif
             Section("Mediathek") {
                 NavigationLink { LibrariesView() } label: {
@@ -100,6 +103,7 @@ struct AdminView: View {
         #if os(macOS)
         .task {
             uebersicht = try? await session.verwaltet { try await session.client.adminOverview() }
+            netz = try? await session.verwaltet { try await session.client.adminNetz() }
             if session.isOwner {
                 updateKurz = (try? await session.verwaltet { try await session.client.adminUpdate() })?.kurz
             }
@@ -108,6 +112,39 @@ struct AdminView: View {
     }
 
     #if os(macOS)
+    /// So sieht Lumen diesen Mac: zu Hause oder unterwegs, die Adresse und
+    /// der Grund — und ein Hinweis, wenn Docker die echten Adressen
+    /// verdeckt (dann gilt jedes Gerät als unterwegs).
+    @ViewBuilder
+    private var diesesGeraet: some View {
+        if let n = netz {
+            Section {
+                Label {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(n.geraet.zuHause ? "Gilt als zu Hause" : "Gilt als unterwegs")
+                        Text("So sieht Lumen dieses Gerät: Adresse \(n.geraet.adresse.isEmpty ? "?" : n.geraet.adresse)")
+                            .font(.caption).foregroundStyle(Theme.label2)
+                        Text(n.grundText).font(.caption).foregroundStyle(Theme.label2)
+                    }
+                } icon: {
+                    Image(systemName: n.geraet.zuHause ? "checkmark.circle" : "exclamationmark.triangle")
+                        .foregroundStyle(n.geraet.zuHause ? Theme.good : Theme.warn)
+                }
+                if n.dockerVerdeckt {
+                    Label("Docker verdeckt die echten Adressen: Lumen sieht für alle Geräte dieselbe Adresse und behandelt sicherheitshalber alle als unterwegs. Abhilfe: in der docker-compose.yml „network_mode: host“ eintragen (README, „Synology Schritt für Schritt“).",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(Theme.warn)
+                }
+            } header: {
+                Text("Dieses Gerät")
+            } footer: {
+                Text(n.hostNetz == true
+                     ? "Lumen läuft im Netz des NAS und sieht die echten Adressen der Geräte."
+                     : "Zu Hause gibt es die Profilauswahl, die Übernahme aus Emby und Jellyfin und keine Qualitätsgrenze für unterwegs.")
+            }
+        }
+    }
+
     /// Was ein Betreiber auf einen Blick wissen will, bevor es knallt: ob
     /// die Platte reicht und ob die Sicherung läuft.
     @ViewBuilder

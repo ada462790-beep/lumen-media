@@ -12,4 +12,6 @@
         <item quantity="one">%1$d film</item>
         <item quantity="other">%1$d films</item>
     </plurals>
+    <string name="kern_sort_anzahl_filme">Number of Films</string>
+    <string name="kern_nichts_passt">Nothing matches ‘%1$s’.</string>
 </resources>

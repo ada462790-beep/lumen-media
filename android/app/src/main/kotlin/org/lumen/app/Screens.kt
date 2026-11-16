@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -77,6 +78,8 @@ fun DetailScreen(
     onReihe: (String) -> Unit = {},
     // „Heruntergeladen" führt zur Liste der Downloads.
     onDownloads: () -> Unit = {},
+    // Bei einer Folge: der Name der Serie darüber führt zur Serie.
+    onSerie: (String) -> Unit = {},
 ) {
     var zurListe by remember(itemId) { mutableStateOf(false) }
     // Ob dieses Gerät die Datei direkt abspielt — für die Technik-Zeile.
@@ -167,12 +170,32 @@ fun DetailScreen(
 
         item {
             Column(Modifier.padding(16.dp)) {
+                // Eine Folge sagt, zu welcher Serie sie gehört — ein Tipp darauf
+                // führt zur Serie mit allen Staffeln.
+                if (item.kind == "episode") {
+                    val serie = d.seriesId ?: item.seriesId
+                    item.seriesTitle?.let { name ->
+                        Text(name + if (serie != null) "  ›" else "", color = Lumen.label2, fontSize = 15.sp,
+                             fontWeight = FontWeight.SemiBold,
+                             modifier = if (serie != null) Modifier.clickableRow { onSerie(serie) } else Modifier)
+                    }
+                    Titelseite.folgenKennung(item).takeIf { it.isNotBlank() }?.let {
+                        Text(it, color = Lumen.label2, fontSize = 13.sp)
+                    }
+                }
                 Text(item.title, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 item.originalTitle?.takeIf { it != item.title && it.isNotBlank() }?.let {
                     Text(it, color = Lumen.label2, fontSize = 14.sp)
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(Titelseite.metaZeile(item), color = Lumen.label2, fontSize = 14.sp)
+                // Die Wertungen gut sichtbar in einer eigenen Reihe, darunter
+                // die ruhige Eckdatenzeile — wie im Browser.
+                val wertungen = d.wertungen
+                if (wertungen.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    WertungenZeile(wertungen)
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(Titelseite.eckdaten(item), color = Lumen.label2, fontSize = 14.sp)
                 // Auflösung, HDR, Ton, Sprachen, Untertitel, direkt oder umgewandelt.
                 val technik = Technik.abzeichen(item, d.playable, direkt)
                 if (technik.isNotEmpty()) {
@@ -187,7 +210,9 @@ fun DetailScreen(
                         // Mehrere Fassungen: „Ansehen" startet die Standard-
                         // Fassung; eine andere wählt man im Player unter
                         // „Qualität" — wie im Browser.
-                        val mehr = if (fassungen.size > 1) " · " + txn(R.plurals.qualitaeten_anzahl, fassungen.size) else ""
+                        // „· 2 Sprachen" (deutsche und englische Datei), „· 2 Qualitäten"
+                        // oder „· 2 Fassungen" — je nachdem, worin sie sich unterscheiden.
+                        val mehr = Fassungen.hinweis(fassungen)?.let { " · $it" } ?: ""
                         PrimaryButton("▶  " + Titelseite.abspielText(item) + mehr) { onPlay(Abspielen(item)) }
                         if (Titelseite.hatStand(item)) {
                             QuietButton(tx(R.string.von_vorn)) { onPlay(Abspielen(item, ab = 0.0)) }
@@ -237,7 +262,7 @@ fun DetailScreen(
                     // Auf einen Chromecast schicken — nur, wenn einer da ist.
                     if (d.playable != null) CastKnopf(model)
                 }
-                hinweis?.let {
+                (hinweis ?: Titelseite.nichtAbspielbar(d))?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, color = Lumen.label2, fontSize = 13.sp)
                 }
@@ -273,14 +298,28 @@ fun DetailScreen(
         // ist, trägt den Haken.
         if (staffeln.isNotEmpty()) {
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp),
+                // Viele Staffeln (ab sieben): nur die Zahlen unter der
+                // Überschrift „Staffeln", „Specials" bleibt ausgeschrieben —
+                // wie im Browser. Die gewählte rückt ins Sichtfeld.
+                val kompakt = AmStueck.staffelnKompakt(staffeln)
+                val leiste = rememberLazyListState()
+                LaunchedEffect(staffel, staffeln.size) {
+                    val i = staffeln.indexOfFirst { it.id == staffel }
+                    if (i >= 0) leiste.animateScrollToItem(maxOf(0, i - 1))
+                }
+                if (kompakt) {
+                    Text(Texte.t(Tx.STAFFELN), fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                         modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+                }
+                LazyRow(state = leiste, contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)) {
                     items(staffeln, key = { it.id }) { st ->
                         FilterChip(
                             selected = staffel == st.id,
                             onClick = { if (staffel != st.id) { staffel = st.id; episodes = null } },
-                            label = { Text(AmStueck.staffelName(st)) },
+                            label = { Text(AmStueck.staffelKnopf(st, kompakt), maxLines = 1) },
+                            modifier = Modifier.semantics { contentDescription = AmStueck.staffelName(st) },
                             colors = FilterChipDefaults.filterChipColors(
                                 labelColor = Lumen.label2, selectedContainerColor = Lumen.fill,
                                 selectedLabelColor = Lumen.label))
@@ -291,7 +330,10 @@ fun DetailScreen(
             // Die gewählte Staffel auf einmal als gesehen markieren — oder,
             // wenn schon alles gesehen ist, wieder zurücknehmen.
             val gewaehlteStaffel = staffeln.firstOrNull { it.id == staffel }
-            val staffelNr = gewaehlteStaffel?.seasonNo ?: folgen?.firstOrNull()?.seasonNo
+            // Die Specials sind Staffel 0 (der Server lässt die 0 weg) — auch sie
+            // lassen sich auf einmal als gesehen markieren.
+            val staffelNr = gewaehlteStaffel?.let { if (AmStueck.istSpecials(it)) 0 else it.seasonNo }
+                ?: folgen?.firstOrNull()?.seasonNo
             if (!folgen.isNullOrEmpty() && staffelNr != null) {
                 val alleGesehen = folgen.all { it.finished }
                 item {
@@ -538,7 +580,9 @@ fun ProfileScreen(
     }
 
     fun pref(key: String, wert: String) {
-        model.send(onDone = { model.refreshMe() }) { it.updatePrefs(mapOf(key to wert)) }
+        // Die Tonsprache schreibt mit: Profilsprache oder Originalton (tonWahl).
+        val werte = if (key == Spuren.PREF_TON) Einstellungen.tonPrefs(wert) else mapOf(key to wert)
+        model.send(onDone = { model.refreshMe() }) { it.updatePrefs(werte) }
     }
 
     LazyColumn(contentPadding = PaddingValues(16.dp)) {
@@ -836,7 +880,8 @@ fun ProfileScreen(
             Spuren.PREF_TON -> Einstellungen.TON_WAHL
             else -> Einstellungen.UNTERTITEL_WAHL
         }
-        val aktuell = me.prefs[key]?.trim().orEmpty().ifEmpty { if (key == Spuren.PREF_UNTERTITEL) Spuren.AUS else "" }
+        val aktuell = if (key == Spuren.PREF_TON) Einstellungen.tonAktuell(me.prefs)
+            else me.prefs[key]?.trim().orEmpty().ifEmpty { if (key == Spuren.PREF_UNTERTITEL) Spuren.AUS else "" }
         AlertDialog(
             onDismissRequest = { sprachwahl = null },
             title = {

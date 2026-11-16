@@ -13,6 +13,7 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.lumen.core.ApiClient
+import org.lumen.core.bildSpeicherSchluessel
 
 /**
  * Der Bildlader für alle Poster, Standbilder und Profilbilder.
@@ -35,7 +36,25 @@ fun lumenBildlader(context: Context, client: () -> ApiClient?): ImageLoader =
                 .addInterceptor(SchluesselErneuern(client))
                 .build()
         }
+        .components { add(OhneSchluesselMerken()) }
         .build()
+
+/**
+ * Bilder unter ihrer Adresse ohne Medienschlüssel merken (Speicher und
+ * Platte) — der Schlüssel wechselt, das Bild nicht. Siehe [bildSpeicherSchluessel].
+ */
+private class OhneSchluesselMerken : coil.intercept.Interceptor {
+    override suspend fun intercept(chain: coil.intercept.Interceptor.Chain): coil.request.ImageResult {
+        val anfrage = chain.request
+        val adresse = anfrage.data as? String
+        if (adresse == null || "key=" !in adresse || anfrage.memoryCacheKey != null) return chain.proceed(anfrage)
+        val schluessel = bildSpeicherSchluessel(adresse)
+        return chain.proceed(anfrage.newBuilder()
+            .memoryCacheKey(schluessel)
+            .diskCacheKey(schluessel)
+            .build())
+    }
+}
 
 private class SchluesselErneuern(private val client: () -> ApiClient?) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {

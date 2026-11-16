@@ -28,6 +28,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,11 +73,23 @@ internal fun TvSuche(
         runCatching { feld.requestFocus() }
     }
 
+    // Das Feld hält seinen Text selbst (samt Cursor). Vorher lief jede
+    // Taste über das ganze Gerüst der App (der Text lag dort, damit er beim
+    // Zurückkommen bleibt) — das baute bei jedem Zeichen alles neu auf, und
+    // mit der Bildschirmtastatur gingen schnell getippte Zeichen verloren.
+    // Wie im Browser: Das Feld wird beim Tippen nicht neu gezeichnet, nur
+    // die Treffer wechseln. Nach oben gemeldet wird erst, wenn das Tippen ruht.
+    var feldWert by remember { mutableStateOf(TextFieldValue(eingabe, TextRange(eingabe.length))) }
+    val text = feldWert.text
+
     // Erst suchen, wenn das Tippen kurz ruht — sonst eine Anfrage je Taste.
-    LaunchedEffect(eingabe) {
-        val q = eingabe.trim()
-        if (q.isEmpty()) { ergebnis = null; sucht = false; return@LaunchedEffect }
+    // Eine neue Eingabe bricht die laufende Suche ab; eine ältere Antwort
+    // überschreibt nie die Treffer einer neueren.
+    LaunchedEffect(text) {
+        val q = text.trim()
+        if (q.isEmpty()) { ergebnis = null; sucht = false; onEingabe(text); return@LaunchedEffect }
         delay(300)
+        onEingabe(text)
         sucht = true
         try {
             ergebnis = withContext(Dispatchers.IO) { client.search(q) }
@@ -86,13 +100,13 @@ internal fun TvSuche(
         sucht = false
     }
 
-    val q = eingabe.trim()
+    val q = text.trim()
     LazyColumn(contentPadding = PaddingValues(start = 56.dp, end = 56.dp, top = 16.dp, bottom = 48.dp)) {
         item(key = "lumen:feld") {
             Column(Modifier.padding(bottom = 24.dp)) {
                 OutlinedTextField(
-                    value = eingabe,
-                    onValueChange = { onEingabe(it); gewuenscht = null },
+                    value = feldWert,
+                    onValueChange = { feldWert = it; gewuenscht = null },
                     singleLine = true,
                     placeholder = { Text(tx(R.string.titel_schauspieler_genre_jahr)) },
                     textStyle = TextStyle(fontSize = 22.sp),
@@ -214,7 +228,7 @@ internal fun TvSuche(
  * Verwaltung, und die gibt es nur im Browser.
  */
 @Composable
-internal fun TvWuensche(client: ApiClient) {
+internal fun TvWuensche(client: ApiClient, verwaltung: Boolean = false) {
     var wuensche by remember { mutableStateOf<List<Wish>?>(null) }
     var eingabe by remember { mutableStateOf("") }
     var hinweis by remember { mutableStateOf<String?>(null) }
@@ -275,12 +289,13 @@ internal fun TvWuensche(client: ApiClient) {
         when {
             liste == null -> item { TvLadeZeile() }
             liste.isEmpty() -> item { Text(tx(R.string.noch_keine_wuensche), color = Tv.label2, fontSize = 20.sp) }
-            else -> items(liste, key = { it.id }) { w -> TvWunschZeile(w) { weg = w } }
+            else -> items(liste, key = { it.id }) { w -> TvWunschZeile(w, verwaltung) { weg = w } }
         }
     }
 
     weg?.let { w ->
-        val austreten = w.wegArt == WunschWeg.AUSTRETEN
+        val art = w.wegArt(verwaltung) ?: WunschWeg.LOESCHEN
+        val austreten = art == WunschWeg.AUSTRETEN
         TvFrage(
             titel = tx(if (austreten) R.string.nicht_mehr_wuenschen_frage else R.string.wunsch_loeschen_frage),
             text = if (austreten) tx(R.string.wunsch_austreten_text, w.title) else tx(R.string.wunsch_loeschen_text, w.title),
@@ -291,7 +306,7 @@ internal fun TvWuensche(client: ApiClient) {
             hinweis = null
             scope.launch {
                 try {
-                    withContext(Dispatchers.IO) { client.wunschLoeschen(w.id) }
+                    withContext(Dispatchers.IO) { client.wunschWeg(w.id, art) }
                     fehler = null
                 } catch (e: LumenException) {
                     // 409 nicht_offen: Der Satz des Servers sagt, warum.
@@ -305,9 +320,10 @@ internal fun TvWuensche(client: ApiClient) {
 
 /** Ein Wunsch: Titel, von wem, rechts der Stand. Fokussierbar, damit sich die Liste blättern lässt. */
 @Composable
-private fun TvWunschZeile(w: Wish, onWeg: () -> Unit) {
+private fun TvWunschZeile(w: Wish, verwaltung: Boolean, onWeg: () -> Unit) {
     var fokussiert by remember { mutableStateOf(false) }
-    val art = w.wegArt
+    // Die Verwaltung löscht jeden Wunsch, wie im Browser.
+    val art = w.wegArt(verwaltung)
     Row(
         Modifier
             .widthIn(max = 980.dp)

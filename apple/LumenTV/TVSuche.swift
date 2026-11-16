@@ -36,7 +36,7 @@ struct TVSucheView: View {
                         .frame(maxWidth: 1200, alignment: .leading)
                 } else if let error {
                     Text(error).foregroundStyle(Theme.bad)
-                } else if let ergebnis, geladenFuer == sauber {
+                } else if let ergebnis, geladenFuer == sauber || !ergebnis.leer {
                     treffer(ergebnis)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 60)

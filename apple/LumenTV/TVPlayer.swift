@@ -497,7 +497,7 @@ struct TVUpNextCard: View {
                 .fill(Color(white: 0.11).opacity(0.92))
         )
         .task(id: item.id) {
-            bild = await session.client.artworkURL(itemId: item.id, kind: "frame")
+            bild = await session.client.artworkURL(itemId: item.id, kind: "frame", breite: Bildbreite.stufe(800))
         }
     }
 }

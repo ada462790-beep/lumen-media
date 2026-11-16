@@ -81,31 +81,60 @@ object Spuren {
      */
     data class Wahl(val ton: Int = -1, val untertitel: Int? = null)
 
+    /** Profil › Tonsprache: „profil" (Standard) oder „original" — wie im Browser. */
+    const val PREF_TON_WAHL = "tonWahl"
+    const val TON_ORIGINAL = "original"
+
     /**
-     * Die Vorbelegung aus den gemerkten Sprachen.
+     * Die Vorbelegung — dieselbe Regel wie im Browser (spurenVorbelegen):
      *
-     * Ton: die Spur in der gemerkten Sprache, sonst die Vorgabe. Untertitel:
-     * die gemerkte Sprache, dabei lieber die vollständige Spur als die
-     * erzwungene. Ist nichts gemerkt oder „aus", laufen nur die erzwungenen
-     * Untertitel zur Tonsprache mit.
+     * Ton: die gemerkte Sprache, wenn es sie gibt. Ohne gemerkte Sprache
+     * die Sprache des Profils ([eigen]) — oder, wer „Originalton" gewählt
+     * hat, die als Original markierte (sonst die erste) Spur. Gibt es
+     * nichts davon, bleibt die Vorgabe des Stroms.
+     *
+     * Untertitel:
+     *  - Läuft der Ton in einer anderen Sprache als das Profil, kommen
+     *    Untertitel in der Sprache des Profils, wenn es welche gibt — sonst
+     *    keine. Fremde Untertitel schaltet Lumen nie von selbst ein.
+     *  - Läuft er in der Sprache des Profils, gibt es Untertitel nur, wenn
+     *    jemand sie in genau dieser Sprache gewählt hat (etwa für
+     *    Hörgeschädigte).
+     *  - „Aus" bleibt aus. Erzwungene in der Tonsprache laufen immer mit.
+     *
+     * Vorher galt die zuletzt gewählte Sprache überall: Wer einmal
+     * englische Untertitel nahm, bekam sie bei jedem englischen Film.
      */
-    fun vorbelegen(tracks: List<Track>, prefs: Map<String, String>): Wahl {
+    fun vorbelegen(tracks: List<Track>, prefs: Map<String, String>,
+                   eigen: String = Texte.sprache.take(2).lowercase()): Wahl {
         val tonSpuren = ton(tracks)
         val textSpuren = text(tracks)
 
         var tonIndex = -1
-        prefs[PREF_TON]?.takeIf { it.isNotBlank() }?.let { sprache ->
-            tonSpuren.firstOrNull { it.language == sprache }?.let { tonIndex = it.index }
+        var tonWunsch = prefs[PREF_TON]?.trim()?.takeIf { it.isNotEmpty() }
+        if (tonWunsch == null && prefs[PREF_TON_WAHL] == TON_ORIGINAL) {
+            val original = Regex("""\boriginal|\bOV\b|\bO-?Ton\b""", RegexOption.IGNORE_CASE)
+            (tonSpuren.firstOrNull { original.containsMatchIn(it.title ?: "") } ?: tonSpuren.firstOrNull())
+                ?.let { tonIndex = it.index }
+        } else if (tonWunsch == null) {
+            tonWunsch = eigen
         }
+        tonWunsch?.let { w -> tonSpuren.firstOrNull { it.language == w }?.let { tonIndex = it.index } }
 
-        val gewuenscht = prefs[PREF_UNTERTITEL]
-        val untertitel: Int? = if (!gewuenscht.isNullOrBlank() && gewuenscht != AUS) {
-            (textSpuren.firstOrNull { it.language == gewuenscht && !it.forced }
-                ?: textSpuren.firstOrNull { it.language == gewuenscht })?.index
-        } else {
-            erzwungene(tracks, tonIndex)?.index
+        val aktuell = tonSpuren.firstOrNull { it.index == tonIndex } ?: tonSpuren.firstOrNull()
+        val tonSprache = aktuell?.language?.takeIf { it.isNotBlank() && it != "und" } ?: ""
+        fun finden(sprache: String): Track? =
+            textSpuren.firstOrNull { it.language == sprache && !it.forced }
+                ?: textSpuren.firstOrNull { it.language == sprache }
+
+        val gewaehlt = prefs[PREF_UNTERTITEL]?.trim().orEmpty()
+        val untertitel: Track? = when {
+            gewaehlt == AUS -> null
+            tonSprache.isNotEmpty() && tonSprache != eigen -> finden(eigen)
+            gewaehlt.isNotEmpty() && gewaehlt == tonSprache.ifEmpty { eigen } -> finden(gewaehlt)
+            else -> null
         }
-        return Wahl(tonIndex, untertitel)
+        return Wahl(tonIndex, untertitel?.index ?: erzwungene(tracks, tonIndex)?.index)
     }
 
     /**

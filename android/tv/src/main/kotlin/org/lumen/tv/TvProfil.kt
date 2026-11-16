@@ -301,7 +301,8 @@ internal fun TvProfil(
             Spuren.PREF_TON -> Einstellungen.TON_WAHL
             else -> Einstellungen.UNTERTITEL_WAHL
         }
-        val aktuell = prefs[key]?.trim().orEmpty().ifEmpty { if (key == Spuren.PREF_UNTERTITEL) Spuren.AUS else "" }
+        val aktuell = if (key == Spuren.PREF_TON) Einstellungen.tonAktuell(prefs)
+            else prefs[key]?.trim().orEmpty().ifEmpty { if (key == Spuren.PREF_UNTERTITEL) Spuren.AUS else "" }
         TvAuswahlDialog(
             titel = when (key) {
                 Sprachen.PREF -> Sprachwahl.titel(ctx)
@@ -309,7 +310,12 @@ internal fun TvProfil(
                 else -> tx(R.string.untertitel)
             },
             wahl = wahl, aktuell = aktuell,
-            onWahl = { wert -> sprachwahl = null; onPref(key, wert) },
+            // Die Tonsprache schreibt mit: Profilsprache oder Originalton (tonWahl).
+            onWahl = { wert ->
+                sprachwahl = null
+                if (key == Spuren.PREF_TON) Einstellungen.tonPrefs(wert).forEach { (k, w) -> onPref(k, w) }
+                else onPref(key, wert)
+            },
             onClose = { sprachwahl = null })
     }
 
