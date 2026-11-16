@@ -296,10 +296,6 @@
         <item quantity="one">%1$d Titel in deiner Mediathek</item>
         <item quantity="other">%1$d Titel in deiner Mediathek</item>
     </plurals>
-    <plurals name="qualitaeten_anzahl">
-        <item quantity="one">%1$d Qualität</item>
-        <item quantity="other">%1$d Qualitäten</item>
-    </plurals>
     <string name="nicht_mehr_wuenschen">Nicht mehr wünschen</string>
     <string name="nicht_mehr_wuenschen_frage">Nicht mehr wünschen?</string>
     <string name="wunsch_loeschen_frage">Wunsch löschen?</string>

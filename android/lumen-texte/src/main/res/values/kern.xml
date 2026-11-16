@@ -160,4 +160,27 @@
     <string name="kern_mbit_s">%1$s Mbit/s</string>
     <string name="kern_fassung_n">Fassung %1$s</string>
     <string name="kern_special">Special</string>
+    <string name="kern_staffel_folge_kurz">S%1$s F%2$s</string>
+    <string name="kern_wertung_von_zehn">Wertung: %1$s von 10</string>
+    <string name="kern_imdb_von_zehn">IMDb: %1$s von 10</string>
+    <string name="kern_imdb_von_zehn_stimmen">IMDb: %1$s von 10, %2$s Stimmen</string>
+    <string name="kern_tomaten_frisch">Rotten Tomatoes: %1$s %% (frisch)</string>
+    <string name="kern_tomaten_faul">Rotten Tomatoes: %1$s %% (faul)</string>
+    <string name="kern_staffeln">Staffeln</string>
+    <string name="kern_profilsprache">Profilsprache</string>
+    <string name="kern_originalton">Originalton</string>
+    <plurals name="kern_sprachen_anzahl">
+        <item quantity="one">%1$d Sprache</item>
+        <item quantity="other">%1$d Sprachen</item>
+    </plurals>
+    <plurals name="kern_qualitaeten_anzahl">
+        <item quantity="one">%1$d Qualität</item>
+        <item quantity="other">%1$d Qualitäten</item>
+    </plurals>
+    <plurals name="kern_fassungen_anzahl">
+        <item quantity="one">%1$d Fassung</item>
+        <item quantity="other">%1$d Fassungen</item>
+    </plurals>
+    <string name="kern_datei_defekt">defekt</string>
+    <string name="kern_datei_defekt_satz">Die Datei ist defekt und lässt sich nicht abspielen.</string>
 </resources>

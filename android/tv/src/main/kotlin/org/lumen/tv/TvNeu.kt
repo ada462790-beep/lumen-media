@@ -266,7 +266,9 @@ internal fun TvNeuigkeiten(
     }
 
     fun oeffnen(n: Neuigkeit) {
-        val id = n.itemId ?: return onHome()
+        // Ohne Titel führt ein Eintrag nirgends hin — vorher sprang OK
+        // zurück auf die Startseite. Wie im Browser.
+        val id = n.itemId ?: return
         scope.launch {
             try {
                 onOpen(withContext(Dispatchers.IO) { client.item(id) }.item)

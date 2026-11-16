@@ -53,7 +53,6 @@ fun NeuigkeitenScreen(
     model: LumenViewModel,
     onBack: () -> Unit,
     onOpen: (String) -> Unit,
-    onHome: () -> Unit,
 ) {
     var daten by remember { mutableStateOf<Neuigkeiten?>(null) }
     var loading by remember { mutableStateOf(true) }
@@ -91,15 +90,16 @@ fun NeuigkeitenScreen(
             }
             itemsIndexed(d.eintraege) { i, n ->
                 val offen = n.klappbar && auf == i
-                NeuigkeitZeile(n, d.istNeu(n), offen) {
-                    val id = n.itemId
-                    when {
-                        id != null -> onOpen(id)
-                        // „{n} neue Titel": aufklappen statt zur Startseite — wie im Browser.
-                        n.klappbar -> auf = if (offen) null else i
-                        else -> onHome()
-                    }
+                // Ein Eintrag ohne Titel und ohne Liste (etwa „Lumen wurde
+                // aktualisiert") führt nirgends hin — vorher sprang er auf die
+                // Startseite, als wäre man falsch abgebogen. Wie im Browser.
+                val ziel: (() -> Unit)? = when {
+                    n.itemId != null -> { { onOpen(n.itemId!!) } }
+                    // „{n} neue Titel": aufklappen statt zur Startseite — wie im Browser.
+                    n.klappbar -> { { auf = if (offen) null else i } }
+                    else -> null
                 }
+                NeuigkeitZeile(n, d.istNeu(n), offen, ziel)
                 if (offen) NeueTitel(model, n, onOpen)
             }
         }
@@ -123,12 +123,12 @@ private fun NeueTitel(model: LumenViewModel, n: Neuigkeit, onOpen: (String) -> U
 }
 
 @Composable
-private fun NeuigkeitZeile(n: Neuigkeit, neu: Boolean, offen: Boolean, onClick: () -> Unit) {
+private fun NeuigkeitZeile(n: Neuigkeit, neu: Boolean, offen: Boolean, onClick: (() -> Unit)?) {
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickableRow(onClick)
+            .then(if (onClick != null) Modifier.clickableRow(onClick) else Modifier)
             .padding(vertical = 10.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -159,7 +159,9 @@ private fun NeuigkeitZeile(n: Neuigkeit, neu: Boolean, offen: Boolean, onClick: 
                     .background(Color(0xFFFF453A)))
         }
         // Aufklappbar: der Pfeil zeigt nach unten, solange die Titel offen sind.
-        Text("›", color = Lumen.label3, fontSize = 20.sp,
-             modifier = if (n.klappbar) Modifier.rotate(if (offen) 270f else 90f) else Modifier)
+        if (onClick != null) {
+            Text("›", color = Lumen.label3, fontSize = 20.sp,
+                 modifier = if (n.klappbar) Modifier.rotate(if (offen) 270f else 90f) else Modifier)
+        }
     }
 }

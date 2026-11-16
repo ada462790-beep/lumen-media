@@ -231,7 +231,35 @@ data class Item(
     val laeuftNoch: Boolean? = null,
     // Das Herz: nur das eigene, wie die Merkliste.
     val favorite: Boolean = false,
+    // Bei Folgen: die Serie, zu der sie gehört (Kennung und Name) — damit
+    // eine Folge in „Weiterschauen" unter dem Namen der Serie steht und
+    // „Mehr Infos" zur Serie führt, wie im Browser.
+    val seriesId: String? = null,
+    val seriesTitle: String? = null,
+    // In „Weiterschauen": die Folge nach der zuletzt gesehenen, noch nicht angefangen.
+    val naechsteFolge: Boolean = false,
 ) {
+    /** Wohin „Mehr Infos" führt: bei einer Folge zur Serie, sonst zum Titel selbst. */
+    val seiteId: String get() = if (kind == "episode") seriesId?.takeIf { it.isNotBlank() } ?: id else id
+
+    /** Der Name auf einer Karte: bei einer Folge die Serie (wenn bekannt), sonst der Titel. */
+    val kartenTitel: String
+        get() = if (kind == "episode") seriesTitle?.takeIf { it.isNotBlank() } ?: title else title
+
+    /**
+     * Die Zeile unter dem Namen einer Folge auf einer Karte: „S1 · F3 · Titel"
+     * bzw. „Special · Titel" — null bei allem anderen. Ohne bekannte Serie
+     * steht der Titel schon oben, dann nur die Kennung.
+     */
+    val folgenUnterzeile: String?
+        get() {
+            if (kind != "episode") return null
+            val kennung = Titelseite.folgenKennungKurz(this)
+            val mitTitel = !seriesTitle.isNullOrBlank() && title.isNotBlank() && title != Texte.t(Tx.SPECIAL)
+            return listOf(kennung, if (mitTitel) title else "").filter { it.isNotBlank() }.joinToString(" · ")
+                .ifEmpty { null }
+        }
+
     /**
      * Ein Special ohne eigene Nummer („S08E00 - The Last Watch"): Der Server
      * zählt es ab 1000 in Staffel 0 (store.SpecialOhneNummer) — die Nummer
@@ -285,6 +313,14 @@ data class Item(
     /** Welches Bild als Poster taugt: das Poster, sonst das Standbild. */
     val posterKind: String
         get() = if (poster == null && frame != null) "frame" else "poster"
+
+    /** Die Adresse, die der Server für dieses Bild nennt (mit Stand ?v=) — oder null. */
+    fun bildPfad(kind: String): String? = when (kind) {
+        "poster" -> poster
+        "backdrop" -> backdrop
+        "frame" -> frame
+        else -> null
+    }
 
     /** Welches Bild in die Breite taugt: Hintergrund, Standbild, Poster. */
     val wideKind: String
@@ -349,6 +385,9 @@ data class Item(
             endYear = j["endYear"].int,
             laeuftNoch = j["laeuftNoch"].bool,
             favorite = j["favorite"].bool ?: false,
+            seriesId = j["seriesId"].text?.takeIf { it.isNotBlank() },
+            seriesTitle = j["seriesTitle"].text?.takeIf { it.isNotBlank() },
+            naechsteFolge = j["naechsteFolge"].bool ?: false,
         )
 
         /** „1 Std. 58 Min." oder „48 Min." */
@@ -526,7 +565,13 @@ data class ItemDetail(
     // Datei — nur, wenn es mehr als eine gibt. [intro] und [creditsMs]
     // gelten für die erste vorhandene Datei.
     val jeDatei: Map<String, VorspannDatei> = emptyMap(),
+    // Die Note stammt aus einer NFO ohne Quelle (bewertungQuelle „nfo"):
+    // dann neutral „★ 7,4" statt als IMDb — wie im Browser.
+    val bewertungNeutral: Boolean = false,
 ) {
+    /** Die Wertungen für die eigene Reihe unter dem Titel. */
+    val wertungen: List<Titelseite.Wertung> get() = Titelseite.wertungen(item, bewertungNeutral)
+
     /** Die Datei, die sich abspielen lässt — fehlende übersprungen. */
     // Was „Ansehen" spielt: die erste Fassung (Teil 1, vorhanden, nicht
     // defekt), sonst irgendeine abspielbare Datei — wie im Browser.
@@ -553,6 +598,7 @@ data class ItemDetail(
             similar = j["similar"].list.map { Item.from(it) },
             jeDatei = (j["jeDatei"] as? JsonValue.Obj)?.fields
                 ?.mapValues { (_, v) -> VorspannDatei.from(v) } ?: emptyMap(),
+            bewertungNeutral = j["bewertungQuelle"].text == "nfo",
         )
     }
 }
@@ -1234,12 +1280,20 @@ data class Wish(
         }
 
     /** Was sich mit dem Wunsch tun lässt: den eigenen offenen löschen, einen angeschlossenen verlassen. */
-    val wegArt: WunschWeg?
-        get() = when {
-            dabei -> WunschWeg.AUSTRETEN
-            mine && state == "open" -> WunschWeg.LOESCHEN
-            else -> null
-        }
+    val wegArt: WunschWeg? get() = wegArt(verwaltung = false)
+
+    /**
+     * Wie der Wunsch wegkommt — wie im Browser (wunschWegKnopf): Die
+     * Verwaltung löscht jeden (der Server prüft, ob er in ihrem Bereich
+     * liegt), wer sich nur angeschlossen hat, tritt aus, wer ihn hat,
+     * löscht den eigenen offenen.
+     */
+    fun wegArt(verwaltung: Boolean): WunschWeg? = when {
+        verwaltung && !dabei -> WunschWeg.VERWALTUNG
+        dabei -> WunschWeg.AUSTRETEN
+        mine && state == "open" -> WunschWeg.LOESCHEN
+        else -> null
+    }
 
     val stateLabel: String
         get() = when (state) {
@@ -1272,4 +1326,4 @@ data class Wish(
 }
 
 /** Löschen (eigener offener Wunsch) oder austreten (angeschlossen) — beides `DELETE /wishes/{id}`. */
-enum class WunschWeg { LOESCHEN, AUSTRETEN }
+enum class WunschWeg { LOESCHEN, AUSTRETEN, VERWALTUNG }

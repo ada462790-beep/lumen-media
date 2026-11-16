@@ -312,6 +312,7 @@ internal fun TvRaster(
             val s = withContext(Dispatchers.IO) {
                 client.seite(kind, genre, sort = wahl.sortierung.schluessel, buchstabe = buchstabe, dir = richtung)
             }
+            client.eigenenStandVergessen(s.items)
             seite = s
             zwischenspeicher?.put(cacheSchluessel, s)
             if (s.genres.isNotEmpty()) genres = s.genres
@@ -421,8 +422,10 @@ internal fun TvRaster(
                      color = Tv.label2, fontSize = 20.sp)
             }
         } else if (s != null) {
+            // Mit dem eigenen Stand der zuletzt geöffneten Titel: Haken und
+            // Merkliste stimmen gleich, auch wenn das Raster aus dem Speicher kommt.
             items(s.items, key = { it.id }) { t ->
-                TvCard(client, t, onFocus = {}, onClick = { onOpen(t) }, breite = RASTER_KARTE)
+                TvCard(client, client.mitEigenemStand(t), onFocus = {}, onClick = { onOpen(t) }, breite = RASTER_KARTE)
             }
             if (s.weiter) item(span = { GridItemSpan(maxLineSpan) }, key = "lumen:mehr") { TvLadeZeile() }
         }

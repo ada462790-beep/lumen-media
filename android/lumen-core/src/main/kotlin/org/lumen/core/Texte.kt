@@ -187,6 +187,17 @@ enum class Tx(val vorgabe: String) {
     MBIT_S("%1\$s Mbit/s"),
     FASSUNG_N("Fassung %1\$s"),
     SPECIAL("Special"),
+    STAFFEL_FOLGE_KURZ("S%1\$s F%2\$s"),
+    WERTUNG_VON_ZEHN("Wertung: %1\$s von 10"),
+    IMDB_VON_ZEHN("IMDb: %1\$s von 10"),
+    IMDB_VON_ZEHN_STIMMEN("IMDb: %1\$s von 10, %2\$s Stimmen"),
+    TOMATEN_FRISCH("Rotten Tomatoes: %1\$s %% (frisch)"),
+    TOMATEN_FAUL("Rotten Tomatoes: %1\$s %% (faul)"),
+    STAFFELN("Staffeln"),
+    PROFILSPRACHE("Profilsprache"),
+    ORIGINALTON("Originalton"),
+    DATEI_DEFEKT("defekt"),
+    DATEI_DEFEKT_SATZ("Die Datei ist defekt und lässt sich nicht abspielen."),
 }
 
 /** Sätze mit Mehrzahl: [eins] für genau eins, [mehr] sonst — wie `<plurals>` in Android. */
@@ -197,6 +208,9 @@ enum class TxN(val eins: String, val mehr: String) {
     TREFFER("%1\$d Treffer", "%1\$d Treffer"),
     FILME_ANZAHL("%1\$d Film", "%1\$d Filme"),
     REIHEN_ANZAHL("%1\$d Reihe", "%1\$d Reihen"),
+    SPRACHEN_ANZAHL("%1\$d Sprache", "%1\$d Sprachen"),
+    QUALITAETEN_ANZAHL("%1\$d Qualität", "%1\$d Qualitäten"),
+    FASSUNGEN_ANZAHL("%1\$d Fassung", "%1\$d Fassungen"),
 }
 
 /** Übersetzt Kennungen in die Sprache der Oberfläche — von der App gesetzt. */

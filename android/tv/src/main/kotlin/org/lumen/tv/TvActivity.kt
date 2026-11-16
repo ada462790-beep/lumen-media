@@ -94,6 +94,11 @@ class LumenTvApplication : Application(), coil.ImageLoaderFactory {
         // Zuerst die Sprache: alles danach, das Text braucht, soll ihn
         // schon in der richtigen bekommen.
         Sprachwahl.einrichten(this)
+        // Bilder in der Grösse, in der dieses Gerät sie zeigt (?w=): Kachel
+        // und längste Bildschirmseite — wie die Web-App mit srcset.
+        resources.displayMetrics.let { m ->
+            org.lumen.core.Bildgroesse.einrichten(220f * 1.08f, maxOf(m.widthPixels, m.heightPixels) / m.density, m.density)
+        }
         val sicher = sichereEinstellungen(this)
         speicherHinweis = sicher.hinweis
         val prefs = sicher.prefs
@@ -900,7 +905,7 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
                         onGelesen = { ungelesen = 0 },
                         onOpen = titelOeffnen,
                         onHome = { bereich = TvBereich.HOME })
-                    TvBereich.WUENSCHE -> TvWuensche(client)
+                    TvBereich.WUENSCHE -> TvWuensche(client, verwaltung = me.account.isAdmin)
                     TvBereich.PROFIL -> TvProfil(client, ich, prefs, info,
                         onPref = { k, w -> if (k == Sprachen.PREF) spracheSetzen(w) else prefSetzen(k, w) },
                         onIch = { ich = it },
@@ -964,7 +969,7 @@ private fun TvStartseite(
         geladen = true
         // Reihen sind eine Zugabe. Klappt das nicht — etwa bei einem
         // älteren Server —, bleibt die Startseite trotzdem stehen.
-        withContext(Dispatchers.IO) { oderNull { client.collections() } }?.let { reihen = it }
+        withContext(Dispatchers.IO) { oderNull { client.collectionsStartseite() } }?.let { reihen = it }
         if (neu) onGeladen(TvStartDaten(rows, reihen))
     }
 
@@ -1525,12 +1530,13 @@ internal fun TvCard(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text(item.title, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        // Eine Folge steht unter dem Namen ihrer Serie, darunter „S1 F3 · Titel" — wie im Browser.
+        Text(item.kartenTitel, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
              fontWeight = if (hervorgehoben) FontWeight.SemiBold else FontWeight.Normal)
         // „4 von 10 Folgen" unter einer angefangenen Serie, sonst Jahr und Wertung.
-        val zweite = unterzeile ?: item.serienStand ?: listOfNotNull(
+        val zweite = unterzeile ?: item.folgenUnterzeile ?: item.serienStand ?: listOfNotNull(
             item.jahresText,
-            item.imdbRating?.takeIf { it > 0 }?.let { "★ " + Titelseite.komma(it) },
+            Titelseite.kachelNote(item),
         ).joinToString(" · ")
         if (zweite.isNotEmpty()) {
             Text(zweite, color = Tv.label2, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

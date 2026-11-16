@@ -168,6 +168,17 @@ internal object KernUebersetzer : Uebersetzer {
         Tx.MBIT_S -> R.string.kern_mbit_s
         Tx.FASSUNG_N -> R.string.kern_fassung_n
         Tx.SPECIAL -> R.string.kern_special
+        Tx.STAFFEL_FOLGE_KURZ -> R.string.kern_staffel_folge_kurz
+        Tx.WERTUNG_VON_ZEHN -> R.string.kern_wertung_von_zehn
+        Tx.IMDB_VON_ZEHN -> R.string.kern_imdb_von_zehn
+        Tx.IMDB_VON_ZEHN_STIMMEN -> R.string.kern_imdb_von_zehn_stimmen
+        Tx.TOMATEN_FRISCH -> R.string.kern_tomaten_frisch
+        Tx.TOMATEN_FAUL -> R.string.kern_tomaten_faul
+        Tx.STAFFELN -> R.string.kern_staffeln
+        Tx.PROFILSPRACHE -> R.string.kern_profilsprache
+        Tx.ORIGINALTON -> R.string.kern_originalton
+        Tx.DATEI_DEFEKT -> R.string.kern_datei_defekt
+        Tx.DATEI_DEFEKT_SATZ -> R.string.kern_datei_defekt_satz
     }
 
     private fun id(k: TxN): Int = when (k) {
@@ -177,5 +188,8 @@ internal object KernUebersetzer : Uebersetzer {
         TxN.TREFFER -> R.plurals.kern_treffer
         TxN.FILME_ANZAHL -> R.plurals.kern_filme_anzahl
         TxN.REIHEN_ANZAHL -> R.plurals.kern_reihen_anzahl
+        TxN.SPRACHEN_ANZAHL -> R.plurals.kern_sprachen_anzahl
+        TxN.QUALITAETEN_ANZAHL -> R.plurals.kern_qualitaeten_anzahl
+        TxN.FASSUNGEN_ANZAHL -> R.plurals.kern_fassungen_anzahl
     }
 }

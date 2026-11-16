@@ -325,6 +325,9 @@ class ApiClient(
     }
 
     companion object {
+        /** So viele Filmreihen zeigt die Startseite — wie der Browser. */
+        const val STARTSEITE_REIHEN = 12
+
         /** Wie lange auf das Zustandekommen der Verbindung gewartet wird. */
         const val VERBINDUNGSFRIST = 8_000
 
@@ -880,7 +883,37 @@ class ApiClient(
     fun search(q: String, limit: Int = 60): Suchergebnis =
         Suchergebnis.from(getJson("/search", mapOf("q" to q.trim(), "limit" to limit.toString())))
 
-    fun item(id: String): ItemDetail = ItemDetail.from(getJson("/items/$id"))
+    fun item(id: String): ItemDetail = ItemDetail.from(getJson("/items/$id")).also { standMerken(it.item) }
+
+    /**
+     * Der eigene Stand (Haken, Merkliste, Herz, Fortschritt, Bewertung)
+     * zuletzt geöffneter Titel — je Anmeldung. Raster, die die App
+     * zwischenspeichert (damit Stelle und Nachgeladenes bleiben), zeigten
+     * nach „Als gesehen markieren" oder „Merken" auf der Titelseite den
+     * alten Haken, bis man neu lud. Jetzt legt [mitEigenemStand] den
+     * frischen Stand darüber — wie im Browser sofort.
+     */
+    private val eigenerStand = java.util.concurrent.ConcurrentHashMap<String, Item>()
+
+    private fun standSchluessel(id: String) = "${token.orEmpty().hashCode()}|$id"
+
+    private fun standMerken(item: Item) {
+        if (eigenerStand.size > 2_000) eigenerStand.clear()
+        eigenerStand[standSchluessel(item.id)] = item
+    }
+
+    /** [item] aus einem zwischengespeicherten Raster, mit dem zuletzt bekannten eigenen Stand. */
+    fun mitEigenemStand(item: Item): Item {
+        val neu = eigenerStand[standSchluessel(item.id)] ?: return item
+        return item.copy(progress = neu.progress, finished = neu.finished, myRating = neu.myRating,
+                         onList = neu.onList, resumeMs = neu.resumeMs, favorite = neu.favorite,
+                         gesehen = neu.gesehen, folgen = if (neu.folgen > 0) neu.folgen else item.folgen)
+    }
+
+    /** Frisch vom Server geholt: Diese Titel tragen schon den neuesten Stand. */
+    fun eigenenStandVergessen(items: List<Item>) {
+        items.forEach { eigenerStand.remove(standSchluessel(it.id)) }
+    }
 
     fun children(id: String): List<Item> =
         getJson("/items/$id/children").list.map { Item.from(it) }
@@ -888,6 +921,19 @@ class ApiClient(
     // ---------------------------------------------------------- Filmreihen
 
     fun collections(): List<Reihe> = getJson("/collections").list.map { Reihe.from(it) }
+
+    /**
+     * Die Filmreihen für die Startseite: höchstens [anzahl], und nur solche
+     * mit mindestens zwei sichtbaren Filmen (?limit= — der Server zählt nur
+     * die gezeigten; eine NFO-Reihe mit einem Film gehört auf die Seite
+     * Filmreihen, nicht in das Band der Startseite). Vorher kamen alle
+     * Reihen samt allen Filmen über die Leitung, bei jedem Öffnen. Ein
+     * älterer Server kennt limit nicht und schickt alles — darum wird hier
+     * noch einmal gefiltert und gekürzt.
+     */
+    fun collectionsStartseite(anzahl: Int = STARTSEITE_REIHEN): List<Reihe> =
+        getJson("/collections", mapOf("limit" to anzahl.toString(), "mindestens" to "2")).list.map { Reihe.from(it) }
+            .let { Reihen.fuerStartseite(it, anzahl) }
 
     fun collection(id: String): Reihe = Reihe.from(getJson("/collections/$id"))
 
@@ -1024,6 +1070,14 @@ class ApiClient(
      * antwortet der Server mit 409 `nicht_offen` und einem Satz dazu.
      */
     fun wunschLoeschen(id: String) { send("DELETE", "/wishes/${enc(id)}") }
+
+    /** Die Verwaltung löscht einen Wunsch aus ihrem Bereich (DELETE /admin/wishes/{id}). */
+    fun wunschLoeschenVerwaltung(id: String) { send("DELETE", "/admin/wishes/${enc(id)}") }
+
+    /** Löschen oder austreten, je nach [art] — siehe [Wish.wegArt]. */
+    fun wunschWeg(id: String, art: WunschWeg) {
+        if (art == WunschWeg.VERWALTUNG) wunschLoeschenVerwaltung(id) else wunschLoeschen(id)
+    }
 
     /**
      * Verwaltung: diese Fassung (Datei) für alle zum Standard des Titels
@@ -1242,9 +1296,13 @@ class ApiClient(
      * Bildlader holt über [nachAbgelaufenemSchluessel] einen und versucht
      * es noch einmal.
      */
-    fun artworkUrl(itemId: String, kind: String = "poster"): String? {
+    fun artworkUrl(itemId: String, kind: String = "poster", breite: Int? = null, stand: String? = null): String? {
         if (!isSignedIn) return null
-        val q = buildMap { bildSchluessel()?.let { put("key", it) } }
+        val q = buildMap {
+            bildSchluessel()?.let { put("key", it) }
+            Bildgroesse.breite(kind, breite)?.let { put("w", it.toString()) }
+            stand?.takeIf { it.isNotBlank() }?.let { put("v", it) }
+        }
         return url("/art/$itemId/$kind", q)
     }
 
@@ -1262,12 +1320,18 @@ class ApiClient(
      * vollständig und mit Medienschlüssel — etwa das Porträt einer Person
      * in der Suche.
      */
-    fun bildUrl(pfad: String?): String? {
+    fun bildUrl(pfad: String?, breite: Int? = null): String? {
         if (!isSignedIn) return null
         if (pfad.isNullOrBlank()) return null
-        val k = bildSchluessel() ?: return "$baseUrl$pfad"
+        val zusatz = buildList {
+            bildSchluessel()?.let { add("key=${enc(it)}") }
+            // Nur Bilder der Bilderroute kennen ?w= (Poster, Hintergründe, Besetzung).
+            val art = pfad.substringBefore('?').substringAfterLast('/')
+            if (pfad.startsWith("/api/v1/art/")) Bildgroesse.breite(art, breite)?.let { add("w=$it") }
+        }
+        if (zusatz.isEmpty()) return "$baseUrl$pfad"
         val trenner = if ('?' in pfad) '&' else '?'
-        return "$baseUrl$pfad${trenner}key=${enc(k)}"
+        return "$baseUrl$pfad$trenner" + zusatz.joinToString("&")
     }
 
     /** Das Foto einer Person — mit Medienschlüssel, nie mit dem Token. */
@@ -1277,28 +1341,42 @@ class ApiClient(
      * Das Bild einer Filmreihe: ihr eigenes Poster (oder mit [breit] ihr
      * Hintergrund), sonst das des ersten Films. Null, wenn es keines gibt.
      */
-    fun reiheBildUrl(reihe: Reihe, breit: Boolean = false): String? {
+    fun reiheBildUrl(reihe: Reihe, breit: Boolean = false,
+                     breite: Int? = if (breit) Bildgroesse.breitBildpunkte else Bildgroesse.posterBildpunkte): String? {
         val eigenes = if (breit) reihe.backdrop else reihe.poster
-        if (eigenes != null) return bildUrl(eigenes)
+        if (eigenes != null) return bildUrl(eigenes, breite)
         val erster = reihe.items.firstOrNull() ?: return null
-        return if (breit) wideUrl(erster) else posterUrl(erster)
+        return if (breit) wideUrl(erster, breite) else posterUrl(erster, breite)
     }
 
     /**
      * Das Bild einer Sammlung: ihr eigenes, sonst das Poster des ersten
      * Titels. Null, wenn es keines gibt.
      */
-    fun sammlungBildUrl(sammlung: Sammlung): String? {
-        if (sammlung.bild != null) return bildUrl(sammlung.bild)
+    fun sammlungBildUrl(sammlung: Sammlung, breite: Int? = Bildgroesse.posterBildpunkte): String? {
+        if (sammlung.bild != null) return bildUrl(sammlung.bild, breite)
         val erster = sammlung.items.firstOrNull() ?: return null
-        return posterUrl(erster)
+        return posterUrl(erster, breite)
     }
 
-    /** Das Bild hochkant: Poster, sonst ein Standbild aus dem Film. */
-    fun posterUrl(item: Item): String? = artworkUrl(item.id, item.posterKind)
+    /**
+     * Das Bild hochkant: Poster, sonst ein Standbild aus dem Film. [breite]
+     * in Bildpunkten, wie breit es gezeigt wird — der Server rechnet es
+     * dann auf die nächste Stufe herunter ([Bildgroesse]) statt ein Poster
+     * mit 2000 × 3000 Punkten zu schicken. Der Stand aus der Adresse des
+     * Servers (?v=) kommt mit: Ein neues Poster hat eine neue Adresse, das
+     * alte darf so lange im Speicher bleiben.
+     */
+    fun posterUrl(item: Item, breite: Int? = Bildgroesse.posterBildpunkte): String? {
+        val kind = item.posterKind
+        return artworkUrl(item.id, kind, breite, Bildgroesse.stand(item.bildPfad(kind)))
+    }
 
     /** Das Bild in die Breite: Hintergrund, Standbild, zur Not das Poster. */
-    fun wideUrl(item: Item): String? = artworkUrl(item.id, item.wideKind)
+    fun wideUrl(item: Item, breite: Int? = Bildgroesse.breitBildpunkte): String? {
+        val kind = item.wideKind
+        return artworkUrl(item.id, kind, breite, Bildgroesse.stand(item.bildPfad(kind)))
+    }
 }
 
 // ---------------------------------------------------------------- Fehler

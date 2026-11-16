@@ -52,6 +52,7 @@ fun main(args: Array<String>) {
     modellTests()
     reihenListenTests()
     amStueckTests()
+    abgleichWebTests()
     spurenTests()
     markenTests()
     sucheTests()
@@ -446,12 +447,15 @@ private fun spurenTests() {
 
     // Vorbelegen nach den gemerkten Sprachen.
     val ohne = Spuren.vorbelegen(spuren, emptyMap())
-    gleich("ohne Prefs: Ton bleibt Vorgabe", -1, ohne.ton)
+    gleich("ohne Prefs: Ton in der Sprache des Profils", 1, ohne.ton)
     gleich("ohne Prefs: erzwungene Untertitel zur ersten Tonspur", 4, ohne.untertitel)
 
     val englisch = Spuren.vorbelegen(spuren, mapOf("tonSprache" to "en"))
     gleich("gemerkte Tonsprache", 2, englisch.ton)
-    pruefe("zu Englisch keine erzwungenen Untertitel", englisch.untertitel == null)
+    // Englischer Ton, deutsches Profil: deutsche Untertitel (die vollständigen), wie im Browser.
+    gleich("fremder Ton: Untertitel in der Profilsprache", 3, englisch.untertitel)
+    pruefe("fremder Ton, Untertitel aus: keine",
+        Spuren.vorbelegen(spuren, mapOf("tonSprache" to "en", "untertitel" to "aus")).untertitel == null)
 
     val mitText = Spuren.vorbelegen(spuren, mapOf("tonSprache" to "en", "untertitel" to "de"))
     gleich("gemerkte Untertitel: lieber die vollständige Spur", 3, mitText.untertitel)
@@ -461,8 +465,23 @@ private fun spurenTests() {
     // trotzdem, denn ohne sie versteht man die fremdsprachigen Stellen nicht.
     gleich("Untertitel aus: erzwungene laufen trotzdem mit", 4,
         Spuren.vorbelegen(spuren, mapOf("untertitel" to "aus")).untertitel)
-    pruefe("unbekannte Sprache gemerkt: nichts",
-        Spuren.vorbelegen(spuren, mapOf("tonSprache" to "ja", "untertitel" to "ja")).untertitel == null)
+    gleich("unbekannte Sprache gemerkt: nur die erzwungenen zur Tonsprache", 4,
+        Spuren.vorbelegen(spuren, mapOf("tonSprache" to "ja", "untertitel" to "ja")).untertitel)
+    // Fremde Untertitel nie von selbst: Ton Deutsch, Profil Deutsch, gemerkt Englisch.
+    gleich("Ton in Profilsprache: gemerkte fremde Untertitel nicht", 4,
+        Spuren.vorbelegen(spuren, mapOf("untertitel" to "en")).untertitel)
+    // Profil auf Englisch: englischer Ton, keine Untertitel (es gibt keine erzwungenen auf Englisch).
+    val englischesProfil = Spuren.vorbelegen(spuren, emptyMap(), eigen = "en")
+    gleich("englisches Profil: englischer Ton", 2, englischesProfil.ton)
+    pruefe("englisches Profil: keine Untertitel", englischesProfil.untertitel == null)
+    // „Originalton": die als Original markierte Spur, sonst die erste.
+    val mitOriginal = listOf(spur(1, "audio", "de"), spur(2, "audio", "en", titel = "Original"))
+    gleich("Originalton: markierte Spur", 2,
+        Spuren.vorbelegen(mitOriginal, mapOf("tonWahl" to "original")).ton)
+    gleich("Originalton ohne Markierung: erste Spur", 1,
+        Spuren.vorbelegen(spuren, mapOf("tonWahl" to "original")).ton)
+    gleich("gemerkte Tonsprache schlägt Originalton", 2,
+        Spuren.vorbelegen(spuren, mapOf("tonWahl" to "original", "tonSprache" to "en")).ton)
     gleich("unbekannte Tonsprache: Vorgabe", -1,
         Spuren.vorbelegen(spuren, mapOf("tonSprache" to "ja")).ton)
     pruefe("Bild-Untertitel werden nie vorbelegt",
@@ -1462,7 +1481,15 @@ private fun einstellungenTests() {
     pruefe("Vorspann ist voreingestellt aus", !Einstellungen.vorspann(leer))
     pruefe("Bewertungen bleiben voreingestellt privat", !Einstellungen.bewertungenTeilen(leer))
     pruefe("Autoplay aus", !Einstellungen.autoplay(mapOf("autoplay" to "0")))
-    gleich("Ton ohne Wahl", "Wie in der Datei", Einstellungen.tonText(leer))
+    gleich("Ton ohne Wahl", "Profilsprache", Einstellungen.tonText(leer))
+    gleich("Originalton gewählt", "Originalton", Einstellungen.tonText(mapOf("tonWahl" to "original")))
+    gleich("Originalton schreibt tonWahl und löscht die Sprache",
+        mapOf("tonSprache" to "", "tonWahl" to "original"), Einstellungen.tonPrefs("original"))
+    gleich("Profilsprache schreibt tonWahl profil",
+        mapOf("tonSprache" to "", "tonWahl" to "profil"), Einstellungen.tonPrefs(""))
+    gleich("eine Sprache schreibt nur die Sprache", mapOf("tonSprache" to "en"), Einstellungen.tonPrefs("en"))
+    gleich("Originalton ist gewählt", "original", Einstellungen.tonAktuell(mapOf("tonWahl" to "original")))
+    gleich("gemerkte Sprache ist gewählt", "fr", Einstellungen.tonAktuell(mapOf("tonWahl" to "original", "tonSprache" to "fr")))
     gleich("Ton Deutsch", "Deutsch", Einstellungen.tonText(mapOf("tonSprache" to "de")))
     gleich("Untertitel aus", "Aus", Einstellungen.untertitelText(mapOf("untertitel" to "aus")))
     gleich("Untertitel Englisch", "Englisch", Einstellungen.untertitelText(mapOf("untertitel" to "en")))
@@ -1478,7 +1505,8 @@ private fun einstellungenTests() {
         Track(2, "audio", null, "de", null, 6, false, false, false, false),
         Track(3, "subtitle", null, "en", null, 0, false, false, false, false))
     gleich("gemerkter Ton gilt", 2, Spuren.vorbelegen(spuren, mapOf("tonSprache" to "de")).ton)
-    gleich("gemerkte Untertitel gelten", 3, Spuren.vorbelegen(spuren, mapOf("untertitel" to "en")).untertitel)
+    gleich("gemerkte Untertitel in der Tonsprache gelten", 3,
+        Spuren.vorbelegen(spuren, mapOf("untertitel" to "en"), eigen = "en").untertitel)
 
     val besitzer = Account.from(Json.parse("""{"id":"a","name":"Y","isOwner":true}"""))
     gleich("Rolle Besitzer", "Besitzer dieses Servers", Einstellungen.rolle(besitzer))
@@ -2720,4 +2748,84 @@ fun spracheTests() {
         Texte.uebersetzer = null
         Texte.sprache = vorher
     }
+}
+
+
+/** Was die Web-App schon konnte und die Apps jetzt ebenso (Abgleich Android ↔ Web). */
+private fun abgleichWebTests() {
+    // Wertungen: genau eine Nachkommastelle, Tomate nach dem echten Prozentwert.
+    val film = titel("""{"id":"m","kind":"movie","title":"M","imdbRating":6.799,"imdbVotes":12345,
+        "rottenTomatoes":59,"tmdbRating":71}""")
+    val w = Titelseite.wertungen(film)
+    gleich("drei Wertungen", listOf(Titelseite.WertungArt.IMDB, Titelseite.WertungArt.TOMATE_FAUL, Titelseite.WertungArt.TMDB),
+        w.map { it.art })
+    gleich("IMDb mit einer Nachkommastelle", "6,8", w[0].wert)
+    gleich("IMDb-Stimmen", "12’345", w[0].zusatz)
+    gleich("59 % ist faul", "Rotten Tomatoes: 59 % (faul)", w[1].beschreibung)
+    gleich("60 % ist frisch", Titelseite.WertungArt.TOMATE_FRISCH,
+        Titelseite.wertungen(titel("""{"id":"m","title":"M","rottenTomatoes":60}""")).single().art)
+    gleich("NFO-Note ohne Quelle: neutral", Titelseite.WertungArt.NOTE, Titelseite.wertungen(film, neutral = true).first().art)
+    gleich("6.75 rundet wie der Browser auf", "6,8", Titelseite.komma(6.75))
+    gleich("Kachel: ★ mit einer Stelle", "★ 6,8", Titelseite.kachelNote(film))
+    pruefe("Eckdaten ohne Wertungen", !Titelseite.eckdaten(film).contains("IMDb"))
+    gleich("Detail: bewertungQuelle nfo heisst neutral", Titelseite.WertungArt.NOTE,
+        ItemDetail.from(Json.parse("""{"item":{"id":"m","title":"M","imdbRating":7.4},"bewertungQuelle":"nfo"}""")).wertungen.first().art)
+
+    // Folgen in „Weiterschauen": unter dem Namen der Serie, Mehr Infos führt zur Serie.
+    val folge = titel("""{"id":"e","kind":"episode","title":"Pilot","seasonNo":1,"episodeNo":3,
+        "seriesId":"s","seriesTitle":"Serie X","naechsteFolge":true}""")
+    gleich("Karte zeigt die Serie", "Serie X", folge.kartenTitel)
+    gleich("darunter Kennung und Titel", "S1 F3 · Pilot", folge.folgenUnterzeile)
+    gleich("Mehr Infos führt zur Serie", "s", folge.seiteId)
+    pruefe("nächste Folge erkannt", folge.naechsteFolge)
+    gleich("Film bleibt bei sich", "m", film.seiteId)
+    pruefe("Film hat keine Folgenzeile", film.folgenUnterzeile == null)
+
+    // Staffeln: „Staffel 3" statt des TMDb-Titels, viele Staffeln kompakt.
+    gleich("Staffelname aus der Nummer", "Staffel 3",
+        AmStueck.staffelName(titel("""{"id":"s3","title":"Season 3","seasonNo":3}""")))
+    val viele = (0..8).map { titel("""{"id":"st$it","title":"S","seasonNo":$it}""") }
+    pruefe("acht reguläre Staffeln: kompakt", AmStueck.staffelnKompakt(viele))
+    pruefe("drei Staffeln: nicht kompakt", !AmStueck.staffelnKompakt(viele.take(4)))
+    gleich("kompakt: nur die Zahl", "5", AmStueck.staffelKnopf(viele[5], true))
+    gleich("kompakt: Specials bleiben ausgeschrieben", "Specials", AmStueck.staffelKnopf(viele[0], true))
+
+    // Fassungen: deutsche und englische Datei heissen „2 Sprachen".
+    fun datei(id: String, h: Int, sprache: String, container: String = "mkv") = MediaFile.from(Json.parse(
+        """{"id":"$id","partNo":1,"height":$h,"container":"$container",
+            "tracks":[{"index":1,"kind":"audio","language":"$sprache"}]}"""))
+    gleich("nur die Sprache anders", "2 Sprachen", Fassungen.hinweis(listOf(datei("a", 1080, "de"), datei("b", 1080, "en"))))
+    gleich("nur die Auflösung anders", "2 Qualitäten", Fassungen.hinweis(listOf(datei("a", 1080, "de"), datei("b", 480, "de"))))
+    gleich("beides anders", "2 Fassungen", Fassungen.hinweis(listOf(datei("a", 1080, "de"), datei("b", 480, "en"))))
+    pruefe("eine Fassung: kein Hinweis", Fassungen.hinweis(listOf(datei("a", 1080, "de"))) == null)
+    gleich("Breitformat 1920 × 800 ist 1080p", "1080p", Fassungen.aufloesung(800, 1920))
+
+    // Bilder in passender Grösse und mit Stand.
+    gleich("Poster auf die nächste Stufe", 500, Bildgroesse.breite("poster", 412))
+    gleich("über der grössten Stufe: die grösste", 1920, Bildgroesse.breite("backdrop", 2400))
+    pruefe("Logos nie verkleinert", Bildgroesse.breite("logo", 300) == null)
+    pruefe("Standbilder nicht", Bildgroesse.breite("frame", 300) == null)
+    pruefe("ohne Angabe kein w", Bildgroesse.breite("poster", null) == null)
+    gleich("Stand aus der Adresse", "abc_1", Bildgroesse.stand("/api/v1/art/it_1/poster?v=abc_1"))
+    pruefe("ohne Stand nichts", Bildgroesse.stand("/api/v1/art/it_1/poster") == null)
+    gleich("Speicherschlüssel ohne Medienschlüssel", "http://x/api/v1/art/a/poster?v=1&w=500",
+        bildSpeicherSchluessel("http://x/api/v1/art/a/poster?key=geheim&v=1&w=500"))
+    gleich("nur der Schlüssel: ohne Fragezeichen", "http://x/api/v1/art/a/poster",
+        bildSpeicherSchluessel("http://x/api/v1/art/a/poster?key=geheim"))
+    gleich("Bildpfad des Posters", "/api/v1/art/m/poster?v=9",
+        titel("""{"id":"m","title":"M","poster":"/api/v1/art/m/poster?v=9"}""").bildPfad("poster"))
+
+    // Filmreihen auf der Startseite: erst ab zwei Filmen, höchstens zwölf.
+    fun reihe(id: String, n: Int) = Reihe.from(Json.parse("""{"id":"$id","name":"R","source":"nfo","anzahl":$n,"items":[]}"""))
+    val reihen = listOf(reihe("a", 1), reihe("b", 2)) + (1..20).map { reihe("c$it", 3) }
+    val start = Reihen.fuerStartseite(reihen, 12)
+    pruefe("Reihe mit einem Film nicht auf der Startseite", start.none { it.id == "a" })
+    gleich("höchstens zwölf", 12, start.size)
+
+    // Wünsche: die Verwaltung löscht jeden.
+    val fremd = Wish.from(Json.parse("""{"id":"w","title":"T","state":"done","by":"Kim"}"""))
+    pruefe("fremder erledigter Wunsch: sonst nicht löschbar", fremd.wegArt == null)
+    gleich("die Verwaltung löscht ihn", WunschWeg.VERWALTUNG, fremd.wegArt(verwaltung = true))
+    val dabei = Wish.from(Json.parse("""{"id":"w","title":"T","state":"open","by":"Kim","dabei":true}"""))
+    gleich("angeschlossen: austreten, auch für die Verwaltung", WunschWeg.AUSTRETEN, dabei.wegArt(verwaltung = true))
 }
