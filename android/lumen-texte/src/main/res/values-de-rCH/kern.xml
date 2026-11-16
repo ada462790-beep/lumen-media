@@ -184,4 +184,9 @@
     </plurals>
     <string name="kern_datei_defekt">defekt</string>
     <string name="kern_datei_defekt_satz">Die Datei ist defekt und lässt sich nicht abspielen.</string>
+    <string name="kern_reihen_durchsuchen">Filmreihen durchsuchen</string>
+    <string name="kern_sort_name">A–Z</string>
+    <string name="kern_sort_zuletzt_neu">Zuletzt hinzugefügt</string>
+    <string name="kern_sort_anzahl_filme">Anzahl Filme</string>
+    <string name="kern_nichts_passt">Nichts passt zu „%1$s“.</string>
 </resources>

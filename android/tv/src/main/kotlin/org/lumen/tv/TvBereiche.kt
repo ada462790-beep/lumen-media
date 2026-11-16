@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -625,6 +626,8 @@ internal fun TvFilmreihen(client: ApiClient, onSammlung: (Sammlung) -> Unit = {}
     var reihen by remember { mutableStateOf<List<Reihe>?>(null) }
     var sammlungen by remember { mutableStateOf<List<Sammlung>>(emptyList()) }
     var fehler by remember { mutableStateOf<String?>(null) }
+    // Sortieren wie im Browser: A–Z, zuletzt hinzugefügt, Anzahl Filme.
+    var sortierung by rememberSaveable { mutableStateOf(ReihenSortierung.NAME) }
 
     LaunchedEffect(Unit) {
         try {
@@ -645,6 +648,14 @@ internal fun TvFilmreihen(client: ApiClient, onSammlung: (Sammlung) -> Unit = {}
                 TvKopf(tx(R.string.filmreihen), if (r.isNullOrEmpty()) null
                     else tx(R.string.reihen_zeile, Texte.n(TxN.REIHEN_ANZAHL, r.size)))
                 fehler?.let { Text(it, color = Tv.bad, fontSize = 17.sp) }
+                if ((r?.size ?: 0) >= 2) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ReihenSortierung.entries.forEach { art ->
+                            TvWahlPille(art.text, sortierung == art) { sortierung = art }
+                        }
+                    }
+                }
             }
         }
         val r = reihen
@@ -654,7 +665,7 @@ internal fun TvFilmreihen(client: ApiClient, onSammlung: (Sammlung) -> Unit = {}
                 Text(tx(R.string.noch_keine_reihen_lumen_erkennt),
                      color = Tv.label2, fontSize = 20.sp)
             }
-            r != null -> items(r, key = { it.id }) { reihe ->
+            r != null -> items(ReihenAuswahl.auswahl(r, "", sortierung), key = { it.id }) { reihe ->
                 TvKachel(client.reiheBildUrl(reihe), reihe.name, reihe.anzahlText,
                          breite = RASTER_KARTE) { onOpen(reihe) }
             }

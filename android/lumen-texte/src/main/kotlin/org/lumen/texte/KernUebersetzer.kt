@@ -177,6 +177,11 @@ internal object KernUebersetzer : Uebersetzer {
         Tx.STAFFELN -> R.string.kern_staffeln
         Tx.PROFILSPRACHE -> R.string.kern_profilsprache
         Tx.ORIGINALTON -> R.string.kern_originalton
+        Tx.REIHEN_DURCHSUCHEN -> R.string.kern_reihen_durchsuchen
+        Tx.SORT_NAME -> R.string.kern_sort_name
+        Tx.SORT_ZULETZT_NEU -> R.string.kern_sort_zuletzt_neu
+        Tx.SORT_ANZAHL_FILME -> R.string.kern_sort_anzahl_filme
+        Tx.NICHTS_PASST -> R.string.kern_nichts_passt
         Tx.DATEI_DEFEKT -> R.string.kern_datei_defekt
         Tx.DATEI_DEFEKT_SATZ -> R.string.kern_datei_defekt_satz
     }

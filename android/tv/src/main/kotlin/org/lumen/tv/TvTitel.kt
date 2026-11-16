@@ -378,7 +378,9 @@ internal fun TvTitel(
                         }
                         val f = folgen
                         // Die gewählte Staffel auf einmal — oder zurück, wenn alles gesehen ist.
-                        val staffelNr = staffeln.firstOrNull { it.id == staffel }?.seasonNo ?: f?.firstOrNull()?.seasonNo
+                        // Die Specials sind Staffel 0 (der Server lässt die 0 weg).
+                        val staffelNr = staffeln.firstOrNull { it.id == staffel }
+                            ?.let { if (AmStueck.istSpecials(it)) 0 else it.seasonNo } ?: f?.firstOrNull()?.seasonNo
                         if (!f.isNullOrEmpty() && staffelNr != null) {
                             val alle = f.all { it.finished }
                             Row(verticalAlignment = Alignment.CenterVertically,

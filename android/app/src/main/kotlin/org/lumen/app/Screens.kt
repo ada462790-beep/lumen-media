@@ -330,7 +330,10 @@ fun DetailScreen(
             // Die gewählte Staffel auf einmal als gesehen markieren — oder,
             // wenn schon alles gesehen ist, wieder zurücknehmen.
             val gewaehlteStaffel = staffeln.firstOrNull { it.id == staffel }
-            val staffelNr = gewaehlteStaffel?.seasonNo ?: folgen?.firstOrNull()?.seasonNo
+            // Die Specials sind Staffel 0 (der Server lässt die 0 weg) — auch sie
+            // lassen sich auf einmal als gesehen markieren.
+            val staffelNr = gewaehlteStaffel?.let { if (AmStueck.istSpecials(it)) 0 else it.seasonNo }
+                ?: folgen?.firstOrNull()?.seasonNo
             if (!folgen.isNullOrEmpty() && staffelNr != null) {
                 val alleGesehen = folgen.all { it.finished }
                 item {

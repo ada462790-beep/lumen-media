@@ -2822,6 +2822,17 @@ private fun abgleichWebTests() {
     pruefe("Reihe mit einem Film nicht auf der Startseite", start.none { it.id == "a" })
     gleich("höchstens zwölf", 12, start.size)
 
+    // Seite Filmreihen: suchen (auch in den Titeln, ohne Akzente) und sortieren.
+    fun r2(id: String, name: String, n: Int, neu: Long, titel: String = "x") = Reihe.from(Json.parse(
+        """{"id":"$id","name":"$name","source":"tmdb","anzahl":$n,"zuletztNeu":$neu,
+            "items":[{"id":"i$id","title":"$titel"}]}"""))
+    val alle = listOf(r2("m", "Matrix", 4, 10, "Matrix Reloaded"), r2("a", "Alien", 6, 30), r2("z", "Zorro", 2, 20, "Café"))
+    gleich("A–Z", listOf("a", "m", "z"), ReihenAuswahl.auswahl(alle, "", ReihenSortierung.NAME).map { it.id })
+    gleich("zuletzt hinzugefügt", listOf("a", "z", "m"), ReihenAuswahl.auswahl(alle, "", ReihenSortierung.NEU).map { it.id })
+    gleich("Anzahl", listOf("a", "m", "z"), ReihenAuswahl.auswahl(alle, "", ReihenSortierung.ANZAHL).map { it.id })
+    gleich("Titel darin zählen", listOf("m"), ReihenAuswahl.auswahl(alle, "reloaded", ReihenSortierung.NAME).map { it.id })
+    gleich("ohne Akzente", listOf("z"), ReihenAuswahl.auswahl(alle, "cafe", ReihenSortierung.NAME).map { it.id })
+
     // Wünsche: die Verwaltung löscht jeden.
     val fremd = Wish.from(Json.parse("""{"id":"w","title":"T","state":"done","by":"Kim"}"""))
     pruefe("fremder erledigter Wunsch: sonst nicht löschbar", fremd.wegArt == null)

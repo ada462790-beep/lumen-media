@@ -830,6 +830,8 @@ data class Reihe(
     // null; dann steht das Poster des ersten Films für die Reihe.
     val poster: String? = null,
     val backdrop: String? = null,
+    // Wann zuletzt ein Film dazukam (Unix-Sekunden) — für „Zuletzt hinzugefügt".
+    val zuletztNeu: Long = 0,
 ) {
     /** „1 Film" oder „3 Filme" */
     val anzahlText: String get() = Texte.n(TxN.FILME_ANZAHL, anzahl)
@@ -872,6 +874,7 @@ data class Reihe(
             items = j["items"].list.map { Item.from(it) },
             poster = j["poster"].text?.takeIf { it.isNotBlank() },
             backdrop = j["backdrop"].text?.takeIf { it.isNotBlank() },
+            zuletztNeu = j["zuletztNeu"].long ?: 0,
         )
     }
 }

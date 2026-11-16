@@ -197,6 +197,11 @@ enum class Tx(val vorgabe: String) {
     PROFILSPRACHE("Profilsprache"),
     ORIGINALTON("Originalton"),
     DATEI_DEFEKT("defekt"),
+    REIHEN_DURCHSUCHEN("Filmreihen durchsuchen"),
+    SORT_NAME("A–Z"),
+    SORT_ZULETZT_NEU("Zuletzt hinzugefügt"),
+    SORT_ANZAHL_FILME("Anzahl Filme"),
+    NICHTS_PASST("Nichts passt zu „%1\$s“."),
     DATEI_DEFEKT_SATZ("Die Datei ist defekt und lässt sich nicht abspielen."),
 }
 

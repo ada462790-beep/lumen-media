@@ -183,4 +183,9 @@
     </plurals>
     <string name="kern_datei_defekt">damaged</string>
     <string name="kern_datei_defekt_satz">The file is damaged and can’t be played.</string>
+    <string name="kern_reihen_durchsuchen">Search Collections</string>
+    <string name="kern_sort_name">A–Z</string>
+    <string name="kern_sort_zuletzt_neu">Recently Added</string>
+    <string name="kern_sort_anzahl_filme">Number of Movies</string>
+    <string name="kern_nichts_passt">Nothing matches “%1$s”.</string>
 </resources>
