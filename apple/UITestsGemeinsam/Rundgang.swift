@@ -88,10 +88,10 @@ class Rundgang: XCTestCase {
     /// Alle Elemente, deren Beschriftung oder Kennung zum Muster passt
     /// (regulärer Ausdruck über den ganzen Text, ohne Gross/klein).
     func alle(_ muster: String, in wurzel: XCUIElement? = nil) -> XCUIElementQuery {
-        // Am Mac steht der Text einer Seitenleisten-Zeile im Wert, nicht in
-        // der Beschriftung.
-        let p = NSPredicate(format: "label MATCHES[c] %@ OR identifier MATCHES[c] %@ OR title MATCHES[c] %@ OR value MATCHES[c] %@",
-                            muster, muster, muster, muster)
+        // Nicht über `value`: am Mac liess das die Abfrage in eine Zeitüberschreitung
+        // laufen (die Bedienungshilfen der App hingen danach).
+        let p = NSPredicate(format: "label MATCHES[c] %@ OR identifier MATCHES[c] %@ OR title MATCHES[c] %@",
+                            muster, muster, muster)
         return (wurzel ?? app).descendants(matching: .any).matching(p)
     }
 
@@ -165,7 +165,11 @@ class Rundgang: XCTestCase {
         #elseif os(macOS)
         app.typeKey("[", modifierFlags: .command)
         #else
-        let knopf = app.navigationBars.buttons.element(boundBy: 0)
+        // Der Zurück-Knopf — am iPad ist der erste Knopf der Leiste der für
+        // die Seitenleiste.
+        let knopf = app.navigationBars.buttons.matching(NSPredicate(
+            format: "identifier == 'BackButton' OR label MATCHES[c] %@",
+            "^(Zurück|Back|Filme|Serien|Startseite|Suchen|Ich|Filmreihen|Movies|Shows|Home|Search)$")).firstMatch
         if sichtbar(knopf) {
             knopf.tap()
         } else {
