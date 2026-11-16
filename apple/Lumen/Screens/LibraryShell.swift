@@ -67,6 +67,19 @@ struct LibraryShell: View {
             }
         }
 
+        /// Die Ziele im Menü „Gehe zu" des Macs (⌘1 …).
+        static func ausMenue(_ name: String) -> Tab? {
+            switch name {
+            case "home": .home
+            case "movies": .movies
+            case "series": .series
+            case "watchlist": .watchlist
+            case "collections": .collections
+            case "search": .search
+            default: nil
+            }
+        }
+
         /// Die fünf Reiter des iPhones.
         static let telefon: [Tab] = [.home, .movies, .series, .search, .ich]
         /// Die Seitenleiste von iPad und Mac, oberer Teil.
@@ -122,6 +135,19 @@ struct LibraryShell: View {
         #if os(macOS)
         // ⌘F aus dem Menü: zur Suche.
         .onReceive(NotificationCenter.default.publisher(for: .lumenSuchen)) { _ in tab = .search }
+        // ⌘1 … ⌘6 aus dem Menü „Gehe zu".
+        .onReceive(NotificationCenter.default.publisher(for: .lumenGeheZu)) { n in
+            if let ziel = n.object as? String, let neu = Tab.ausMenue(ziel) { tab = neu }
+        }
+        // Ein Player-Fenster ging zu: „Weiterschauen", Haken und Merkliste
+        // überall neu — nicht erst beim nächsten Öffnen.
+        .onReceive(NotificationCenter.default.publisher(for: .lumenPlayerZu)) { _ in
+            session.standGeaendert()
+        }
+        #else
+        .onChange(of: abspielstart == nil) { _, zu in
+            if zu { session.standGeaendert() }
+        }
         #endif
     }
 
@@ -229,6 +255,8 @@ struct LibraryShell: View {
 // MARK: - Startseite
 
 struct HomeView: View {
+    /// So viele Filmreihen zeigt die Startseite — wie im Browser.
+    static let reihenAnzahl = 12
     @Environment(Session.self) private var session
     @State private var rows: [HomeRow] = []
     @State private var reihen: [Reihe] = []
@@ -270,6 +298,9 @@ struct HomeView: View {
         #endif
         .task { await load() }
         .refreshable { await load() }
+        // „Weiterschauen", Haken und Merkliste nach jeder Änderung sofort
+        // stimmen lassen — auch wenn die Startseite gerade nicht vorn ist.
+        .onChange(of: session.standAenderung) { Task { await load() } }
     }
 
     /// Was ein Admin tun kann, hängt vom Gerät ab: am Mac gibt es die
@@ -288,12 +319,17 @@ struct HomeView: View {
         error = nil
         // Alle Reihen so, wie der Server sie schickt — keine fest
         // verdrahteten Schlüssel. Neue Reihen erscheinen ohne neue App.
-        do { rows = try await session.client.home().rows.filter { !$0.items.isEmpty } }
+        // Startseite und Filmreihen gleichzeitig. Die Reihe „Filmreihen"
+        // braucht nur zwölf Reihen mit mindestens zwei Filmen (?limit=12) —
+        // die Seite „Filmreihen" zeigt alle.
+        let client = session.client
+        async let filmreihen = try? client.collections(limit: Self.reihenAnzahl)
+        do { rows = try await client.home().rows.filter { !$0.items.isEmpty } }
         catch {
             if APIClient.istAbbruch(error) { return }
             self.error = Session.text(error)
         }
-        reihen = (try? await session.client.collections()) ?? []
+        reihen = await filmreihen ?? []
         loading = false
         // Den Zähler der Neuigkeiten nebenbei auffrischen, wie im Browser —
         // sonst bliebe der Punkt bis zur nächsten Anmeldung alt.
@@ -359,16 +395,14 @@ struct HeroBanner: View {
         }
         #endif
         .task {
-            url = await session.client.artworkURL(for: item, wide: true)
+            url = await session.client.artworkURL(for: item, wide: true, breite: Bildbreite.kopf)
         }
     }
 
     /// „2019 · 1 Std. 58 Min. · Drama · Mystery · ★ 7,8" — wie im Browser.
     private var heroZeile: String {
         var teile = [item.subtitleLine]
-        if let r = item.imdbRating, r > 0 {
-            teile.append("★ " + r.formatted(.number.precision(.fractionLength(1)).locale(.lumen)))
-        }
+        if let note = Wertungen.kurz(item) { teile.append(note) }
         return teile.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
@@ -502,7 +536,8 @@ struct PosterCard: View {
         .frame(width: width, alignment: .leading)
         .accessibilityLabel(zugaenglich)
         .task {
-            url = await session.client.artworkURL(for: item, wide: wide)
+            url = await session.client.artworkURL(for: item, wide: wide,
+                                                  breite: wide ? Bildbreite.breiteKarte : Bildbreite.karte)
         }
     }
 
@@ -522,9 +557,7 @@ struct PosterCard: View {
         if let kurz = item.folgenKurz { return kurz }
         var parts: [String] = []
         if let jahr = item.jahresText { parts.append(jahr) }
-        if let rating = item.imdbRating, rating > 0 {
-            parts.append("★ " + rating.formatted(.number.precision(.fractionLength(1)).locale(.lumen)))
-        }
+        if let note = Wertungen.kurz(item) { parts.append(note) }
         return parts.joined(separator: " · ")
     }
 }
@@ -760,6 +793,8 @@ struct WatchlistView: View {
         .navigationTitle(liste == "gesehen" ? "Gesehen" : "Merkliste")
         .task(id: liste) { await load() }
         .refreshable { await load() }
+        // Gemerkt oder gesehen auf einer Titelseite: sofort hier.
+        .onChange(of: session.standAenderung) { Task { await load() } }
     }
 
     /// Der Server liefert nur die eigene Liste — auch die Titel, die weit
@@ -827,6 +862,7 @@ struct FavoritenView: View {
         // oder weggefallen sein.
         .onAppear { if geladen { Task { await load() } } }
         .refreshable { await load() }
+        .onChange(of: session.standAenderung) { Task { await load() } }
     }
 
     private func load() async {
@@ -860,8 +896,11 @@ struct Chip: View {
                 .foregroundStyle(selected ? Theme.label : Theme.label2)
                 .padding(.horizontal, 14).padding(.vertical, 7)
                 .background(Capsule().fill(selected ? Theme.fill : .clear))
+                .overlay(Capsule().strokeBorder(selected ? Color.clear : Theme.hairline, lineWidth: 1))
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

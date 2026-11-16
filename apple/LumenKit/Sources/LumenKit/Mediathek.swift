@@ -357,6 +357,12 @@ public enum Sprachwahl {
 
     public static let prefTon = "tonSprache"
     public static let prefUntertitel = "untertitel"
+    /// „original": ohne gemerkte Sprache die als Original markierte (sonst
+    /// die erste) Tonspur; sonst die Sprache des Profils. Wie im Browser
+    /// (Profil › Wiedergabe › Tonsprache).
+    public static let prefTonWahl = "tonWahl"
+    /// Der Wert in der Auswahl „Ton", der für „Originalton" steht.
+    public static let original = "original" // sprache: fest
 
     /// Die häufigsten zuerst, der Rest nach dem Namen.
     public static var sprachen: [Wahl] {
@@ -366,20 +372,87 @@ public enum Sprachwahl {
         return (vorn + rest).map { Wahl(wert: $0, name: Spuren.sprachName($0)) }
     }
 
-    /// Leer heisst: die erste Tonspur, so wie die Datei sie mitbringt.
-    public static var ton: [Wahl] { [Wahl(wert: "", name: String(localized: "Wie in der Datei", bundle: .lumenKit, locale: .lumen))] + sprachen }
+    /// Leer heisst: in der Sprache des Profils, wenn es sie gibt;
+    /// „original": der Originalton. Sonst eine feste Sprache.
+    public static var ton: [Wahl] {
+        [Wahl(wert: "", name: String(localized: "Profilsprache", bundle: .lumenKit, locale: .lumen)),
+         Wahl(wert: original, name: String(localized: "Originalton", bundle: .lumenKit, locale: .lumen))] + sprachen
+    }
+
+    /// Was in der Auswahl „Ton" gewählt ist: eine gemerkte Sprache, sonst
+    /// „original" oder leer (Profilsprache).
+    public static func tonWert(_ prefs: [String: String]) -> String {
+        if let s = prefs[prefTon], !s.isEmpty { return s }
+        return prefs[prefTonWahl] == original ? original : ""
+    }
+
+    /// Was beim Server landet, wenn jemand „Ton" wählt. „Originalton" und
+    /// „Profilsprache" setzen die gemerkte Sprache zurück — wie im Browser.
+    public static func tonSetzen(_ wert: String) -> [String: String] {
+        if wert == original { return [prefTonWahl: original, prefTon: ""] }
+        return [prefTonWahl: "profil", prefTon: wert]
+    }
 
     /// „aus" heisst aus — erzwungene Untertitel laufen trotzdem mit.
     public static var untertitel: [Wahl] { [Wahl(wert: "aus", name: String(localized: "Aus", bundle: .lumenKit, locale: .lumen))] + sprachen }
 
     public static func tonName(_ wert: String?) -> String {
-        guard let wert, !wert.isEmpty else { return String(localized: "Wie in der Datei", bundle: .lumenKit, locale: .lumen) }
+        guard let wert, !wert.isEmpty else { return String(localized: "Profilsprache", bundle: .lumenKit, locale: .lumen) }
+        if wert == original { return String(localized: "Originalton", bundle: .lumenKit, locale: .lumen) }
         return Spuren.sprachName(wert)
     }
 
     public static func untertitelName(_ wert: String?) -> String {
         guard let wert, !wert.isEmpty, wert != "aus" else { return String(localized: "Aus", bundle: .lumenKit, locale: .lumen) }
         return Spuren.sprachName(wert)
+    }
+}
+
+// MARK: - Staffel-Leiste
+
+/// Wie die Staffeln einer Serie zur Wahl stehen — dieselben Stufen wie im
+/// Browser (app.js: staffelLeiste): wenige als Kapseln „Staffel 1",
+/// ab sieben nur die Zahlen unter der Überschrift „Staffeln" (Specials
+/// bleibt ein eigener Knopf), ab sechzehn eine Auswahl. Specials sind
+/// Staffel 0 — auch eine Staffel ohne Nummer (season_no NULL) zählt dazu.
+public enum Staffelleiste {
+    public enum Art: Equatable, Sendable {
+        case kapseln, zahlen, auswahl
+    }
+
+    public static let zahlenAb = 7
+    public static let auswahlAb = 16
+
+    public static func istSpecial(_ staffel: Item) -> Bool { (staffel.seasonNo ?? 0) == 0 }
+
+    /// Die Darstellung nach der Zahl der regulären Staffeln.
+    public static func art(_ staffeln: [Item]) -> Art {
+        let n = staffeln.filter { !istSpecial($0) }.count
+        if n >= auswahlAb { return .auswahl }
+        if n >= zahlenAb { return .zahlen }
+        return .kapseln
+    }
+
+    /// Der volle Name: „Specials", „Staffel 3" — oder der Titel, wenn die
+    /// Staffel keine Nummer hat.
+    public static func name(_ staffel: Item) -> String {
+        if istSpecial(staffel) { return String(localized: "Specials", bundle: .lumenKit, locale: .lumen) }
+        if let n = staffel.seasonNo, n > 0 { return String(localized: "Staffel \(n)", bundle: .lumenKit, locale: .lumen) }
+        return staffel.title
+    }
+
+    /// Was auf dem Knopf steht: bei vielen Staffeln nur die Zahl, sonst
+    /// der Titel der Staffel wie der Server ihn nennt (sonst `name`).
+    public static func knopf(_ staffel: Item, art: Art) -> String {
+        if istSpecial(staffel) { return name(staffel) }
+        if art != .kapseln, let n = staffel.seasonNo, n > 0 { return String(n) }
+        return staffel.title.isEmpty ? name(staffel) : staffel.title
+    }
+
+    /// „12 Staffeln" — ohne die Specials.
+    public static func anzahl(_ staffeln: [Item]) -> String {
+        let n = staffeln.filter { !istSpecial($0) }.count
+        return String(localized: "\(n) Staffeln", bundle: .lumenKit, locale: .lumen)
     }
 }
 

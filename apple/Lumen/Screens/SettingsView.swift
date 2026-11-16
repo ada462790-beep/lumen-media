@@ -78,7 +78,11 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("Ton", selection: sprache(Sprachwahl.prefTon, leer: "")) {
+                // „Profilsprache" (Standard) oder „Originalton" — wie im
+                // Browser; eine feste Sprache geht vor.
+                Picker("Ton", selection: Binding(
+                    get: { Sprachwahl.tonWert(prefs) },
+                    set: { neu in Task { await session.prefsSetzen(Sprachwahl.tonSetzen(neu)) } })) {
                     ForEach(Sprachwahl.ton) { w in Text(w.name).tag(w.wert) }
                 }
                 Picker("Untertitel", selection: sprache(Sprachwahl.prefUntertitel, leer: "aus")) {

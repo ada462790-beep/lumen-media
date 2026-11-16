@@ -670,8 +670,9 @@ final class SpurenTests: XCTestCase {
         XCTAssertEqual(file.textspuren.map(\.index), [2], "PGS lässt sich nicht als Text zeigen")
     }
 
-    /// Vorbelegung nach den gemerkten Sprachen — und erzwungene Untertitel
-    /// in der Tonsprache, wenn niemand Untertitel will.
+    /// Vorbelegung wie im Browser (spurenVorbelegen): Ton in der gemerkten
+    /// Sprache, sonst in der des Profils; Untertitel in der Sprache des
+    /// Profils, wenn der Ton fremd ist; erzwungene in der Tonsprache.
     func testVorbelegung() throws {
         let ton = [try spur(#"{"index":1,"kind":"audio","language":"en"}"#),
                    try spur(#"{"index":2,"kind":"audio","language":"de"}"#)]
@@ -680,31 +681,64 @@ final class SpurenTests: XCTestCase {
                     try spur(#"{"index":5,"kind":"subtitle","language":"en"}"#)]
 
         // „Aus" heisst: keine vollen Untertitel. Erzwungene in der Tonsprache
-        // laufen trotzdem mit — dafür sind sie da (fremdsprachige Sätze
-        // im Film). So macht es auch der Browser.
-        let deutsch = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "de", "untertitel": "aus"])
+        // laufen trotzdem mit — dafür sind sie da.
+        let deutsch = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "de", "untertitel": "aus"], eigen: "de-CH")
         XCTAssertEqual(deutsch.ton, 2)
         XCTAssertEqual(deutsch.untertitel, 3)
 
-        // Englischer Ton, keine Wahl bei den Untertiteln: die erzwungenen
-        // laufen nicht mit, denn sie sind deutsch — nicht die Tonsprache.
-        let englisch = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "en"])
+        // Englischer Ton, deutsches Profil: deutsche Untertitel (die vollen).
+        let englisch = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "en"], eigen: "de-CH")
         XCTAssertEqual(englisch.ton, 1)
-        XCTAssertNil(englisch.untertitel)
+        XCTAssertEqual(englisch.untertitel, 4)
+
+        // Englischer Ton, englisches Profil, keine Wahl: keine Untertitel —
+        // auch nicht die gemerkten deutschen von einem anderen Film.
+        let englischEn = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "en", "untertitel": "de"], eigen: "en-US")
+        XCTAssertEqual(englischEn.ton, 1)
+        XCTAssertNil(englischEn.untertitel)
 
         // Deutscher Ton ohne Untertitelwunsch: die erzwungenen deutschen laufen mit.
-        let erzwungen = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "de"])
+        let erzwungen = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "de"], eigen: "de-CH")
         XCTAssertEqual(erzwungen.untertitel, 3)
 
-        // Untertitel gewünscht: die volle Spur, nicht die erzwungene.
-        let voll = Spuren.vorbelegung(ton: ton, text: text, prefs: ["untertitel": "de"])
-        XCTAssertNil(voll.ton, "keine Tonsprache gemerkt: es bleibt bei der ersten")
+        // Keine Tonsprache gemerkt: die des Profils. Untertitel in genau
+        // dieser Sprache gewünscht: die volle Spur, nicht die erzwungene.
+        let voll = Spuren.vorbelegung(ton: ton, text: text, prefs: ["untertitel": "de"], eigen: "de-CH")
+        XCTAssertEqual(voll.ton, 2)
         XCTAssertEqual(voll.untertitel, 4)
 
-        // Eine Sprache, die es nicht gibt, ändert nichts.
-        let fremd = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "ja", "untertitel": "ja"])
+        // Eine gemerkte Sprache, die es nicht gibt: es bleibt die erste
+        // Spur (englisch) — und dazu Untertitel in der Sprache des Profils.
+        let fremd = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "ja", "untertitel": "ja"], eigen: "de-CH")
         XCTAssertNil(fremd.ton)
-        XCTAssertNil(fremd.untertitel)
+        XCTAssertEqual(fremd.untertitel, 4)
+
+        // Keine Untertitel in der Datei: nichts geht kaputt.
+        let leer = Spuren.vorbelegung(ton: ton, text: [], prefs: [:], eigen: "fr-FR")
+        XCTAssertNil(leer.ton)
+        XCTAssertNil(leer.untertitel)
+        let nichts = Spuren.vorbelegung(ton: [], text: [], prefs: ["untertitel": "de"], eigen: "de-CH")
+        XCTAssertNil(nichts.ton)
+        XCTAssertNil(nichts.untertitel)
+    }
+
+    /// „Originalton": ohne gemerkte Sprache die als Original markierte Spur.
+    func testVorbelegungOriginalton() throws {
+        let ton = [try spur(#"{"index":1,"kind":"audio","language":"de","title":"Deutsch"}"#),
+                   try spur(#"{"index":2,"kind":"audio","language":"en","title":"English (Original)"}"#)]
+        let text = [try spur(#"{"index":4,"kind":"subtitle","language":"de"}"#)]
+        let r = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonWahl": "original"], eigen: "de-CH")
+        XCTAssertEqual(r.ton, 2)
+        XCTAssertEqual(r.untertitel, 4, "Originalton englisch, Profil deutsch: deutsche Untertitel")
+        // Eine gemerkte Sprache geht vor.
+        XCTAssertEqual(Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonWahl": "original", "tonSprache": "de"], eigen: "de-CH").ton, 1)
+        XCTAssertTrue(Spuren.istOriginal(ton[1]))
+        XCTAssertFalse(Spuren.istOriginal(ton[0]))
+        XCTAssertEqual(Sprachwahl.tonWert(["tonWahl": "original"]), Sprachwahl.original)
+        XCTAssertEqual(Sprachwahl.tonWert(["tonWahl": "original", "tonSprache": "en"]), "en")
+        XCTAssertEqual(Sprachwahl.tonWert([:]), "")
+        XCTAssertEqual(Sprachwahl.tonSetzen(Sprachwahl.original), ["tonWahl": "original", "tonSprache": ""])
+        XCTAssertEqual(Sprachwahl.tonSetzen("fr"), ["tonWahl": "profil", "tonSprache": "fr"])
     }
 
     /// WebVTT lesen: Kopf, Kennungen, Einstellungen, Tags, Windows-Zeilen.

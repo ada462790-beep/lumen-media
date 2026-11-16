@@ -100,7 +100,7 @@ struct CollectionCard: View {
         }
         .frame(width: Theme.posterWidth, alignment: .leading)
         .task(id: reihe.id) {
-            url = await session.client.reiheBildURL(reihe)
+            url = await session.client.reiheBildURL(reihe, breite: Bildbreite.karte)
         }
     }
 }

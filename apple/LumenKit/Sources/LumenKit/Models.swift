@@ -177,6 +177,10 @@ public struct Medienschluessel: Codable, Sendable {
     public let key: String
     public let gueltigBis: Date?
     public let gueltigSek: Int
+    /// Der Bildschlüssel: nur für Bilder, eine Woche lang derselbe. Ein
+    /// älterer Server schickt ihn nicht.
+    public let bildKey: String?
+    public let bildGueltigSek: Int?
 }
 
 // MARK: - Mediathek
@@ -219,13 +223,13 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
 
     // Was dem angemeldeten Profil gehört. Der Server schickt das nur an
     // dieses eine Profil — niemand sonst sieht es, auch der Besitzer nicht.
-    public let progress: Double?     // Prozent
-    public let finished: Bool?
-    public let myRating: Int?
-    public let onList: Bool?
+    public var progress: Double?     // Prozent
+    public var finished: Bool?
+    public var myRating: Int?
+    public var onList: Bool?
     /// Das Herz. Fehlt bei Go, wenn es nicht gesetzt ist.
-    public let favorite: Bool?
-    public let resumeMs: Int64?
+    public var favorite: Bool?
+    public var resumeMs: Int64?
 
     public let poster: String?       // Pfad auf dem Server, ohne Token
     public let backdrop: String?
@@ -254,12 +258,6 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public let kanaele: Int?
 
     public var isSeen: Bool { finished == true }
-
-    /// „🍅 93 % Rotten Tomatoes" — ab 60 % gilt ein Titel als frisch.
-    public var tomatenText: String? {
-        guard let p = rottenTomatoes else { return nil }
-        return (p >= 60 ? "🍅" : "🟢") + " " + String(localized: "\(p) % Rotten Tomatoes", bundle: .lumenKit, locale: .lumen)
-    }
 
     /// Ein Special ohne eigene Nummer („S08E00 - The Last Watch"): Der
     /// Server zählt es ab 1000 in Staffel 0 — die Nummer ist selbst
@@ -302,12 +300,6 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
         }
         let n: Int = episodeNo ?? 0
         return String(localized: "Folge \(n): \(title)", bundle: .lumenKit, locale: .lumen)
-    }
-
-    /// „TMDb 75 %" — neben IMDb und Rotten Tomatoes, wie im Browser.
-    public var tmdbText: String? {
-        guard let p = tmdbRating, p > 0 else { return nil }
-        return String(localized: "TMDb \(p) %", bundle: .lumenKit, locale: .lumen)
     }
 
     /// Das Abzeichen links oben: „Neu", „Neue Folge", „3 neue Folgen".
@@ -363,6 +355,22 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
         // Ein Halbgeviertstrich, kein Bindestrich: so schreibt man Spannen.
         if let endYear, endYear > 0, endYear != year { return "\(year)–\(endYear)" }
         return String(year)
+    }
+
+    /// Der Stand eines Bildes (`?v=` in der Adresse, die der Server am
+    /// Titel schickt): „poster", „backdrop" oder „frame". nil ohne Stand.
+    public func bildStand(_ art: String) -> String? {
+        let pfad: String?
+        switch art {
+        case "poster": pfad = poster
+        case "backdrop": pfad = backdrop
+        case "frame": pfad = frame
+        default: pfad = nil
+        }
+        guard let pfad, let teile = URLComponents(string: pfad),
+              let v = teile.queryItems?.first(where: { $0.name == "v" })?.value, !v.isEmpty
+        else { return nil }
+        return v
     }
 
     public var percent: Double { progress ?? 0 }
@@ -555,7 +563,7 @@ public struct SharedRating: Codable, Hashable, Sendable {
 }
 
 public struct ItemDetail: Codable, Sendable {
-    public let item: Item
+    public var item: Item
     public let files: [MediaFile]
     public let sharedRatings: [SharedRating]?
     public let seasons: [Item]?
@@ -576,6 +584,16 @@ public struct ItemDetail: Codable, Sendable {
     /// Datei — nur, wenn es mehr als eine gibt. `intro` und `creditsMs`
     /// oben gelten für die erste vorhandene Datei.
     public let jeDatei: [String: VorspannDatei]?
+    /// Links auf die Seite des Titels bei IMDb und TMDb — für die Wertungen.
+    public let links: [TitelLink]?
+    /// „nfo": Die Note stammt aus einer NFO ohne Quelle; sie steht dann
+    /// neutral da, ohne IMDb-Schriftzug (`Wertungen.liste`).
+    public let bewertungQuelle: String?
+
+    /// Die Wertungen unter dem Titel, wie im Browser.
+    public var wertungen: [Wertung] {
+        Wertungen.liste(item, links: links, neutral: bewertungQuelle == "nfo")
+    }
 
     /// Die Datei, die „Ansehen" spielt: die erste Fassung (Teil 1,
     /// vorhanden, nicht defekt), sonst irgendeine abspielbare — wie im Browser.

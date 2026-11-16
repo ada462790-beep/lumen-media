@@ -104,7 +104,7 @@ struct PlaylistRow: View {
         .padding(.vertical, 2)
         .task(id: liste.vorschau?.first?.id) {
             guard let first = liste.vorschau?.first else { url = nil; return }
-            url = await session.client.artworkURL(for: first)
+            url = await session.client.artworkURL(for: first, breite: Bildbreite.karte)
         }
     }
 
@@ -383,7 +383,7 @@ struct PlaylistItemRow: View {
             }
         }
         .padding(.vertical, 2)
-        .task(id: item.id) { url = await session.client.artworkURL(for: item) }
+        .task(id: item.id) { url = await session.client.artworkURL(for: item, breite: Bildbreite.karte) }
     }
 }
 

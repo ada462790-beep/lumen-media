@@ -32,6 +32,8 @@ struct AdminWuenscheView: View {
     @State private var wuensche: [Wish] = []
     @State private var loading = true
     @State private var error: String?
+    /// Entfernen nur nach einer Rückfrage — wie im Browser.
+    @State private var weg: Wish?
 
     var body: some View {
         List {
@@ -54,6 +56,22 @@ struct AdminWuenscheView: View {
         }
         .navigationTitle("Wünsche")
         .task { await load() }
+        .confirmationDialog("Wunsch entfernen?", isPresented: Binding(
+            get: { weg != nil }, set: { if !$0 { weg = nil } }), titleVisibility: .visible, presenting: weg) { w in
+            Button("Entfernen", role: .destructive) { Task { await entfernen(w) } }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { w in
+            Text("„\(w.title)“ verschwindet für alle, die ihn sich gewünscht haben.")
+        }
+    }
+
+    private func entfernen(_ w: Wish) async {
+        do {
+            try await session.verwaltet { try await session.client.adminWunschLoeschen(w.id) }
+        } catch {
+            self.error = Session.text(error)
+        }
+        await load()
     }
 
     @ViewBuilder
@@ -85,6 +103,14 @@ struct AdminWuenscheView: View {
             if w.state != "done" { knopf(w, "done", String(localized: "Erfüllt", bundle: .lumen, locale: .lumen)) }
             if w.state != "declined" && w.state != "done" { knopf(w, "declined", String(localized: "Ablehnen", bundle: .lumen, locale: .lumen)) }
             if w.state == "done" || w.state == "declined" { knopf(w, "open", String(localized: "Wieder offen", bundle: .lumen, locale: .lumen)) }
+            Button {
+                weg = w
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Theme.bad)
+            .help("Wunsch entfernen")
         }
         .padding(.vertical, 4)
     }

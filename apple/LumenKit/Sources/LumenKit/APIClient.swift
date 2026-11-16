@@ -35,6 +35,15 @@ public actor APIClient {
     /// ihn bei jeder Benutzung (bis zu 48 Stunden) — hier steht also eher
     /// zu wenig als zu viel, und das ist die richtige Seite zum Irren.
     public private(set) var medienSchluesselBis: Date?
+    /// Der Bildschlüssel (`bildKey` aus /me/media-key): gilt nur für Bilder
+    /// und bleibt eine Woche lang derselbe — auch über einen Neustart des
+    /// Servers. Mit ihm behalten Poster dieselbe Adresse, und der
+    /// Zwischenspeicher des Geräts (URLCache) liefert sie beim nächsten
+    /// Öffnen, statt alle neu zu laden. Vorher trug jede Bildadresse den
+    /// Medienschlüssel, der mit jedem Abruf wechselt. Ein älterer Server
+    /// schickt keinen; dann gilt der Medienschlüssel wie bisher.
+    public private(set) var bildSchluessel: String?
+    private var bildSchluesselBis: Date?
     /// Ein Abruf, der gerade läuft. Viele Bilder zugleich sollen nicht
     /// viele Schlüssel holen.
     private var schluesselAbruf: Task<Void, Error>?
@@ -118,6 +127,12 @@ public actor APIClient {
 
     // MARK: - Medienschlüssel
 
+    /// Für Tests: einen Bildschlüssel von Hand setzen.
+    public func setBildSchluessel(_ key: String?, gueltigBis: Date? = nil) {
+        bildSchluessel = key
+        bildSchluesselBis = key == nil ? nil : (gueltigBis ?? Date().addingTimeInterval(7 * 24 * 3600))
+    }
+
     /// Für Tests und für die Sitzung: einen Schlüssel von Hand setzen.
     public func setMedienSchluessel(_ key: String?, gueltigBis: Date? = nil) {
         medienSchluessel = key
@@ -127,6 +142,8 @@ public actor APIClient {
     private func schluesselVergessen() {
         medienSchluessel = nil
         medienSchluesselBis = nil
+        bildSchluessel = nil
+        bildSchluesselBis = nil
         schluesselAbruf = nil
     }
 
@@ -173,6 +190,10 @@ public actor APIClient {
         // NAS und die des Geräts gehen selten gleich.
         let sek = antwort.gueltigSek > 0 ? antwort.gueltigSek : 6 * 3600
         medienSchluesselBis = Date().addingTimeInterval(TimeInterval(sek))
+        if let bild = antwort.bildKey, !bild.isEmpty, let bildSek = antwort.bildGueltigSek, bildSek > 0 {
+            bildSchluessel = bild
+            bildSchluesselBis = Date().addingTimeInterval(TimeInterval(bildSek))
+        }
     }
 
     /// Läuft der Schlüssel bald ab, holt das einen neuen im Hintergrund.
@@ -195,8 +216,9 @@ public actor APIClient {
               let teile = URLComponents(url: adresse, resolvingAgainstBaseURL: false),
               let alt = teile.queryItems?.first(where: { $0.name == "key" })?.value
         else { return nil }
+        let bild = Self.istBildWeg(teile.path)
         // Hat inzwischen schon jemand einen neuen geholt, reicht der.
-        if let neu = medienSchluessel, neu != alt {
+        if let neu = bild ? gueltigerBildSchluessel ?? medienSchluessel : medienSchluessel, neu != alt {
             return Self.tauscheSchluessel(in: teile, gegen: neu)
         }
         var probe = URLRequest(url: adresse)
@@ -209,8 +231,33 @@ public actor APIClient {
         } catch {
             return nil
         }
-        guard let neu = medienSchluessel, neu != alt else { return nil }
+        guard let neu = bild ? gueltigerBildSchluessel ?? medienSchluessel : medienSchluessel, neu != alt
+        else { return nil }
         return Self.tauscheSchluessel(in: teile, gegen: neu)
+    }
+
+    /// Wege, auf denen der Bildschlüssel gilt — wie `bildWeg` im Server.
+    static func istBildWeg(_ pfad: String) -> Bool {
+        pfad.contains("/api/v1/art/") || pfad.contains("/api/v1/avatar/")
+            || pfad.contains("/api/v1/wishes/poster/")
+            || (pfad.contains("/api/v1/persons/") && pfad.hasSuffix("/bild"))
+    }
+
+    /// Der Bildschlüssel, solange er noch mindestens eine Stunde gilt.
+    private var gueltigerBildSchluessel: String? {
+        guard let bildSchluessel, let bis = bildSchluesselBis,
+              bis.timeIntervalSinceNow > Self.schluesselVorlauf else { return nil }
+        return bildSchluessel
+    }
+
+    /// Die Abfrage für eine Bildadresse: der Bildschlüssel, wenn es einen
+    /// gibt, sonst der Medienschlüssel.
+    private func mitBildSchluessel(_ query: [String: String] = [:]) -> [String: String]? {
+        schluesselNachsehen()
+        guard let key = gueltigerBildSchluessel else { return mitSchluessel(query) }
+        var q = query
+        q["key"] = key
+        return q
     }
 
     private static func tauscheSchluessel(in teile: URLComponents, gegen neu: String) -> URL? {
@@ -558,7 +605,7 @@ public actor APIClient {
     /// Zwischenspeicher kommt.
     public func avatarURL(accountId: String, stand: Int = 0) -> URL {
         var q: [String: String] = stand > 0 ? ["v": String(stand)] : [:]
-        if let mit = mitSchluessel(q) { q = mit }
+        if let mit = mitBildSchluessel(q) { q = mit }
         return url("/avatar/\(accountId)", q)
     }
 
@@ -712,14 +759,24 @@ public actor APIClient {
     /// Das Foto zur Personenseite, mit dem Medienschlüssel. nil, wenn der
     /// Server keins hat (`bild` fehlt) oder niemand angemeldet ist.
     public func personBildURL(_ info: PersonInfo) -> URL? {
-        guard info.bild != nil, token != nil, let q = mitSchluessel() else { return nil }
+        guard info.bild != nil, token != nil, let q = mitBildSchluessel() else { return nil }
         let teil = Self.pfadTeil(info.name)
         return url("/persons/\(teil)/bild", q)
     }
 
     // MARK: - Filmreihen
 
-    public func collections() async throws -> [Reihe] { try await get("/collections") }
+    /// Alle Filmreihen (Seite „Filmreihen") — auch solche aus NFO oder Emby
+    /// mit nur einem Film. Mit `limit` (Startseite) nur so viele, und nur
+    /// Reihen mit mindestens zwei sichtbaren Filmen: ein einzelner Film
+    /// wirkt in einem Band von Reihen wie ein Fehler. Vorher kamen auf der
+    /// Startseite alle Reihen samt allen Filmen über die Leitung.
+    public func collections(limit: Int? = nil, mindestens: Int? = nil) async throws -> [Reihe] {
+        var q: [String: String] = [:]
+        if let limit, limit > 0 { q["limit"] = String(limit) }
+        if let mindestens, mindestens > 0 { q["mindestens"] = String(mindestens) }
+        return try await get("/collections", q)
+    }
 
     public func collection(_ id: String) async throws -> Reihe {
         try await get("/collections/\(id)")
@@ -729,12 +786,12 @@ public actor APIClient {
     /// ersten Films — wie `reiheBildUrl` auf Android. Das eigene liegt
     /// unter derselben Bilderroute wie die eines Titels, mit der Kennung
     /// der Reihe.
-    public func reiheBildURL(_ reihe: Reihe, wide: Bool = false) -> URL? {
+    public func reiheBildURL(_ reihe: Reihe, wide: Bool = false, breite: Int? = nil) -> URL? {
         if (wide ? reihe.backdrop : reihe.poster) != nil {
-            return artworkURL(itemId: reihe.id, kind: wide ? "backdrop" : "poster")
+            return artworkURL(itemId: reihe.id, kind: wide ? "backdrop" : "poster", breite: breite)
         }
         guard let erster = reihe.items.first else { return nil }
-        return artworkURL(for: erster, wide: wide)
+        return artworkURL(for: erster, wide: wide, breite: breite)
     }
 
     // MARK: - Eigene Sammlungen
@@ -752,12 +809,12 @@ public actor APIClient {
     /// Das Bild einer Sammlung: ihr eigenes, sonst das Poster des ersten
     /// Titels. Das eigene liegt wie bei den Filmreihen unter der
     /// Bilderroute der Titel, mit der Kennung der Sammlung.
-    public func sammlungBildURL(_ sammlung: Sammlung) -> URL? {
+    public func sammlungBildURL(_ sammlung: Sammlung, breite: Int? = nil) -> URL? {
         if sammlung.bild != nil {
-            return artworkURL(itemId: sammlung.id, kind: "poster")
+            return artworkURL(itemId: sammlung.id, kind: "poster", breite: breite)
         }
         guard let erster = sammlung.items.first else { return nil }
-        return artworkURL(for: erster)
+        return artworkURL(for: erster, breite: breite)
     }
 
     // MARK: - Bildschirmzeit
@@ -942,9 +999,22 @@ public actor APIClient {
 
     /// Ohne Medienschlüssel nil: Die Sitzung holt ihn, bevor die
     /// Mediathek erscheint, also heisst das „nicht angemeldet".
-    public func artworkURL(itemId: String, kind: String = "poster") -> URL? {
-        guard token != nil, let q = mitSchluessel() else { return nil }
-        return url("/art/\(itemId)/\(kind)", q)
+    ///
+    /// `stand`: der Stand des Bildes (`?v=` aus der Adresse, die der Server
+    /// am Titel schickt) — mit ihm darf das Gerät das Bild ein Jahr lang
+    /// aufbewahren; ein neues Bild hat einen anderen Stand. `breite`: wie
+    /// viele Pixel breit das Bild höchstens gebraucht wird; der Server
+    /// rechnet es einmal herunter (bildgroesse.go), statt für eine Kachel
+    /// ein Poster von einem Megabyte zu schicken.
+    public func artworkURL(itemId: String, kind: String = "poster",
+                           stand: String? = nil, breite: Int? = nil) -> URL? {
+        guard token != nil else { return nil }
+        var q: [String: String] = [:]
+        if let stand, !stand.isEmpty { q["v"] = stand }
+        if let breite, breite > 0 { q["w"] = String(breite) }
+        // Die bewegte Vorschau ist kein Bild: dort gilt nur der Medienschlüssel.
+        guard let mit = kind == "vorschau" ? mitSchluessel(q) : mitBildSchluessel(q) else { return nil }
+        return url("/art/\(itemId)/\(kind)", mit)
     }
 
     /// Die bewegte Vorschau: zwölf stumme Sekunden aus dem Film als MP4
@@ -958,8 +1028,9 @@ public actor APIClient {
     /// hochkant Poster vor Standbild, breit Hintergrund vor Standbild vor
     /// Poster. Die Wahl steht am Titel (`posterArt`, `wideArt`), damit sie
     /// sich ohne Netz prüfen lässt.
-    public func artworkURL(for item: Item, wide: Bool = false) -> URL? {
-        artworkURL(itemId: item.id, kind: wide ? item.wideArt : item.posterArt)
+    public func artworkURL(for item: Item, wide: Bool = false, breite: Int? = nil) -> URL? {
+        let art = wide ? item.wideArt : item.posterArt
+        return artworkURL(itemId: item.id, kind: art, stand: item.bildStand(art), breite: breite)
     }
 
     // MARK: - Verwaltung
@@ -1001,6 +1072,12 @@ public actor APIClient {
     public func adminSetWishState(_ id: String, state: String, note: String = "") async throws {
         struct Body: Encodable { let state: String, note: String }
         _ = try await request("PUT", "/admin/wishes/\(id)", body: Body(state: state, note: note))
+    }
+
+    /// Einen Wunsch ganz entfernen — jeden, auch einen erledigten (wie im
+    /// Browser unter Verwaltung › Wünsche). Mitverwalter nur in ihrem Bereich.
+    public func adminWunschLoeschen(_ id: String) async throws {
+        _ = try await request("DELETE", "/admin/wishes/\(id)")
     }
 
     /// Doppelte Titel, fehlende Dateien, nicht erkannte Titel.
