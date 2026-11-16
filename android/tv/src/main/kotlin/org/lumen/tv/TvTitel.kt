@@ -150,18 +150,24 @@ internal fun TvTitel(
     val folgenLeiste = androidx.compose.foundation.lazy.rememberLazyListState()
     val folgenFokus = remember { FocusRequester() }
     var zurFolge by remember { mutableStateOf(ziel.folge) }
-    LaunchedEffect(folgen, zurFolge) {
+    var folgeFokussiert by remember { mutableStateOf(false) }
+    LaunchedEffect(folgen) {
         val gesucht = zurFolge ?: return@LaunchedEffect
         val f = folgen ?: return@LaunchedEffect
         zurFolge = null
         if (staffel != ziel.staffel) return@LaunchedEffect
         val i = f.indexOfFirst { it.id == gesucht }
         if (i < 0) return@LaunchedEffect
-        kotlinx.coroutines.delay(150)
         seite.scrollToItem(1)
         folgenLeiste.scrollToItem(maxOf(0, i - 1))
-        kotlinx.coroutines.delay(50)
-        runCatching { folgenFokus.requestFocus() }
+        // Die Karte steht erst nach ein, zwei Bildern bereit, und der
+        // Startfokus auf „Abspielen" kommt womöglich noch dazwischen: so
+        // lange nachfassen, bis die Folge den Fokus wirklich hat.
+        repeat(30) {
+            kotlinx.coroutines.delay(100)
+            if (folgeFokussiert) return@LaunchedEffect
+            runCatching { folgenFokus.requestFocus() }
+        }
     }
 
     val d = detail
@@ -437,7 +443,10 @@ internal fun TvTitel(
                                             contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
                                 items(f, key = { it.id }) { folge ->
                                     TvFolgenKarte(client, folge,
-                                        modifier = if (folge.id == ziel.folge) Modifier.focusRequester(folgenFokus) else Modifier,
+                                        modifier = if (folge.id == ziel.folge)
+                                            Modifier.focusRequester(folgenFokus)
+                                                .onFocusChanged { if (it.isFocused) folgeFokussiert = true }
+                                        else Modifier,
                                         onGesehen = {
                                             aendern { c ->
                                                 if (folge.finished) c.clearFinished(folge.id) else c.markFinished(folge.id)

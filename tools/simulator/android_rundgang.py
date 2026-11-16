@@ -171,7 +171,7 @@ def aufbau(versuche: int = 3) -> list[Knoten]:
                     klasse=n.get("class", ""), paket=n.get("package", ""),
                     x1=int(m.group(1)), y1=int(m.group(2)), x2=int(m.group(3)), y2=int(m.group(4)),
                     fokus=n.get("focused") == "true", klickbar=n.get("clickable") == "true",
-                    gewaehlt=n.get("selected") == "true"))
+                    gewaehlt=n.get("selected") == "true" or n.get("checked") == "true"))
             LETZTER_AUFBAU = knoten
             return knoten
         time.sleep(1.5)
@@ -694,7 +694,7 @@ def rundgang_tv():
                  finde(r"^(Startseite|Home|Abspielen|Weiterschauen|Play|Resume)$") is None)
             taste("KEYCODE_BACK", pause=1.5)
             time.sleep(2)
-            foto("nach-wiedergabe", "", finde(r"^Interstellar$") is not None)
+            foto("nach-wiedergabe", "zurück auf der Titelseite", finde(r"^Interstellar$|^Weiter bei|^Von vorn$") is not None)
 
 
 def main():

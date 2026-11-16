@@ -164,7 +164,7 @@ fun DetailScreen(
     // die Staffeln und (wenn es die Folgen gibt) „Staffel als gesehen".
     val liste = rememberLazyListState()
     var zurFolge by remember(itemId) { mutableStateOf(startFolge) }
-    LaunchedEffect(episodes, zurFolge) {
+    LaunchedEffect(episodes) {
         val ziel = zurFolge ?: return@LaunchedEffect
         val folgen = episodes ?: return@LaunchedEffect
         if (staffel != startStaffel) { zurFolge = null; return@LaunchedEffect }
@@ -528,7 +528,10 @@ private fun EpisodeRow(model: LumenViewModel, episode: Item, onGesehen: () -> Un
         Modifier.fillMaxWidth().clickableRow(onPlay).padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Box {
+        // Feste Grösse: der Fortschrittsstreifen füllt die Breite — ohne sie
+        // nahm die Box bei einer angefangenen Folge die ganze Zeile ein, und
+        // Nummer, Name und Text verschwanden.
+        Box(Modifier.width(128.dp).height(72.dp)) {
             Artwork(
                 model.client.wideUrl(episode),
                 episode.title, Modifier.width(128.dp).height(72.dp), corner = 8.dp)
