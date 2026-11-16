@@ -38,6 +38,13 @@ struct TVDetailView: View {
     @State private var staffeln: [Item] = []
     @State private var staffel: String?
     @State private var folgen: [Item] = []
+    /// Bei einer Serie die Folge, die „Weiterschauen" startet (der Server
+    /// weiss sie): ihre Staffel ist offen, sie steht in der Leiste im Bild,
+    /// und wer hinunter in die Folgen geht, landet auf ihr.
+    @State private var weiter: Item?
+    /// Fokus in den Staffeln und Folgen — für den Startpunkt beim Hineingehen.
+    @FocusState private var staffelFokus: String?
+    @FocusState private var folgenFokus: String?
     /// Ob der Server „gesehen" für eine Staffel kennt — sonst kein Knopf.
     @State private var staffelGesehenGeht = true
     /// Nach dem Haken an einer späten Folge: auch die davor?
@@ -46,6 +53,13 @@ struct TVDetailView: View {
     @FocusState private var knopfFokus: Knopf?
 
     private var item: Item? { detail?.item ?? vorschau }
+
+    /// Die Folge, auf der der Fokus beim Hineingehen landet: die nächste,
+    /// wenn ihre Staffel offen ist.
+    private var naechsteFolge: String? {
+        guard let weiter, weiter.parentId == staffel, folgen.contains(where: { $0.id == weiter.id }) else { return nil }
+        return weiter.id
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -319,28 +333,32 @@ struct TVDetailView: View {
                 // eigener Fokus-Bereich, damit „nach unten" in die Folgen führt.
                 let art = Staffelleiste.art(staffeln)
                 ScrollViewReader { leiste in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 20) {
-                            ForEach(staffeln) { st in
-                                Button {
-                                    Task { await zeigeStaffel(st.id) }
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        if staffel == st.id { Image(systemName: "checkmark") }
-                                        Text(Staffelleiste.knopf(st, art: art))
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 20) {
+                                ForEach(staffeln) { st in
+                                    Button {
+                                        session.staffelMerken(serie: itemId, staffel: st.id)
+                                        Task { await zeigeStaffel(st.id) }
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            if staffel == st.id { Image(systemName: "checkmark") }
+                                            Text(Staffelleiste.knopf(st, art: art))
+                                        }
+                                        .font(.callout.weight(staffel == st.id ? .semibold : .regular))
                                     }
-                                    .font(.callout.weight(staffel == st.id ? .semibold : .regular))
+                                    .id(st.id)
+                                    .focused($staffelFokus, equals: st.id)
+                                    .accessibilityLabel(Staffelleiste.name(st))
+                                    .accessibilityAddTraits(staffel == st.id ? .isSelected : [])
                                 }
-                                .id(st.id)
-                                .accessibilityLabel(Staffelleiste.name(st))
-                                .accessibilityAddTraits(staffel == st.id ? .isSelected : [])
                             }
+                            .padding(.vertical, 16)
                         }
-                        .padding(.vertical, 16)
-                    }
-                    .onAppear { if let staffel { leiste.scrollTo(staffel, anchor: .center) } }
+                        .onAppear { if let staffel { leiste.scrollTo(staffel, anchor: .center) } }
                 }
                 .focusSection()
+                // Von den Knöpfen hinunter: auf die gewählte Staffel.
+                .defaultFocus($staffelFokus, staffel, priority: .userInitiated)
             }
             if folgen.isEmpty {
                 Text("In dieser Staffel liegt noch keine Folge.")
@@ -357,25 +375,34 @@ struct TVDetailView: View {
                     }
                     .font(.callout.weight(.semibold))
                 }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 40) {
-                        ForEach(folgen) { f in
-                            // Ein langer Druck: die Folge als gesehen
-                            // markieren, ohne sie abzuspielen.
-                            TVFolgenKarte(folge: f) { playing = Abspielstart(item: f) }
-                                .contextMenu {
-                                    Button {
-                                        Task { await gesehen(f) }
-                                    } label: {
-                                        Label(f.isSeen ? "Nicht gesehen" : "Gesehen",
-                                              systemImage: f.isSeen ? "checkmark.circle.fill" : "checkmark.circle")
+                ScrollViewReader { leiste in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 40) {
+                            ForEach(folgen) { f in
+                                // Ein langer Druck: die Folge als gesehen
+                                // markieren, ohne sie abzuspielen.
+                                TVFolgenKarte(folge: f) { playing = Abspielstart(item: f) }
+                                    .id(f.id)
+                                    .focused($folgenFokus, equals: f.id)
+                                    .contextMenu {
+                                        Button {
+                                            Task { await gesehen(f) }
+                                        } label: {
+                                            Label(f.isSeen ? "Nicht gesehen" : "Gesehen",
+                                                  systemImage: f.isSeen ? "checkmark.circle.fill" : "checkmark.circle")
+                                        }
                                     }
-                                }
+                            }
                         }
+                        .padding(.vertical, 24)
                     }
-                    .padding(.vertical, 24)
+                    // Die nächste Folge rückt ins Bild — der Fokus bleibt oben
+                    // auf „Abspielen", bis man hinuntergeht.
+                    .onAppear { if let id = naechsteFolge { leiste.scrollTo(id, anchor: .leading) } }
+                    .onChange(of: naechsteFolge) { _, id in if let id { leiste.scrollTo(id, anchor: .leading) } }
                 }
                 .focusSection()
+                .defaultFocus($folgenFokus, naechsteFolge, priority: .userInitiated)
             }
         }
     }
@@ -428,7 +455,15 @@ struct TVDetailView: View {
             }
             let geordnet = Titelseite.staffeln(neu.seasons ?? [])
             staffeln = geordnet
-            let ziel = geordnet.first { $0.id == staffel }?.id ?? geordnet.first?.id
+            if neu.item.kind == "series", !geordnet.isEmpty {
+                weiter = try? await session.client.weiterInSerie(itemId)
+            }
+            // Die gewählte Staffel bleibt beim Neuladen stehen. Beim ersten
+            // Laden wie im Browser: die zuletzt gewählte dieser Serie, sonst
+            // die der nächsten Folge, sonst die erste — nicht immer Staffel 1.
+            let ziel = geordnet.first { $0.id == staffel }?.id
+                ?? Titelseite.startStaffel(geordnet, weiterParentId: weiter?.parentId,
+                                           gemerkt: session.gemerkteStaffel(serie: itemId))?.id
             if let ziel { await zeigeStaffel(ziel) }
         } catch { self.error = Session.text(error) }
     }

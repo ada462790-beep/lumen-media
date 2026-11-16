@@ -339,7 +339,7 @@ struct DetailView: View {
     }
 
     /// Staffeln als Reiter, darunter die Folgen der gewählten — wie im
-    /// Browser. Die erste Staffel ist gleich offen; Specials (Staffel 0 und
+    /// Browser. Offen ist die Staffel der nächsten Folge (load); Specials (Staffel 0 und
     /// Staffeln ohne Nummer) stehen hinten. Ab sieben Staffeln nur die
     /// Zahlen unter „Staffeln", ab sechzehn eine Auswahl (Staffelleiste).
     private var staffelTeil: some View {
@@ -386,7 +386,10 @@ struct DetailView: View {
                 Text("Staffeln").font(.headline)
                 Picker("Staffel wählen", selection: Binding(
                     get: { staffel ?? "" },
-                    set: { id in Task { await zeigeStaffel(id) } })) {
+                    set: { id in
+                        session.staffelMerken(serie: itemId, staffel: id)
+                        Task { await zeigeStaffel(id) }
+                    })) {
                     ForEach(staffeln) { st in Text(Staffelleiste.name(st)).tag(st.id) }
                 }
                 .pickerStyle(.menu)
@@ -403,6 +406,7 @@ struct DetailView: View {
                         HStack(spacing: 8) {
                             ForEach(staffeln) { st in
                                 Chip(label: Staffelleiste.knopf(st, art: art), selected: staffel == st.id) {
+                                    session.staffelMerken(serie: itemId, staffel: st.id)
                                     Task { await zeigeStaffel(st.id) }
                                 }
                                 .id(st.id)
@@ -487,8 +491,19 @@ struct DetailView: View {
             }
             let geordnet = Titelseite.staffeln(fresh.seasons ?? [])
             staffeln = geordnet
-            // Die gewählte Staffel bleibt beim Neuladen stehen.
-            let ziel = geordnet.first { $0.id == staffel }?.id ?? geordnet.first?.id
+            // Die gewählte Staffel bleibt beim Neuladen stehen. Beim ersten
+            // Laden wie im Browser: die zuletzt gewählte dieser Serie, sonst
+            // die der nächsten Folge, sonst die erste — nicht immer
+            // Staffel 1, wenn man längst in Staffel 4 ist.
+            var ziel = geordnet.first { $0.id == staffel }?.id
+            if ziel == nil, !geordnet.isEmpty {
+                let gemerkt = session.gemerkteStaffel(serie: itemId)
+                var weiter: Item?
+                if gemerkt == nil, fresh.item.kind == "series" {
+                    weiter = try? await session.client.weiterInSerie(itemId)
+                }
+                ziel = Titelseite.startStaffel(geordnet, weiterParentId: weiter?.parentId, gemerkt: gemerkt)?.id
+            }
             if let ziel { await zeigeStaffel(ziel) }
         } catch { self.error = Session.text(error) }
         loading = false

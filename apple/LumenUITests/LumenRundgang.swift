@@ -93,6 +93,7 @@ final class LumenRundgang: Rundgang {
         // Serien mit Staffelwahl
         if bereich("serien", "^(Serien|Shows|TV Shows)$") {
             if schritt("serie-breaking-bad", "^Breaking Bad.*") {
+                staffelDerNaechstenFolge()
                 nachUnten()
                 foto("serie-folgen")
                 if schritt("serie-staffelwahl", "^(Staffel 1|Season 1|Staffel 01).*") {

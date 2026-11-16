@@ -74,6 +74,7 @@ final class LumenTVRundgang: Rundgang {
 
         if reiter("serien", "^(Serien|Shows|TV Shows)$") {
             if schritt("serie-breaking-bad", "^Breaking Bad.*") {
+                staffelDerNaechstenFolge()
                 taste(.down)
                 foto("serie-runter")
                 _ = schritt("serie-specials", "^(Specials|Staffel 0|Season 0|Extras).*")

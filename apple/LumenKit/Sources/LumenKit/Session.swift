@@ -775,6 +775,21 @@ public final class Session {
 
     public func standGeaendert() { standAenderung &+= 1 }
 
+    // MARK: - Gewählte Staffel
+
+    /// Die zuletzt gewählte Staffel einer Serie, solange die App läuft —
+    /// wie im Browser (S.staffelWahl) nur für eine Serie: Wer Staffel 3
+    /// wählt, zurückgeht und die Serie wieder öffnet, sieht Staffel 3.
+    /// Siehe `Titelseite.startStaffel`.
+    @ObservationIgnored private var staffelWahl: (serie: String, staffel: String)?
+
+    public func staffelMerken(serie: String, staffel: String) { staffelWahl = (serie, staffel) }
+
+    public func gemerkteStaffel(serie: String) -> String? {
+        guard let w = staffelWahl, w.serie == serie else { return nil }
+        return w.staffel
+    }
+
     // MARK: - Profilbild und Neuigkeiten
 
     /// Zählt hoch, sobald ein eigenes Bild hochgeladen wurde — es hängt als

@@ -228,6 +228,36 @@ class Rundgang: XCTestCase {
         return true
     }
 
+    /// Breaking Bad direkt aus den Serien geöffnet (nicht von einer Folge
+    /// aus): S2 F1 ist angefangen (tools/simulator/einrichten.py), also soll
+    /// Staffel 2 gewählt sein — wie im Browser, nicht Staffel 1. Die Folge
+    /// S2 F1 („Sieben Dreissig Sieben") gibt es nur in Staffel 2. Am
+    /// Fernseher dazu: hinunter auf die gewählte Staffel, dann auf die
+    /// nächste Folge — danach wieder hinauf zu den Knöpfen.
+    func staffelDerNaechstenFolge() {
+        Thread.sleep(forTimeInterval: 2)
+        let staffel2 = "^(Staffel 2|Season 2|2)$"
+        let folge = ".*(Sieben Dreissig Sieben|Seven Thirty-Seven).*"
+        let gewaehlt = alle(staffel2).matching(NSPredicate(format: "selected == true")).firstMatch.exists
+        let folgeDa = alle(folge).firstMatch.exists
+        foto("serie-direkt-staffel", "Staffel 2 gewählt: \(gewaehlt), Folge S2 F1 da: \(folgeDa)",
+             ok: gewaehlt || folgeDa)
+        #if os(tvOS)
+        XCUIRemote.shared.press(.down)
+        Thread.sleep(forTimeInterval: 1.2)
+        let aufStaffel = fokus().map { $0.label.range(of: staffel2, options: .regularExpression) != nil } ?? false
+        foto("serie-direkt-fokus-staffel", "Fokus: \(fokus()?.label ?? "keiner")", ok: aufStaffel)
+        XCUIRemote.shared.press(.down)
+        Thread.sleep(forTimeInterval: 1.2)
+        let aufFolge = fokus().map { $0.label.range(of: folge, options: .regularExpression) != nil } ?? false
+        foto("serie-direkt-fokus-folge", "Fokus: \(fokus()?.label ?? "keiner")", ok: aufFolge)
+        XCUIRemote.shared.press(.up)
+        Thread.sleep(forTimeInterval: 0.6)
+        XCUIRemote.shared.press(.up)
+        Thread.sleep(forTimeInterval: 1)
+        #endif
+    }
+
     func zurueck() {
         #if os(tvOS)
         XCUIRemote.shared.press(.menu)
