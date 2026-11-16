@@ -330,7 +330,10 @@ def waehle(muster: str, bereich: str = "", warten: float = 8) -> bool:
     k = warte(muster, warten, bereich=bereich)
     if not k and not bereich:
         # Vielleicht weiter unten oder oben: scrollen und noch einmal suchen.
-        for richtung in ["hoch"] * 3 + ["runter"] * 6:
+        # Am Fernseher braucht es mehr Drücke: erst durch die Wahlpillen
+        # über einem Raster, dann Reihe um Reihe.
+        schritte = ["hoch"] * 8 + ["runter"] * 12 if TV else ["hoch"] * 3 + ["runter"] * 6
+        for richtung in schritte:
             if TV:
                 taste("KEYCODE_DPAD_DOWN" if richtung == "hoch" else "KEYCODE_DPAD_UP")
             else:

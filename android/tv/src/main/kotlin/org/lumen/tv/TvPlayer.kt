@@ -898,7 +898,11 @@ private fun TvWiedergabe(
                         setControllerVisibilityListener(
                             PlayerView.ControllerVisibilityListener { sichtbarkeit ->
                                 steuerungSichtbar = sichtbarkeit == View.VISIBLE
+                                // Das Zahnrad von Media3 doppelte das eigene
+                                // (Qualität, Ton, Untertitel): weg damit.
+                                findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
                             })
+                        findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
                         // Beim Spulen mit links/rechts auf der Zeitleiste: das Vorschaubild.
                         findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
                             ?.addListener(object : androidx.media3.ui.TimeBar.OnScrubListener {

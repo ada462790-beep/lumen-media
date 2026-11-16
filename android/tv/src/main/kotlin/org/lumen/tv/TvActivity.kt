@@ -966,6 +966,10 @@ private fun TvStartseite(
     // In welcher Reihe der Fokus steht: 0 die erste, -1 ausserhalb (Navigation).
     var fokusReihe by remember { mutableStateOf(-1) }
     var beendenHinweis by remember { mutableStateOf(false) }
+    // Ob der Fokus wirklich in der Liste angekommen ist — ein Wunsch nach
+    // Fokus kann still verpuffen (etwa während die Activity nach dem
+    // Sprachwechsel neu aufgebaut wird).
+    var listeHatFokus by remember { mutableStateOf(false) }
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
 
     // Schon Geladenes steht sofort da; aufgefrischt wird still im
@@ -1018,10 +1022,12 @@ private fun TvStartseite(
     /** Ganz nach oben und auf die erste Karte der ersten Reihe. */
     suspend fun nachOben() {
         liste.scrollToItem(0)
-        // Einen Moment, bis die erste Reihe wieder aufgebaut ist.
-        repeat(10) {
-            kotlinx.coroutines.delay(50)
-            if (runCatching { ersteKarte.requestFocus() }.isSuccess) return
+        // Bis zu drei Sekunden: so lange fragen, bis die erste Karte den
+        // Fokus wirklich hat — die Reihe muss erst wieder aufgebaut sein.
+        repeat(30) {
+            kotlinx.coroutines.delay(100)
+            if (listeHatFokus && fokusReihe == 0) return
+            runCatching { ersteKarte.requestFocus() }
         }
     }
 
@@ -1076,7 +1082,10 @@ private fun TvStartseite(
         LazyColumn(
             state = liste,
             contentPadding = PaddingValues(start = 56.dp, top = 12.dp, bottom = 48.dp),
-            modifier = Modifier.fillMaxSize().onFocusChanged { if (!it.hasFocus) fokusReihe = -1 },
+            modifier = Modifier.fillMaxSize().onFocusChanged {
+                listeHatFokus = it.hasFocus
+                if (!it.hasFocus) fokusReihe = -1
+            },
         ) {
             // Erst wenn die Reihen da sind (oder feststeht, dass keine
             // kommen): sonst stünden die Listen allein da und behielten
@@ -1112,7 +1121,7 @@ private fun TvStartseite(
                             Text(tx(R.string.filmreihen), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(16.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(28.dp),
-                                    contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
+                                    contentPadding = PaddingValues(vertical = 12.dp, horizontal = 12.dp)) {
                                 items(reihen, key = { it.id }) { reihe ->
                                     TvKachel(
                                         bild = client.reiheBildUrl(reihe),
@@ -1138,7 +1147,7 @@ private fun TvStartseite(
                     }
                     Spacer(Modifier.height(16.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(28.dp),
-                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
+                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 12.dp)) {
                         items(listen, key = { it.id }) { liste ->
                             TvKachel(
                                 bild = liste.vorschau.firstOrNull()?.let { client.posterUrl(it) },
@@ -1207,7 +1216,7 @@ internal fun TvKartenReihe(
         Text(titel, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(28.dp),
-                contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
+                contentPadding = PaddingValues(vertical = 12.dp, horizontal = 12.dp)) {
             val gezeigt = eintraege.distinctBy { it.id }
             items(gezeigt, key = { it.id }) { item ->
                 // Ein Druck öffnet die Titelseite; dort steht „Abspielen"

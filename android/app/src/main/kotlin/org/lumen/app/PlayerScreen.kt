@@ -858,7 +858,11 @@ private fun Wiedergabe(
                         setControllerVisibilityListener(
                             PlayerView.ControllerVisibilityListener { sichtbarkeit ->
                                 steuerungSichtbar = sichtbarkeit == View.VISIBLE
+                                // Das Zahnrad von Media3 doppelte das eigene
+                                // (Qualität, Ton, Untertitel): weg damit.
+                                findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
                             })
+                        findViewById<View>(androidx.media3.ui.R.id.exo_settings)?.visibility = View.GONE
                         // Zu Beginn einmal die ganze Steuerung samt Zeitleiste.
                         post { showController() }
                         // Beim Spulen über die Zeitleiste: wo man landen würde.
