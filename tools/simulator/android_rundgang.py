@@ -510,10 +510,10 @@ def folge_von_startseite():
         zurueck(2)
     else:
         knoten = aufbau()
-        offen = staffel_2_offen(knoten)
-        foto("folge-startseite-serie",
-             f"Staffel 2 gewählt: {offen}; Folge zu sehen: {bool(finde(FOLGE_S2, knoten))}",
-             offen and bool(finde(FOLGE_S2, knoten)))
+        # Die Folge gibt es nur in Staffel 2 — steht sie da, ist Staffel 2
+        # offen (den gewählten Chip meldet uiautomator nicht als „selected").
+        sichtbar = bool(finde(FOLGE_S2, knoten))
+        foto("folge-startseite-serie", f"Folge aus Staffel 2 zu sehen: {sichtbar}", sichtbar)
         zurueck()
     sicherstellen()
 
