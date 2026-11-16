@@ -247,14 +247,22 @@ class Rundgang: XCTestCase {
         Thread.sleep(forTimeInterval: 1.2)
         let aufStaffel = fokus().map { $0.label.range(of: staffel2, options: .regularExpression) != nil } ?? false
         foto("serie-direkt-fokus-staffel", "Fokus: \(fokus()?.label ?? "keiner")", ok: aufStaffel)
-        XCUIRemote.shared.press(.down)
-        Thread.sleep(forTimeInterval: 1.2)
-        let aufFolge = fokus().map { $0.label.range(of: folge, options: .regularExpression) != nil } ?? false
+        // Weiter hinunter — über „Staffel gesehen" hinweg — bis in die Folgen.
+        var hinunter = 1
+        var aufFolge = false
+        for _ in 0..<3 {
+            XCUIRemote.shared.press(.down)
+            hinunter += 1
+            Thread.sleep(forTimeInterval: 1.2)
+            let name = fokus()?.label ?? ""
+            aufFolge = name.range(of: folge, options: .regularExpression) != nil
+            if aufFolge || name.range(of: "(?i)gesehen|watched", options: .regularExpression) == nil { break }
+        }
         foto("serie-direkt-fokus-folge", "Fokus: \(fokus()?.label ?? "keiner")", ok: aufFolge)
-        XCUIRemote.shared.press(.up)
-        Thread.sleep(forTimeInterval: 0.6)
-        XCUIRemote.shared.press(.up)
-        Thread.sleep(forTimeInterval: 1)
+        for _ in 0..<hinunter {
+            XCUIRemote.shared.press(.up)
+            Thread.sleep(forTimeInterval: 0.6)
+        }
         #endif
     }
 
