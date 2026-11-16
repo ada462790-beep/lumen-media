@@ -73,6 +73,8 @@ func (s *Server) messen(next http.Handler) http.Handler {
 			return
 		}
 		start := time.Now()
+		// Nach langer Ruhe wärmt der Speicher einmal vor (store/vorwaermen.go).
+		s.st.Zugriff()
 		ctx, m := store.MitMessung(r.Context())
 		r2 := r.WithContext(ctx)
 		mw := &messSchreiber{ResponseWriter: w, start: start, m: m}

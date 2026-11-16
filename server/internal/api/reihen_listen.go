@@ -140,7 +140,7 @@ func reiheMindestensFuer(source string) int {
 // reihen liefert die Filmreihen, die die Person sieht.
 //
 // ?limit= und ?offset= zählen nur die Reihen, die tatsächlich gezeigt
-// werden (mindestens zwei sichtbare Filme). Die Startseite zeigt zwölf;
+// werden (mit ?limit= mindestens zwei sichtbare Filme). Die Startseite zeigt zwölf;
 // vorher kamen bei ihr alle Reihen samt allen Filmen über die Leitung —
 // bei 900 Reihen fast 5 MB, auf jedem Gerät, bei jedem Öffnen. Ohne
 // limit kommt wie bisher alles (Seite „Filmreihen").
@@ -152,6 +152,16 @@ func (s *Server) reihen(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := max(qInt(r, "limit", 0), 0)
 	offset := max(qInt(r, "offset", 0), 0)
+	// Die Reihe „Filmreihen" der Startseite (?limit=…) zeigt nur Reihen
+	// mit mindestens zwei sichtbaren Filmen — auch solche aus NFO oder
+	// Emby, die auf der Seite Filmreihen schon ab einem Film stehen. Ein
+	// einzelner Film wirkt in einem Band von Reihen wie ein Fehler.
+	// ?mindestens= legt es ausdrücklich fest.
+	mindestens := 0
+	if limit > 0 {
+		mindestens = reiheMindestens
+	}
+	mindestens = max(qInt(r, "mindestens", mindestens), 0)
 	out := []reiheAntwort{}
 	// In Stücken: Wer nur zwölf will, bekommt die Titel von etwas mehr
 	// als zwölf Reihen nachgeschlagen, nicht die von allen.
@@ -185,7 +195,7 @@ func (s *Server) reihen(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			a.ZuletztNeu = zuletztNeu(a.Items)
-			if a.Anzahl = len(a.Items); a.Anzahl < reiheMindestensFuer(x.Source) {
+			if a.Anzahl = len(a.Items); a.Anzahl < max(reiheMindestensFuer(x.Source), mindestens) {
 				continue
 			}
 			if uebersprungen < offset {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"path/filepath"
 	"sort"
+	"strconv"
 )
 
 // FeldKeineFassung: Dieser Eintrag ist ein eigener Film (von Hand
@@ -41,10 +42,27 @@ type FassungSeite struct {
 // Jahr, verschiedener Tonsprache und einer Laufzeit, die um höchstens
 // 5 % abweicht (PAL-Beschleunigung: gut 4 %). Höchstens hoechstens Paare.
 func (s *Store) FassungKandidaten(ctx context.Context, hoechstens int) ([][2]FassungSeite, error) {
+	// Über alle Filme gerechnet — gemerkt, bis sich die Mediathek ändert
+	// (mediathek_merken.go).
+	stand := StandMediathek()
+	k := strconv.Itoa(hoechstens)
+	gemerkt := map[string][][2]FassungSeite{}
+	if len(s.fassungMerk.holen(stand, []string{k}, gemerkt)) == 0 {
+		return append([][2]FassungSeite(nil), gemerkt[k]...), nil
+	}
+	out, err := s.fassungKandidatenRechnen(ctx, hoechstens)
+	if err != nil {
+		return nil, err
+	}
+	s.fassungMerk.merken(stand, []string{k}, map[string][][2]FassungSeite{k: out}, 4)
+	return append([][2]FassungSeite(nil), out...), nil
+}
+
+func (s *Store) fassungKandidatenRechnen(ctx context.Context, hoechstens int) ([][2]FassungSeite, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT i.id, i.library_id, i.title, i.year, f.path, f.duration_ms,
-		        COALESCE((SELECT t.language FROM media_track t
-		                   WHERE t.file_id = f.id AND t.kind = 'audio' ORDER BY t.idx LIMIT 1), '')
+		// Die Sprache der ersten Tonspur steht an der Datei (ton_sprache,
+		// schmal.go) — vorher las das für jede Datei ihre Spuren.
+		`SELECT i.id, i.library_id, i.title, i.year, f.path, f.duration_ms, COALESCE(f.ton_sprache, '')
 		   FROM media_file f JOIN item i ON i.id = f.item_id
 		  WHERE i.kind = 'movie' AND i.year > 0 AND f.missing_since IS NULL
 		    AND COALESCE(f.defekt,'') = '' AND f.duration_ms > 0

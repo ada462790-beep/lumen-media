@@ -90,7 +90,10 @@ func planOhneScan(t *testing.T, st *Store, name, q string, args ...any) {
 		plan = append(plan, text)
 	}
 	for _, z := range plan {
-		if strings.HasPrefix(z, "SCAN ") && z != "SCAN z" && z != "SCAN x" && !strings.Contains(z, "CONSTANT ROW") {
+		// Erlaubt: die eigenen Zwischenergebnisse (z, x) und mitgegebene
+		// Werte (VALUES — „SCAN 80 CONSTANT ROWS", „SCAN 0-ROW VALUES CLAUSE").
+		if strings.HasPrefix(z, "SCAN ") && z != "SCAN z" && z != "SCAN x" &&
+			!strings.Contains(z, "CONSTANT ROW") && !strings.Contains(z, "VALUES CLAUSE") {
 			t.Errorf("%s liest eine ganze Tabelle:\n  %s", name, strings.Join(plan, "\n  "))
 			return
 		}
@@ -143,7 +146,7 @@ func TestKennzahlenNachFilmenDannSerien(t *testing.T) {
 		if dauer > 500*time.Millisecond {
 			t.Errorf("%s: Kennzahlen für %d Titel brauchten %v", wann, len(ids), dauer)
 		}
-		planOhneScan(t, st, wann+": Kennzahlen", kennzahlenSQL(len(ids)), kennzahlenArgs(ids)...)
+		planOhneScan(t, st, wann+": Kennzahlen", kennzahlenSQL(len(ids), len(ids)), kennzahlenArgs(ids, ids)...)
 		planOhneScan(t, st, wann+": ErstePfade", erstePfadeSQL(len(ids)), erstePfadeArgs(ids)...)
 	}
 	// Auch mit der veralteten Statistik vom Film-Durchlauf.

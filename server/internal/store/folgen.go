@@ -30,28 +30,15 @@ type FolgenStelle struct {
 // Making-of zwischen zwei Folgen.
 func (s *Store) SerienFolgen(ctx context.Context, seriesIDs []string) (map[string][]FolgenStelle, error) {
 	out := map[string][]FolgenStelle{}
-	for i := 0; i < len(seriesIDs); i += 400 {
-		teil := seriesIDs[i:min(i+400, len(seriesIDs))]
-		rows, err := s.db.QueryContext(ctx,
-			`SELECT st.parent_id, e.id, COALESCE(st.season_no,0), COALESCE(e.episode_no,0)
-			   FROM item e JOIN item st ON st.id = e.parent_id
-			  WHERE e.kind = 'episode' AND COALESCE(st.season_no,0) > 0
-			    AND st.parent_id IN (`+placeholders(len(teil))+`)`, toAny(teil)...)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var serie string
-			var f FolgenStelle
-			if err := rows.Scan(&serie, &f.ID, &f.Staffel, &f.Nr); err != nil {
-				rows.Close()
-				return nil, err
+	alle, err := s.serienFolgenKurz(ctx, seriesIDs)
+	if err != nil {
+		return nil, err
+	}
+	for serie, fs := range alle {
+		for _, f := range fs {
+			if f.staffel > 0 {
+				out[serie] = append(out[serie], FolgenStelle{ID: f.id, Staffel: f.staffel, Nr: f.nr})
 			}
-			out[serie] = append(out[serie], f)
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
 		}
 	}
 	for _, folgen := range out {
@@ -154,4 +141,55 @@ func (s *Store) FolgeUmnummern(ctx context.Context, id string, nr int) error {
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE item SET episode_no = ? WHERE id = ? AND kind = 'episode'`, nullInt(nr), id)
 	return err
+}
+
+// folgeKurz: eine Folge, wie sie die Seiten über ihre Serie brauchen.
+type folgeKurz struct {
+	id          string
+	staffel, nr int
+	neu         int64 // added_at
+}
+
+// serienFolgenKurz: je Serie alle Folgen samt Specials (Staffel 0), in
+// keiner bestimmten Reihenfolge — über item_by_parent (Serie → Staffeln →
+// Folgen) ohne die Zeilen selbst, und je Serie gemerkt, bis sich die
+// Mediathek ändert (mediathek_merken.go). Daraus kommen SerienFolgen, die
+// Zahl der Folgen (folgenZahl) und die neuen Folgen (neueFolgen).
+func (s *Store) serienFolgenKurz(ctx context.Context, seriesIDs []string) (map[string][]folgeKurz, error) {
+	out := map[string][]folgeKurz{}
+	if len(seriesIDs) == 0 {
+		return out, nil
+	}
+	stand := StandMediathek()
+	fehlt := s.serienFolgenMerk.holen(stand, seriesIDs, out)
+	neu := map[string][]folgeKurz{}
+	for a := 0; a < len(fehlt); a += 400 {
+		teil := fehlt[a:min(a+400, len(fehlt))]
+		rows, err := s.db.QueryContext(ctx,
+			`SELECT st.parent_id, e.id, COALESCE(st.season_no,0), COALESCE(e.episode_no,0), e.added_at
+			   FROM item st INDEXED BY item_by_parent
+			   CROSS JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
+			  WHERE st.parent_id IN (`+placeholders(len(teil))+`) AND e.kind = 'episode'`, toAny(teil)...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var serie string
+			var f folgeKurz
+			if err := rows.Scan(&serie, &f.id, &f.staffel, &f.nr, &f.neu); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			neu[serie] = append(neu[serie], f)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	s.serienFolgenMerk.merken(stand, fehlt, neu, 20000)
+	for k, v := range neu {
+		out[k] = v
+	}
+	return out, nil
 }

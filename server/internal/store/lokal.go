@@ -441,11 +441,22 @@ func (s *Store) LokaleMitKennungNachholen(ctx context.Context) (int64, error) {
 // PosterStand zählt Filme und Serien und wie viele davon ein Poster haben
 // (aus der Sammlung oder von TMDb) — für den Hinweis in der Verwaltung.
 func (s *Store) PosterStand(ctx context.Context) (titel, mitPoster int) {
-	_ = s.db.QueryRowContext(ctx,
-		`SELECT count(*), COALESCE(sum(EXISTS (SELECT 1 FROM artwork a
-		          WHERE a.item_id = i.id AND a.kind = 'poster' AND COALESCE(a.path,'') != '')), 0)
-		   FROM item i WHERE i.kind IN ('movie','series')`).Scan(&titel, &mitPoster)
-	return titel, mitPoster
+	v, _ := s.zahlGemerkt("poster", func() ([2]int, error) {
+		var titel, mitPoster int
+		err := s.posterZaehlen(ctx, &titel, &mitPoster)
+		return [2]int{titel, mitPoster}, err
+	})
+	return v[0], v[1]
+}
+
+func (s *Store) posterZaehlen(ctx context.Context, titel, mitPoster *int) error {
+	return s.db.QueryRowContext(ctx,
+		// Gezählt wird über zwei schmale Indizes (artwork_da, schmal.go),
+		// ohne eine Zeile von item oder artwork zu lesen. Von selbst nahm
+		// SQLite den Primärschlüssel und las für den Pfad jede Zeile.
+		`SELECT count(*), COALESCE(sum(EXISTS (SELECT 1 FROM artwork a INDEXED BY artwork_da
+		          WHERE a.kind = 'poster' AND a.item_id = i.id AND a.path <> '')), 0)
+		   FROM item i WHERE i.kind IN ('movie','series')`).Scan(titel, mitPoster)
 }
 
 // BisFolgen nennt für Doppelfolgen das Ende („S01E01-E02" → 2). Folgen

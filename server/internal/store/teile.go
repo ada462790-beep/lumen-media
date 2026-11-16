@@ -185,8 +185,24 @@ type FilmDatei struct {
 	Jahr      int    `json:"jahr,omitempty"`
 }
 
-// FilmDateienVorhanden: alle vorhandenen Dateien aller Filme.
+// FilmDateienVorhanden: alle vorhandenen Dateien aller Filme. Die Seite
+// Aufräumen sucht darin bei jedem Öffnen nach Teilen; gelesen wird das
+// einmal und gemerkt, bis sich die Mediathek ändert (mediathek_merken.go).
 func (s *Store) FilmDateienVorhanden(ctx context.Context) ([]FilmDatei, error) {
+	stand := StandMediathek()
+	gemerkt := map[string][]FilmDatei{}
+	if len(s.filmDateienMerk.holen(stand, []string{""}, gemerkt)) == 0 {
+		return append([]FilmDatei{}, gemerkt[""]...), nil
+	}
+	out, err := s.filmDateienLesen(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.filmDateienMerk.merken(stand, []string{""}, map[string][]FilmDatei{"": out}, 1)
+	return append([]FilmDatei{}, out...), nil
+}
+
+func (s *Store) filmDateienLesen(ctx context.Context) ([]FilmDatei, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT f.id, f.item_id, i.library_id, f.path, f.size_bytes, COALESCE(f.height,0),
 		        COALESCE(f.container,''), f.part_no, i.title, COALESCE(i.year,0)

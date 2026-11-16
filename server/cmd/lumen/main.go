@@ -203,7 +203,10 @@ func run(o Optionen, log *slog.Logger) error {
 	srv.SetUmwandlungsOrdner(umwandlungDir)
 	// grund endet beim Herunterfahren: Hausmeister, Durchläufe, Metadaten
 	// und Downloads hören dann auf, bevor die Datenbank geschlossen wird.
-	grund, allesBeenden := context.WithCancel(context.Background())
+	// Was dort geschrieben wird, gilt als Arbeit im Hintergrund
+	// (store.Hintergrund): Gemerkte Antworten dürfen danach noch einmal
+	// kommen, während sie neu entstehen.
+	grund, allesBeenden := context.WithCancel(store.Hintergrund(context.Background()))
 	defer allesBeenden()
 	srv.SetzeGrund(grund)
 	srv.SetzeBeenden(allesBeenden)
@@ -216,7 +219,14 @@ func run(o Optionen, log *slog.Logger) error {
 	// Filmreihen einmal beim Start bilden. Wer von einer älteren Fassung
 	// kommt, hat sonst keine, bis er das nächste Mal eine Bibliothek prüft.
 	// Unter der Arbeitssperre — nicht neben einem Durchlauf her.
-	go srv.Nacheinander(grund, srv.ReihenBilden)
+	// Danach die kleinen, oft gebrauchten Teile der Datenbank einmal
+	// lesen — nur jetzt und nach langer Ruhe, nie in Abständen
+	// (store/vorwaermen.go). Erst nach den Reihen: Deren Schreiben machte
+	// das Vorgewärmte sonst gleich wieder ungültig.
+	go func() {
+		srv.Nacheinander(grund, srv.ReihenBilden)
+		st.Vorwaermen(grund)
+	}()
 	// Und ab dann hält der Hausmeister die Bibliotheken aktuell.
 	go srv.Hausmeister(grund)
 	// Fehlende Untertitel holen, wenn die Verwaltung es eingeschaltet hat.
@@ -404,11 +414,13 @@ func housekeeping(st *store.Store, stop <-chan struct{}) {
 		case <-stop:
 			return
 		case <-t.C:
-			_ = st.TrimLog(context.Background(), 14*24*time.Hour)
+			// Wartung: zählt als Arbeit im Hintergrund (store.Hintergrund).
+			ctx := store.Hintergrund(context.Background())
+			_ = st.TrimLog(ctx, 14*24*time.Hour)
 			// Ein Gerät, das ein halbes Jahr nicht da war, ist meist
 			// verloren, verkauft oder ersetzt. Seine Anmeldung gilt dann
 			// nicht mehr.
-			_ = st.AlteGeraeteAbmelden(context.Background(), 180*24*time.Hour)
+			_ = st.AlteGeraeteAbmelden(ctx, 180*24*time.Hour)
 		}
 	}
 }

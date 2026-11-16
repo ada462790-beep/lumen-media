@@ -52,6 +52,21 @@ type Store struct {
 	zuletzt zuletztSchreiber
 	// kennzahlen: Abzeichen je Titel, bis sich etwas ändert (kennzahlen.go).
 	kennzahlen kennzahlenSpeicher
+	// abbilder: der eigene Fortschritt je Konto; baumMerk: zu jeder Folge
+	// ihre Serie (fortschritt_abbild.go).
+	abbilder abbildSpeicher
+	baumMerk baumSpeicher
+	// reihenMerk: alle Filmreihen samt Filmen, bis sich die Mediathek
+	// ändert (reihen.go).
+	reihenMerk reihenSpeicher
+	// Zeilen, Bilder und Folgenzahl je Titel, bis sich die Mediathek
+	// ändert (mediathek_merken.go).
+	itemMerk         merkSpeicher[Item]
+	bildMerk         merkSpeicher[bildEintrag]
+	serienFolgenMerk merkSpeicher[[]folgeKurz]
+	zahlMerk         merkSpeicher[[2]int]
+	filmDateienMerk  merkSpeicher[[]FilmDatei]
+	fassungMerk      merkSpeicher[[][2]FassungSeite]
 }
 
 // Open legt die Datenbank an oder öffnet sie und bringt das Schema auf Stand.
@@ -162,7 +177,10 @@ func Open(path string) (*Store, error) {
 // zusatzNachruesten): Specials mit selbst vergebener Nummer und die
 // Ordnerjahre, unter denen eine Serie schon Folgen aufgenommen hat —
 // nichts umzurechnen.
-const SchemaStand = 17
+// Stand 18: schmale Indizes (schmal.go, schmalNachruesten) und
+// media_file.ton_kanaele/ton_sprache, einmal aus den Spuren gefüllt
+// (tonFuellen).
+const SchemaStand = 18
 
 // umbauOffenEndung: die Marke neben der Datenbank, solange ein Umbau
 // nicht ganz durch ist (vorDemNachruesten).
@@ -327,7 +345,13 @@ func umbauen(db *sql.DB) error {
 	// Zeilen bekommen ihn bei der nächsten Änderung.
 	// Stand 17: zwei Spalten an item_zusatz (zusatzNachruesten), nichts
 	// umzurechnen.
-	return nil
+	// Stand 18: Kanäle und Sprache der Tonspuren an jede Datei (schmal.go).
+	if stand < 18 {
+		if err := tonFuellen(db); err != nil {
+			return fmt.Errorf("tonspuren nachtragen: %w", err)
+		}
+	}
+	return erreicht(18)
 }
 
 // Optimieren bringt die Statistik für den Abfrageplaner auf Stand — nach
@@ -362,7 +386,7 @@ func optimieren(ctx context.Context, db *sql.DB) error {
 	if da > 0 {
 		_ = conn.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_stat1 WHERE tbl = 'item'`).Scan(&da)
 	}
-	if da == 0 || statistikVeraltet(ctx, conn) {
+	if da == 0 || statistikVeraltet(ctx, conn) || indexOhneStatistik(ctx, conn) {
 		_, err = conn.ExecContext(ctx, `ANALYZE`)
 		return err
 	}
@@ -371,6 +395,23 @@ func optimieren(ctx context.Context, db *sql.DB) error {
 	}
 	_, err = conn.ExecContext(ctx, `PRAGMA optimize`)
 	return err
+}
+
+// indexOhneStatistik: Ein Index auf item, media_file oder artwork hat
+// noch keine Zeile in sqlite_stat1 — er kam mit einem Update dazu
+// (schmal.go). Ohne Statistik kennt der Planer ihn nicht besser als die
+// alten und nimmt womöglich den breiten Weg über die Tabelle. Indizes mit
+// WHERE zählen nicht: Ein leerer (file_fehlt, wenn nichts fehlt) hätte nie
+// eine Zeile, und jeder Start zählte alles neu.
+func indexOhneStatistik(ctx context.Context, conn *sql.Conn) bool {
+	var n int
+	_ = conn.QueryRowContext(ctx,
+		`SELECT count(*) FROM sqlite_master m
+		  WHERE m.type = 'index' AND m.tbl_name IN ('item', 'media_file', 'artwork')
+		    AND m.sql IS NOT NULL AND m.sql NOT LIKE '% WHERE %'
+		    AND NOT EXISTS (SELECT 1 FROM sqlite_stat1 s WHERE s.idx = m.name)
+		    AND EXISTS (SELECT 1 FROM sqlite_stat1 s WHERE s.tbl = m.tbl_name)`).Scan(&n)
+	return n > 0
 }
 
 // statistikVeraltet: Die Zeilenzahl von item oder media_file weicht um
@@ -411,8 +452,17 @@ func statistikVeraltet(ctx context.Context, conn *sql.Conn) bool {
 // hiess und die den Index nicht schon unter diesem Namen hatte, brach
 // der Start mit „no such column: reihenfolge" ab.
 func nachUmbauIndizes(db *sql.DB) error {
-	_, err := db.Exec(`CREATE INDEX IF NOT EXISTS progress_resume ON progress (account_id, reihenfolge DESC)`)
-	return err
+	for _, stmt := range []string{
+		`CREATE INDEX IF NOT EXISTS progress_resume ON progress (account_id, reihenfolge DESC)`,
+		// Der ganze eigene Fortschritt eines Profils in einem Stück, ohne
+		// die Zeilen der Tabelle (fortschritt_abbild.go).
+		`CREATE INDEX IF NOT EXISTS progress_abbild ON progress (account_id, reihenfolge DESC, item_id, position_ms, duration_ms, finished)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // titelKleinFuellen trägt titel_klein, original_klein und zuletzt_neu für
@@ -679,6 +729,15 @@ func nachruesten(db *sql.DB) error {
 			return err
 		}
 	}
+	// fehlt_seit (Stand 14) muss da sein, bevor die Sortier-Indizes sie
+	// nennen (ordIndizesAnlegen).
+	if _, err := db.Exec(`ALTER TABLE item ADD COLUMN fehlt_seit INTEGER`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column") {
+		return err
+	}
+	if err := ordIndizesAnlegen(db); err != nil {
+		return err
+	}
 	for _, stmt := range []string{
 		`CREATE TABLE IF NOT EXISTS gruppe (
 		   id         TEXT PRIMARY KEY,
@@ -716,11 +775,8 @@ func nachruesten(db *sql.DB) error {
 		`DROP INDEX IF EXISTS item_sort_neu`,
 		`DROP INDEX IF EXISTS item_sort_jahr`,
 		`DROP INDEX IF EXISTS item_sort_wertung`,
-		`CREATE INDEX IF NOT EXISTS item_ord_titel ON item (kind, sort_title, id)`,
-		`CREATE INDEX IF NOT EXISTS item_ord_neu ON item (kind, zuletzt_neu DESC, sort_title, id)`,
-		`CREATE INDEX IF NOT EXISTS item_ord_erschienen ON item (kind, COALESCE(premiered, CAST(year AS TEXT)) DESC, sort_title, id)`,
-		`CREATE INDEX IF NOT EXISTS item_ord_wertung ON item (kind, imdb_rating DESC, sort_title, id)`,
-		`CREATE INDEX IF NOT EXISTS item_ord_laufzeit ON item (kind, runtime_ms IS NULL, runtime_ms, sort_title, id)`,
+		// Die Sortier-Indizes selbst stehen in schmal.go (ordIndizes):
+		// Seit Stand 18 tragen sie auch, was ein Profil sehen darf.
 		// Dateien, die gerade fehlen (Verwaltung → Aufräumen); fast alle
 		// Zeilen haben hier NULL und stehen gar nicht im Index.
 		// Was noch nachzuschlagen ist und was nicht erkannt wurde: Die
@@ -732,7 +788,10 @@ func nachruesten(db *sql.DB) error {
 		// Mediathek — auf einer NAS mit 100 000 Folgen ein Grossteil der
 		// Zeit von /me, und bei kaltem Zwischenspeicher Sprünge über die
 		// ganze Platte.
-		`CREATE INDEX IF NOT EXISTS item_neu_seit ON item (kind, added_at)`,
+		// Mit parent_id (schmal.go): „Neue Folgen von …" kommt von der
+		// Folge zur Staffel, ohne die Zeile der Folge zu lesen.
+		`DROP INDEX IF EXISTS item_neu_seit`,
+		`CREATE INDEX IF NOT EXISTS item_neu_eltern ON item (kind, added_at, parent_id)`,
 		`CREATE INDEX IF NOT EXISTS file_fehlt ON media_file (missing_since) WHERE missing_since IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS playlist_by_account ON playlist (account_id)`,
 		`CREATE INDEX IF NOT EXISTS playlist_item_by_list ON playlist_item (playlist_id, ord)`,
@@ -773,6 +832,10 @@ func nachruesten(db *sql.DB) error {
 	}
 	// Specials und Ordnerjahre an item_zusatz (lokal.go, Stand 17).
 	if err := zusatzNachruesten(db); err != nil {
+		return err
+	}
+	// Schmale Indizes, Tonspuren an der Datei (schmal.go, Stand 18).
+	if err := schmalNachruesten(db); err != nil {
 		return err
 	}
 	// Handbearbeitung, eigene Sammlungen, Untertitel (funktionen_schema.go).
@@ -919,7 +982,8 @@ func (s *Store) RecentLog(ctx context.Context, level string, limit int) ([]LogLi
 
 // TrimLog wirft alte Zeilen weg. Der Besitzer stellt die Aufbewahrung ein.
 func (s *Store) TrimLog(ctx context.Context, keep time.Duration) error {
-	_, err := s.db.ExecContext(ctx,
+	// Wie das Schreiben ins Protokoll: ändert nichts, was eine Seite zeigt.
+	_, err := s.db.ExecContext(OhneStand(ctx),
 		`DELETE FROM log_line WHERE at < ?`, time.Now().Add(-keep).Unix())
 	return err
 }

@@ -78,7 +78,7 @@ type Server struct {
 }
 
 // SetzeGrund gibt den Kontext, der beim Herunterfahren endet.
-func (s *Server) SetzeGrund(ctx context.Context) { s.grund = ctx }
+func (s *Server) SetzeGrund(ctx context.Context) { s.grund = store.Hintergrund(ctx) }
 
 // SetzeBeenden nennt die Funktion, die alle Arbeit im Hintergrund abbricht
 // (das Ende von grund). Ein Neustart nach Update oder Wiederherstellen

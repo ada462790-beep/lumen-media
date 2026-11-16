@@ -254,6 +254,21 @@ func (s *Server) bildSenden(w http.ResponseWriter, r *http.Request, ordner, name
 // schon schmal genug (oder ziel 0), kommt das Original. art ist leer,
 // wenn es das Original ist.
 func (s *Server) bildInBreite(ctx context.Context, path, name string, info os.FileInfo, ziel int) ([]byte, string, error) {
+	// Schon einmal verkleinert? Die Datei trägt die Änderungszeit des
+	// Originals: Ändert sich das Original, passt sie nicht mehr. Zuerst,
+	// vor dem Original: Eine verkleinerte Fassung gibt es nur, wenn das
+	// Original breiter war. Vorher las jede Anfrage erst das ganze
+	// Original (oft über ein Megabyte) — auf einer kalten Platte über eine
+	// Sekunde je Bild, auch wenn die kleine Fassung längst daneben lag.
+	klein := ""
+	if ziel > 0 {
+		klein = filepath.Join(s.dataDir, kleinOrdner, strconv.Itoa(ziel), strings.TrimSuffix(name, filepath.Ext(name))+".jpg")
+		if ki, err := os.Stat(klein); err == nil && ki.ModTime().Equal(info.ModTime()) {
+			if b, err := os.ReadFile(klein); err == nil {
+				return b, "image/jpeg", nil
+			}
+		}
+	}
 	roh, err := os.ReadFile(path)
 	if err != nil {
 		return nil, "", err
@@ -267,14 +282,6 @@ func (s *Server) bildInBreite(ctx context.Context, path, name string, info os.Fi
 	}
 	if kopf.Width <= ziel {
 		return roh, "", nil
-	}
-	// Schon einmal verkleinert? Die Datei trägt die Änderungszeit des
-	// Originals: Ändert sich das Original, passt sie nicht mehr.
-	klein := filepath.Join(s.dataDir, kleinOrdner, strconv.Itoa(ziel), strings.TrimSuffix(name, filepath.Ext(name))+".jpg")
-	if ki, err := os.Stat(klein); err == nil && ki.ModTime().Equal(info.ModTime()) {
-		if b, err := os.ReadFile(klein); err == nil {
-			return b, "image/jpeg", nil
-		}
 	}
 	var out bytes.Buffer
 	err = bildDekodieren(ctx, roh, bildGrenzen{seite: 20000}, func(img image.Image) error {
@@ -510,4 +517,94 @@ func ycbcrNachRGB(y, cb, cr uint8) (uint8, uint8, uint8) {
 		return 255
 	}
 	return k(r), k(g), k(b)
+}
+
+// ---------------------------------------------------------------- Vorbereiten
+
+// Die Poster der Startseite werden im Hintergrund schon verkleinert, bevor
+// jemand sie sieht: Das erste Verkleinern eines grossen Posters dauerte
+// auf einer NAS über eine Sekunde (Original von der Platte lesen,
+// dekodieren, neu kodieren). Nur wenn die Startseite neu gerechnet wird,
+// nie von selbst in Ruhe; einer nach dem anderen, mit Pausen dazwischen.
+
+// posterBreiten: in diesen Breiten zeigt die Startseite Poster
+// (app.js, artOf: 230 Punkte breit, einfache und doppelte Dichte).
+var posterBreiten = []int{342, 500}
+
+const (
+	// posterHoechstens: so viele Bilder je Durchgang.
+	posterHoechstens = 120
+	// posterPause: zwischen zwei Bildern.
+	posterPause = 40 * time.Millisecond
+)
+
+var bildVorbereitung struct {
+	mu       sync.Mutex
+	laeuft   bool
+	geprueft map[string]bool // Name, Änderungszeit, Breite: schon da oder nicht nötig
+}
+
+// posterVorbereiten verkleinert die Poster dieser Titel im Hintergrund vor,
+// soweit es noch keine kleine Fassung gibt. Läuft schon ein Durchgang,
+// bleibt es dabei.
+func (s *Server) posterVorbereiten(ids []string) {
+	if s.meta == nil || s.dataDir == "" || len(ids) == 0 {
+		return
+	}
+	v := &bildVorbereitung
+	v.mu.Lock()
+	if v.laeuft {
+		v.mu.Unlock()
+		return
+	}
+	v.laeuft = true
+	if v.geprueft == nil || len(v.geprueft) > 50000 {
+		v.geprueft = map[string]bool{}
+	}
+	v.mu.Unlock()
+	s.begleitet(func(ctx context.Context) {
+		defer func() {
+			v.mu.Lock()
+			v.laeuft = false
+			v.mu.Unlock()
+		}()
+		art, err := s.st.ArtworkFor(ctx, ids)
+		if err != nil {
+			return
+		}
+		n := 0
+		for _, id := range ids {
+			name := art[id]["poster"]
+			if name == "" || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
+				continue
+			}
+			path := filepath.Join(s.meta.ArtDir(), name)
+			info, err := os.Stat(path)
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			for _, b := range posterBreiten {
+				k := name + "\x00" + strconv.FormatInt(info.ModTime().UnixNano(), 10) + "\x00" + strconv.Itoa(b)
+				v.mu.Lock()
+				schon := v.geprueft[k]
+				v.mu.Unlock()
+				if schon {
+					continue
+				}
+				if ctx.Err() != nil || n >= posterHoechstens {
+					return
+				}
+				// bildInBreite legt die kleine Fassung an (oder liest sie,
+				// wenn es sie schon gibt).
+				if _, _, err := s.bildInBreite(ctx, path, name, info, b); err != nil {
+					continue
+				}
+				v.mu.Lock()
+				v.geprueft[k] = true
+				v.mu.Unlock()
+				n++
+				time.Sleep(posterPause)
+			}
+		}
+	})
 }

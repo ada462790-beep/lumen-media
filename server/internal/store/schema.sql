@@ -114,7 +114,9 @@ CREATE TABLE IF NOT EXISTS item (
   match_state   TEXT NOT NULL DEFAULT 'pending' -- pending | matched | unmatched | manual
 );
 CREATE INDEX IF NOT EXISTS item_by_library ON item (library_id, kind);
-CREATE INDEX IF NOT EXISTS item_by_parent  ON item (parent_id, season_no, episode_no);
+-- Mit Art, Hinzufügen und Kennung: Kinder lassen sich ohne ihre Zeilen
+-- lesen (schmal.go; ältere Datenbanken bekommen ihn dort neu).
+CREATE INDEX IF NOT EXISTS item_by_parent  ON item (parent_id, season_no, episode_no, kind, added_at, id);
 CREATE INDEX IF NOT EXISTS item_by_sort    ON item (sort_title);
 
 -- Suchindex als gewöhnliche Tabelle statt FTS5: eine Mediathek zu Hause hat

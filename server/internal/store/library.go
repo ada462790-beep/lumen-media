@@ -447,6 +447,11 @@ type Query struct {
 	// Buchstabe: nur Titel, die damit anfangen („a" … „z"), „#" für alles
 	// andere (Zahlen, Zeichen).
 	Buchstabe string
+	// NeuSeit: nur Titel, bei denen seit diesem Zeitpunkt (Unix-Sekunden)
+	// etwas dazukam (zuletzt_neu: der Titel selbst oder bei Serien eine
+	// Folge); 0 = alle. SQLite liest dann über item_ord_neu nur diese.
+	// Ob der Titel selbst neu ist (added_at), prüft der Aufrufer.
+	NeuSeit int64
 	// Freigabe: die Abfrage kommt aus den Rechten eines Kontos. Dann
 	// heisst „keine Bibliotheken" auch „nichts" — auch wenn Kennungen
 	// mitkommen. Ohne diesen Riegel lief eine Abfrage mit Kennungen und
@@ -525,14 +530,21 @@ func bedingung(q Query) (where []string, args []any, ok bool) {
 		args = append(args, q.Genre)
 	}
 	if t := strings.TrimSpace(q.Text); t != "" {
+		// Von den Treffern im Suchtext zu den Titeln, nicht umgekehrt: Mit
+		// EXISTS je Titel ging die Suche nach Folgen alle 15 000 Folgen
+		// samt ihren Zeilen durch (fast die ganze Datei).
 		where = append(where,
-			`EXISTS (SELECT 1 FROM item_search s WHERE s.item_id = i.id AND s.haystack LIKE ?)`)
+			`i.id IN (SELECT s.item_id FROM item_search s WHERE s.haystack LIKE ?)`)
 		args = append(args, "%"+fold(strings.ToLower(t))+"%")
 	}
 	if p := strings.TrimSpace(q.Person); p != "" {
 		where = append(where,
 			`EXISTS (SELECT 1 FROM besetzung b WHERE b.item_id = i.id AND lower(b.name) LIKE ?)`)
 		args = append(args, "%"+strings.ToLower(p)+"%")
+	}
+	if q.NeuSeit > 0 {
+		where = append(where, `i.zuletzt_neu >= ?`)
+		args = append(args, q.NeuSeit)
 	}
 	if q.JahrVon > 0 {
 		where = append(where, `i.year >= ?`)
@@ -586,26 +598,127 @@ func (s *Store) Query(ctx context.Context, q Query) ([]Item, error) {
 		return s.queryInGo(ctx, q, where, args, schluessel, absteigend)
 	}
 
-	sqlText := `SELECT ` + itemCols + ` FROM item i WHERE ` + strings.Join(where, " AND ") +
-		` ORDER BY ` + order + ` LIMIT ? OFFSET ?`
-	args = append(args, q.Limit, q.Offset)
-
+	// Zwei Schritte: erst die Kennungen der Seite (nur über Indizes, wo
+	// einer passt), dann die Zeilen dieser Kennungen. In einem Schritt las
+	// SQLite für jeden Titel, der sortiert wurde, die ganze Zeile samt
+	// Beschreibung — bei „Neu dazugekommen" alle Filme und Serien, um
+	// zwanzig davon zu zeigen.
+	var sqlText string
+	if teile, targs, ok := jeArtGetrennt(q, schluessel, absteigend); ok {
+		sqlText, args = teile, targs
+	} else {
+		sqlText = `SELECT i.id FROM item i WHERE ` + strings.Join(where, " AND ") +
+			` ORDER BY ` + order + ` LIMIT ? OFFSET ?`
+		args = append(args, q.Limit, q.Offset)
+	}
 	rows, err := s.db.QueryContext(ctx, sqlText, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	ids, err := collectStrings(rows)
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	return s.itemsInReihenfolge(ctx, ids)
+}
 
-	out := []Item{}
-	for rows.Next() {
-		it, err := scanItem(rows)
+// jeArtGetrennt: Gilt eine Abfrage mehreren Arten (Filme und Serien) und
+// sortiert sie nach einer Spalte mit eigenem Index (item_ord_*), liest
+// SQLite sonst alle Titel beider Arten und sortiert sie. Getrennt je Art
+// liefert jeder Index seine ersten Limit+Offset in Reihenfolge, und nur
+// diese werden zusammen sortiert.
+func jeArtGetrennt(q Query, schluessel string, absteigend bool) (string, []any, bool) {
+	kinds := q.Kinds
+	if len(kinds) == 0 {
+		kinds = []string{"movie", "series"}
+	}
+	if len(kinds) < 2 || len(q.IDs) > 0 || q.Sort == "liste" || q.Sort == "relevanz" ||
+		strings.TrimSpace(q.Text) != "" {
+		return "", nil, false
+	}
+	r, bekannt := rasterSortierungen[schluessel]
+	if !bekannt || r.inGo {
+		return "", nil, false
+	}
+	spalte := "NULL"
+	if r.spalte != "" {
+		spalte = r.spalte
+	}
+	order := sqlOrdnung(schluessel, absteigend)
+	var teile []string
+	var args []any
+	for _, k := range kinds {
+		qq := q
+		qq.Kinds = []string{k}
+		w, a, ok := bedingung(qq)
+		if !ok {
+			return "", nil, false
+		}
+		teile = append(teile, `SELECT * FROM (SELECT i.id AS id, `+spalte+` AS s1, i.sort_title AS s2
+		   FROM item i WHERE `+strings.Join(w, " AND ")+` ORDER BY `+order+` LIMIT ?)`)
+		args = append(append(args, a...), q.Limit+q.Offset)
+	}
+	var aussen string
+	switch {
+	case r.spalte == "" && absteigend:
+		aussen = `s2 DESC, id DESC`
+	case r.spalte == "":
+		aussen = `s2, id`
+	case absteigend:
+		aussen = `s1 DESC, s2, id`
+	default:
+		aussen = `s1 IS NULL, s1, s2, id`
+	}
+	return `SELECT id FROM (` + strings.Join(teile, ` UNION ALL `) + `) ORDER BY ` + aussen + ` LIMIT ? OFFSET ?`,
+		append(args, q.Limit, q.Offset), true
+}
+
+// itemsInReihenfolge holt die Zeilen zu Kennungen und gibt sie in deren
+// Reihenfolge zurück; was es nicht gibt, fehlt.
+func (s *Store) itemsInReihenfolge(ctx context.Context, ids []string) ([]Item, error) {
+	out := make([]Item, 0, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	nach := make(map[string]Item, len(ids))
+	// Die Zeilen bleiben im Speicher, bis sich die Mediathek ändert
+	// (mediathek_merken.go).
+	stand := StandMediathek()
+	fehlt := s.itemMerk.holen(stand, ids, nach)
+	neu := make(map[string]Item, len(fehlt))
+	for a := 0; a < len(fehlt); a += 500 {
+		teil := fehlt[a:min(a+500, len(fehlt))]
+		rows, err := s.db.QueryContext(ctx, `SELECT `+itemCols+` FROM item i WHERE i.id IN (`+placeholders(len(teil))+`)`, toAny(teil)...)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, *it)
+		for rows.Next() {
+			it, err := scanItem(rows)
+			if err != nil {
+				rows.Close()
+				return nil, err
+			}
+			nach[it.ID] = *it
+			neu[it.ID] = *it
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 	}
-	return out, rows.Err()
+	s.itemMerk.merken(stand, fehlt, neu, itemMerkHoechstens)
+	for _, id := range ids {
+		if it, ok := nach[id]; ok {
+			out = append(out, it)
+		}
+	}
+	return out, nil
 }
+
+// itemMerkHoechstens: so viele Zeilen behält der Speicher (je etwa ein
+// Kilobyte mit Beschreibung).
+const itemMerkHoechstens = 8000
 
 // TitelGleich sucht Titel einer Art in einer Bibliothek, die genau so
 // heissen (ohne Rücksicht auf Gross- und Kleinschreibung) — über den
@@ -743,36 +856,54 @@ func dateiEintragen(ctx context.Context, t *sql.Tx, f *MediaFile) error {
 // stehen je Teil hinten — auch eine defekte bevorzugte —, damit die Apps,
 // die die erste Datei als Standard nehmen, nie mit einer defekten beginnen.
 func (s *Store) FilesFor(ctx context.Context, itemID string) ([]MediaFile, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, item_id, path, size_bytes, mtime, part_no, COALESCE(edition,''),
-		        COALESCE(container,''), COALESCE(duration_ms,0), COALESCE(bitrate,0),
-		        COALESCE(width,0), COALESCE(height,0), COALESCE(video_codec,''),
-		        COALESCE(hdr,''), missing_since,
-		        id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), ''),
-		        COALESCE(defekt,'')
-		   FROM media_file WHERE item_id = ?
-		  ORDER BY part_no,
-		           COALESCE(defekt,'') <> '',
-		           id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), '') DESC,
-		           COALESCE(height,0) DESC, size_bytes DESC`, itemID)
+	m, err := s.filesForMehrere(ctx, []string{itemID})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	if m[itemID] == nil {
+		return []MediaFile{}, nil
+	}
+	return m[itemID], nil
+}
 
-	out := []MediaFile{}
-	for rows.Next() {
-		var f MediaFile
-		var missing sql.NullInt64
-		if err := rows.Scan(&f.ID, &f.ItemID, &f.Path, &f.SizeBytes, &f.MTime, &f.PartNo,
-			&f.Edition, &f.Container, &f.DurationMS, &f.Bitrate, &f.Width, &f.Height,
-			&f.VideoCodec, &f.HDR, &missing, &f.Bevorzugt, &f.Defekt); err != nil {
+// filesForMehrere wie FilesFor für mehrere Titel in einer Abfrage.
+func (s *Store) filesForMehrere(ctx context.Context, itemIDs []string) (map[string][]MediaFile, error) {
+	out := map[string][]MediaFile{}
+	for a := 0; a < len(itemIDs); a += 400 {
+		teil := itemIDs[a:min(a+400, len(itemIDs))]
+		rows, err := s.db.QueryContext(ctx,
+			`SELECT id, item_id, path, size_bytes, mtime, part_no, COALESCE(edition,''),
+			        COALESCE(container,''), COALESCE(duration_ms,0), COALESCE(bitrate,0),
+			        COALESCE(width,0), COALESCE(height,0), COALESCE(video_codec,''),
+			        COALESCE(hdr,''), missing_since,
+			        id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), ''),
+			        COALESCE(defekt,'')
+			   FROM media_file WHERE item_id IN (`+placeholders(len(teil))+`)
+			  ORDER BY item_id, part_no,
+			           COALESCE(defekt,'') <> '',
+			           id = COALESCE((SELECT bevorzugte_datei FROM item WHERE id = media_file.item_id), '') DESC,
+			           COALESCE(height,0) DESC, size_bytes DESC`, toAny(teil)...)
+		if err != nil {
 			return nil, err
 		}
-		f.Missing = missing.Valid
-		out = append(out, f)
+		for rows.Next() {
+			var f MediaFile
+			var missing sql.NullInt64
+			if err := rows.Scan(&f.ID, &f.ItemID, &f.Path, &f.SizeBytes, &f.MTime, &f.PartNo,
+				&f.Edition, &f.Container, &f.DurationMS, &f.Bitrate, &f.Width, &f.Height,
+				&f.VideoCodec, &f.HDR, &missing, &f.Bevorzugt, &f.Defekt); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			f.Missing = missing.Valid
+			out[f.ItemID] = append(out[f.ItemID], f)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Store) File(ctx context.Context, id string) (*MediaFile, error) {
@@ -915,17 +1046,23 @@ const teileVon = `
 // — für die Übersicht, die nur die Zahl zeigt („in Teilen", wie der
 // Abschnitt auf der Seite Aufräumen).
 func (s *Store) DoppelZahl(ctx context.Context) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT count(*) `+teileVon).Scan(&n)
-	return n, err
+	v, err := s.zahlGemerkt("doppel", func() ([2]int, error) {
+		var n int
+		err := s.db.QueryRowContext(ctx, `SELECT count(*) `+teileVon).Scan(&n)
+		return [2]int{n}, err
+	})
+	return v[0], err
 }
 
 // FehlendZahl zählt die Dateien, die gerade fehlen (Index file_fehlt).
 func (s *Store) FehlendZahl(ctx context.Context) (int, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT count(*) FROM media_file WHERE missing_since IS NOT NULL`).Scan(&n)
-	return n, err
+	v, err := s.zahlGemerkt("fehlend", func() ([2]int, error) {
+		var n int
+		err := s.db.QueryRowContext(ctx,
+			`SELECT count(*) FROM media_file WHERE missing_since IS NOT NULL`).Scan(&n)
+		return [2]int{n}, err
+	})
+	return v[0], err
 }
 
 func (s *Store) Duplicates(ctx context.Context) ([]Duplicate, error) {
@@ -947,8 +1084,14 @@ func (s *Store) Duplicates(ctx context.Context) ([]Duplicate, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	// Die Dateien aller Doppel in einer Abfrage (vorher eine je Film).
+	ids := make([]string, len(out))
 	for i := range out {
-		alle, _ := s.FilesFor(ctx, out[i].ItemID)
+		ids[i] = out[i].ItemID
+	}
+	dateien, _ := s.filesForMehrere(ctx, ids)
+	for i := range out {
+		alle := dateien[out[i].ItemID]
 		// Nur die vorhandenen Teile; eine fehlende Datei steht unter
 		// „Fehlende Dateien".
 		out[i].Files = make([]MediaFile, 0, len(alle))
@@ -1013,18 +1156,24 @@ func (s *Store) MissingFilesSeite(ctx context.Context, grenze, versatz int) ([]M
 // entweder weil keine Quelle eingerichtet ist oder weil der Durchlauf noch
 // läuft.
 func (s *Store) PendingCount(ctx context.Context) int {
-	var n int
-	_ = s.db.QueryRowContext(ctx,
-		`SELECT count(*) FROM item WHERE match_state = 'pending'
-		   AND kind IN ('movie','series')`).Scan(&n)
-	return n
+	v, _ := s.zahlGemerkt("pending", func() ([2]int, error) {
+		var n int
+		err := s.db.QueryRowContext(ctx,
+			`SELECT count(*) FROM item WHERE match_state = 'pending'
+			   AND kind IN ('movie','series')`).Scan(&n)
+		return [2]int{n}, err
+	})
+	return v[0]
 }
 
 func (s *Store) UnmatchedCount(ctx context.Context) int {
-	var n int
-	_ = s.db.QueryRowContext(ctx,
-		`SELECT count(*) FROM item WHERE match_state = 'unmatched' AND kind IN ('movie','series')`).Scan(&n)
-	return n
+	v, _ := s.zahlGemerkt("unmatched", func() ([2]int, error) {
+		var n int
+		err := s.db.QueryRowContext(ctx,
+			`SELECT count(*) FROM item WHERE match_state = 'unmatched' AND kind IN ('movie','series')`).Scan(&n)
+		return [2]int{n}, err
+	})
+	return v[0]
 }
 
 // ---------------------------------------------------------------- Hilfen
@@ -1249,30 +1398,59 @@ func (s *Store) ArtworkMitStand(ctx context.Context, itemIDs []string) (namen, s
 	if len(itemIDs) == 0 {
 		return namen, staende, nil
 	}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT a.item_id, a.kind, a.path, COALESCE(a.source_url,''),
-		        COALESCE(lb.mtime,0), COALESCE(lb.groesse,0)
-		   FROM artwork a LEFT JOIN lokal_bild lb ON lb.item_id = a.item_id AND lb.art = a.kind
-		  WHERE a.item_id IN (`+placeholders(len(itemIDs))+`)`, toAny(itemIDs)...)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id, kind, path, quelle string
-		var mtime, groesse int64
-		if err := rows.Scan(&id, &kind, &path, &quelle, &mtime, &groesse); err != nil {
+	// Gemerkt je Titel, bis sich die Mediathek ändert (mediathek_merken.go):
+	// Die Zeilen von artwork tragen lange Adressen, und eine Liste braucht
+	// sie für jeden Titel.
+	stand := StandMediathek()
+	gemerkt := map[string]bildEintrag{}
+	fehlt := s.bildMerk.holen(stand, itemIDs, gemerkt)
+	neu := map[string]bildEintrag{}
+	for a := 0; a < len(fehlt); a += 500 {
+		teil := fehlt[a:min(a+500, len(fehlt))]
+		rows, err := s.db.QueryContext(ctx,
+			`SELECT a.item_id, a.kind, a.path, COALESCE(a.source_url,''),
+			        COALESCE(lb.mtime,0), COALESCE(lb.groesse,0)
+			   FROM artwork a LEFT JOIN lokal_bild lb ON lb.item_id = a.item_id AND lb.art = a.kind
+			  WHERE a.item_id IN (`+placeholders(len(teil))+`)`, toAny(teil)...)
+		if err != nil {
 			return nil, nil, err
 		}
-		if namen[id] == nil {
-			namen[id], staende[id] = map[string]string{}, map[string]string{}
+		for rows.Next() {
+			var id, kind, path, quelle string
+			var mtime, groesse int64
+			if err := rows.Scan(&id, &kind, &path, &quelle, &mtime, &groesse); err != nil {
+				rows.Close()
+				return nil, nil, err
+			}
+			e, ok := neu[id]
+			if !ok {
+				e = bildEintrag{namen: map[string]string{}, staende: map[string]string{}}
+				neu[id] = e
+			}
+			e.namen[kind] = path
+			h := fnv.New64a()
+			fmt.Fprintf(h, "%s\x00%s\x00%d\x00%d", path, quelle, mtime, groesse)
+			e.staende[kind] = strconv.FormatUint(h.Sum64()%(1<<40), 36)
 		}
-		namen[id][kind] = path
-		h := fnv.New64a()
-		fmt.Fprintf(h, "%s\x00%s\x00%d\x00%d", path, quelle, mtime, groesse)
-		staende[id][kind] = strconv.FormatUint(h.Sum64()%(1<<40), 36)
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, nil, err
+		}
 	}
-	return namen, staende, rows.Err()
+	s.bildMerk.merken(stand, fehlt, neu, 20000)
+	for id, e := range neu {
+		gemerkt[id] = e
+	}
+	// Die inneren Karten werden geteilt: Aufrufer lesen sie nur.
+	for id, e := range gemerkt {
+		namen[id], staende[id] = e.namen, e.staende
+	}
+	return namen, staende, nil
+}
+
+// bildEintrag: die Bilder eines Titels (Art → Datei) und ihr Stand.
+type bildEintrag struct {
+	namen, staende map[string]string
 }
 
 // UnmatchedItems sind die Titel, die der Besitzer von Hand zuordnen muss —
@@ -1588,7 +1766,7 @@ func erstePfadeSQL(n int) string {
 	         SELECT parent_id, id FROM item INDEXED BY item_by_parent WHERE parent_id IN (` + ph + `)
 	         UNION ALL
 	         SELECT st.parent_id, e.id FROM item st INDEXED BY item_by_parent
-	           JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
+	           CROSS JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
 	          WHERE st.parent_id IN (` + ph + `)) x
 	   CROSS JOIN item e CROSS JOIN media_file f INDEXED BY file_by_item
 	  WHERE e.id = x.e AND f.item_id = x.e`

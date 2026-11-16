@@ -22,6 +22,14 @@ package api
 // kommt sie trotzdem sofort, und Lumen rechnet sie für das nächste Mal im
 // Hintergrund neu (Zufallsreihen, „neu seit"). Was persönlich ist, bleibt
 // beim Profil: Der Schlüssel enthält Konto und Gerät.
+//
+// Hat seither nur die Arbeit im Hintergrund geschrieben — ein Durchlauf,
+// Metadaten, die Wartung (store.StandHart blieb stehen) —, kommt die
+// gemerkte Antwort ebenfalls sofort und wird daneben neu gerechnet.
+// Früher leerte jedes solche Schreiben alle Antworten: Lief abends etwas
+// im Hintergrund, rechnete die Startseite bei jedem Öffnen neu, auf
+// kalten Platten mehrere Sekunden. Was jemand selbst ändert (Haken,
+// Merkliste, Freigaben), rückt StandHart weiter und ist sofort zu sehen.
 
 import (
 	"bytes"
@@ -42,9 +50,15 @@ const (
 	antwortHoechstens = 16 << 20
 )
 
+// antwortNachrechnen: so lange nach dem letzten Rechnen wird eine Antwort,
+// die nur der Hintergrund überholt hat, nicht schon wieder neu gerechnet —
+// ein Durchlauf schreibt ständig. (Variable nur für Tests.)
+var antwortNachrechnen = 30 * time.Second
+
 type antwortEintrag struct {
 	status int // 0 = 200
 	stand  int64
+	hart   int64 // store.StandHart beim Rechnen
 	zeit   time.Time
 	kopf   http.Header
 	inhalt []byte
@@ -122,18 +136,27 @@ func (s *Server) gemerkt(h http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		k := antwortSchluessel(w, r)
-		if e := s.antworten.holen(k); e != nil && e.stand == store.Stand() {
-			if time.Since(e.zeit) >= antwortFrisch && s.antworten.neuRechnen(k, true) {
-				// Sofort liefern, für das nächste Mal neu rechnen.
-				r2 := r.Clone(context.WithoutCancel(r.Context()))
-				kopf := w.Header().Clone()
-				s.begleitet(func(context.Context) {
-					defer s.antworten.neuRechnen(k, false)
-					s.antwortRechnen(h, kopf, r2, k)
-				})
+		if e := s.antworten.holen(k); e != nil {
+			jetzt, hart := store.Stand(), store.StandHart()
+			// Gültig, aber alt — oder nur vom Hintergrund überholt: sofort
+			// liefern und für das nächste Mal neu rechnen.
+			veraltet := (e.stand == jetzt && time.Since(e.zeit) >= antwortFrisch) ||
+				(e.stand != jetzt && e.hart == hart && time.Since(e.zeit) >= antwortNachrechnen)
+			if e.stand == jetzt || e.hart == hart {
+				if veraltet && s.antworten.neuRechnen(k, true) {
+					// Eigene Messung: Die Zeit des Nachrechnens gehört nicht
+					// zu dieser Anfrage (Server-Timing, langsame Anfragen).
+					nctx, _ := store.MitMessung(context.WithoutCancel(r.Context()))
+					r2 := r.Clone(nctx)
+					kopf := w.Header().Clone()
+					s.begleitet(func(context.Context) {
+						defer s.antworten.neuRechnen(k, false)
+						s.antwortRechnen(h, kopf, r2, k)
+					})
+				}
+				antwortSenden(w, e)
+				return
 			}
-			antwortSenden(w, e)
-			return
 		}
 		e := s.antwortRechnen(h, w.Header().Clone(), r, k)
 		antwortSenden(w, e)
@@ -143,16 +166,19 @@ func (s *Server) gemerkt(h http.HandlerFunc) http.HandlerFunc {
 // antwortRechnen ruft den Weg und legt die Antwort ab, wenn sie gelang
 // und sich während des Rechnens nichts geändert hat.
 func (s *Server) antwortRechnen(h http.HandlerFunc, kopf http.Header, r *http.Request, k string) *antwortEintrag {
-	vorher := store.Stand()
+	vorher, hart := store.Stand(), store.StandHart()
 	rec := &antwortAufnahme{kopf: kopf, status: http.StatusOK}
 	h(rec, r)
-	e := &antwortEintrag{stand: vorher, zeit: time.Now(), kopf: rec.kopf, inhalt: rec.inhalt.Bytes()}
+	e := &antwortEintrag{stand: vorher, hart: hart, zeit: time.Now(), kopf: rec.kopf, inhalt: rec.inhalt.Bytes()}
 	if rec.status != http.StatusOK {
 		// Fehler werden nicht aufbewahrt.
 		e.status = rec.status
 		return e
 	}
-	if store.Stand() == vorher {
+	// Hat während des Rechnens nur der Hintergrund geschrieben, gilt die
+	// Antwort trotzdem (mit dem Stand von vorher — die nächste Anfrage
+	// rechnet sie dann im Hintergrund nach).
+	if store.StandHart() == hart {
 		s.antworten.ablegen(k, e)
 	}
 	return e

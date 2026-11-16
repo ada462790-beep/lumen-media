@@ -13,6 +13,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -30,20 +32,46 @@ type Kennzahl struct {
 //
 // Für eine Serie heisst das: alle Dateien aller Folgen ansehen. Die
 // Startseite fragt das bei jedem Aufruf für Dutzende Serien — darum
-// bleiben die Ergebnisse im Speicher, bis sich in der Datenbank etwas
-// ändert (Stand). Auch Titel ohne Datei werden gemerkt.
+// bleiben die Ergebnisse im Speicher, bis sich in der Mediathek etwas
+// ändert (StandMediathek — ein gespeicherter Stand beim Schauen zählt
+// nicht). Auch Titel ohne Datei werden gemerkt.
 func (s *Store) Kennzahlen(ctx context.Context, ids []string) (map[string]Kennzahl, error) {
+	return s.kennzahlenRechnen(ctx, ids, func(string) bool { return true })
+}
+
+// KennzahlenFuer wie Kennzahlen, aber nur Serien und Staffeln sehen bei
+// ihren Kindern nach: Ein Film hat keine Folgen, und die Suche danach
+// kostete bei 800 Filmen 1600 Sprünge in item_by_parent.
+func (s *Store) KennzahlenFuer(ctx context.Context, items []Item) (map[string]Kennzahl, error) {
+	ids := make([]string, len(items))
+	kinder := map[string]bool{}
+	for i, it := range items {
+		ids[i] = it.ID
+		if it.Kind == "series" || it.Kind == "season" {
+			kinder[it.ID] = true
+		}
+	}
+	return s.kennzahlenRechnen(ctx, ids, func(id string) bool { return kinder[id] })
+}
+
+func (s *Store) kennzahlenRechnen(ctx context.Context, ids []string, mitKindern func(string) bool) (map[string]Kennzahl, error) {
 	out := map[string]Kennzahl{}
 	if len(ids) == 0 {
 		return out, nil
 	}
-	stand := Stand()
+	stand := StandMediathek()
 	fehlt := s.kennzahlenAusSpeicher(stand, ids, out)
 	if len(fehlt) == 0 {
 		return out, nil
 	}
+	var eltern []string
+	for _, id := range fehlt {
+		if mitKindern(id) {
+			eltern = append(eltern, id)
+		}
+	}
 	neu := map[string]Kennzahl{}
-	rows, err := s.db.QueryContext(ctx, kennzahlenSQL(len(fehlt)), kennzahlenArgs(fehlt)...)
+	rows, err := s.db.QueryContext(ctx, kennzahlenSQL(len(fehlt), len(eltern)), kennzahlenArgs(fehlt, eltern)...)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +129,7 @@ func (s *Store) kennzahlenMerken(stand int64, gefragt []string, neu map[string]K
 	defer k.mu.Unlock()
 	// Erst gerechnet, dann gemerkt: Hat sich der Stand inzwischen
 	// geändert, passt das Ergebnis nicht mehr.
-	if Stand() != stand {
+	if StandMediathek() != stand {
 		return
 	}
 	if k.stand != stand || k.m == nil || len(k.m) > 50000 {
@@ -123,26 +151,51 @@ func (s *Store) NeueFolgenSeit(ctx context.Context, accountID string, seriesIDs 
 	if len(seriesIDs) == 0 {
 		return out, nil
 	}
-	args := append([]any{seit.Unix(), accountID}, toAny(seriesIDs)...)
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT st.parent_id, count(*) FROM item e JOIN item st ON st.id = e.parent_id
-		  WHERE e.kind = 'episode' AND e.added_at > ?
-		    AND NOT EXISTS (SELECT 1 FROM progress p WHERE p.account_id = ? AND p.item_id = e.id AND p.finished = 1)
-		    AND st.parent_id IN (`+placeholders(len(seriesIDs))+`)
-		  GROUP BY st.parent_id`, args...)
+	neu, err := s.neueFolgen(ctx, seriesIDs, seit)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id string
-		var n int
-		if err := rows.Scan(&id, &n); err != nil {
+	var a *abbild
+	if accountID != "" {
+		// Was dieses Profil schon gesehen hat, aus seinem Stand im
+		// Speicher (fortschritt_abbild.go) — nicht je Folge in progress.
+		if a, err = s.fortschrittAbbild(ctx, accountID); err != nil {
 			return nil, err
 		}
-		out[id] = n
 	}
-	return out, rows.Err()
+	for _, f := range neu {
+		if a != nil {
+			if z, ok := a.zeile(f.id); ok && z.fertig {
+				continue
+			}
+		}
+		out[f.serie]++
+	}
+	return out, nil
+}
+
+// neueFolge: eine Folge, jünger als ein Zeitpunkt.
+type neueFolge struct {
+	serie, id string
+	neu       int64
+}
+
+// neueFolgen: die Folgen dieser Serien, die nach seit dazukamen — über
+// item_by_parent (Serie → Staffeln → Folgen) ohne die Zeilen selbst.
+func (s *Store) neueFolgen(ctx context.Context, seriesIDs []string, seit time.Time) ([]neueFolge, error) {
+	alle, err := s.serienFolgenKurz(ctx, seriesIDs)
+	if err != nil {
+		return nil, err
+	}
+	var out []neueFolge
+	for _, serie := range seriesIDs {
+		for _, f := range alle[serie] {
+			if f.neu > seit.Unix() {
+				out = append(out, neueFolge{serie: serie, id: f.id, neu: f.neu})
+			}
+		}
+	}
+	return out, nil
 }
 
 // kennzahlenSQL: drei Zweige mit UNION ALL (der Titel selbst, seine
@@ -152,26 +205,35 @@ func (s *Store) NeueFolgenSeit(ctx context.Context, accountID string, seriesIDs 
 // wertlos (beim ersten ANALYZE war es überall NULL), und SQLite las für
 // jede Datei einer Folge die ganze Tabelle item — die Startseite brauchte
 // 245 s. INDEXED BY und CROSS JOIN (z zuerst, dann die Dateien) legen
-// die Wege fest, unabhängig von der Statistik.
-func kennzahlenSQL(n int) string {
-	ph := placeholders(n)
+// die Wege fest, unabhängig von der Statistik — auch zwischen Staffel und
+// Folge: Seit item_by_parent die Kennung mitführt (schmal.go), hätte SQLite
+// mit veralteter Statistik sonst alle Folgen durchgesehen und die Staffel
+// dazu gesucht.
+func kennzahlenSQL(n, eltern int) string {
+	pe := "NULL"
+	if eltern > 0 {
+		pe = placeholders(eltern)
+	}
+	// Der erste Zweig liest die Kennungen nicht aus item (sie kommen ja
+	// mit): Eine Kennung ohne Titel hat auch keine Datei.
+	werte := strings.TrimSuffix(strings.Repeat("(?),", n), ",")
 	return `WITH z(t, e) AS (
-		     SELECT id, id FROM item WHERE id IN (` + ph + `)
+		     SELECT column1, column1 FROM (VALUES ` + werte + `)
 		     UNION ALL
-		     SELECT parent_id, id FROM item INDEXED BY item_by_parent WHERE parent_id IN (` + ph + `)
+		     SELECT parent_id, id FROM item INDEXED BY item_by_parent WHERE parent_id IN (` + pe + `)
 		     UNION ALL
 		     SELECT st.parent_id, e.id FROM item st INDEXED BY item_by_parent
-		       JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
-		      WHERE st.parent_id IN (` + ph + `))
+		       CROSS JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
+		      WHERE st.parent_id IN (` + pe + `))
 		 SELECT z.t, MAX(COALESCE(f.height, 0)), MAX(COALESCE(f.width, 0)), MAX(COALESCE(f.hdr, '')),
-		        MAX(COALESCE((SELECT MAX(channels) FROM media_track mt WHERE mt.file_id = f.id AND mt.kind = 'audio'), 0))
-		   FROM z CROSS JOIN media_file f INDEXED BY file_by_item
+		        MAX(COALESCE(f.ton_kanaele, 0))
+		   FROM z CROSS JOIN media_file f INDEXED BY file_kennzahl
 		  WHERE f.item_id = z.e AND f.missing_since IS NULL
 		  GROUP BY z.t`
 }
 
-func kennzahlenArgs(ids []string) []any {
-	return append(append(toAny(ids), toAny(ids)...), toAny(ids)...)
+func kennzahlenArgs(ids, eltern []string) []any {
+	return append(append(toAny(ids), toAny(eltern)...), toAny(eltern)...)
 }
 
 // Qualitaet macht aus Breite und Höhe ein Wort fürs Abzeichen.
@@ -206,9 +268,9 @@ func (s *Store) Aehnliche(ctx context.Context, q Query, itemID string, limit int
 	// Kandidaten nur von den eigenen Reihen, Personen und Genres aus
 	// (Index je Name) — vorher rechnete die Abfrage für jeden Titel der
 	// Mediathek drei Unterabfragen (6 → 82 ms je Titelseite mit Besetzung,
-	// und wachsend mit der Sammlung). ?1 ist der Titel; die Platzhalter
-	// der Rechte (bedingung) zählen danach weiter.
-	args = append(append([]any{itemID}, args...), limit)
+	// und wachsend mit der Sammlung). Gezählt wird nur über die Indizes;
+	// die Zeilen der Kandidaten (oft Tausende über ein gemeinsames Genre)
+	// werden nicht gelesen.
 	rows, err := s.db.QueryContext(ctx,
 		`WITH k(id, p) AS (
 		     SELECT b.item_id, 10 FROM collection_item a
@@ -222,23 +284,86 @@ func (s *Store) Aehnliche(ctx context.Context, q Query, itemID string, limit int
 		     SELECT b.item_id, 2 FROM genre a
 		       JOIN genre b INDEXED BY genre_by_name ON b.name = a.name
 		      WHERE a.item_id = ?1 AND b.item_id != ?1)
-		 SELECT i.id, sum(k.p) + CASE WHEN i.kind = (SELECT kind FROM item WHERE id = ?1) THEN 1 ELSE 0 END AS punkte
-		   FROM k CROSS JOIN item i
-		  WHERE i.id = k.id AND `+strings.Join(where, " AND ")+`
-		  GROUP BY i.id HAVING punkte > 2
-		  ORDER BY punkte DESC, i.imdb_rating DESC, i.sort_title LIMIT ?`, args...)
+		 SELECT id, sum(p) FROM k GROUP BY id`, itemID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []string{}
+	punkte := map[string]int{}
 	for rows.Next() {
 		var id string
-		var punkte int
-		if err := rows.Scan(&id, &punkte); err != nil {
+		var p int
+		if err := rows.Scan(&id, &p); err != nil {
+			rows.Close()
 			return nil, err
 		}
-		out = append(out, id)
+		punkte[id] = p
 	}
-	return out, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(punkte) == 0 {
+		return []string{}, nil
+	}
+	var eigeneArt string
+	_ = s.db.QueryRowContext(ctx, `SELECT kind FROM item WHERE id = ?`, itemID).Scan(&eigeneArt)
+	// Was das Konto sehen darf, samt Wertung und Sortiertitel — alles aus
+	// dem Sortier-Index (schmal.go, sichtSpalten), ohne eine Zeile.
+	vrows, err := s.db.QueryContext(ctx,
+		`SELECT i.id, i.kind, i.imdb_rating, i.sort_title FROM item i INDEXED BY item_ord_wertung
+		  WHERE `+strings.Join(where, " AND "), args...)
+	if err != nil {
+		return nil, err
+	}
+	type treffer struct {
+		id, titel string
+		punkte    int
+		wertung   sql.NullFloat64
+	}
+	var alle []treffer
+	for vrows.Next() {
+		var t treffer
+		var art string
+		if err := vrows.Scan(&t.id, &art, &t.wertung, &t.titel); err != nil {
+			vrows.Close()
+			return nil, err
+		}
+		p, ok := punkte[t.id]
+		if !ok {
+			continue
+		}
+		if art == eigeneArt {
+			p++
+		}
+		if t.punkte = p; p > 2 {
+			alle = append(alle, t)
+		}
+	}
+	vrows.Close()
+	if err := vrows.Err(); err != nil {
+		return nil, err
+	}
+	// Wie zuvor in SQL: Punkte, dann Wertung (ohne Wertung zuletzt), dann
+	// Titel.
+	sort.Slice(alle, func(i, j int) bool {
+		a, b := alle[i], alle[j]
+		if a.punkte != b.punkte {
+			return a.punkte > b.punkte
+		}
+		if a.wertung.Valid != b.wertung.Valid {
+			return a.wertung.Valid
+		}
+		if a.wertung.Float64 != b.wertung.Float64 {
+			return a.wertung.Float64 > b.wertung.Float64
+		}
+		if a.titel != b.titel {
+			return a.titel < b.titel
+		}
+		return a.id < b.id
+	})
+	out := make([]string, 0, min(limit, len(alle)))
+	for _, t := range alle[:min(limit, len(alle))] {
+		out = append(out, t.id)
+	}
+	return out, nil
 }

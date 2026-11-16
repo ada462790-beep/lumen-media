@@ -483,8 +483,13 @@ const reihenOrdnung = erschienenAusdruck + ` IS NULL, ` + erschienenAusdruck + `
 // werden dafür nur Kennung und Schlüssel aller passenden Titel — die
 // Bedingung (Freigaben, Altersgrenze, Filter) ist dieselbe wie sonst.
 func (s *Store) queryInGo(ctx context.Context, q Query, where []string, args []any, schluessel string, absteigend bool) ([]Item, error) {
+	// Ohne ORDER BY: Sortiert wird gleich in Go (nach Titel, dann
+	// Kennung — wie SQLite Text vergleicht, Byte für Byte). Mit ORDER BY
+	// nahm SQLite den Index über sort_title allein und las dafür jede
+	// Zeile der Tabelle, auch die aller Folgen; so reicht ein Sortier-Index
+	// mit den Spalten der Bedingung (schmal.go, sichtSpalten).
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT i.id, i.sort_title FROM item i WHERE `+strings.Join(where, " AND ")+` ORDER BY i.sort_title, i.id`, args...)
+		`SELECT i.id, i.sort_title FROM item i WHERE `+strings.Join(where, " AND "), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -506,6 +511,12 @@ func (s *Store) queryInGo(ctx context.Context, q Query, where []string, args []a
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	sort.Slice(alle, func(i, j int) bool {
+		if alle[i].schluessel != alle[j].schluessel {
+			return alle[i].schluessel < alle[j].schluessel
+		}
+		return alle[i].id < alle[j].id
+	})
 
 	switch {
 	case schluessel == "random":
@@ -566,27 +577,5 @@ func (s *Store) queryInGo(ctx context.Context, q Query, where []string, args []a
 	for i, z := range seite {
 		ids[i] = z.id
 	}
-	trows, err := s.db.QueryContext(ctx, `SELECT `+itemCols+` FROM item i WHERE i.id IN (`+placeholders(len(ids))+`)`, toAny(ids)...)
-	if err != nil {
-		return nil, err
-	}
-	defer trows.Close()
-	nach := map[string]Item{}
-	for trows.Next() {
-		it, err := scanItem(trows)
-		if err != nil {
-			return nil, err
-		}
-		nach[it.ID] = *it
-	}
-	if err := trows.Err(); err != nil {
-		return nil, err
-	}
-	out := make([]Item, 0, len(ids))
-	for _, id := range ids {
-		if it, ok := nach[id]; ok {
-			out = append(out, it)
-		}
-	}
-	return out, nil
+	return s.itemsInReihenfolge(ctx, ids)
 }

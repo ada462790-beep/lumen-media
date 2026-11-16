@@ -628,7 +628,7 @@ func (s *Store) LookupTokenHash(ctx context.Context, sum [32]byte) (*Account, *D
 	if e, ok := s.tokens.holen(sum); ok {
 		return s.tokenGilt(sum, e)
 	}
-	stand := Stand()
+	stand := StandHart()
 	var d Device
 	var created, seen int64
 	err := s.db.QueryRowContext(ctx,

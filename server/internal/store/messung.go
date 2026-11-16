@@ -23,7 +23,8 @@ package store
 //     die Bedienung warten müsste.
 //   - Jedes Schreiben ausserhalb des Protokolls zählt Stand() hoch. Daran
 //     erkennen Zwischenspeicher (Startseite, Listen), dass sich etwas
-//     geändert hat.
+//     geändert hat. StandHart() lässt die Arbeit im Hintergrund weg,
+//     StandMediathek() das Schreiben in die Tabellen eines Profils.
 //
 // Gemessen wird nur Zeit und Anzahl — nie, was gelesen oder geschrieben
 // wurde.
@@ -91,13 +92,39 @@ func (m *Messung) gewartet(d time.Duration) {
 
 // ---------------------------------------------------------------- Stand
 
-var stand atomic.Int64
+var (
+	stand            atomic.Int64
+	standHart        atomic.Int64
+	standMediathek   atomic.Int64
+	standFortschritt atomic.Int64
+)
 
 // Stand zählt jedes Schreiben in die Datenbank, ausser ins Protokoll und
 // in nebensächliche Merker (OhneStand). Wer eine Antwort zwischenspeichert,
 // merkt sich den Stand dazu: Ist er weitergerückt, gilt die Antwort nicht
 // mehr.
 func Stand() int64 { return stand.Load() }
+
+// StandHart zählt nur, was nicht aus der Arbeit im Hintergrund kommt
+// (Hintergrund): Haken, Merkliste, Einstellungen — alles, was jemand
+// selbst getan hat und sofort sehen soll. Ein Durchlauf oder das
+// Nachschlagen von Metadaten rückt nur Stand weiter; eine gemerkte Antwort
+// darf dann noch einmal kommen, während sie im Hintergrund neu entsteht
+// (api/antwortspeicher.go).
+func StandHart() int64 { return standHart.Load() }
+
+// StandMediathek zählt nur Schreiben ausserhalb der Tabellen, die einem
+// Profil gehören (privateTabellen), und ausserhalb von nebenTabellen: Ein
+// gespeicherter Stand beim Schauen
+// ändert nichts an Dateien, Reihen oder Abzeichen. Danach richten sich
+// Zwischenspeicher, die nur von der Mediathek abhängen (kennzahlen.go,
+// reihen.go).
+func StandMediathek() int64 { return standMediathek.Load() }
+
+// standFortschrittJetzt zählt Schreiben in progress — und das Löschen von
+// Titeln, Bibliotheken und Konten, das Zeilen dort mitnimmt. Danach
+// richtet sich das Abbild des eigenen Fortschritts (fortschritt_abbild.go).
+func standFortschrittJetzt() int64 { return standFortschritt.Load() }
 
 type ohneStandKey struct{}
 
@@ -107,6 +134,26 @@ func OhneStand(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ohneStandKey{}, true)
 }
 
+type hintergrundKey struct{}
+
+// Hintergrund kennzeichnet Arbeit, die niemand gerade angestossen hat und
+// auf die niemand wartet: Durchläufe, Metadaten, Wartung. Was sie
+// schreibt, rückt Stand weiter, aber nicht StandHart.
+func Hintergrund(ctx context.Context) context.Context {
+	if imHintergrund(ctx) {
+		return ctx
+	}
+	return context.WithValue(ctx, hintergrundKey{}, true)
+}
+
+func imHintergrund(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(hintergrundKey{}).(bool)
+	return v
+}
+
 func zaehltFuerStand(ctx context.Context, query string) bool {
 	if ctx != nil {
 		if v, _ := ctx.Value(ohneStandKey{}).(bool); v {
@@ -114,6 +161,98 @@ func zaehltFuerStand(ctx context.Context, query string) bool {
 		}
 	}
 	return schreibend(query)
+}
+
+// privateTabellen gehören einem Profil (schema.sql, playback.go). Was dort
+// geschrieben wird, ändert die Mediathek nicht (StandMediathek).
+var privateTabellen = map[string]bool{
+	"progress": true, "progress_reihe": true, "rating": true, "favorit": true,
+	"watchlist": true, "prefs": true, "playlist": true, "playlist_item": true,
+	"token": true, "bildschirmzeit_tag": true, "bildschirmzeit_regel": true,
+}
+
+// nebenTabellen: Was dort steht, zeigt keine Liste und kein Abzeichen —
+// erkannter Vorspann, Versuche bei OpenSubtitles, Einstellungen, Wünsche,
+// Mitteilungen, Angaben zu Personen. Die Erkennung im Hintergrund schreibt
+// laufend in vorspann_erkannt; StandMediathek bleibt davon stehen, damit
+// das Gemerkte (mediathek_merken.go) nicht bei jeder Folge verfällt.
+var nebenTabellen = map[string]bool{
+	"vorspann_erkannt": true, "untertitel_versuch": true, "setting": true,
+	"wish": true, "wish_dabei": true, "notice": true, "person_info": true, "log_line": true,
+}
+
+// zielTabelle: die Tabelle, in die eine schreibende Anweisung schreibt
+// (INSERT … INTO t, REPLACE INTO t, UPDATE t, DELETE FROM t), klein
+// geschrieben; leer, wenn sie sich nicht erkennen lässt.
+func zielTabelle(q string) string {
+	w := strings.Fields(strings.ToLower(q))
+	for i := 0; i < len(w); i++ {
+		switch w[i] {
+		case "into":
+			if i+1 < len(w) {
+				return tabellenName(w[i+1])
+			}
+		case "update":
+			j := i + 1
+			if j+1 < len(w) && w[j] == "or" {
+				j += 2
+			}
+			if j < len(w) {
+				return tabellenName(w[j])
+			}
+		case "delete":
+			if i+2 < len(w) && w[i+1] == "from" {
+				return tabellenName(w[i+2])
+			}
+		}
+	}
+	return ""
+}
+
+func tabellenName(w string) string {
+	if k := strings.IndexAny(w, "( "); k >= 0 {
+		w = w[:k]
+	}
+	return strings.Trim(w, `"'`+"`")
+}
+
+// standArt: welche Stände eine schreibende Anweisung weiterrückt.
+type standArt struct {
+	hart, mediathek, fortschritt bool
+}
+
+func (a *standArt) dazu(b standArt) {
+	a.hart = a.hart || b.hart
+	a.mediathek = a.mediathek || b.mediathek
+	a.fortschritt = a.fortschritt || b.fortschritt
+}
+
+// standArtVon: Was diese schreibende Anweisung ändert. Die Mediathek
+// alles ausser privateTabellen und nebenTabellen; den Fortschritt progress
+// selbst und das Löschen dessen, woran er hängt (ON DELETE CASCADE).
+func standArtVon(ctx context.Context, q string) standArt {
+	ziel := zielTabelle(q)
+	loeschen := strings.HasPrefix(strings.ToUpper(strings.TrimLeft(q, " \t\r\n")), "DELETE")
+	return standArt{
+		hart:        !imHintergrund(ctx),
+		mediathek:   !privateTabellen[ziel] && !nebenTabellen[ziel],
+		fortschritt: ziel == "progress" || (loeschen && (ziel == "item" || ziel == "library" || ziel == "account")),
+	}
+}
+
+// standWeiter rückt die Stände nach einem Schreiben ausserhalb einer
+// Transaktion (oder beim Abschluss einer) weiter.
+func standWeiter(a standArt) {
+	stand.Add(1)
+	if a.hart {
+		standHart.Add(1)
+	}
+	if a.mediathek {
+		standMediathek.Add(1)
+	}
+	if a.fortschritt {
+		standFortschritt.Add(1)
+	}
 }
 
 // schreibend: grob, ob eine Anweisung schreibt. SELECT, PRAGMA (lesend)
@@ -245,6 +384,7 @@ type messConn struct {
 	innen    driver.Conn
 	txBeginn time.Time // gesetzt, solange eine Transaktion offen ist
 	standTx  bool      // in der offenen Transaktion wurde etwas geschrieben, das für Stand zählt
+	artTx    standArt  // … und welche Stände es weiterrückt
 }
 
 func (c *messConn) Prepare(q string) (driver.Stmt, error) { return c.innen.Prepare(q) }
@@ -268,7 +408,7 @@ func (c *messConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.T
 	if err != nil {
 		return nil, err
 	}
-	c.txBeginn, c.standTx = time.Now(), false
+	c.txBeginn, c.standTx, c.artTx = time.Now(), false, standArt{}
 	return &messTx{innen: tx, conn: c, m: m}, nil
 }
 
@@ -283,10 +423,12 @@ func (c *messConn) ExecContext(ctx context.Context, q string, args []driver.Name
 	m := messungVon(ctx)
 	m.zaehlen(d)
 	if err == nil && zaehltFuerStand(ctx, q) {
+		a := standArtVon(ctx, q)
 		if c.txBeginn.IsZero() {
-			stand.Add(1)
+			standWeiter(a)
 		} else {
 			c.standTx = true
+			c.artTx.dazu(a)
 		}
 	}
 	// Ein Schreiben ausserhalb einer Transaktion hält die Sperre für die
@@ -334,9 +476,9 @@ func (t *messTx) ende() {
 		sperreGehalten(time.Since(t.conn.txBeginn))
 	}
 	if t.conn.standTx {
-		stand.Add(1)
+		standWeiter(t.conn.artTx)
 	}
-	t.conn.txBeginn, t.conn.standTx = time.Time{}, false
+	t.conn.txBeginn, t.conn.standTx, t.conn.artTx = time.Time{}, false, standArt{}
 }
 
 func (t *messTx) Commit() error {
@@ -349,7 +491,7 @@ func (t *messTx) Commit() error {
 
 func (t *messTx) Rollback() error {
 	err := t.innen.Rollback()
-	t.conn.standTx = false
+	t.conn.standTx, t.conn.artTx = false, standArt{}
 	t.ende()
 	return err
 }

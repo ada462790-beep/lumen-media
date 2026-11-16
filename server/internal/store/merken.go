@@ -19,9 +19,11 @@ package store
 // bis zu fünf Sekunden (busy_timeout).
 //
 // Jetzt:
-//   - Geprüfte Tokens bleiben im Speicher, solange sich in der Datenbank
-//     nichts geändert hat (Stand). Ein abgemeldetes Gerät, ein gesperrtes
-//     Konto oder eine geänderte Gruppe rückt den Stand weiter.
+//   - Geprüfte Tokens bleiben im Speicher, solange niemand etwas geändert
+//     hat (StandHart). Ein abgemeldetes Gerät, ein gesperrtes Konto oder
+//     eine geänderte Gruppe rückt den Stand weiter; Arbeit im Hintergrund
+//     (Durchlauf, Metadaten) nicht — sonst brauchte nach jedem solchen
+//     Schreiben die Anmeldung selbst wieder die Platte.
 //   - „Zuletzt gesehen" (nur der Tag) schreibt ein eigener Schreiber nach
 //     ein paar Sekunden gesammelt; die Anfrage wartet nicht darauf.
 
@@ -49,7 +51,7 @@ func (t *tokenSpeicher) holen(sum [32]byte) (tokenMerk, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	e, ok := t.m[sum]
-	if !ok || e.stand != Stand() {
+	if !ok || e.stand != StandHart() {
 		return tokenMerk{}, false
 	}
 	return e, true

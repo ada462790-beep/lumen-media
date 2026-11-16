@@ -15,6 +15,7 @@ package store
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -53,13 +54,29 @@ type Vorlage struct {
 // Wann geschaut wurde, speichert Lumen nicht; es braucht es auch nicht.
 func (s *Store) verfolgteSerien(ctx context.Context, accountID string) (map[string]time.Time, error) {
 	out := map[string]time.Time{}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT st.parent_id, e.added_at FROM progress p
-		   JOIN item e ON e.id = p.item_id JOIN item st ON st.id = e.parent_id
-		  WHERE p.account_id = ? AND e.kind = 'episode'`, accountID)
+	// Die angefangenen Folgen aus dem eigenen Stand im Speicher
+	// (fortschritt_abbild.go), ihre Serie und ihr Hinzufügen aus baum.
+	a, b, err := s.abbildMitBaum(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
+	for _, z := range a.zeilen {
+		e := b[z.id]
+		if e.kind != "episode" || e.serie == "" {
+			continue
+		}
+		if t := time.Unix(e.neu, 0); t.After(out[e.serie]) {
+			out[e.serie] = t
+		}
+	}
+	// Die Merkliste; welche davon Serien sind, sagt baum.
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT item_id, added_at FROM watchlist WHERE account_id = ?`, accountID)
+	if err != nil {
+		return nil, err
+	}
+	merk := map[string]int64{}
+	var ids []string
 	for rows.Next() {
 		var id string
 		var at int64
@@ -67,39 +84,33 @@ func (s *Store) verfolgteSerien(ctx context.Context, accountID string) (map[stri
 			rows.Close()
 			return nil, err
 		}
-		if t := time.Unix(at, 0); t.After(out[id]) {
-			out[id] = t
-		}
+		merk[id] = at
+		ids = append(ids, id)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rows, err = s.db.QueryContext(ctx,
-		`SELECT w.item_id, w.added_at FROM watchlist w JOIN item i ON i.id = w.item_id
-		  WHERE w.account_id = ? AND i.kind = 'series'`, accountID)
+	mb, err := s.baum(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id string
-		var at int64
-		if err := rows.Scan(&id, &at); err != nil {
-			return nil, err
+	for _, id := range ids {
+		if mb[id].kind != "series" {
+			continue
 		}
 		if _, da := out[id]; !da {
-			out[id] = time.Unix(at, 0)
+			out[id] = time.Unix(merk[id], 0)
 		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Neuigkeiten stellt die Liste zusammen — nur innerhalb dessen, was das
 // Konto sehen darf (q), und nur was jünger ist als 30 Tage.
 func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]Neuigkeit, error) {
 	out := []Neuigkeit{}
-	where, args, ok := bedingung(q)
+	_, _, ok := bedingung(q)
 	if !ok {
 		return out, nil
 	}
@@ -123,6 +134,20 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 		if err != nil {
 			return nil, err
 		}
+		// Die neuen Folgen aller dieser Serien in einer Abfrage (ab der
+		// Grenze); je Serie zählt dann nur, was jünger ist als ihr „seit".
+		sids := make([]string, len(sichtbar))
+		for i, serie := range sichtbar {
+			sids[i] = serie.ID
+		}
+		frische, err := s.neueFolgen(ctx, sids, grenze)
+		if err != nil {
+			return nil, err
+		}
+		jeSerie := map[string][]int64{}
+		for _, f := range frische {
+			jeSerie[f.serie] = append(jeSerie[f.serie], f.neu)
+		}
 		for _, serie := range sichtbar {
 			seit := serien[serie.ID]
 			if seit.Before(grenze) {
@@ -130,24 +155,15 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 			}
 			var n int
 			var juengste int64
-			rows, err := s.db.QueryContext(ctx,
-				`SELECT e.added_at FROM item e JOIN item st ON st.id = e.parent_id
-				  WHERE e.kind = 'episode' AND st.parent_id = ? AND e.added_at > ?`, serie.ID, seit.Unix())
-			if err != nil {
-				return nil, err
-			}
-			for rows.Next() {
-				var at int64
-				if err := rows.Scan(&at); err != nil {
-					rows.Close()
-					return nil, err
+			for _, at := range jeSerie[serie.ID] {
+				if at <= seit.Unix() {
+					continue
 				}
 				n++
 				if at > juengste {
 					juengste = at
 				}
 			}
-			rows.Close()
 			if n == 0 {
 				continue
 			}
@@ -172,37 +188,64 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 		for _, id := range fertig {
 			fertigSet[id] = true
 		}
-		rargs := append([]any{}, toAny(fertig)...)
-		rargs = append(rargs, grenze.Unix())
-		rargs = append(rargs, args...)
-		rows, err := s.db.QueryContext(ctx,
-			`SELECT DISTINCT c.id, c.name, i.id, i.title, i.added_at
-			   FROM collection c
-			   JOIN collection_item mine ON mine.collection_id = c.id AND mine.item_id IN (`+placeholders(len(fertig))+`)
-			   JOIN collection_item neu ON neu.collection_id = c.id
-			   JOIN item i ON i.id = neu.item_id AND i.added_at > ?
-			  WHERE c.hidden = 0 AND `+strings.Join(where, " AND ")+`
-			  ORDER BY i.added_at DESC LIMIT 50`, rargs...)
+		// Die Reihen samt Filmen kommen aus dem Speicher (reihen.go), das
+		// Hinzufügen der Filme aus baum (fortschritt_abbild.go). Gelesen
+		// werden nur die Zeilen der wenigen neuen Filme — vorher ging das
+		// über alle Filme aller Reihen, die man angefangen hat.
+		reihen, err := s.Reihen(ctx, false)
 		if err != nil {
 			return nil, err
 		}
-		for rows.Next() {
-			var cid, cname, iid, ititle string
-			var at int64
-			if err := rows.Scan(&cid, &cname, &iid, &ititle, &at); err != nil {
-				rows.Close()
-				return nil, err
+		reiheVon := map[string]Reihe{} // neuer Film → seine Reihe
+		var kandidaten []string
+		for _, r := range reihen {
+			mein := false
+			for _, id := range r.ItemIDs {
+				if fertigSet[id] {
+					mein = true
+					break
+				}
 			}
-			if fertigSet[iid] {
+			if !mein {
 				continue
 			}
-			out = append(out, Neuigkeit{Art: "reihe", ItemID: iid, Titel: ititle,
-				Text: "Neu in deiner Reihe „" + cname + "“", At: time.Unix(at, 0),
-				Vorlage: Vorlage{Text: "Neu in deiner Reihe „{reihe}“", Werte: []any{"reihe", cname}}})
+			for _, id := range r.ItemIDs {
+				if !fertigSet[id] {
+					if _, schon := reiheVon[id]; !schon {
+						reiheVon[id] = r
+						kandidaten = append(kandidaten, id)
+					}
+				}
+			}
 		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
+		b, err := s.baum(ctx, kandidaten)
+		if err != nil {
 			return nil, err
+		}
+		var neue []string
+		for _, id := range kandidaten {
+			if e := b[id]; e.da && e.neu > grenze.Unix() {
+				neue = append(neue, id)
+			}
+		}
+		if len(neue) > 0 {
+			// Sichtbarkeit: nur, was die Freigabe erlaubt.
+			rq := q
+			rq.IDs, rq.Kinds, rq.Limit = neue, []string{"movie", "series"}, len(neue)
+			sichtbar, err := s.Query(ctx, rq)
+			if err != nil {
+				return nil, err
+			}
+			sort.SliceStable(sichtbar, func(i, j int) bool { return sichtbar[i].AddedAt.After(sichtbar[j].AddedAt) })
+			if len(sichtbar) > 50 {
+				sichtbar = sichtbar[:50]
+			}
+			for _, it := range sichtbar {
+				cname := reiheVon[it.ID].Name
+				out = append(out, Neuigkeit{Art: "reihe", ItemID: it.ID, Titel: it.Title,
+					Text: "Neu in deiner Reihe „" + cname + "“", At: it.AddedAt,
+					Vorlage: Vorlage{Text: "Neu in deiner Reihe „{reihe}“", Werte: []any{"reihe", cname}}})
+			}
 		}
 	}
 
@@ -242,7 +285,7 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 	// jeden ansehen.
 	woche := time.Now().Add(-7 * 24 * time.Hour)
 	nq := q
-	nq.Sort, nq.Limit = "added", 500
+	nq.Sort, nq.Limit, nq.NeuSeit = "added", 500, woche.Unix()
 	alle, err := s.Query(ctx, nq)
 	if err != nil {
 		return nil, err
@@ -282,9 +325,11 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 	for _, it := range neueTitel {
 		neuSet[it.ID] = true
 	}
+	// Je Staffel über den Index item_neu_eltern gezählt (ohne die Zeilen
+	// der Folgen), die Serie der Staffel kommt aus baum.
 	frq, err := s.db.QueryContext(ctx,
-		`SELECT st.parent_id, count(*), max(e.added_at) FROM item e JOIN item st ON st.id = e.parent_id
-		  WHERE e.kind = 'episode' AND e.added_at >= ? GROUP BY st.parent_id`, woche.Unix())
+		`SELECT parent_id, count(*), max(added_at) FROM item INDEXED BY item_neu_eltern
+		  WHERE kind = 'episode' AND added_at >= ? AND parent_id IS NOT NULL GROUP BY parent_id`, woche.Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +337,8 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 		n  int
 		at int64
 	}
-	frisch := map[string]folgenNeu{}
+	jeStaffel := map[string]folgenNeu{}
+	var staffeln []string
 	for frq.Next() {
 		var id string
 		var f folgenNeu
@@ -300,13 +346,27 @@ func (s *Store) Neuigkeiten(ctx context.Context, q Query, accountID string) ([]N
 			frq.Close()
 			return nil, err
 		}
-		if !gemeldet[id] && !neuSet[id] {
-			frisch[id] = f
-		}
+		jeStaffel[id] = f
+		staffeln = append(staffeln, id)
 	}
 	frq.Close()
 	if err := frq.Err(); err != nil {
 		return nil, err
+	}
+	sb, err := s.baum(ctx, staffeln)
+	if err != nil {
+		return nil, err
+	}
+	frisch := map[string]folgenNeu{}
+	for _, st := range staffeln {
+		e := sb[st]
+		if e.kind != "season" || e.serie == "" || gemeldet[e.serie] || neuSet[e.serie] {
+			continue
+		}
+		f, n := frisch[e.serie], jeStaffel[st]
+		f.n += n.n
+		f.at = max(f.at, n.at)
+		frisch[e.serie] = f
 	}
 	if len(frisch) > 0 {
 		ids := make([]string, 0, len(frisch))

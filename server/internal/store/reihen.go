@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -247,35 +248,93 @@ func scanReihe(sc interface{ Scan(...any) error }) (*Reihe, error) {
 
 // Reihen gibt alle Reihen mit ihren Filmen in Reihenfolge — aufgelöste
 // nur, wenn danach gefragt wird.
+//
+// Die Startseite fragt das bei jedem Öffnen. Früher war das eine Abfrage
+// je Reihe (bei 240 Reihen 241 Abfragen, auf einem NAS mit kalter Platte
+// 2,6 s); jetzt eine für alle Filme aller Reihen, und das Ergebnis bleibt
+// im Speicher, bis sich die Mediathek ändert (StandMediathek).
 func (s *Store) Reihen(ctx context.Context, auchAufgeloeste bool) ([]Reihe, error) {
-	q := `SELECT ` + reiheCols + ` FROM collection c`
-	if !auchAufgeloeste {
-		q += ` WHERE c.hidden = 0`
+	stand := StandMediathek()
+	m := &s.reihenMerk
+	m.mu.Lock()
+	if m.stand == stand && m.alle != nil {
+		out := m.kopie(auchAufgeloeste)
+		m.mu.Unlock()
+		return out, nil
 	}
-	rows, err := s.db.QueryContext(ctx, q)
+	m.mu.Unlock()
+
+	rows, err := s.db.QueryContext(ctx, `SELECT `+reiheCols+` FROM collection c`)
 	if err != nil {
 		return nil, err
 	}
-	var out []Reihe
+	var alle []Reihe
 	for rows.Next() {
 		r, err := scanReihe(rows)
 		if err != nil {
 			rows.Close()
 			return nil, err
 		}
-		out = append(out, *r)
+		alle = append(alle, *r)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	nachNamenSortieren(out, func(r *Reihe) string { return r.Name }, func(r *Reihe) string { return r.ID }, nil)
-	for i := range out {
-		if out[i].ItemIDs, err = s.reiheFilme(ctx, out[i].ID); err != nil {
+	nachNamenSortieren(alle, func(r *Reihe) string { return r.Name }, func(r *Reihe) string { return r.ID }, nil)
+	filme := map[string][]string{}
+	frows, err := s.db.QueryContext(ctx,
+		`SELECT ci.collection_id, ci.item_id FROM collection_item ci JOIN item i ON i.id = ci.item_id
+		  ORDER BY ci.collection_id, `+reihenOrdnung)
+	if err != nil {
+		return nil, err
+	}
+	for frows.Next() {
+		var c, id string
+		if err := frows.Scan(&c, &id); err != nil {
+			frows.Close()
 			return nil, err
 		}
+		filme[c] = append(filme[c], id)
 	}
-	return out, nil
+	frows.Close()
+	if err := frows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range alle {
+		alle[i].ItemIDs = filme[alle[i].ID]
+		if alle[i].ItemIDs == nil {
+			alle[i].ItemIDs = []string{}
+		}
+	}
+	m.mu.Lock()
+	if StandMediathek() == stand {
+		m.stand, m.alle = stand, alle
+	}
+	m.mu.Unlock()
+	r := &reihenSpeicher{alle: alle}
+	return r.kopie(auchAufgeloeste), nil
+}
+
+// reihenSpeicher: alle Reihen (auch aufgelöste) samt Filmen, gültig für
+// einen StandMediathek.
+type reihenSpeicher struct {
+	mu    sync.Mutex
+	stand int64
+	alle  []Reihe
+}
+
+// kopie: die Reihen für einen Aufrufer, der sie verändern darf.
+func (m *reihenSpeicher) kopie(auchAufgeloeste bool) []Reihe {
+	var out []Reihe
+	for _, r := range m.alle {
+		if r.Hidden && !auchAufgeloeste {
+			continue
+		}
+		r.ItemIDs = append([]string(nil), r.ItemIDs...)
+		out = append(out, r)
+	}
+	return out
 }
 
 func (s *Store) reiheFilme(ctx context.Context, id string) ([]string, error) {

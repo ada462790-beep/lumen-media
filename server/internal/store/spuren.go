@@ -170,7 +170,9 @@ func spurenSchreiben(ctx context.Context, t *sql.Tx, fileID string, tracks []Tra
 			return err
 		}
 	}
-	_, err := t.ExecContext(ctx, `UPDATE media_file SET spuren_gelesen = 1 WHERE id = ?`, fileID)
+	kanaele, sprache := tonAusSpuren(tracks)
+	_, err := t.ExecContext(ctx, `UPDATE media_file SET spuren_gelesen = 1, ton_kanaele = ?, ton_sprache = ? WHERE id = ?`,
+		kanaele, sprache, fileID)
 	return err
 }
 

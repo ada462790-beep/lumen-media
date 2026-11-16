@@ -212,26 +212,18 @@ func (s *Store) ProgressFor(ctx context.Context, accountID string, itemIDs []str
 	if len(itemIDs) == 0 {
 		return out, nil
 	}
-	q := `SELECT item_id, position_ms, duration_ms, finished
-	        FROM progress WHERE account_id = ? AND item_id IN (` + placeholders(len(itemIDs)) + `)`
-	args := append([]any{accountID}, toAny(itemIDs)...)
-
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	// Aus dem eigenen Stand im Speicher (fortschritt_abbild.go): Eine
+	// Liste mit 800 Filmen fragte sonst 800 Mal in progress nach.
+	a, err := s.fortschrittAbbild(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var p Progress
-		var fin int
-		if err := rows.Scan(&p.ItemID, &p.PositionMS, &p.DurationMS, &fin); err != nil {
-			return nil, err
+	for _, id := range itemIDs {
+		if z, ok := a.zeile(id); ok {
+			out[id] = Progress{ItemID: id, PositionMS: z.pos, DurationMS: z.dauer, Finished: z.fertig}
 		}
-		p.Finished = fin == 1
-		out[p.ItemID] = p
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Weiter ist ein Eintrag in „Weiterschauen". Naechste heisst: Das ist
@@ -250,82 +242,111 @@ type Weiter struct {
 // Gelesen wird nur der eigene Stand; der Aufbau der Serien kommt aus der
 // Mediathek, zusammengelegt wird in Go.
 func (s *Store) Weiterschauen(ctx context.Context, accountID string, limit int) ([]Weiter, error) {
-	type stand struct {
-		id, kind, serie string
-		pos             int64
-		fertig          bool
-		r               int64
-	}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT p.item_id, p.position_ms, p.finished, p.reihenfolge, i.kind, COALESCE(st.parent_id,'')
-		   FROM progress p JOIN item i ON i.id = p.item_id
-		   LEFT JOIN item st ON st.id = i.parent_id AND i.kind = 'episode'
-		  WHERE p.account_id = ?
-		  ORDER BY p.reihenfolge DESC`, accountID)
+	alle, err := s.weiterStaende(ctx, accountID, "")
 	if err != nil {
 		return nil, err
 	}
-	var alle []stand
-	jeItem := map[string]stand{}
-	serienSet := map[string]bool{}
-	for rows.Next() {
-		var x stand
-		var fin int
-		if err := rows.Scan(&x.id, &x.pos, &fin, &x.r, &x.kind, &x.serie); err != nil {
-			rows.Close()
-			return nil, err
+	// Die Folgen einer Serie werden erst geholt, wenn die Serie an der
+	// Reihe ist — in Stücken, nicht für jede Serie, die das Profil je
+	// angefangen hat.
+	folgen := map[string][]FolgenStelle{}
+	geholt := map[string]bool{}
+	holen := func(ab int) error {
+		var neu []string
+		for _, x := range alle[ab:] {
+			if x.kind == "episode" && x.serie != "" && !geholt[x.serie] {
+				geholt[x.serie] = true
+				neu = append(neu, x.serie)
+				if len(neu) >= max(2*limit, 16) {
+					break
+				}
+			}
 		}
-		x.fertig = fin == 1
-		alle = append(alle, x)
-		jeItem[x.id] = x
-		if x.kind == "episode" && x.serie != "" {
-			serienSet[x.serie] = true
+		if len(neu) == 0 {
+			return nil
 		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	serien := make([]string, 0, len(serienSet))
-	for id := range serienSet {
-		serien = append(serien, id)
-	}
-	folgen, err := s.SerienFolgen(ctx, serien)
-	if err != nil {
-		return nil, err
-	}
-	stelle := map[string]int{} // Folge → Platz in ihrer Serie
-	for _, fs := range folgen {
-		for i, f := range fs {
-			stelle[f.ID] = i
+		f, err := s.SerienFolgen(ctx, neu)
+		for k, v := range f {
+			folgen[k] = v
 		}
+		return err
 	}
+	return weiterRechnen(alle, limit, folgen, geholt, holen)
+}
 
+// weiterStand: ein Eintrag des eigenen Fortschritts mit seinem Platz in
+// der Mediathek, das zuletzt Berührte zuerst.
+type weiterStand struct {
+	id, kind, serie string
+	pos             int64
+	fertig          bool
+	r               int64
+}
+
+// weiterStaende: der eigene Fortschritt (fortschritt_abbild.go) — nur
+// Titel, die es gibt; mit serie nur die Folgen dieser Serie.
+func (s *Store) weiterStaende(ctx context.Context, accountID, serie string) ([]weiterStand, error) {
+	a, b, err := s.abbildMitBaum(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	alle := make([]weiterStand, 0, len(a.zeilen))
+	for _, z := range a.zeilen {
+		e := b[z.id]
+		if !e.da || (serie != "" && e.serie != serie) {
+			continue
+		}
+		alle = append(alle, weiterStand{id: z.id, kind: e.kind, serie: e.serie, pos: z.pos, fertig: z.fertig, r: z.reihe})
+	}
+	return alle, nil
+}
+
+// weiterRechnen stellt „Weiterschauen" aus dem eigenen Stand zusammen.
+// folgen enthält die Folgen der Serien, für die geholt[serie] gilt; holen
+// holt weitere ab dem Platz in alle, sobald eine Serie dran ist, die noch
+// fehlt.
+func weiterRechnen(alle []weiterStand, limit int, folgen map[string][]FolgenStelle,
+	geholt map[string]bool, holen func(ab int) error) ([]Weiter, error) {
+	jeItem := make(map[string]weiterStand, len(alle))
+	for _, x := range alle {
+		jeItem[x.id] = x
+	}
 	// Je Serie die zuletzt berührte Folge. Haben mehrere dieselbe Nummer
 	// (eine ganze Staffel auf einmal als gesehen markiert), gilt die
 	// späteste davon.
 	type letzte struct {
-		x     stand
+		x     weiterStand
 		platz int
 	}
-	jeSerie := map[string]*letzte{}
-	for _, x := range alle {
-		if x.kind != "episode" || x.serie == "" {
-			continue
+	stelle := map[string]map[string]int{} // Serie → Folge → Platz
+	letzteVon := func(serie string) *letzte {
+		st := stelle[serie]
+		if st == nil {
+			st = map[string]int{}
+			for i, f := range folgen[serie] {
+				st[f.ID] = i
+			}
+			stelle[serie] = st
 		}
-		platz, ok := stelle[x.id]
-		if !ok {
-			continue // ein Special: zählt nicht für „Als Nächstes"
+		var l *letzte
+		for _, x := range alle {
+			if x.kind != "episode" || x.serie != serie {
+				continue
+			}
+			platz, ok := st[x.id]
+			if !ok {
+				continue // ein Special: zählt nicht für „Als Nächstes"
+			}
+			if l == nil || x.r > l.x.r || (x.r == l.x.r && platz > l.platz) {
+				l = &letzte{x, platz}
+			}
 		}
-		l := jeSerie[x.serie]
-		if l == nil || x.r > l.x.r || (x.r == l.x.r && platz > l.platz) {
-			jeSerie[x.serie] = &letzte{x, platz}
-		}
+		return l
 	}
 
 	out := []Weiter{}
 	gesehen := map[string]bool{}
-	for _, x := range alle {
+	for i, x := range alle {
 		if len(out) >= limit {
 			break
 		}
@@ -336,11 +357,19 @@ func (s *Store) Weiterschauen(ctx context.Context, accountID string, limit int) 
 				out = append(out, Weiter{ItemID: x.id})
 			}
 		case x.kind == "episode":
-			l := jeSerie[x.serie]
-			if l == nil || gesehen[x.serie] {
+			if gesehen[x.serie] {
 				continue
 			}
 			gesehen[x.serie] = true
+			if !geholt[x.serie] {
+				if err := holen(i); err != nil {
+					return nil, err
+				}
+			}
+			l := letzteVon(x.serie)
+			if l == nil {
+				continue
+			}
 			e := l.x
 			if !e.fertig || e.pos > 0 {
 				// Die Folge läuft noch (oder wieder) — dort geht es weiter.
@@ -392,7 +421,14 @@ func (s *Store) WeiterInSerieSichtbar(ctx context.Context, accountID, serieID st
 			ids = append(ids, id)
 		}
 	}
-	weiter, err := s.Weiterschauen(ctx, accountID, 1<<20)
+	// „Weiterschauen" nur für diese eine Serie: ihre Folgen aus dem
+	// eigenen Stand, statt die Reihe für alle Serien zu rechnen.
+	staende, err := s.weiterStaende(ctx, accountID, serieID)
+	if err != nil {
+		return "", err
+	}
+	weiter, err := weiterRechnen(staende, 1, folgen, map[string]bool{serieID: true},
+		func(int) error { return nil })
 	if err != nil {
 		return "", err
 	}
@@ -441,23 +477,16 @@ func (s *Store) FinishedIDs(ctx context.Context, accountID string, itemIDs []str
 	if len(itemIDs) == 0 {
 		return out, nil
 	}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT item_id FROM progress
-		  WHERE account_id = ? AND finished = 1 AND item_id IN (`+placeholders(len(itemIDs))+`)`,
-		append([]any{accountID}, toAny(itemIDs)...)...)
+	a, err := s.fortschrittAbbild(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
+	for _, id := range itemIDs {
+		if z, ok := a.zeile(id); ok && z.fertig {
+			out[id] = true
 		}
-		out[id] = true
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // ---------------------------------------------------------------- Bewertungen
@@ -628,54 +657,48 @@ func (s *Store) SerienStaende(ctx context.Context, accountID string, seriesIDs [
 	// ein paar tausend Zeilen) und wurden danach in Stücken zu 400 gegen
 	// progress geprüft. Das kostete die Seite „Serien" 30 ms von 35 —
 	// auf einer kleinen NAS ein Vielfaches.
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT st.parent_id, count(*) FROM item st INDEXED BY item_by_parent
-		   JOIN item e INDEXED BY item_by_parent ON e.parent_id = st.id
-		  WHERE e.kind = 'episode' AND COALESCE(st.season_no,0) > 0
-		    AND st.parent_id IN (`+placeholders(len(seriesIDs))+`)
-		  GROUP BY st.parent_id`,
-		toAny(seriesIDs)...)
+	zahl, err := s.folgenZahl(ctx, seriesIDs)
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next() {
-		var serie string
-		var n int
-		if err := rows.Scan(&serie, &n); err != nil {
-			rows.Close()
-			return nil, err
-		}
+	for serie, n := range zahl {
 		out[serie] = SerienStand{Folgen: n}
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	// Die eigenen gesehenen Folgen dieser Serien: von den Haken des Kontos
-	// aus (wenige) zur Serie.
-	rows, err = s.db.QueryContext(ctx,
-		`SELECT st.parent_id FROM progress p
-		   JOIN item e ON e.id = p.item_id
-		   JOIN item st ON st.id = e.parent_id
-		  WHERE p.account_id = ? AND p.finished = 1
-		    AND e.kind = 'episode' AND COALESCE(st.season_no,0) > 0
-		    AND st.parent_id IN (`+placeholders(len(seriesIDs))+`)`,
-		append([]any{accountID}, toAny(seriesIDs)...)...)
+	// Die eigenen gesehenen Folgen dieser Serien: aus dem eigenen Stand
+	// im Speicher (fortschritt_abbild.go), Zeile für Zeile.
+	a, b, err := s.abbildMitBaum(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var serie string
-		if err := rows.Scan(&serie); err != nil {
-			return nil, err
+	for _, z := range a.zeilen {
+		e := b[z.id]
+		if !z.fertig || e.kind != "episode" || e.staffel <= 0 {
+			continue
 		}
-		if st, ok := out[serie]; ok {
+		if st, ok := out[e.serie]; ok {
 			st.Gesehen++
-			out[serie] = st
+			out[e.serie] = st
 		}
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+// folgenZahl: je Serie die Zahl ihrer Folgen ohne Specials (Staffel > 0)
+// — nur aus der Mediathek, über item_by_parent ohne die Zeilen selbst.
+func (s *Store) folgenZahl(ctx context.Context, seriesIDs []string) (map[string]int, error) {
+	alle, err := s.serienFolgenKurz(ctx, seriesIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]int{}
+	for serie, fs := range alle {
+		for _, f := range fs {
+			if f.staffel > 0 {
+				out[serie]++
+			}
+		}
+	}
+	return out, nil
 }
 
 // AngefangeneIDs: alles, wozu dieses Konto irgendeinen Stand hat —
@@ -684,29 +707,20 @@ func (s *Store) SerienStaende(ctx context.Context, accountID string, seriesIDs [
 // Bei Folgen kommt die Serie mit dazu: Wer Folge 3 geschaut hat, hat die
 // Serie angefangen — auch wenn die Serie selbst keinen Stand trägt.
 func (s *Store) AngefangeneIDs(ctx context.Context, accountID string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT p.item_id, COALESCE(st.parent_id,'')
-		   FROM progress p LEFT JOIN item e ON e.id = p.item_id AND e.kind = 'episode'
-		   LEFT JOIN item st ON st.id = e.parent_id
-		  WHERE p.account_id = ?`, accountID)
+	a, b, err := s.abbildMitBaum(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []string{}
 	serien := map[string]bool{}
-	for rows.Next() {
-		var id, serie string
-		if err := rows.Scan(&id, &serie); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-		if serie != "" && !serien[serie] {
-			serien[serie] = true
-			out = append(out, serie)
+	for _, z := range a.zeilen {
+		out = append(out, z.id)
+		if e := b[z.id]; e.kind == "episode" && e.serie != "" && !serien[e.serie] {
+			serien[e.serie] = true
+			out = append(out, e.serie)
 		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // ZuletztGesehen: für jeden Titel, zu dem dieses Profil einen Stand hat,
@@ -715,30 +729,20 @@ func (s *Store) AngefangeneIDs(ctx context.Context, accountID string) ([]string,
 // nur die Reihenfolge, und nur die eigene; das Grösste je Serie wird in
 // Go gesucht, nicht mit max() über die private Tabelle.
 func (s *Store) ZuletztGesehen(ctx context.Context, accountID string) (map[string]int64, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT p.item_id, p.reihenfolge, COALESCE(st.parent_id,'')
-		   FROM progress p LEFT JOIN item e ON e.id = p.item_id AND e.kind = 'episode'
-		   LEFT JOIN item st ON st.id = e.parent_id
-		  WHERE p.account_id = ?`, accountID)
+	a, b, err := s.abbildMitBaum(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := map[string]int64{}
-	for rows.Next() {
-		var id, serie string
-		var r int64
-		if err := rows.Scan(&id, &r, &serie); err != nil {
-			return nil, err
+	for _, z := range a.zeilen {
+		if z.reihe > out[z.id] {
+			out[z.id] = z.reihe
 		}
-		if r > out[id] {
-			out[id] = r
-		}
-		if serie != "" && r > out[serie] {
-			out[serie] = r
+		if e := b[z.id]; e.kind == "episode" && e.serie != "" && z.reihe > out[e.serie] {
+			out[e.serie] = z.reihe
 		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // FertigeIDs: was dieses Konto zu Ende gesehen hat, zuletzt zuerst —
@@ -794,76 +798,62 @@ func (s *Store) FavoritIDs(ctx context.Context, accountID string) ([]string, err
 // zuerst. Gezählt wird in Go, nicht in SQL: Auf den privaten Tabellen
 // gibt es bewusst keine zusammenfassenden Abfragen (privacy_test.go).
 func (s *Store) GesehenIDs(ctx context.Context, accountID string) ([]string, error) {
-	type eintrag struct {
-		kind string
-		r    int64
-	}
-	fertig := map[string]eintrag{}
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT p.item_id, i.kind, p.reihenfolge FROM progress p JOIN item i ON i.id = p.item_id
-		  WHERE p.account_id = ? AND p.finished = 1`, accountID)
+	a, b, err := s.abbildMitBaum(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	for rows.Next() {
-		var id string
-		var e eintrag
-		if err := rows.Scan(&id, &e.kind, &e.r); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		fertig[id] = e
-	}
-	rows.Close()
-
 	type treffer struct {
 		id string
 		r  int64
 	}
 	var out []treffer
-	for id, e := range fertig {
-		if e.kind == "movie" {
-			out = append(out, treffer{id, e.r})
-		}
-	}
-	// Serien: alle Folgen (Staffel > 0) müssen gesehen sein.
-	folgen, err := s.db.QueryContext(ctx,
-		`SELECT st.parent_id, e.id FROM item e JOIN item st ON st.id = e.parent_id
-		  WHERE e.kind = 'episode' AND st.season_no > 0`)
-	if err != nil {
-		return nil, err
-	}
+	// Serien, aus denen etwas gesehen ist: wie viele Folgen (Staffel > 0)
+	// und wann die letzte davon fertig wurde. Nur diese Serien zählen
+	// danach ihre Folgen — nicht alle Folgen der Mediathek.
 	type stand struct {
-		alle bool
-		r    int64
+		n int
+		r int64
 	}
 	serien := map[string]*stand{}
-	for folgen.Next() {
-		var serie, folge string
-		if err := folgen.Scan(&serie, &folge); err != nil {
-			folgen.Close()
+	for _, z := range a.zeilen {
+		if !z.fertig {
+			continue
+		}
+		e := b[z.id]
+		switch {
+		case e.kind == "movie":
+			out = append(out, treffer{z.id, z.reihe})
+		case e.kind == "episode" && e.staffel > 0 && e.serie != "":
+			st := serien[e.serie]
+			if st == nil {
+				st = &stand{}
+				serien[e.serie] = st
+			}
+			st.n++
+			st.r = max(st.r, z.reihe)
+		}
+	}
+	if len(serien) > 0 {
+		ids := make([]string, 0, len(serien))
+		for id := range serien {
+			ids = append(ids, id)
+		}
+		zahl, err := s.folgenZahl(ctx, ids)
+		if err != nil {
 			return nil, err
 		}
-		st := serien[serie]
-		if st == nil {
-			st = &stand{alle: true}
-			serien[serie] = st
-		}
-		if e, ok := fertig[folge]; ok {
-			if e.r > st.r {
-				st.r = e.r
+		for id, st := range serien {
+			if n := zahl[id]; n > 0 && st.n >= n {
+				out = append(out, treffer{id, st.r})
 			}
-		} else {
-			st.alle = false
 		}
 	}
-	folgen.Close()
-	for id, st := range serien {
-		if st.alle {
-			out = append(out, treffer{id, st.r})
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].r != out[j].r {
+			return out[i].r > out[j].r
 		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].r > out[j].r })
+		return out[i].id < out[j].id
+	})
 	ids := make([]string, len(out))
 	for i, t := range out {
 		ids[i] = t.id

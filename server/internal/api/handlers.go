@@ -603,7 +603,7 @@ func (s *Server) decorate(r *http.Request, items []store.Item) ([]view, error) {
 	if err != nil {
 		return nil, err
 	}
-	kenn, _ := s.st.Kennzahlen(r.Context(), ids)
+	kenn, _ := s.st.KennzahlenFuer(r.Context(), items)
 	neueFolgen, _ := s.st.NeueFolgenSeit(r.Context(), acc.ID, serien, time.Now().Add(-neuSeit))
 
 	spr := s.wirksameSprache(r.Context(), acc.ID)
@@ -1227,6 +1227,12 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, row{x.key, x.title, x.wide, v})
 	}
 	ok(w, map[string]any{"rows": rows})
+	// Die Poster dieser Seite im Hintergrund verkleinern (bildgroesse.go).
+	ids := make([]string, 0, len(alle))
+	for _, it := range alle {
+		ids = append(ids, it.ID)
+	}
+	s.posterVorbereiten(ids)
 }
 
 func inOrder(items []store.Item, ids []string) []store.Item {
