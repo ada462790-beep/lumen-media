@@ -6,6 +6,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import XCTest
+#if os(iOS)
+import UIKit
+#endif
 
 /// Gemeinsames für die Rundgänge im Simulator-Ablauf
 /// (.github/workflows/simulator.yml): anmelden lassen, Elemente finden,
