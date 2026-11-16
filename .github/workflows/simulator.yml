@@ -34,7 +34,7 @@ on:
       mac:
         description: 'Mac-Rechner (macos-latest oder macos-15-intel, wenn die arm64-Macs ausgelastet sind)'
         type: choice
-        options: [macos-latest, macos-15-intel]
+        options: [macos-latest, macos-15-intel, macos-26, macos-15]
         default: macos-latest
       nur:
         description: 'Nur einen Teil laufen lassen'
@@ -201,7 +201,7 @@ jobs:
     if: ${{ inputs.nur != 'android' && !contains(github.event.head_commit.message, '[nur android]') }}
     # Beim Hochschieben der Intel-Mac: die arm64-Macs sind bei GitHub oft so
     # ausgelastet, dass der Job ohne Rechner abbricht. Von Hand wählbar.
-    runs-on: ${{ inputs.mac == 'macos-latest' && 'macos-latest' || 'macos-15-intel' }}
+    runs-on: ${{ inputs.mac || 'macos-15-intel' }}
     timeout-minutes: 170
     env:
       # xcodebuild reicht TEST_RUNNER_… ohne den Vorsatz an die UI-Tests
