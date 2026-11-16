@@ -245,7 +245,7 @@ internal fun TvTitel(
                         }.joinToString(" · "),
                         color = Tv.label2, fontSize = 18.sp)
                     // Auflösung, HDR, Ton, Sprachen, Untertitel, direkt oder umgewandelt.
-                    val technik = Technik.abzeichen(item, d?.playable, direkt)
+                    val technik = Technik.abzeichen(item, d?.playable, direkt, d?.files ?: emptyList())
                     if (technik.isNotEmpty()) {
                         Spacer(Modifier.height(12.dp))
                         TvTechnikZeile(technik)

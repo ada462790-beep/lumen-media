@@ -260,4 +260,5 @@
     <string name="pl_gilt_fuer_alle">Now applies to everyone</string>
     <string name="pl_qualitaet_x">Quality: %1$s</string>
     <string name="pl_fassung_x">Version: %1$s</string>
+    <string name="zum_beenden_nochmals_zurueck">Press Back again to exit</string>
 </resources>

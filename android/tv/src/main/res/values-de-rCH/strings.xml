@@ -261,4 +261,5 @@
     <string name="pl_gilt_fuer_alle">Gilt jetzt für alle</string>
     <string name="pl_qualitaet_x">Qualität: %1$s</string>
     <string name="pl_fassung_x">Fassung: %1$s</string>
+    <string name="zum_beenden_nochmals_zurueck">Zum Beenden nochmals „Zurück“ drücken</string>
 </resources>

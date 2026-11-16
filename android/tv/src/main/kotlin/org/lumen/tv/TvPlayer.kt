@@ -42,6 +42,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -198,14 +199,44 @@ internal fun TvPlayer(
 private enum class TvFeld { TON, UNTERTITEL, FOLGEN, QUALITAET }
 
 /**
- * Die Bildfläche von Media3 mit einem Griff fürs Steuerkreuz: „hoch" bei
+ * Die Bildfläche von Media3 mit Griffen fürs Steuerkreuz: „hoch" bei
  * sichtbarer Steuerung geht zu den Symbolen von Lumen, statt ins Leere.
+ * Links/rechts bei verborgener Steuerung spult gleich 10 Sekunden und
+ * zeigt die Zeitleiste mit dem Fokus darauf — weitere Drücke spulen dort.
+ * Jede andere Taste (OK, hoch, runter) blendet die Steuerung samt
+ * Zeitleiste ein; das macht Media3 selbst, sobald die Fläche den Fokus hat.
  */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class LumenPlayerView(context: Context, private val hoch: () -> Boolean) : PlayerView(context) {
+    init {
+        // Ohne Fokus kämen die Tasten der Fernbedienung nie hier an: OK
+        // blendete dann keine Zeitleiste ein.
+        isFocusable = true
+        isFocusableInTouchMode = true
+    }
+
+    /** Die Zeitleiste einblenden und den Fokus daraufsetzen. */
+    fun zeitleisteZeigen() {
+        showController()
+        post { findViewById<View>(androidx.media3.ui.R.id.exo_progress)?.requestFocus() }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_DPAD_UP &&
             isControllerFullyVisible && hoch()) {
+            return true
+        }
+        val seitwaerts = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        if (seitwaerts && useController && !isControllerFullyVisible) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                player?.let { p ->
+                    val schritt = if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 10_000L else -10_000L
+                    var ziel = (p.currentPosition + schritt).coerceAtLeast(0L)
+                    if (p.duration > 0) ziel = ziel.coerceAtMost(p.duration)
+                    p.seekTo(ziel)
+                }
+                zeitleisteZeigen()
+            }
             return true
         }
         return super.dispatchKeyEvent(event)
@@ -271,8 +302,11 @@ private fun TvWiedergabe(
     // Die HLS-Sitzung, falls umgewandelt wird — beim Schliessen beenden.
     var hlsSitzung by remember { mutableStateOf<HlsSitzung?>(null) }
     var offen by remember { mutableStateOf<TvFeld?>(null) }
-    var steuerungSichtbar by remember { mutableStateOf(true) }
+    // Erst sichtbar, wenn Media3 es meldet — sonst stünden Titel und
+    // Zahnrad da, die Zeitleiste aber nicht.
+    var steuerungSichtbar by remember { mutableStateOf(false) }
     var leisteFokussiert by remember { mutableStateOf(false) }
+    var vorspannFokussiert by remember { mutableStateOf(false) }
     val leisteFokus = remember { FocusRequester() }
 
     // Das Folgen-Feld: Staffeln der Serie, die gewählte, deren Folgen.
@@ -817,7 +851,38 @@ private fun TvWiedergabe(
     // darum den jeweils aktuellen Stand, nicht den vom ersten Aufbau.
     val hochErlaubt by rememberUpdatedState(etwasZuWaehlen && naechstes == null)
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    // Sobald die Bildfläche steht: Fokus darauf und einmal die Steuerung
+    // zeigen — so weiss man, dass die Fernbedienung hier wirkt.
+    LaunchedEffect(ansicht) {
+        val v = ansicht ?: return@LaunchedEffect
+        delay(150)
+        if (offen == null && !leisteFokussiert && !vorspannFokussiert) {
+            v.requestFocus()
+            v.showController()
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Color.Black)
+        // Rückfall: Hat die Bildfläche den Fokus nicht (Compose hielt ihn
+        // irgendwo im Nichts), gehen OK und Steuerkreuz trotzdem an sie —
+        // statt verloren. Was Lumen selbst zeigt (Leiste, Felder, „Vorspann
+        // überspringen", „Als Nächstes"), behält seine Tasten.
+        .onPreviewKeyEvent { e ->
+            val v = ansicht ?: return@onPreviewKeyEvent false
+            if (offen != null || leisteFokussiert || vorspannFokussiert || naechstes != null ||
+                fehler != null || v.hasFocus()) return@onPreviewKeyEvent false
+            val nativ = e.nativeKeyEvent
+            when (nativ.keyCode) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    v.requestFocus()
+                    v.dispatchKeyEvent(nativ)
+                    true
+                }
+                else -> false
+            }
+        }) {
         val p = player
         if (p != null) {
             AndroidView(
@@ -970,6 +1035,7 @@ private fun TvWiedergabe(
             TvVorspannKnopf(
                 onClick = { vorspannUeberspringen() },
                 onWeg = { zumBild() },
+                onFokus = { vorspannFokussiert = it },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 190.dp))
         }
 
@@ -1423,7 +1489,9 @@ private fun TvTonBalken(farbe: Color, modifier: Modifier) {
  * gibt den Fokus zurück ans Bild, damit Spulen weiter geht.
  */
 @Composable
-private fun TvVorspannKnopf(onClick: () -> Unit, onWeg: () -> Unit, modifier: Modifier = Modifier) {
+private fun TvVorspannKnopf(onClick: () -> Unit, onWeg: () -> Unit, onFokus: (Boolean) -> Unit = {},
+                            modifier: Modifier = Modifier) {
+    DisposableEffect(Unit) { onDispose { onFokus(false) } }
     var fokussiert by remember { mutableStateOf(false) }
     val fokus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -1440,7 +1508,7 @@ private fun TvVorspannKnopf(onClick: () -> Unit, onWeg: () -> Unit, modifier: Mo
                     else -> { onWeg(); true }
                 }
             }
-            .onFocusChanged { fokussiert = it.isFocused }
+            .onFocusChanged { fokussiert = it.isFocused; onFokus(it.isFocused) }
             .clickable(role = Role.Button, onClick = onClick)
             .clip(RoundedCornerShape(30.dp))
             .background(if (fokussiert) Color.White else Color(0xD912121A))

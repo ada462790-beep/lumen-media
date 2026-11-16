@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -216,7 +217,9 @@ internal fun TvVorschauBild(vorschau: TvVorschauSpieler, client: ApiClient, item
         onRelease = { rahmen ->
             (rahmen.getChildAt(0) as? TextureView)?.let { vorschau.flaecheLoesen(it) }
         },
-        modifier = Modifier.fillMaxSize(),
+        // RESIZE_MODE_ZOOM macht den Rahmen grösser als seinen Platz; ohne
+        // Beschnitt lag das Video über der Navigation oben.
+        modifier = Modifier.fillMaxSize().clipToBounds(),
     )
 }
 

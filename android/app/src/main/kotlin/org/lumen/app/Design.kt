@@ -429,6 +429,24 @@ fun StateOverlay(
 @Composable
 fun Modifier.verticalScrollable(): Modifier = verticalScroll(rememberScrollState())
 
+/**
+ * Eine Seite, deren Inhalt mittig steht und trotzdem scrollt, wenn der Platz
+ * nicht reicht — etwa wenn die Tastatur offen ist. Mit fillMaxSize und
+ * verticalScroll allein stünde alles oben oder wäre abgeschnitten.
+ */
+@Composable
+fun MittigeSeite(inhalt: @Composable ColumnScope.() -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight).padding(28.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = inhalt,
+        )
+    }
+}
+
 @Composable
 fun Modifier.horizontalScrollable(): Modifier = horizontalScroll(rememberScrollState())
 

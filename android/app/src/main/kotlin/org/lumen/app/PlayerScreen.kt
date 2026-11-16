@@ -246,7 +246,9 @@ private fun Wiedergabe(
     // Die HLS-Sitzung, falls umgewandelt wird — beim Schliessen beenden.
     var hlsSitzung by remember { mutableStateOf<HlsSitzung?>(null) }
     var offen by remember { mutableStateOf<Offen?>(null) }
-    var steuerungSichtbar by remember { mutableStateOf(true) }
+    // Erst sichtbar, wenn Media3 es meldet — sonst stünden Titel und
+    // Zahnrad da, die Zeitleiste aber nicht.
+    var steuerungSichtbar by remember { mutableStateOf(false) }
 
     // Das Folgen-Feld: die Staffeln der Serie, welche gewählt ist, und
     // deren Folgen — geladen beim ersten Öffnen.
@@ -857,6 +859,8 @@ private fun Wiedergabe(
                             PlayerView.ControllerVisibilityListener { sichtbarkeit ->
                                 steuerungSichtbar = sichtbarkeit == View.VISIBLE
                             })
+                        // Zu Beginn einmal die ganze Steuerung samt Zeitleiste.
+                        post { showController() }
                         // Beim Spulen über die Zeitleiste: wo man landen würde.
                         findViewById<androidx.media3.ui.DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)
                             ?.addListener(object : androidx.media3.ui.TimeBar.OnScrubListener {

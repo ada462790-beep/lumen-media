@@ -64,7 +64,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Lumen ist immer dunkel: helle Symbole in Status- und
+        // Navigationsleiste, auch wenn das Telefon hell eingestellt ist —
+        // sonst stünden dunkle Symbole auf dunklem Grund.
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         // Nur beim ersten Start: nach einer Wiederherstellung ist der Link
         // schon verarbeitet worden.
         if (savedInstanceState == null) inviteCode(intent)?.let { model.pendingInvite = it }
@@ -191,6 +196,12 @@ private fun Root(model: LumenViewModel) {
             },
         )
     }
+    // Vor der Anmeldung: weg von Statusleiste, Navigation und Tastatur —
+    // sonst verdeckte die Tastatur beim ersten Start „Verbinden". Nach der
+    // Anmeldung kümmern sich Gerüst und Seiten selbst darum.
+    val rand = if (stage is Stage.SignedIn) Modifier
+               else Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
+    Box(rand) {
     val offeneEinladung = einladung
     if (offeneEinladung != null && (stage is Stage.ChoosingProfile || stage is Stage.Unlocking)) {
         BackHandler { einladung = null; model.fehlerWeg() }
@@ -218,6 +229,7 @@ private fun Root(model: LumenViewModel) {
         is Stage.Unlocking -> UnlockScreen(model, s.profile)
         is Stage.SignedIn -> LibraryScaffold(model)
     }
+    }
 }
 
 // ---------------------------------------------------------------- Einrichten
@@ -229,11 +241,7 @@ private fun ServerScreen(model: LumenViewModel, message: String?) {
     var vonAussen by remember { mutableStateOf(false) }
     val busy by model.busy.collectAsStateWithLifecycle()
 
-    Column(
-        Modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    MittigeSeite {
         Text("Lumen", fontSize = 34.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
         Text(
@@ -303,11 +311,7 @@ private fun FirstRunScreen(model: LumenViewModel) {
     val error by model.error.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
 
-    Column(
-        Modifier.fillMaxSize().padding(28.dp).verticalScrollable(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    MittigeSeite {
         Text(tx(R.string.willkommen_bei_lumen), fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
         Text(
@@ -339,11 +343,7 @@ private fun FirstRunScreen(model: LumenViewModel) {
 private fun ProfilesScreen(model: LumenViewModel, profiles: List<ProfileCard>,
                            onMitCode: () -> Unit,
                            onEinladung: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    MittigeSeite {
         Text(tx(R.string.wer_schaut), fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(32.dp))
         LazyVerticalGrid(
@@ -408,11 +408,7 @@ private fun UnterwegsScreen(model: LumenViewModel,
     val schutz by model.neuerSchutz.collectAsStateWithLifecycle()
     LaunchedEffect(schutz) { if (schutz != null) geheim = "" }
 
-    Column(
-        Modifier.fillMaxSize().padding(28.dp).verticalScrollable(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    MittigeSeite {
         Text(tx(R.string.von_unterwegs_anmelden), fontSize = 28.sp, fontWeight = FontWeight.Bold,
              textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         Spacer(Modifier.height(10.dp))
@@ -474,11 +470,7 @@ private fun EinladungScreen(model: LumenViewModel, vorgabe: String, onBack: () -
     val error by model.error.collectAsStateWithLifecycle()
     val busy by model.busy.collectAsStateWithLifecycle()
 
-    Column(
-        Modifier.fillMaxSize().padding(28.dp).verticalScrollable(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    MittigeSeite {
         Text(tx(R.string.du_bist_eingeladen), fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
         Text(
@@ -537,11 +529,7 @@ private fun UnlockScreen(model: LumenViewModel, profile: ProfileCard) {
     LaunchedEffect(schutz) { if (schutz != null) secret = "" }
     val art = schutz?.art ?: profile.lockKind
 
-    Column(
-        Modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    MittigeSeite {
         Avatar(profile.initial, profile.avatar, 84.dp, model.profilbildUrl(profile.id, profile.avatar))
         Spacer(Modifier.height(14.dp))
         Text(profile.name, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -755,67 +743,96 @@ private fun LibraryScaffold(model: LumenViewModel) {
 
     when (val oben = stapel.lastOrNull()) {
         is Ziel.Titel -> {
-            DetailScreen(model, oben.id, onBack = { zurueck() },
-                         onPlay = { model.abspielen = it },
-                         onOpen = titelOeffnen,
-                         onPerson = { oeffnen(Ziel.Person(it)) },
-                         onReihe = { oeffnen(Ziel.ReiheOffen(it)) },
-                         onDownloads = { oeffnen(Ziel.Downloads) },
-                         onSerie = { oeffnen(Ziel.Titel(it)) })
+            // Das Bild oben reicht bis unter die Statusleiste; damit Uhr und
+            // Symbole beim Scrollen nicht auf Text stehen, liegt dort ein
+            // dunkler Streifen.
+            Box(Modifier.fillMaxSize()) {
+                DetailScreen(model, oben.id, onBack = { zurueck() },
+                             onPlay = { model.abspielen = it },
+                             onOpen = titelOeffnen,
+                             onPerson = { oeffnen(Ziel.Person(it)) },
+                             onReihe = { oeffnen(Ziel.ReiheOffen(it)) },
+                             onDownloads = { oeffnen(Ziel.Downloads) },
+                             onSerie = { oeffnen(Ziel.Titel(it)) })
+                Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
+                        .background(Color(0xB3050507)))
+            }
             return
         }
         is Ziel.ReiheOffen -> {
-            ReiheScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen,
-                        onPlay = { model.abspielen = Abspielen(it) })
+            Rand {
+                ReiheScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen,
+                            onPlay = { model.abspielen = Abspielen(it) })
+            }
             return
         }
         is Ziel.SammlungOffen -> {
-            SammlungScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen)
+            Rand {
+                SammlungScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen)
+            }
             return
         }
         is Ziel.ListeOffen -> {
-            ListeScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen,
-                        onPlay = { name, eintraege, n ->
-                            model.abspielen = Abspielen(n.titel, eintraege, n.index, listenName = name)
-                        })
+            Rand {
+                ListeScreen(model, oben.id, onBack = { zurueck() }, onOpen = titelOeffnen,
+                            onPlay = { name, eintraege, n ->
+                                model.abspielen = Abspielen(n.titel, eintraege, n.index, listenName = name)
+                            })
+            }
             return
         }
         Ziel.Suche -> {
-            SuchScreen(model, onBack = { zurueck() }, onOpen = titelOeffnen,
-                       onPerson = { oeffnen(Ziel.Person(it)) },
-                       onGenre = { oeffnen(Ziel.Genre(it)) },
-                       onReihe = { oeffnen(Ziel.ReiheOffen(it.id)) },
-                       onSammlung = { oeffnen(Ziel.SammlungOffen(it.id)) })
+            Rand {
+                SuchScreen(model, onBack = { zurueck() }, onOpen = titelOeffnen,
+                           onPerson = { oeffnen(Ziel.Person(it)) },
+                           onGenre = { oeffnen(Ziel.Genre(it)) },
+                           onReihe = { oeffnen(Ziel.ReiheOffen(it.id)) },
+                           onSammlung = { oeffnen(Ziel.SammlungOffen(it.id)) })
+            }
             return
         }
         is Ziel.Person -> {
-            PersonScreen(model, oben.name, onBack = { zurueck() }, onOpen = titelOeffnen)
+            Rand {
+                PersonScreen(model, oben.name, onBack = { zurueck() }, onOpen = titelOeffnen)
+            }
             return
         }
         is Ziel.Genre -> {
-            GenreScreen(model, oben.name, onBack = { zurueck() }, onOpen = titelOeffnen)
+            Rand {
+                GenreScreen(model, oben.name, onBack = { zurueck() }, onOpen = titelOeffnen)
+            }
             return
         }
         Ziel.Neuigkeiten -> {
-            NeuigkeitenScreen(model, onBack = { zurueck() },
-                              onOpen = { oeffnen(Ziel.Titel(it)) })
+            Rand {
+                NeuigkeitenScreen(model, onBack = { zurueck() },
+                                  onOpen = { oeffnen(Ziel.Titel(it)) })
+            }
             return
         }
         Ziel.Wuensche -> {
-            WuenscheScreen(model, onBack = { zurueck() })
+            Rand {
+                WuenscheScreen(model, onBack = { zurueck() })
+            }
             return
         }
         Ziel.FernseherAnmelden -> {
-            FernseherAnmeldenScreen(model, onBack = { zurueck() })
+            Rand {
+                FernseherAnmeldenScreen(model, onBack = { zurueck() })
+            }
             return
         }
         Ziel.Sperre -> {
-            SperreScreen(model, onBack = { zurueck() })
+            Rand {
+                SperreScreen(model, onBack = { zurueck() })
+            }
             return
         }
         Ziel.Downloads -> {
-            DownloadsScreen(model, onBack = { zurueck() },
-                            onPlay = { model.offline = it })
+            Rand {
+                DownloadsScreen(model, onBack = { zurueck() },
+                                onPlay = { model.offline = it })
+            }
             return
         }
         null -> Unit
@@ -936,6 +953,17 @@ private fun LibraryScaffold(model: LumenViewModel) {
             }
         }
     }
+}
+
+/**
+ * Eine Seite über den Reitern: sie hält sich von Statusleiste,
+ * Navigationsleiste, Kamera-Aussparung und Tastatur fern — die App zeichnet
+ * von Rand zu Rand (enableEdgeToEdge), und ohne das läge etwa das Suchfeld
+ * unter der Uhr.
+ */
+@Composable
+private fun Rand(inhalt: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) { inhalt() }
 }
 
 /** Das Symbol eines Reiters — am Profil mit Punkt, wenn Neuigkeiten ungelesen sind. */

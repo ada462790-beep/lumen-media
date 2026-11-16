@@ -64,14 +64,21 @@ object Technik {
      *
      * [direkt] ist null, solange der Plan fehlt; dann bleibt das letzte
      * Abzeichen weg statt etwas zu raten.
+     *
+     * [fassungen] sind alle Dateien des Titels: liegt er etwa einmal auf
+     * Deutsch und einmal auf Englisch vor, stehen beide Sprachen da — die
+     * der gewählten Datei zuerst.
      */
-    fun abzeichen(item: Item, datei: MediaFile?, direkt: Boolean?): List<TechAbzeichen> {
+    fun abzeichen(item: Item, datei: MediaFile?, direkt: Boolean?,
+                  fassungen: List<MediaFile> = emptyList()): List<TechAbzeichen> {
         if (datei == null && item.qualitaet.isNullOrBlank()) return emptyList()
         val spuren = datei?.tracks ?: emptyList()
         val ton = spuren.filter { it.isAudio }
         val text = spuren.filter { it.isSubtitle && !it.bitmap }
         val kanaele = (ton.maxOfOrNull { it.channels } ?: 0).takeIf { it > 0 } ?: item.kanaele
-        val sprachen = sprachenVon(ton)
+        val sprachen = (sprachenVon(ton) +
+            fassungen.filter { it.id != datei?.id }.flatMap { f -> sprachenVon(f.tracks.filter { it.isAudio }) })
+            .distinct()
         val utSprachen = sprachenVon(text)
 
         val out = mutableListOf<TechAbzeichen>()

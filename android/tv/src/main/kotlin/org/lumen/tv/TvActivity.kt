@@ -29,6 +29,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
@@ -327,10 +329,16 @@ private fun TvRoot(store: Serverliste) {
         is Stage.NeedsServer -> TvServerScreen(s.message,
             onZurueck = if (controller.server.isNotEmpty()) ({ schritt { controller.serverWahl() } }) else null,
         ) { adresse, fingerabdruck ->
-            stage = Stage.StartingUp
-            hintergrund { controller.useServer(adresse, fingerabdruck) }
-            profilHier = false
-            stage = controller.stage
+            // Im Ablauf von TvRoot, nicht in einem Effekt der Eingabeseite:
+            // die verschwindet, sobald „lädt" gesetzt ist, und ihr Effekt
+            // würde mitten im Verbinden abgebrochen — der Ladekreis bliebe
+            // für immer stehen.
+            scope.launch {
+                stage = Stage.StartingUp
+                hintergrund { controller.useServer(adresse, fingerabdruck) }
+                profilHier = false
+                stage = controller.stage
+            }
         }
 
         is Stage.ChoosingServer -> TvServerListe(
@@ -428,15 +436,10 @@ internal fun Mitte(content: @Composable () -> Unit) {
 
 @Composable
 private fun TvServerScreen(message: String?, onZurueck: (() -> Unit)?,
-                           onConnect: suspend (String, String?) -> Unit) {
+                           onConnect: (String, String?) -> Unit) {
     var adresse by remember { mutableStateOf("") }
     var fingerabdruck by remember { mutableStateOf("") }
     var vonAussen by remember { mutableStateOf(false) }
-    var senden by remember { mutableStateOf(false) }
-
-    LaunchedEffect(senden) {
-        if (senden) { onConnect(adresse, Pinnen.saubern(fingerabdruck)); senden = false }
-    }
 
     if (onZurueck != null) androidx.activity.compose.BackHandler { onZurueck() }
 
@@ -482,7 +485,9 @@ private fun TvServerScreen(message: String?, onZurueck: (() -> Unit)?,
             }
             Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                TvButton(tx(R.string.verbinden)) { senden = true }
+                TvButton(tx(R.string.verbinden)) {
+                    if (adresse.isNotBlank()) onConnect(adresse.trim(), Pinnen.saubern(fingerabdruck))
+                }
                 if (!vonAussen) TvButton(tx(R.string.von_unterwegs_verbinden)) { vonAussen = true }
                 if (onZurueck != null) TvButton(tx(R.string.zurueck_zu_den_servern)) { onZurueck() }
             }
@@ -953,6 +958,15 @@ private fun TvStartseite(
     var neueListe by remember { mutableStateOf(false) }
     var listenHinweis by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    // Die Scrollstelle: über das Öffnen eines Titels hinweg gerettet (der
+    // Halter im Gerüst), beim ersten Öffnen ganz oben.
+    val liste = androidx.compose.foundation.lazy.rememberLazyListState()
+    val ersteKarte = remember { FocusRequester() }
+    val rueckkehr = LocalTvRueckkehr.current
+    // In welcher Reihe der Fokus steht: 0 die erste, -1 ausserhalb (Navigation).
+    var fokusReihe by remember { mutableStateOf(-1) }
+    var beendenHinweis by remember { mutableStateOf(false) }
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
 
     // Schon Geladenes steht sofort da; aufgefrischt wird still im
     // Hintergrund (etwa „Weiterschauen" nach einem Film). Ein Fehler zählt
@@ -1001,6 +1015,48 @@ private fun TvStartseite(
     val gefuellt = rows.filter { it.items.isNotEmpty() }
     val gezeigt = fokus ?: gefuellt.firstOrNull()?.items?.firstOrNull()
 
+    /** Ganz nach oben und auf die erste Karte der ersten Reihe. */
+    suspend fun nachOben() {
+        liste.scrollToItem(0)
+        // Einen Moment, bis die erste Reihe wieder aufgebaut ist.
+        repeat(10) {
+            kotlinx.coroutines.delay(50)
+            if (runCatching { ersteKarte.requestFocus() }.isSuccess) return
+        }
+    }
+
+    // Beim ersten Öffnen: oben stehen, der Fokus auf der ersten Karte —
+    // nicht auf der Navigation und nicht unten bei „Listen". (Kamen die
+    // Listen vor den Reihen an, hielt die Liste sie als erste sichtbare
+    // fest, und Weiterschauen lag unerreichbar darüber.)
+    val ersteDa = gefuellt.isNotEmpty()
+    LaunchedEffect(ersteDa) {
+        if (ersteDa && vorher == null && rueckkehr.id == null) {
+            // Nach der Navigation, die sich beim Öffnen den Fokus holt.
+            kotlinx.coroutines.delay(250)
+            nachOben()
+        }
+    }
+
+    // Zurück wie bei TV-Apps üblich: steht man weiter unten, erst nach
+    // oben auf die erste Reihe; von oben beim ersten Druck ein Hinweis,
+    // erst der zweite beendet die App.
+    androidx.activity.compose.BackHandler {
+        val unten = fokusReihe > 0 || (fokusReihe < 0 && liste.firstVisibleItemIndex > 0)
+        if (unten && gefuellt.isNotEmpty()) {
+            beendenHinweis = false
+            scope.launch { nachOben() }
+        } else if (beendenHinweis) {
+            activity?.finish()
+        } else {
+            beendenHinweis = true
+            scope.launch {
+                kotlinx.coroutines.delay(3000)
+                beendenHinweis = false
+            }
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         // Das Bild des fokussierten Titels im Hintergrund — so sieht man
         // schon beim Durchblättern, worum es geht.
@@ -1017,7 +1073,15 @@ private fun TvStartseite(
                 listOf(Color(0xF2050507), Color(0x8C050507), Color(0xE6050507)))))
         }
 
-        LazyColumn(contentPadding = PaddingValues(start = 56.dp, top = 12.dp, bottom = 48.dp)) {
+        LazyColumn(
+            state = liste,
+            contentPadding = PaddingValues(start = 56.dp, top = 12.dp, bottom = 48.dp),
+            modifier = Modifier.fillMaxSize().onFocusChanged { if (!it.hasFocus) fokusReihe = -1 },
+        ) {
+            // Erst wenn die Reihen da sind (oder feststeht, dass keine
+            // kommen): sonst stünden die Listen allein da und behielten
+            // ihren Platz oben, wenn die Reihen darüber eingefügt werden.
+            if (geladen || gefuellt.isNotEmpty()) {
             if (gezeigt != null) {
                 item(key = "lumen:kopf") {
                     Column(Modifier.padding(bottom = 32.dp, end = 56.dp)) {
@@ -1038,7 +1102,9 @@ private fun TvStartseite(
             // fest verdrahtet. Die Vorsilbe hält sie von den eigenen fern.
             gefuellt.forEachIndexed { i, row ->
                 item(key = "reihe:" + row.key) {
-                    TvKartenReihe(client, row.title, row.items, onFocus = { fokus = it }, onOpen = onOpen)
+                    TvKartenReihe(client, row.title, row.items,
+                        onFocus = { fokus = it; fokusReihe = i }, onOpen = onOpen,
+                        ersterFokus = if (i == 0) ersteKarte else null)
                 }
                 if (i == 0 && reihen.isNotEmpty()) {
                     item(key = "lumen:filmreihen") {
@@ -1052,6 +1118,7 @@ private fun TvStartseite(
                                         bild = client.reiheBildUrl(reihe),
                                         titel = reihe.name,
                                         zeile = reihe.anzahlText,
+                                        onFocus = { fokusReihe = 1 },
                                         onClick = { onReihe(reihe) })
                                 }
                             }
@@ -1079,15 +1146,25 @@ private fun TvStartseite(
                                 // Wer eine geteilte Liste angelegt hat — mehr nicht.
                                 zeile = if (liste.meine) liste.anzahlText
                                         else tx(R.string.x_von_x, liste.anzahlText, liste.von.name),
+                                onFocus = { fokusReihe = Int.MAX_VALUE },
                                 onClick = { onListe(liste) })
                         }
                         item(key = "lumen:neue-liste") {
                             TvKachel(bild = null, titel = tx(R.string.neue_liste), zeile = tx(R.string.anlegen),
-                                     symbol = "+", onClick = { neueListe = true })
+                                     symbol = "+", onFocus = { fokusReihe = Int.MAX_VALUE },
+                                     onClick = { neueListe = true })
                         }
                     }
                 }
             }
+            }
+        }
+
+        if (beendenHinweis) {
+            Text(tx(R.string.zum_beenden_nochmals_zurueck), fontSize = 20.sp,
+                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)
+                     .clip(RoundedCornerShape(16.dp)).background(Color(0xE612121A))
+                     .padding(horizontal = 24.dp, vertical = 14.dp))
         }
 
         fehler?.let {
@@ -1124,16 +1201,20 @@ internal fun TvKartenReihe(
     onOpen: (Item) -> Unit,
     hier: String? = null,
     breite: Dp = 200.dp,
+    ersterFokus: FocusRequester? = null,
 ) {
     Column(Modifier.padding(bottom = 36.dp)) {
         Text(titel, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(12.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(28.dp),
                 contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
-            items(eintraege.distinctBy { it.id }, key = { it.id }) { item ->
+            val gezeigt = eintraege.distinctBy { it.id }
+            items(gezeigt, key = { it.id }) { item ->
                 // Ein Druck öffnet die Titelseite; dort steht „Abspielen"
                 // schon unter dem Fokus.
                 TvCard(client, item,
+                    modifier = if (ersterFokus != null && item.id == gezeigt.first().id)
+                        Modifier.focusRequester(ersterFokus) else Modifier,
                     onFocus = { onFocus(item) },
                     onClick = { onOpen(item) },
                     breite = breite,
@@ -1482,6 +1563,10 @@ internal fun TvCard(
             .scale(skalierung)
             .rueckkehrFokus(item.id)
             .onFocusChanged { if (it.isFocused) { fokussiert = true; onFocus() } else fokussiert = false }
+            // Der Name für Bedienungshilfen (und den Simulator-Rundgang) —
+            // auch wenn die Karte nur halb im Bild ist und ihre Schrift
+            // darunter noch fehlt.
+            .semantics { contentDescription = item.kartenTitel }
             .clickable(role = Role.Button, onClick = onClick)
     ) {
         Box {
@@ -1547,7 +1632,8 @@ internal fun TvCard(
 /** Eine Kachel für etwas, das kein einzelner Titel ist: eine Reihe, eine Liste. */
 @Composable
 internal fun TvKachel(bild: String?, titel: String, zeile: String,
-                      symbol: String? = null, breite: Dp = 220.dp, onClick: () -> Unit) {
+                      symbol: String? = null, breite: Dp = 220.dp, onFocus: () -> Unit = {},
+                      onClick: () -> Unit) {
     var fokussiert by remember { mutableStateOf(false) }
     val skalierung by animateFloatAsState(if (fokussiert) 1.08f else 1f, label = "fokus")
 
@@ -1555,7 +1641,8 @@ internal fun TvKachel(bild: String?, titel: String, zeile: String,
         Modifier
             .width(breite)
             .scale(skalierung)
-            .onFocusChanged { fokussiert = it.isFocused }
+            .onFocusChanged { fokussiert = it.isFocused; if (it.isFocused) onFocus() }
+            .semantics { contentDescription = titel }
             .clickable(role = Role.Button, onClick = onClick)
     ) {
         Box(

@@ -117,7 +117,7 @@ fun DetailScreen(
 
     val d = detail
     if (d == null) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
             IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, tx(R.string.zurueck), tint = Color.White) }
             StateOverlay(loading, error, onRetry = { reload++ })
         }
@@ -197,7 +197,7 @@ fun DetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(Titelseite.eckdaten(item), color = Lumen.label2, fontSize = 14.sp)
                 // Auflösung, HDR, Ton, Sprachen, Untertitel, direkt oder umgewandelt.
-                val technik = Technik.abzeichen(item, d.playable, direkt)
+                val technik = Technik.abzeichen(item, d.playable, direkt, d.files)
                 if (technik.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     TechnikZeile(technik)
@@ -1041,11 +1041,17 @@ fun SettingSwitch(label: String, checked: Boolean, onChange: (Boolean) -> Unit) 
 /** Eine Zeile, die woandershin führt: Beschriftung, Wert, Pfeil. */
 @Composable
 private fun LinkZeile(label: String, wert: String, onClick: () -> Unit) {
+    // Eine Zeile statt Überschrift und Anhang: ListItem gäbe einem langen
+    // Wert („Wie der Server (Deutsch (Schweiz))") den ganzen Platz, und die
+    // Beschriftung bräche mitten im Wort um („Sprach/e"). So behält sie
+    // ihre Breite, und der Wert bricht bei Bedarf um.
     ListItem(
-        headlineContent = { Text(label) },
-        trailingContent = {
+        headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(wert, color = Lumen.label2, fontSize = 15.sp)
+                Text(label, maxLines = 1, softWrap = false)
+                Spacer(Modifier.width(16.dp))
+                Text(wert, color = Lumen.label2, fontSize = 15.sp, textAlign = TextAlign.End,
+                     modifier = Modifier.weight(1f))
                 Text("  ›", color = Lumen.label3, fontSize = 20.sp)
             }
         },
@@ -1065,7 +1071,13 @@ private fun SettingGroup(title: String) {
 @Composable
 private fun SettingRow(label: String, value: String) {
     ListItem(
-        headlineContent = { Text(label) },
-        trailingContent = { Text(value, color = Lumen.label2, fontSize = 15.sp) },
+        headlineContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, maxLines = 1, softWrap = false)
+                Spacer(Modifier.width(16.dp))
+                Text(value, color = Lumen.label2, fontSize = 15.sp, textAlign = TextAlign.End,
+                     modifier = Modifier.weight(1f))
+            }
+        },
         colors = ListItemDefaults.colors(containerColor = Lumen.background))
 }

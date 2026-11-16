@@ -379,7 +379,9 @@ def suche_nach_unten(muster: str, max_wischer: int = 5) -> bool:
 # ---------------------------------------------------------------- Anmeldung
 
 def anmelden():
-    adresse_muster = r"^(Adresse|Address)$|lumen\.local"
+    # Vor der Anmeldung spricht die App die Sprache des Geräts — im Emulator
+    # oft Englisch; am Fernseher steht nur der Platzhalter im Feld.
+    adresse_muster = r"^(Adresse|Address)$|lumen\.local|192\.168\.1\.20|^(Verbinden|Connect)$"
     k = warte(adresse_muster + r"|Server hinzufügen|Add server|Mit Code|Profil hier|" + re.escape(NAME), 40)
     foto("erster-start", "" if k else "kein Anmeldebildschirm erkannt", bool(k))
     if finde(r"^Server hinzufügen$|^Add server$"):
@@ -534,7 +536,15 @@ def rundgang_handy():
         if waehle(r"(Weiterschauen|Fortsetzen|Weiter bei|Ansehen|Abspielen|Play|Resume|Continue)"):
             time.sleep(8)
             foto("wiedergabe")
-            tippen_bei(BREITE // 2, HOEHE // 2)
+            # Der Player steht quer: die Mitte aus dem Bildschirmaufbau,
+            # nicht aus `wm size` (das bleibt hochkant).
+            flaeche = max(aufbau() or [Knoten("", "", "", "", 0, 0, BREITE, HOEHE, False, False, False)],
+                          key=lambda k: k.flaeche)
+            if finde(r"Steuerelemente|controls", LETZTER_AUFBAU, nur_sichtbar=False) is None:
+                # Die Steuerung steht schon (zu Beginn eingeblendet): erst
+                # ausblenden lassen, dann per Tippen wieder zeigen.
+                time.sleep(4)
+            tippen_bei(*flaeche.mitte)
             time.sleep(1)
             foto("wiedergabe-steuerung")
             player_verlassen()
@@ -543,16 +553,25 @@ def rundgang_handy():
 
 
 def rundgang_tv():
-    # Wo steht die Startseite nach der Anmeldung? Hinauf bis ganz oben.
-    taste(*(["KEYCODE_DPAD_UP"] * 8), pause=0.4)
-    foto("startseite-oben", "nach 8× hinauf")
+    # Wo steht der Fokus nach der Anmeldung? (Soll: erste Karte der ersten Reihe.)
+    f = fokussiert(aufbau())
+    foto("startseite-fokus", f"Fokus: {f.beschriftung if f else 'keiner'}", bool(f))
     taste("KEYCODE_DPAD_DOWN")
     foto("startseite-zeile-2")
     taste("KEYCODE_DPAD_DOWN", "KEYCODE_DPAD_DOWN")
     foto("startseite-zeile-4")
+    # Zurück: erst nach oben zur ersten Reihe, dann ein Hinweis, erst der
+    # zweite Druck oben verlässt die App.
     taste("KEYCODE_BACK")
     time.sleep(1)
-    foto("startseite-nach-zurueck", "wohin springt der Fokus mit Zurück?")
+    f = fokussiert(aufbau())
+    foto("startseite-nach-zurueck", f"Fokus: {f.beschriftung if f else 'keiner'}")
+    taste("KEYCODE_BACK")
+    time.sleep(0.5)
+    foto("startseite-zurueck-hinweis", "", bool(finde(r"nochmals|again")))
+    time.sleep(3.5)
+    taste(*(["KEYCODE_DPAD_UP"] * 8), pause=0.4)
+    foto("startseite-oben", "nach 8× hinauf")
 
     schritt("filme", r"^(Filme|Movies)$", bereich="oben")
     if schritt("film-inception", r"^Inception$"):
@@ -598,9 +617,12 @@ def rundgang_tv():
             foto("wiedergabe")
             taste("KEYCODE_DPAD_CENTER", pause=1)
             foto("wiedergabe-steuerung")
-            taste("KEYCODE_DPAD_DOWN", pause=1)
+            time.sleep(4)
+            taste("KEYCODE_DPAD_RIGHT", pause=1)
+            foto("wiedergabe-spulen")
+            taste("KEYCODE_DPAD_UP", pause=1)
             foto("wiedergabe-spuren")
-            zurueck(2)
+            zurueck(3)
             time.sleep(2)
             foto("nach-wiedergabe")
 

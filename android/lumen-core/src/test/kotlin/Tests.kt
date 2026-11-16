@@ -1115,6 +1115,12 @@ private fun technikTests() {
         Technik.abzeichen(film, datei, direkt = false).last().text)
     pruefe("Ohne Plan kein Urteil",
         Technik.abzeichen(film, datei, direkt = null).none { it.art != "normal" })
+    val englisch = MediaFile.from(Json.parse("""{"id":"g","tracks":[
+        {"index":1,"kind":"audio","language":"en","channels":2}]}"""))
+    val deutsch = MediaFile.from(Json.parse("""{"id":"h","tracks":[
+        {"index":1,"kind":"audio","language":"de","channels":2}]}"""))
+    gleich("Zwei Fassungen: beide Sprachen, die gewählte zuerst", "DE · EN",
+        Technik.abzeichen(film, deutsch, null, listOf(deutsch, englisch)).first { "·" in it.text }.text)
     gleich("Stereo", "Stereo", Technik.tonName(2))
     gleich("7.1", "7.1", Technik.tonName(8))
     gleich("Mono nichts", null, Technik.tonName(1))
