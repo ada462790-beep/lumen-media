@@ -75,6 +75,25 @@ object AmStueck {
         if (kompakt && !istSpecials(staffel) && (staffel.seasonNo ?: 0) > 0) staffel.seasonNo.toString()
         else staffelName(staffel)
 
+    /**
+     * Welche Staffel offen ist, wenn eine Serie aufgeht — wie im Browser
+     * (app.js, Fall „detail"): die zuletzt gewählte dieser Serie
+     * ([gemerkt]: nach einem Druck auf eine Staffel, von einer Folge aus
+     * geöffnet oder zurück aus dem Player), sonst die Staffel der nächsten
+     * Folge ([weiterParentId], GET /items/{id}/weiterschauen), sonst die
+     * erste. Nicht immer Staffel 1, wenn man längst in Staffel 4 ist.
+     *
+     * Der Server nennt nie eine Folge der Specials, und ist alles gesehen,
+     * die erste Folge überhaupt — dann ist es die erste reguläre Staffel.
+     * Eine Kennung, die es unter [staffeln] nicht gibt, zählt nicht.
+     */
+    fun startStaffel(staffeln: List<Item>, weiterParentId: String?, gemerkt: String? = null): Item? {
+        val geordnet = staffelnOrdnen(staffeln)
+        return geordnet.firstOrNull { gemerkt != null && it.id == gemerkt }
+            ?: geordnet.firstOrNull { weiterParentId != null && it.id == weiterParentId }
+            ?: geordnet.firstOrNull()
+    }
+
     /** Die Folgen einer Staffel nach Nummer; ohne Nummer (oder 0) ans Ende,
      *  bei Gleichstand in der Reihenfolge des Servers — wie überall. */
     fun folgenOrdnen(folgen: List<Item>): List<Item> =

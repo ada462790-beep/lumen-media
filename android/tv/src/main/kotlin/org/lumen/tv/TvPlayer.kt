@@ -125,6 +125,14 @@ internal fun TvPlayer(
     val scope = rememberCoroutineScope()
     val autoplay = prefs["autoplay"] != "0"
 
+    // Zurück auf der Serie ist die Staffel der zuletzt gespielten Folge
+    // offen — wie im Browser (zielNachPlayer), nicht wieder Staffel 1.
+    LaunchedEffect(aktuell.id) {
+        val serie = aktuell.seriesId
+        val st = aktuell.parentId
+        if (aktuell.kind == "episode" && !serie.isNullOrBlank() && !st.isNullOrBlank()) client.staffelMerken(serie, st)
+    }
+
     fun weiter(n: AmStueck.Naechstes) {
         naechstes = null
         startAb = null

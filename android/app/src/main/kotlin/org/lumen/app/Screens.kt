@@ -106,9 +106,15 @@ fun DetailScreen(
         detail = model.fetch { it.item(itemId) }
         loading = false
         val d = detail ?: return@LaunchedEffect
-        if (staffel == null) {
-            val geordnet = AmStueck.staffelnOrdnen(d.seasons)
-            staffel = (geordnet.firstOrNull { it.id == startStaffel } ?: geordnet.firstOrNull())?.id
+        if (staffel == null && d.seasons.isNotEmpty()) {
+            // Welche Staffel offen ist — wie im Browser: die zuletzt gewählte
+            // (von einer Folge aus geöffnet, eine Staffel gedrückt, zurück aus
+            // dem Player), sonst die der nächsten Folge, sonst die erste.
+            // Nicht immer Staffel 1, wenn man längst in Staffel 4 ist.
+            val gemerkt = model.client.gemerkteStaffel(itemId) ?: startStaffel
+            val weiter = if (d.item.kind == "series" && gemerkt == null)
+                withContext(Dispatchers.IO) { oderNull { model.client.weiterInSerie(itemId) } } else null
+            if (staffel == null) staffel = AmStueck.startStaffel(d.seasons, weiter?.parentId, gemerkt)?.id
         }
         val datei = d.playable
         if (datei != null && direkt == null) {
@@ -342,7 +348,10 @@ fun DetailScreen(
                     items(staffeln, key = { it.id }) { st ->
                         FilterChip(
                             selected = staffel == st.id,
-                            onClick = { if (staffel != st.id) { staffel = st.id; episodes = null } },
+                            onClick = {
+                                model.client.staffelMerken(item.id, st.id)
+                                if (staffel != st.id) { staffel = st.id; episodes = null }
+                            },
                             label = { Text(AmStueck.staffelKnopf(st, kompakt), maxLines = 1) },
                             modifier = Modifier.semantics { contentDescription = AmStueck.staffelName(st) },
                             colors = FilterChipDefaults.filterChipColors(

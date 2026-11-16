@@ -314,6 +314,23 @@ private fun amStueckTests() {
     gleich("Staffeln: Specials zuletzt", listOf("s1", "s2", "s0"),
         AmStueck.staffelnOrdnen(listOf(specials, zweite, erste)).map { it.id })
 
+    // Welche Staffel beim Öffnen einer Serie offen ist (wie im Browser).
+    val alle = listOf(specials, zweite, erste)
+    gleich("Start: Staffel der nächsten Folge", "s2", AmStueck.startStaffel(alle, "s2")?.id)
+    gleich("Start: gemerkte Staffel vor der nächsten Folge", "s0", AmStueck.startStaffel(alle, "s2", gemerkt = "s0")?.id)
+    gleich("Start: ohne nächste Folge die erste reguläre", "s1", AmStueck.startStaffel(alle, null)?.id)
+    gleich("Start: unbekannte Staffel zählt nicht", "s1", AmStueck.startStaffel(alle, "weg", gemerkt = "auch weg")?.id)
+    gleich("Start: gemerkte fremde Staffel, dann die der nächsten Folge", "s2",
+        AmStueck.startStaffel(alle, "s2", gemerkt = "andere-serie")?.id)
+    gleich("Start: ohne Staffeln nichts", null, AmStueck.startStaffel(emptyList(), "s2")?.id)
+    val wahl = ApiClient("http://nas:8097", "TOKEN")
+    gleich("anfangs keine gemerkte Staffel", null, wahl.gemerkteStaffel("serie"))
+    wahl.staffelMerken("serie", "s3")
+    gleich("gemerkte Staffel der Serie", "s3", wahl.gemerkteStaffel("serie"))
+    gleich("gemerkt nur für diese Serie", null, wahl.gemerkteStaffel("andere"))
+    wahl.staffelMerken("andere", "a2")
+    gleich("wie im Browser: nur die zuletzt gewählte Serie", null, wahl.gemerkteStaffel("serie"))
+
     // Nordlicht: Folge 1 gesehen, 2 offen. Staffel 2 hat eine Folge.
     val folgen = mapOf(
         "s1" to listOf(

@@ -98,6 +98,10 @@ internal fun TvTitel(
     var direkt by remember { mutableStateOf<Boolean?>(null) }
     var staffel by remember { mutableStateOf<String?>(null) }
     var folgen by remember { mutableStateOf<List<Item>?>(null) }
+    // Bei einer Serie die Folge, die „Weiterschauen" startet (der Server
+    // weiss sie): ihre Staffel ist offen, und beim Hineingehen in die
+    // Folgen steht der Fokus auf ihr.
+    var weiter by remember { mutableStateOf<Item?>(null) }
     // Die Liste, aus der man kommt, und der Platz darin — beides ändert
     // sich, wenn der Titel verschoben wird.
     var liste by remember { mutableStateOf(ziel.liste) }
@@ -114,9 +118,16 @@ internal fun TvTitel(
         try {
             val d = withContext(Dispatchers.IO) { client.item(ziel.item.id) }
             detail = d
+            if (d.item.kind == "series" && d.seasons.isNotEmpty()) {
+                weiter = withContext(Dispatchers.IO) { oderNull { client.weiterInSerie(ziel.item.id) } }
+            }
             if (staffel == null) {
-                val geordnet = AmStueck.staffelnOrdnen(d.seasons)
-                staffel = (geordnet.firstOrNull { it.id == ziel.staffel } ?: geordnet.firstOrNull())?.id
+                // Welche Staffel offen ist — wie im Browser: die zuletzt
+                // gewählte (von einer Folge aus geöffnet, eine Staffel
+                // gedrückt, zurück aus dem Player), sonst die der nächsten
+                // Folge, sonst die erste. Nicht immer Staffel 1.
+                val gemerkt = client.gemerkteStaffel(ziel.item.id) ?: ziel.staffel
+                staffel = AmStueck.startStaffel(d.seasons, weiter?.parentId, gemerkt)?.id
             }
             val datei = d.playable
             if (datei != null && direkt == null) {
@@ -151,6 +162,25 @@ internal fun TvTitel(
     val folgenFokus = remember { FocusRequester() }
     var zurFolge by remember { mutableStateOf(ziel.folge) }
     var folgeFokussiert by remember { mutableStateOf(false) }
+    // Welche Folgenkarte den Fokus bekommt: die, von der man kommt, sonst
+    // die nächste Folge — beides nur in ihrer eigenen Staffel.
+    val fokusFolge = when {
+        ziel.folge != null && staffel == ziel.staffel -> ziel.folge
+        else -> weiter?.takeIf { it.parentId == staffel }?.id
+    }
+    // Ob die Karte gerade zusammengesetzt ist (eine LazyRow setzt nur die
+    // sichtbaren zusammen) — sonst greift der FocusRequester ins Leere.
+    var fokusKarteDa by remember { mutableStateOf(false) }
+    // Direkt geöffnet: die nächste Folge in der Leiste ins Bild holen, ohne
+    // den Fokus von „Abspielen" wegzunehmen — erst wer hinuntergeht, landet
+    // auf ihr (focusRestorer unten).
+    LaunchedEffect(folgen, fokusFolge) {
+        if (zurFolge != null) return@LaunchedEffect
+        val gesucht = fokusFolge ?: return@LaunchedEffect
+        val f = folgen ?: return@LaunchedEffect
+        val i = f.indexOfFirst { it.id == gesucht }
+        if (i > 0) folgenLeiste.scrollToItem(maxOf(0, i - 1))
+    }
     LaunchedEffect(folgen) {
         val gesucht = zurFolge ?: return@LaunchedEffect
         val f = folgen ?: return@LaunchedEffect
@@ -322,7 +352,9 @@ internal fun TvTitel(
                                 TvButton(tx(R.string.serie)) {
                                     scope.launch {
                                         try {
-                                            // Mit der Staffel dieser Folge, nicht mit Staffel 1.
+                                            // Mit der Staffel dieser Folge, nicht mit Staffel 1 —
+                                            // sie gilt dann als gewählt (wie im Browser).
+                                            item.parentId?.let { client.staffelMerken(serie, it) }
                                             onOpenZiel(TvTitelZiel(withContext(Dispatchers.IO) { client.item(serie) }.item,
                                                                    staffel = item.parentId, folge = item.id))
                                         } catch (e: LumenException) {
@@ -406,6 +438,7 @@ internal fun TvTitel(
                                     TvWahlPille(AmStueck.staffelKnopf(st, kompakt), st.id == staffel,
                                                 modifier = (if (st.id == staffel) Modifier.focusRequester(gewaehlt) else Modifier)
                                                     .semantics { contentDescription = AmStueck.staffelName(st) }) {
+                                        client.staffelMerken(item.id, st.id)
                                         if (staffel != st.id) { staffel = st.id; folgen = null }
                                     }
                                 }
@@ -440,10 +473,19 @@ internal fun TvTitel(
                                                 color = Tv.label2, fontSize = 18.sp)
                             else -> LazyRow(state = folgenLeiste,
                                             horizontalArrangement = Arrangement.spacedBy(24.dp),
-                                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
+                                            contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp),
+                                            modifier = Modifier.focusRestorer {
+                                                if (fokusKarteDa) folgenFokus else FocusRequester.Default
+                                            }) {
                                 items(f, key = { it.id }) { folge ->
+                                    if (folge.id == fokusFolge) {
+                                        DisposableEffect(Unit) {
+                                            fokusKarteDa = true
+                                            onDispose { fokusKarteDa = false }
+                                        }
+                                    }
                                     TvFolgenKarte(client, folge,
-                                        modifier = if (folge.id == ziel.folge)
+                                        modifier = if (folge.id == fokusFolge)
                                             Modifier.focusRequester(folgenFokus)
                                                 .onFocusChanged { if (it.isFocused) folgeFokussiert = true }
                                         else Modifier,

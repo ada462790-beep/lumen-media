@@ -918,6 +918,34 @@ class ApiClient(
     fun children(id: String): List<Item> =
         getJson("/items/$id/children").list.map { Item.from(it) }
 
+    /**
+     * Welche Folge „Weiterschauen" auf der Seite einer Serie startet: die
+     * angefangene oder die nächste ungesehene (ohne Specials), und wenn
+     * alles gesehen ist, die erste. Null, wenn die Serie keine reguläre
+     * Folge hat oder der Server die Frage nicht kennt (404).
+     */
+    fun weiterInSerie(serieId: String): Item? =
+        try {
+            (getJson("/items/$serieId/weiterschauen")["item"] as? JsonValue.Obj)?.let { Item.from(it) }
+        } catch (e: LumenException.Server) {
+            if (e.status == 404 || e.status == 400) null else throw e
+        }
+
+    /**
+     * Die zuletzt gewählte Staffel einer Serie, solange die App läuft — je
+     * Anmeldung und wie im Browser (S.staffelWahl) nur für eine Serie: Wer
+     * Staffel 3 wählt, eine Folge schaut und zurückkommt, sieht wieder
+     * Staffel 3. Siehe [AmStueck.startStaffel].
+     */
+    @Volatile private var staffelWahl: Triple<Int, String, String>? = null
+
+    fun staffelMerken(serieId: String, staffelId: String) {
+        staffelWahl = Triple(token.orEmpty().hashCode(), serieId, staffelId)
+    }
+
+    fun gemerkteStaffel(serieId: String): String? =
+        staffelWahl?.takeIf { it.first == token.orEmpty().hashCode() && it.second == serieId }?.third
+
     // ---------------------------------------------------------- Filmreihen
 
     fun collections(): List<Reihe> = getJson("/collections").list.map { Reihe.from(it) }

@@ -717,8 +717,13 @@ private fun LibraryScaffold(model: LumenViewModel) {
     fun zurueck() { stapel = stapel.dropLast(1) }
     val titelOeffnen: (Item) -> Unit = { oeffnen(Ziel.Titel(it.id)) }
     // Eine Folge öffnet ihre Serie — mit der Staffel dieser Folge, nicht mit Staffel 1.
+    // Diese Staffel gilt dann auch als gewählt (wie im Browser), damit sie
+    // nach dem Player noch offen ist.
     fun serieVon(t: Item): Ziel.Titel =
-        if (t.seiteId != t.id) Ziel.Titel(t.seiteId, staffel = t.parentId, folge = t.id) else Ziel.Titel(t.id)
+        if (t.seiteId != t.id) {
+            t.parentId?.let { model.client.staffelMerken(t.seiteId, it) }
+            Ziel.Titel(t.seiteId, staffel = t.parentId, folge = t.id)
+        } else Ziel.Titel(t.id)
 
     model.offline?.let { d ->
         key(d.itemId) { OfflineSpieler(model, d) { model.offline = null } }
