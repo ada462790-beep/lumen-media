@@ -1080,6 +1080,10 @@ public actor APIClient {
         _ = try await request("DELETE", "/admin/wishes/\(id)")
     }
 
+    /// Zu Hause oder unterwegs, und warum — für Verwaltung › Dieses Gerät.
+    /// Ein älterer Server kennt den Weg nicht (404).
+    public func adminNetz() async throws -> NetzStand { try await get("/admin/netz") }
+
     /// Doppelte Titel, fehlende Dateien, nicht erkannte Titel.
     public func adminCleanup() async throws -> Aufraeumen { try await get("/admin/cleanup") }
 

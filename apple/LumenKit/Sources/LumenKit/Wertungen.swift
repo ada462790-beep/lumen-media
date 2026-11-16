@@ -111,3 +111,50 @@ public enum Wertungen {
         return out
     }
 }
+
+// MARK: - Heimnetz
+
+/// So sieht der Server das Gerät, von dem die Anfrage kommt
+/// (GET /admin/netz) — wie im Browser unter Verwaltung › Dieses Gerät.
+public struct NetzStand: Codable, Sendable {
+    public struct Geraet: Codable, Sendable {
+        public let adresse: String
+        public let zuHause: Bool
+        public let grund: String
+        public let kopf: String?
+    }
+    public struct Gateway: Codable, Sendable {
+        public let adresse: String
+        public let docker: Bool?
+    }
+    public let geraet: Geraet
+    public let hostNetz: Bool?
+    public let bruecke: Bool?
+    public let gateway: Gateway?
+
+    /// Ob Docker die echten Adressen verdeckt: dann gilt jedes Gerät als
+    /// unterwegs (keine Profilauswahl, Qualitätsgrenze).
+    public var dockerVerdeckt: Bool {
+        gateway?.docker == true || (geraet.grund == "gateway" && bruecke == true)
+    }
+
+    /// Warum das Gerät als zu Hause oder unterwegs gilt — dieselben Sätze
+    /// wie im Browser (netzGrund).
+    public var grundText: String {
+        switch geraet.grund {
+        case "festgelegt": return String(localized: "Die Adresse steht in LUMEN_HEIMNETZ.", bundle: .lumenKit, locale: .lumen)
+        case "nichtFestgelegt": return String(localized: "Die Adresse steht nicht in LUMEN_HEIMNETZ.", bundle: .lumenKit, locale: .lumen)
+        case "lumenSelbst": return String(localized: "Die Anfrage kommt aus dem Container von Lumen selbst.", bundle: .lumenKit, locale: .lumen)
+        case "rechnerSelbst": return String(localized: "Die Anfrage kommt vom Rechner, auf dem Lumen läuft – etwa über einen Reverse-Proxy. Das zählt nur als zu Hause, wenn die Adresse einzeln in LUMEN_HEIMNETZ steht.", bundle: .lumenKit, locale: .lumen)
+        case "containerNetz": return String(localized: "Die Anfrage kommt aus einem anderen Container auf dem NAS, etwa einem Reverse-Proxy.", bundle: .lumenKit, locale: .lumen)
+        case "gateway": return String(localized: "Die Adresse ist das Gateway eines eigenen Netzes. Dahinter kann jedes Gerät stecken, auch eines aus dem Internet.", bundle: .lumenKit, locale: .lumen)
+        case "oeffentlich": return String(localized: "Keine Adresse aus dem Heimnetz.", bundle: .lumenKit, locale: .lumen)
+        case "privat": return String(localized: "Private Adresse im Heimnetz.", bundle: .lumenKit, locale: .lumen)
+        case "vermittler": return String(localized: "Über den Vermittler (Fernzugriff).", bundle: .lumenKit, locale: .lumen)
+        case "weitergereicht":
+            let kopf = geraet.kopf ?? ""
+            return String(localized: "Ein Reverse-Proxy hat die Anfrage weitergereicht (\(kopf)).", bundle: .lumenKit, locale: .lumen)
+        default: return String(localized: "Die Adresse ist nicht lesbar.", bundle: .lumenKit, locale: .lumen)
+        }
+    }
+}

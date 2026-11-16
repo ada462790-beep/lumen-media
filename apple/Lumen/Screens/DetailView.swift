@@ -35,6 +35,8 @@ struct DetailView: View {
     /// diese Runde liest `?staffel=` nicht und setzt den Haken nur an der
     /// Serie selbst — das lässt sich von hier aus nicht erkennen.)
     @State private var staffelGesehenGeht = true
+    /// Nach dem Haken an einer späten Folge: auch die davor? (wie im Browser)
+    @State private var vorherFrage: Item?
     #if os(macOS)
     /// Verwaltung am Titel: „Anderen Titel zuweisen" offen, und was zuletzt
     /// geschah („wird neu geholt …", „zugewiesen").
@@ -114,6 +116,12 @@ struct DetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(aktionsFehler ?? "")
+        }
+        .confirmationDialog("Auch alle Folgen davor als gesehen markieren?", isPresented: Binding(
+            get: { vorherFrage != nil }, set: { if !$0 { vorherFrage = nil } }),
+            titleVisibility: .visible, presenting: vorherFrage) { folge in
+            Button("Ja, alle davor") { Task { await bisHier(folge) } }
+            Button("Nein", role: .cancel) {}
         }
         .sheet(isPresented: $showLists) {
             AddToPlaylistSheet(itemId: itemId, title: item?.title ?? "")
@@ -565,9 +573,37 @@ struct DetailView: View {
             episodes[i].finished = neu
             if neu { episodes[i].progress = 0; episodes[i].resumeMs = 0 }
         }
+        var davorOffen = false
         do {
             if neu { try await session.client.markFinished(folge.id) }
             else { try await session.client.clearFinished(folge.id) }
+            session.standGeaendert()
+            if neu { davorOffen = await nochOffenDavor(folge) }
+        } catch {
+            aktionsFehler = Session.text(error)
+        }
+        await load()
+        // „Bis hier gesehen" ist der häufige Fall, wenn man eine Serie
+        // anderswo angefangen hat — einmal nachfragen.
+        if davorOffen { vorherFrage = folge }
+    }
+
+    /// Liegt vor `folge` noch Ungesehenes — in ihrer Staffel oder in einer
+    /// früheren (ohne Specials)?
+    private func nochOffenDavor(_ folge: Item) async -> Bool {
+        if Titelseite.davorOffen(folge, in: episodes) { return true }
+        guard let nr = folge.seasonNo, nr > 1 else { return false }
+        for st in staffeln {
+            guard let s = st.seasonNo, s > 0, s < nr else { continue }
+            let folgen = (try? await session.client.children(of: st.id)) ?? []
+            if folgen.contains(where: { !$0.isSeen }) { return true }
+        }
+        return false
+    }
+
+    private func bisHier(_ folge: Item) async {
+        do {
+            try await session.client.markFinishedBisHier(folge.id)
             session.standGeaendert()
         } catch {
             aktionsFehler = Session.text(error)

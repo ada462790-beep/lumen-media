@@ -183,6 +183,57 @@ final class AppAbgleichTests: XCTestCase {
         XCTAssertEqual(k.bildGueltigSek, 604800)
     }
 
+    // MARK: Startseite
+
+    func testStartseiteOhneWiederholung() throws {
+        func t(_ id: String, neu: Bool = false) throws -> Item {
+            try JSONDecoder.lumen.decode(Item.self, from: Data(
+                #"{"id":"\#(id)","libraryId":"lib_1","kind":"movie","title":"T","neu":\#(neu),"matchState":"matched","addedAt":"2026-10-23T13:35:52+02:00"}"#.utf8))
+        }
+        func reihe(_ key: String, _ ids: [String], wide: Bool = false, neu: Bool = false) throws -> HomeRow {
+            let items = try ids.map { try t($0, neu: neu) }
+            return HomeRow(key: key, title: key, wide: wide, items: items)
+        }
+        let acht = (1...8).map { "m\($0)" }
+        let rows = try [reihe("resume", ["m1"], wide: true),
+                        reihe("new", acht, neu: true),
+                        reihe("top", acht),
+                        reihe("drama", acht + ["x1", "x2", "x3", "x4"]),
+                        reihe("leer", [])]
+        let fertig = Startseite.aufbereitet(rows)
+        XCTAssertEqual(fertig.map(\.key), ["resume", "new", "drama"], "„top“ wiederholt nur, leere fällt weg")
+        XCTAssertTrue(fertig[1].items.allSatisfy { $0.neu != true }, "in „Neu dazugekommen“ keine Plakette")
+        let wenigNeu = try HomeRow(key: "x", title: "x", wide: false, items: [t("a", neu: true), t("b"), t("c"), t("d")])
+        XCTAssertEqual(Startseite.neuGedaempft(wenigNeu).filter { $0.neu == true }.count, 1)
+    }
+
+    // MARK: Folgen davor
+
+    func testDavorOffen() throws {
+        func folge(_ id: String, _ staffel: Int, _ nr: Int, gesehen: Bool) throws -> Item {
+            try JSONDecoder.lumen.decode(Item.self, from: Data(
+                #"{"id":"\#(id)","libraryId":"lib_1","kind":"episode","title":"F","seasonNo":\#(staffel),"episodeNo":\#(nr),"finished":\#(gesehen),"matchState":"matched","addedAt":"2026-10-23T13:35:52+02:00"}"#.utf8))
+        }
+        let folgen = try [folge("a", 1, 1, gesehen: false), folge("b", 1, 2, gesehen: true), folge("c", 1, 3, gesehen: false)]
+        XCTAssertTrue(Titelseite.davorOffen(folgen[2], in: folgen))
+        XCTAssertFalse(Titelseite.davorOffen(folgen[0], in: folgen))
+        let special = try folge("s", 0, 5, gesehen: false)
+        XCTAssertFalse(Titelseite.davorOffen(special, in: folgen + [special]), "Specials fragen nie")
+    }
+
+    // MARK: Heimnetz
+
+    func testNetzStand() throws {
+        let n = try JSONDecoder.lumen.decode(NetzStand.self, from: Data(
+            #"{"geraet":{"adresse":"172.17.0.1","zuHause":false,"grund":"gateway"},"container":true,"hostNetz":false,"bruecke":true,"festgelegt":false}"#.utf8))
+        XCTAssertFalse(n.geraet.zuHause)
+        XCTAssertTrue(n.dockerVerdeckt)
+        XCTAssertFalse(n.grundText.isEmpty)
+        let zuHause = try JSONDecoder.lumen.decode(NetzStand.self, from: Data(
+            #"{"geraet":{"adresse":"192.168.1.5","zuHause":true,"grund":"privat"},"hostNetz":true}"#.utf8))
+        XCTAssertFalse(zuHause.dockerVerdeckt)
+    }
+
     // MARK: Meldungen
 
     func testMeldungBeginntGross() {

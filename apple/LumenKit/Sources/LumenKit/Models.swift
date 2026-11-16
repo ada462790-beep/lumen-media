@@ -251,7 +251,7 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     /// Abzeichen auf der Karte: neu dazugekommen (sieben Tage), neue
     /// Folgen seit einer Woche, Qualität (SD/HD/4K), HDR-Art (HDR10, HLG,
     /// DV …) und die meisten Tonkanäle der besten Datei.
-    public let neu: Bool?
+    public var neu: Bool?
     public let neueFolgen: Int?
     public let qualitaet: String?
     public let hdr: String?
@@ -646,6 +646,44 @@ public struct HomeRow: Codable, Identifiable, Sendable {
 
 public struct Home: Codable, Sendable {
     public let rows: [HomeRow]
+}
+
+/// Die Reihen der Startseite so, wie der Browser sie zeigt (app.js:
+/// reihenOhneWiederholung, neuGedaempft):
+///
+/// - Bei kleiner Bibliothek zeigten „Neu", „Gut bewertet", „Drama" und
+///   „Noch nicht angefangen" dieselben acht Titel. Eine Reihe, die zu über
+///   70 % wiederholt, was weiter oben schon stand, und weniger als vier
+///   eigene Titel hat, fällt weg. Weiterschauen und breite Reihen bleiben.
+/// - „Neu" auf dem Poster sagt nur etwas, wenn es nicht auf allem steht:
+///   in der Reihe „Neu dazugekommen" nicht, und nicht, wo mehr als ein
+///   Drittel neu ist.
+/// - Leere Reihen fallen weg.
+public enum Startseite {
+    public static func aufbereitet(_ rows: [HomeRow]) -> [HomeRow] {
+        var schon = Set<String>()
+        var out: [HomeRow] = []
+        for r in rows where !r.items.isEmpty {
+            if !(r.isWide || r.key == "resume") {
+                let ids = r.items.map(\.id)
+                let eigene = ids.filter { !schon.contains($0) }.count
+                if Double(ids.count - eigene) / Double(ids.count) > 0.7 && eigene < 4 { continue }
+                schon.formUnion(ids)
+            }
+            out.append(HomeRow(key: r.key, title: r.title, wide: r.wide, items: neuGedaempft(r)))
+        }
+        return out
+    }
+
+    public static func neuGedaempft(_ r: HomeRow) -> [Item] {
+        let neu = r.items.filter { $0.neu == true && !$0.isSeen }.count
+        guard r.key == "new" || Double(neu) > Double(r.items.count) / 3 else { return r.items }
+        return r.items.map { titel in
+            var x = titel
+            if x.neu == true { x.neu = false }
+            return x
+        }
+    }
 }
 
 // MARK: - Neuigkeiten

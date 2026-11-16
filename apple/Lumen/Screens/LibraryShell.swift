@@ -324,7 +324,7 @@ struct HomeView: View {
         // die Seite „Filmreihen" zeigt alle.
         let client = session.client
         async let filmreihen = try? client.collections(limit: Self.reihenAnzahl)
-        do { rows = try await client.home().rows.filter { !$0.items.isEmpty } }
+        do { rows = Startseite.aufbereitet(try await client.home().rows) }
         catch {
             if APIClient.istAbbruch(error) { return }
             self.error = Session.text(error)

@@ -40,6 +40,8 @@ struct TVDetailView: View {
     @State private var folgen: [Item] = []
     /// Ob der Server „gesehen" für eine Staffel kennt — sonst kein Knopf.
     @State private var staffelGesehenGeht = true
+    /// Nach dem Haken an einer späten Folge: auch die davor?
+    @State private var vorherFrage: Item?
 
     private var item: Item? { detail?.item ?? vorschau }
 
@@ -97,6 +99,14 @@ struct TVDetailView: View {
         .task { await load() }
         .fullScreenCover(item: $playing) { s in
             TVPlayerView(item: s.item, vonVorn: s.vonVorn, datei: s.datei).environment(session)
+        }
+        .confirmationDialog("Auch alle Folgen davor als gesehen markieren?", isPresented: Binding(
+            get: { vorherFrage != nil }, set: { if !$0 { vorherFrage = nil } }),
+            titleVisibility: .visible, presenting: vorherFrage) { folge in
+            Button("Ja, alle davor") {
+                Task { await aendern { try await session.client.markFinishedBisHier(folge.id) } }
+            }
+            Button("Nein", role: .cancel) {}
         }
         // Zurück aus dem Player: Stand, Haken und „Weiter bei" auffrischen.
         .onChange(of: playing == nil) { _, zu in
@@ -418,10 +428,12 @@ struct TVDetailView: View {
         } else if let i = folgen.firstIndex(where: { $0.id == item.id }) {
             folgen[i].finished = neu
         }
+        let davorOffen = neu && item.kind == "episode" && Titelseite.davorOffen(item, in: folgen)
         await aendern {
             if neu { try await session.client.markFinished(item.id) }
             else { try await session.client.clearFinished(item.id) }
         }
+        if davorOffen { vorherFrage = item }
     }
 
     /// Eine ganze Staffel. Kennt der Server das noch nicht (404), fällt

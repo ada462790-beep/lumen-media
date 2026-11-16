@@ -351,7 +351,7 @@ struct TVHomeView: View {
         do {
             // Leere Reihen gar nicht erst zeigen: eine Überschrift ohne
             // Karten ist ein Fokus-Loch.
-            rows = try await client.home().rows.filter { !$0.items.isEmpty }
+            rows = Startseite.aufbereitet(try await client.home().rows)
         } catch {
             if !APIClient.istAbbruch(error) { fehler = Session.text(error) }
         }

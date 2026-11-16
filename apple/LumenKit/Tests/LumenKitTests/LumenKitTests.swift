@@ -1107,7 +1107,10 @@ final class MediathekTests: XCTestCase {
         XCTAssertEqual(Sprachwahl.untertitel.first?.wert, "aus")
         XCTAssertEqual(Array(Sprachwahl.sprachen.prefix(2).map(\.wert)), ["de", "en"])
         XCTAssertEqual(Sprachwahl.sprachen.count, Spuren.sprachen.count, "jede Sprache genau einmal")
-        XCTAssertEqual(Sprachwahl.tonName(nil), "Wie in der Datei")
+        // Ohne gemerkte Sprache: die des Profils (wie im Browser), oder der Originalton.
+        XCTAssertEqual(Sprachwahl.tonName(nil), "Profilsprache")
+        XCTAssertEqual(Sprachwahl.tonName(Sprachwahl.original), "Originalton")
+        XCTAssertEqual(Sprachwahl.ton.map(\.wert).prefix(2), ["", Sprachwahl.original])
         XCTAssertEqual(Sprachwahl.tonName("fr"), "Französisch")
         XCTAssertEqual(Sprachwahl.untertitelName("aus"), "Aus")
         XCTAssertEqual(Sprachwahl.untertitelName(""), "Aus")

@@ -488,6 +488,14 @@ public enum Titelseite {
     /// „Von vorn" nur, wenn es einen gemerkten Stand gibt.
     public static func kannVonVorn(_ item: Item) -> Bool { item.resumeSeconds > weiterAb }
 
+    /// Ob vor `folge` in ihrer Staffel noch eine Folge ungesehen ist —
+    /// dann fragt die Titelseite nach dem Haken: „Auch alle Folgen davor?"
+    /// Specials fragen nie.
+    public static func davorOffen(_ folge: Item, in folgen: [Item]) -> Bool {
+        guard (folge.seasonNo ?? 0) > 0, let i = folgen.firstIndex(where: { $0.id == folge.id }) else { return false }
+        return folgen[..<i].contains { !$0.isSeen }
+    }
+
     /// Der Knopf an einer Folge: „Weiter", wenn sie angefangen ist.
     public static func folge(_ folge: Item) -> String {
         folge.percent > 1 && !folge.isSeen ? String(localized: "Weiter", bundle: .lumenKit, locale: .lumen) : String(localized: "Ansehen", bundle: .lumenKit, locale: .lumen)

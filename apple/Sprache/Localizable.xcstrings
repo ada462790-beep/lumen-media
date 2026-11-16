@@ -20526,6 +20526,286 @@
           }
         }
       }
+    },
+    "Gilt als zu Hause" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt als zu Hause"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt als zu Hause"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counts as home"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counts as home"
+          }
+        }
+      }
+    },
+    "Gilt als unterwegs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt als unterwegs"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt als unterwegs"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counts as away from home"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counts as away from home"
+          }
+        }
+      }
+    },
+    "Dieses Gerät" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Device"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Device"
+          }
+        }
+      }
+    },
+    "Lumen läuft im Netz des NAS und sieht die echten Adressen der Geräte." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen läuft im Netz des NAS und sieht die echten Adressen der Geräte."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen läuft im Netz des NAS und sieht die echten Adressen der Geräte."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen runs in the NAS’s network and sees the devices’ real addresses."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumen runs in the NAS’s network and sees the devices’ real addresses."
+          }
+        }
+      }
+    },
+    "Zu Hause gibt es die Profilauswahl, die Übernahme aus Emby und Jellyfin und keine Qualitätsgrenze für unterwegs." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu Hause gibt es die Profilauswahl, die Übernahme aus Emby und Jellyfin und keine Qualitätsgrenze für unterwegs."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu Hause gibt es die Profilauswahl, die Übernahme aus Emby und Jellyfin und keine Qualitätsgrenze für unterwegs."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At home you get the profile picker, import from Emby and Jellyfin, and no remote quality limit."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At home you get the profile picker, import from Emby and Jellyfin, and no remote quality limit."
+          }
+        }
+      }
+    },
+    "So sieht Lumen dieses Gerät: Adresse %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "So sieht Lumen dieses Gerät: Adresse %@"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "So sieht Lumen dieses Gerät: Adresse %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How Lumen sees this device: address %@"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How Lumen sees this device: address %@"
+          }
+        }
+      }
+    },
+    "Docker verdeckt die echten Adressen: Lumen sieht für alle Geräte dieselbe Adresse und behandelt sicherheitshalber alle als unterwegs. Abhilfe: in der docker-compose.yml „network_mode: host“ eintragen (README, „Synology Schritt für Schritt“)." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docker verdeckt die echten Adressen: Lumen sieht für alle Geräte dieselbe Adresse und behandelt sicherheitshalber alle als unterwegs. Abhilfe: in der docker-compose.yml „network_mode: host“ eintragen (README, „Synology Schritt für Schritt“)."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docker verdeckt die echten Adressen: Lumen sieht für alle Geräte dieselbe Adresse und behandelt sicherheitshalber alle als unterwegs. Abhilfe: in der docker-compose.yml „network_mode: host“ eintragen (README, „Synology Schritt für Schritt“)."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docker hides the real addresses: Lumen sees the same address for every device and treats them all as away from home to be safe. Fix: add “network_mode: host” in docker-compose.yml (README, “Synology step by step”)."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Docker hides the real addresses: Lumen sees the same address for every device and treats them all as away from home to be safe. Fix: add “network_mode: host” in docker-compose.yml (README, “Synology step by step”)."
+          }
+        }
+      }
+    },
+    "Auch alle Folgen davor als gesehen markieren?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auch alle Folgen davor als gesehen markieren?"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auch alle Folgen davor als gesehen markieren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also mark all previous episodes as watched?"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also mark all previous episodes as watched?"
+          }
+        }
+      }
+    },
+    "Ja, alle davor" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ja, alle davor"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ja, alle davor"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yes, All Previous"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yes, All Previous"
+          }
+        }
+      }
+    },
+    "Nein" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nein"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nein"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
