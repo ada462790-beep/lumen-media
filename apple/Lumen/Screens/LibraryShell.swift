@@ -350,7 +350,7 @@ struct HeroBanner: View {
 
     var body: some View {
         NavigationLink { DetailView(itemId: item.id) } label: {
-            Artwork(url: url, title: item.title, corner: 0)
+            Artwork(url: url, title: "", corner: 0)
                 .aspectRatio(16.0 / 9.0, contentMode: .fill)
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: 420)
