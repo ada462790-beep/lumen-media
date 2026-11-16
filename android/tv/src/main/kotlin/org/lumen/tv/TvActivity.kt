@@ -1020,7 +1020,13 @@ private fun TvStartseite(
     val gezeigt = fokus ?: gefuellt.firstOrNull()?.items?.firstOrNull()
 
     /** Ganz nach oben und auf die erste Karte der ersten Reihe. */
+    val eingabeArt = androidx.compose.ui.platform.LocalInputModeManager.current
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
     suspend fun nachOben() {
+        // Kam zuletzt ein Tippen (Touch-Modus — etwa über adb oder eine
+        // Fernbedienungs-App), nähme keine Karte den Fokus an: zurück in
+        // den Tastenmodus, wie nach einem Druck aufs Steuerkreuz.
+        eingabeArt.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard)
         liste.scrollToItem(0)
         // Bis zu drei Sekunden: so lange fragen, bis die erste Karte den
         // Fokus wirklich hat — die Reihe muss erst wieder aufgebaut sein.

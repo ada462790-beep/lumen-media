@@ -399,6 +399,9 @@ def anmelden():
             tippen_bei(*f.mitte)
         time.sleep(0.8)
         eingeben(SERVER)
+        if not TV and tastatur_offen():
+            # Mit offener Tastatur: muss „Verbinden" darüber zu sehen sein.
+            foto("adresse-tastatur")
         tastatur_zu()
         foto("adresse")
         if finde(r"^Verbinden$|^Connect$"):

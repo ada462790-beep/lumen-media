@@ -267,6 +267,7 @@ private fun TvWiedergabe(
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
+    val composeFlaeche = LocalView.current
     val scope = rememberCoroutineScope()
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     var ansicht by remember { mutableStateOf<PlayerView?>(null) }
@@ -888,8 +889,13 @@ private fun TvWiedergabe(
             AndroidView(
                 factory = { ctx ->
                     LumenPlayerView(ctx, hoch = {
-                        if (hochErlaubt) runCatching { leisteFokus.requestFocus() }.isSuccess
-                        else false
+                        if (hochErlaubt) {
+                            // Den Fokus erst der Compose-Fläche zurückgeben:
+                            // solange die eingebettete Bildfläche ihn hält,
+                            // verpufft der Wunsch nach der Leiste.
+                            composeFlaeche.requestFocus()
+                            runCatching { leisteFokus.requestFocus() }.isSuccess
+                        } else false
                     }).apply {
                         this.player = p
                         useController = true

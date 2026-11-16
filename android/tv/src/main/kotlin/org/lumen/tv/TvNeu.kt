@@ -196,29 +196,43 @@ internal fun TvVorschauBild(vorschau: TvVorschauSpieler, client: ApiClient, item
     val sichtbar = vorschau.bereitFuer == item.id
     val deckkraft by animateFloatAsState(if (sichtbar) 1f else 0f, tween(450), label = "vorschau")
     val verhaeltnis = vorschau.seitenverhaeltnis
+    // RESIZE_MODE_ZOOM macht den Rahmen grösser als seinen Platz (bei einem
+    // 16:9-Video unter der Navigation je 35 dp oben und unten). Ein
+    // gewöhnlicher FrameLayout darum herum beschneidet ihn — Compose allein
+    // tut das bei einer eingebetteten View nicht, und das Video lag über
+    // der Navigation.
     AndroidView(
         factory = { ctx ->
-            AspectRatioFrameLayout(ctx).apply {
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                // Der Fokus gehört den Karten, nicht dem Bild dahinter.
+            android.widget.FrameLayout(ctx).apply {
+                clipChildren = true
+                clipToPadding = true
                 isFocusable = false
+                // Der Fokus gehört den Karten, nicht dem Bild dahinter.
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                val flaeche = TextureView(ctx)
-                addView(flaeche, android.widget.FrameLayout.LayoutParams(
+                val rahmen = AspectRatioFrameLayout(ctx).apply {
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    isFocusable = false
+                    val flaeche = TextureView(ctx)
+                    addView(flaeche, android.widget.FrameLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+                    vorschau.spieler().setVideoTextureView(flaeche)
+                }
+                addView(rahmen, android.widget.FrameLayout.LayoutParams(
                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT))
-                vorschau.spieler().setVideoTextureView(flaeche)
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.Gravity.CENTER))
             }
         },
-        update = { rahmen ->
-            rahmen.alpha = deckkraft
-            if (verhaeltnis > 0f) rahmen.setAspectRatio(verhaeltnis)
+        update = { aussen ->
+            aussen.alpha = deckkraft
+            val rahmen = aussen.getChildAt(0) as? AspectRatioFrameLayout
+            if (verhaeltnis > 0f) rahmen?.setAspectRatio(verhaeltnis)
         },
-        onRelease = { rahmen ->
-            (rahmen.getChildAt(0) as? TextureView)?.let { vorschau.flaecheLoesen(it) }
+        onRelease = { aussen ->
+            val rahmen = aussen.getChildAt(0) as? AspectRatioFrameLayout
+            (rahmen?.getChildAt(0) as? TextureView)?.let { vorschau.flaecheLoesen(it) }
         },
-        // RESIZE_MODE_ZOOM macht den Rahmen grösser als seinen Platz; ohne
-        // Beschnitt lag das Video über der Navigation oben.
         modifier = Modifier.fillMaxSize().clipToBounds(),
     )
 }
