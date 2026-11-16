@@ -40,6 +40,10 @@ class Rundgang: XCTestCase {
         if app.launchEnvironment["LUMEN_TEST_SERVER"] == nil {
             app.launchEnvironment["LUMEN_TEST_SERVER"] = "http://127.0.0.1:8097"
         }
+        // Das Gerät spricht Schweizer Hochdeutsch, wie bei den meisten, die
+        // Lumen nutzen — sonst stünden die Teile, die das System selbst
+        // beschriftet (Suchfeld: „Cancel", „Clear text"), auf Englisch da.
+        app.launchArguments += ["-AppleLanguages", "(de-CH)", "-AppleLocale", "de_CH"]
         app.launch()
     }
 
@@ -51,10 +55,17 @@ class Rundgang: XCTestCase {
         Thread.sleep(forTimeInterval: 0.8)
         #if os(macOS)
         let bild = app.windows.firstMatch.exists ? app.windows.firstMatch.screenshot() : XCUIScreen.main.screenshot()
+        let png = bild.pngRepresentation
+        let anhang = XCTAttachment(screenshot: bild)
+        #elseif os(iOS)
+        let bild = XCUIScreen.main.screenshot()
+        let (png, aufrecht) = Self.aufrecht(bild)
+        let anhang = XCTAttachment(image: aufrecht)
         #else
         let bild = XCUIScreen.main.screenshot()
-        #endif
+        let png = bild.pngRepresentation
         let anhang = XCTAttachment(screenshot: bild)
+        #endif
         anhang.name = datei
         anhang.lifetime = .keepAlways
         add(anhang)
@@ -69,12 +80,34 @@ class Rundgang: XCTestCase {
         if let ordner = ProcessInfo.processInfo.environment["SIM_FOTOS"] {
             let basis = URL(fileURLWithPath: ordner)
             try? FileManager.default.createDirectory(at: basis, withIntermediateDirectories: true)
-            try? bild.pngRepresentation.write(to: basis.appendingPathComponent(datei + ".png"))
+            try? png.write(to: basis.appendingPathComponent(datei + ".png"))
             try? baum.write(to: basis.appendingPathComponent(datei + ".txt"), atomically: true, encoding: .utf8)
             try? bericht.joined(separator: "\n")
                 .write(to: basis.appendingPathComponent("bericht-\(geraet).txt"), atomically: true, encoding: .utf8)
         }
     }
+
+    #if os(iOS)
+    /// Im Querformat liefert der Simulator das Bild hochkant — das iPad lag
+    /// in den Fotos auf der Seite. Hier wird es aufgerichtet.
+    static func aufrecht(_ bild: XCUIScreenshot) -> (Data, UIImage) {
+        let img = bild.image
+        let lage = XCUIDevice.shared.orientation
+        guard lage.isLandscape, img.size.height > img.size.width else { return (bild.pngRepresentation, img) }
+        let groesse = CGSize(width: img.size.height, height: img.size.width)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = img.scale
+        let neu = UIGraphicsImageRenderer(size: groesse, format: format).image { ctx in
+            let c = ctx.cgContext
+            c.translateBy(x: groesse.width / 2, y: groesse.height / 2)
+            // Querformat links: die Oberseite des Bilds zeigt nach rechts.
+            c.rotate(by: lage == .landscapeLeft ? -.pi / 2 : .pi / 2)
+            img.draw(in: CGRect(x: -img.size.width / 2, y: -img.size.height / 2,
+                                width: img.size.width, height: img.size.height))
+        }
+        return (neu.pngData() ?? bild.pngRepresentation, neu)
+    }
+    #endif
 
     func berichtAnhaengen() {
         let a = XCTAttachment(string: bericht.joined(separator: "\n"))
@@ -118,7 +151,20 @@ class Rundgang: XCTestCase {
 
     func druecken(_ e: XCUIElement) {
         #if os(macOS)
-        e.click()
+        // Nicht `click()` auf ein Element ausserhalb des Fensters: das
+        // bricht den ganzen Rundgang ab („Unable to find hit point").
+        // Erst hinscrollen, dann über Koordinaten klicken.
+        let fenster = app.windows.firstMatch
+        var n = 0
+        while e.exists && !imFenster(e) && n < 6 {
+            fensterScrollen(e.frame.midY > fenster.frame.midY ? -300 : 300)
+            n += 1
+        }
+        if e.exists && !e.frame.isEmpty && imFenster(e) {
+            fenster.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: e.frame.midX - fenster.frame.minX, dy: e.frame.midY - fenster.frame.minY))
+                .click()
+        }
         #elseif os(tvOS)
         _ = fokussieren(e)
         XCUIRemote.shared.press(.select)
@@ -137,6 +183,26 @@ class Rundgang: XCTestCase {
         }
         #endif
     }
+
+    #if os(macOS)
+    /// Ob die Mitte des Elements im Fenster liegt (unter der Titelleiste).
+    func imFenster(_ e: XCUIElement) -> Bool {
+        let f = app.windows.firstMatch.frame.insetBy(dx: 0, dy: 30)
+        let r = e.frame
+        return !r.isEmpty && f.contains(CGPoint(x: r.midX, y: r.midY))
+    }
+
+    /// Scrollen mit dem Mausrad über dem Inhalt rechts der Seitenleiste —
+    /// über eine Koordinate, nicht über ein Element: `scroll` an Fenster
+    /// oder ScrollView sucht einen Trefferpunkt und brach den Rundgang ab.
+    func fensterScrollen(_ delta: CGFloat) {
+        let fenster = app.windows.firstMatch
+        guard fenster.exists else { return }
+        fenster.coordinate(withNormalizedOffset: CGVector(dx: 0.62, dy: 0.55))
+            .scroll(byDeltaX: 0, deltaY: delta)
+        Thread.sleep(forTimeInterval: 0.4)
+    }
+    #endif
 
     /// Ob die Mitte des Elements auf dem Bildschirm liegt.
     func sichtbar(_ e: XCUIElement) -> Bool {
@@ -186,7 +252,9 @@ class Rundgang: XCTestCase {
             #if os(tvOS)
             XCUIRemote.shared.press(.down)
             #elseif os(macOS)
-            app.windows.firstMatch.scroll(byDeltaX: 0, deltaY: -400)
+            fensterScrollen(-400)
+            // Falls das Mausrad nicht ankommt: Bild ab.
+            app.typeKey(.pageDown, modifierFlags: [])
             #else
             app.swipeUp()
             #endif
@@ -199,7 +267,8 @@ class Rundgang: XCTestCase {
             #if os(tvOS)
             XCUIRemote.shared.press(.up)
             #elseif os(macOS)
-            app.windows.firstMatch.scroll(byDeltaX: 0, deltaY: 400)
+            fensterScrollen(400)
+            app.typeKey(.pageUp, modifierFlags: [])
             #else
             app.swipeDown()
             #endif

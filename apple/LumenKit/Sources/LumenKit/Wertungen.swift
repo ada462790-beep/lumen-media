@@ -68,9 +68,12 @@ public enum Wertungen {
 
     /// Eine Note mit genau einer Nachkommastelle in der Schreibweise des
     /// Profils: „6.8" in der Schweiz, „6,8" in Deutschland — nie „6.799",
-    /// nie „7".
+    /// nie „7". Gerundet wie im Browser (Math.round): 6.75 → „6.8", nicht
+    /// kaufmännisch-gerade „6.8"/„6.7" je nach Ziffer. Das Komma oder den
+    /// Punkt bestimmt die Sprache des Profils — de-CH und Englisch mit
+    /// Punkt, de-DE und de-AT mit Komma, wie `toLocaleString` im Browser.
     public static func note(_ wert: Double) -> String {
-        wert.formatted(.number.precision(.fractionLength(1)).locale(.lumen))
+        wert.formatted(.number.precision(.fractionLength(1)).rounded(rule: .toNearestOrAwayFromZero).locale(.lumen))
     }
 
     /// „★ 6.8" — kurz, für Karten und Zeilen. nil ohne Note.

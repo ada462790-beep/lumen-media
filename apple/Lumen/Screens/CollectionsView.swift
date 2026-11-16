@@ -67,7 +67,8 @@ struct CollectionsView: View {
                 Loading(loading: loading, error: error, retry: load)
             }
         }
-        .navigationTitle(zeigtSammlungen ? Text("Sammlungen") : Text("Filmreihen"))
+        .navigationTitle(zeigtSammlungen ? String(localized: "Sammlungen", bundle: .lumen, locale: .lumen)
+                                         : String(localized: "Filmreihen", bundle: .lumen, locale: .lumen))
         .task { await load() }
         .refreshable { await load() }
     }

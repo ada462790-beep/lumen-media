@@ -33,6 +33,21 @@ final class AppAbgleichTests: XCTestCase {
         XCTAssertTrue(sieben.hasPrefix("7") && sieben.hasSuffix("0"), sieben)
     }
 
+    /// Punkt oder Komma nach der Sprache des Profils, wie im Browser
+    /// (toLocaleString): „7.9" in der Schweiz, „7,9" in Deutschland.
+    /// Gerundet wie Math.round: 6.75 → 6.8, 6.85 → 6.9.
+    func testNoteNachSprache() {
+        let vorher = Sprache.aktuell
+        defer { Sprache.setzen(vorher, merken: false) }
+        Sprache.setzen("de-CH", merken: false)
+        XCTAssertEqual(Wertungen.note(7.9), "7.9")
+        XCTAssertEqual(Wertungen.note(6.75), "6.8")
+        Sprache.setzen("de-DE", merken: false)
+        XCTAssertEqual(Wertungen.note(7.9), "7,9")
+        Sprache.setzen("en-US", merken: false)
+        XCTAssertEqual(Wertungen.note(7.9), "7.9")
+    }
+
     /// Rotten Tomatoes: ab 60 % frisch, darunter faul — nach dem echten Wert.
     func testRottenTomatoesSchwelle() throws {
         XCTAssertTrue(Wertungen.frisch(60))

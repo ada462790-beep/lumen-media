@@ -285,7 +285,7 @@ struct FernseherAnmeldenView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Fernseher anmelden")
+        .navigationTitle(String(localized: "Fernseher anmelden", bundle: .lumen, locale: .lumen))
         .onAppear { fokus = true }
         .onChange(of: code) { _, _ in
             // Wer weitertippt, will den nächsten Fernseher anmelden.

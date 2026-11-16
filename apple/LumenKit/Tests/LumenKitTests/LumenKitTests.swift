@@ -940,6 +940,18 @@ final class NeuheitenTests: XCTestCase {
         // Nur am Titel: was der Server zusammengefasst hat.
         XCTAssertEqual(Technik.zeile(item: try titel(#","qualitaet":"HD","kanaele":2"#), file: nil, plan: nil)
                         .map(\.text), ["HD", "Stereo"])
+        // Zwei Dateien, eine deutsch, eine englisch: beide Sprachen.
+        let englisch = try JSONDecoder.lumen.decode(MediaFile.self, from: Data("""
+        {"id":"f2","itemId":"it_1","path":"/m/a.en.mkv","sizeBytes":1,"partNo":1,"height":576,
+         "tracks":[{"index":1,"kind":"audio","language":"en","channels":2}]}
+        """.utf8))
+        let deutsch = try JSONDecoder.lumen.decode(MediaFile.self, from: Data("""
+        {"id":"f3","itemId":"it_1","path":"/m/a.de.mkv","sizeBytes":1,"partNo":1,"height":576,
+         "tracks":[{"index":1,"kind":"audio","language":"de","channels":2}]}
+        """.utf8))
+        XCTAssertEqual(Technik.zeile(item: try titel(#","qualitaet":"SD""#), file: deutsch, plan: nil,
+                                     fassungen: [deutsch, englisch]).map(\.text),
+                       ["SD", "Stereo", "DE · EN"])
         XCTAssertEqual(Technik.qualitaet(hoehe: 1080), "HD")
         XCTAssertEqual(Technik.qualitaet(hoehe: 2160), "4K")
         XCTAssertEqual(Technik.qualitaet(hoehe: 576), "SD")

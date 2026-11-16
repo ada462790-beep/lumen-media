@@ -110,7 +110,7 @@ struct TVGeraeteView: View {
                 Text("Alle Geräte müssen sich danach neu anmelden — dieses auch.")
             }
         }
-        .navigationTitle("Meine Geräte")
+        .navigationTitle(String(localized: "Meine Geräte", bundle: .lumen, locale: .lumen))
         .task { await laden() }
         .confirmationDialog("Überall abmelden?", isPresented: $fragen) {
             Button("Abmelden", role: .destructive) {

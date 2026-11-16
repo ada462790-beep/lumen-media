@@ -161,7 +161,7 @@ struct ServerEinstellungenView: View {
         }
         .formStyle(.grouped)
         .overlay { if laedt { ProgressView() } }
-        .navigationTitle("Server")
+        .navigationTitle(String(localized: "Server", bundle: .lumen, locale: .lumen))
         .task { await load() }
     }
 

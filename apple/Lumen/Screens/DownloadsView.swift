@@ -175,7 +175,7 @@ struct DownloadsView: View {
                     description: Text("Auf der Titelseite eines Films oder einer Folge lädst du ihn für unterwegs."))
             }
         }
-        .navigationTitle("Downloads")
+        .navigationTitle(String(localized: "Downloads", bundle: .lumen, locale: .lumen))
         .onAppear { downloads.vorbereiten() }
         .playerZeigen(item: $abspielen) { e in
             PlayerAuftrag(item: e.item, offlineDatei: e.fileId)

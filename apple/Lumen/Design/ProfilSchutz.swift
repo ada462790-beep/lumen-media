@@ -131,7 +131,7 @@ struct ProfilSchutzView: View {
                 }
             }
         }
-        .navigationTitle("Profil schützen")
+        .navigationTitle(String(localized: "Profil schützen", bundle: .lumen, locale: .lumen))
         .onAppear { art = bisher == .none ? .pin : bisher }
     }
 

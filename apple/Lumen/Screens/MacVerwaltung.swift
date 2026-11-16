@@ -54,7 +54,7 @@ struct AdminWuenscheView: View {
                 Loading(loading: loading, error: error, retry: load)
             }
         }
-        .navigationTitle("Wünsche")
+        .navigationTitle(String(localized: "Wünsche", bundle: .lumen, locale: .lumen))
         .task { await load() }
         .confirmationDialog("Wunsch entfernen?", isPresented: Binding(
             get: { weg != nil }, set: { if !$0 { weg = nil } }), titleVisibility: .visible, presenting: weg) { w in
@@ -263,7 +263,7 @@ struct AufraeumenView: View {
                 Loading(loading: loading, error: error, retry: load)
             }
         }
-        .navigationTitle("Aufräumen")
+        .navigationTitle(String(localized: "Aufräumen", bundle: .lumen, locale: .lumen))
         .task { await load() }
     }
 
@@ -498,7 +498,7 @@ struct KontenView: View {
             }
         }
         .overlay { if konten.isEmpty { Loading(loading: loading, error: error, retry: load) } }
-        .navigationTitle("Konten und Rechte")
+        .navigationTitle(String(localized: "Konten und Rechte", bundle: .lumen, locale: .lumen))
         .task { await load() }
     }
 
@@ -638,7 +638,7 @@ struct SicherungView: View {
         .overlay {
             if daten == nil { Loading(loading: loading, error: error, retry: load) }
         }
-        .navigationTitle("Sicherung")
+        .navigationTitle(String(localized: "Sicherung", bundle: .lumen, locale: .lumen))
         .task { await load() }
         // Den Neustart nicht weiter abwarten, wenn niemand mehr hinschaut.
         // Der Server startet trotzdem; beim nächsten Öffnen ist er da.
@@ -985,7 +985,7 @@ struct GruppenView: View {
                 Loading(loading: loading, error: error, retry: load)
             }
         }
-        .navigationTitle("Gruppen")
+        .navigationTitle(String(localized: "Gruppen", bundle: .lumen, locale: .lumen))
         .task { await load() }
     }
 
@@ -1288,7 +1288,7 @@ struct UpdatesView: View {
         .overlay {
             if stand == nil { Loading(loading: loading, error: error, retry: load) }
         }
-        .navigationTitle("Updates")
+        .navigationTitle(String(localized: "Updates", bundle: .lumen, locale: .lumen))
         .task { await load() }
         .confirmationDialog(wiedergabenFrage, isPresented: $trotzdemFrage, titleVisibility: .visible) {
             Button("Trotzdem") { Task { await aktualisieren(trotzdem: true) } }

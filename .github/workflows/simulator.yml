@@ -283,10 +283,18 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p "$GITHUB_WORKSPACE/fotos/iphone"
+          # Hängt die App („main thread busy"), zeigen Stichproben, woran:
+          # jede Minute eine, solange der Rundgang läuft (höchstens zwölf).
+          ( for i in $(seq -w 12); do sleep 60
+              p=$(pgrep -f '/Lumen.app/Lumen$' | head -1)
+              [ -n "$p" ] && sample "$p" 1 -file "$GITHUB_WORKSPACE/fotos/iphone/stichprobe-$i.txt" >/dev/null 2>&1
+            done ) &
+          waechter=$!
           TEST_RUNNER_SIM_FOTOS="$GITHUB_WORKSPACE/fotos/iphone" \
           xcodebuild test-without-building -project Lumen.xcodeproj -scheme Lumen \
             -destination "id=$IPHONE" -derivedDataPath "$RUNNER_TEMP/dd-ios" \
             -resultBundlePath "$RUNNER_TEMP/iphone.xcresult" 2>&1 | tail -60
+          kill $waechter 2>/dev/null || true
 
       - name: iPad — Rundgang
         working-directory: apple
@@ -294,10 +302,18 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p "$GITHUB_WORKSPACE/fotos/ipad"
+          # Hängt die App („main thread busy"), zeigen Stichproben, woran:
+          # jede Minute eine, solange der Rundgang läuft (höchstens zwölf).
+          ( for i in $(seq -w 12); do sleep 60
+              p=$(pgrep -f '/Lumen.app/Lumen$' | head -1)
+              [ -n "$p" ] && sample "$p" 1 -file "$GITHUB_WORKSPACE/fotos/ipad/stichprobe-$i.txt" >/dev/null 2>&1
+            done ) &
+          waechter=$!
           TEST_RUNNER_SIM_FOTOS="$GITHUB_WORKSPACE/fotos/ipad" \
           xcodebuild test-without-building -project Lumen.xcodeproj -scheme Lumen \
             -destination "id=$IPAD" -derivedDataPath "$RUNNER_TEMP/dd-ios" \
             -resultBundlePath "$RUNNER_TEMP/ipad.xcresult" 2>&1 | tail -60
+          kill $waechter 2>/dev/null || true
 
       - name: Apple TV — Rundgang
         working-directory: apple

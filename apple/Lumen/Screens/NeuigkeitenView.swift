@@ -44,7 +44,7 @@ struct NeuigkeitenView: View {
                     description: Text("Lumen meldet sich, sobald eine Serie, die du schaust, neue Folgen bekommt."))
             }
         }
-        .navigationTitle("Neuigkeiten")
+        .navigationTitle(String(localized: "Neuigkeiten", bundle: .lumen, locale: .lumen))
         .task { await load() }
         .refreshable { await load() }
     }

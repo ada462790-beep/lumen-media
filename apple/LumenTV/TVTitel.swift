@@ -42,6 +42,8 @@ struct TVDetailView: View {
     @State private var staffelGesehenGeht = true
     /// Nach dem Haken an einer späten Folge: auch die davor?
     @State private var vorherFrage: Item?
+    /// Welcher der Knöpfe oben den Fokus hat — für die Zeile darunter.
+    @FocusState private var knopfFokus: Knopf?
 
     private var item: Item? { detail?.item ?? vorschau }
 
@@ -133,7 +135,8 @@ struct TVDetailView: View {
             Text(zeile(item)).font(.title3).foregroundStyle(Theme.label2)
             // 4K, Dolby Vision, 5.1, Sprachen, Untertitel —
             // kleine umrandete Abzeichen wie im Player.
-            TechnikZeile(abzeichen: Technik.zeile(item: item, file: detail?.playable, plan: plan),
+            TechnikZeile(abzeichen: Technik.zeile(item: item, file: detail?.playable, plan: plan,
+                                                 fassungen: Fassungen.liste(detail?.files ?? [])),
                          gross: true)
                 .padding(.top, 4)
             if let overview = item.overview, !overview.isEmpty {
@@ -152,80 +155,138 @@ struct TVDetailView: View {
 
     /// Abspielen, von vorn, zur Liste, merken, gesehen. Alles in einer
     /// Zeile, damit der Fokus nur nach rechts und links muss.
+    ///
+    /// Wie in der TV-App von Apple: Abspielen mit Text, der Rest als runde
+    /// Symbole — mit Text brachen „Merken" und „Ganze Serie gesehen" auf
+    /// drei Meter Abstand in zwei Zeilen um. Was ein Symbol tut, steht
+    /// darunter, sobald es den Fokus hat; „2 Sprachen" steht dort, solange
+    /// Abspielen ihn hat.
     @ViewBuilder
     private func knoepfe(_ item: Item) -> some View {
-        // Mehrere Fassungen desselben Films: „Abspielen" startet die
-        // Standard-Fassung, eine andere wählt man im Player unter „Qualität".
-        HStack(spacing: 24) {
-            // Eine Serie hat selbst keine Datei — der Player sucht ihre
-            // erste offene Folge. Ein Film braucht eine, die da ist.
-            if item.kind == "series" {
-                Button {
-                    playing = Abspielstart(item: item)
-                } label: {
-                    Label(Titelseite.serieAbspielen(item), systemImage: "play.fill")
-                }
-            } else if let detail, detail.playable != nil {
-                // Mehrere Fassungen (Sprachen, Qualitäten): „Abspielen"
-                // spielt gleich die erste, gewählt wird im Player.
-                let hinweis = Fassungen.hinweis(Fassungen.liste(detail.files))
-                Button {
-                    playing = Abspielstart(item: item)
-                } label: {
-                    Label(hinweis.map { Titelseite.abspielen(item) + " · " + $0 } ?? Titelseite.abspielen(item),
-                          systemImage: "play.fill")
-                }
-                if Titelseite.kannVonVorn(item) {
+        let hinweis = detail.flatMap { Fassungen.hinweis(Fassungen.liste($0.files)) }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 24) {
+                // Eine Serie hat selbst keine Datei — der Player sucht ihre
+                // erste offene Folge. Ein Film braucht eine, die da ist.
+                if item.kind == "series" {
                     Button {
-                        playing = Abspielstart(item: item, vonVorn: true)
+                        playing = Abspielstart(item: item)
                     } label: {
-                        Label("Von vorn", systemImage: "backward.end")
+                        Label(Titelseite.serieAbspielen(item), systemImage: "play.fill")
+                            .lineLimit(1).fixedSize()
+                    }
+                    .focused($knopfFokus, equals: .abspielen)
+                } else if let detail, detail.playable != nil {
+                    // Mehrere Fassungen (Sprachen, Qualitäten): „Abspielen"
+                    // spielt gleich die erste, gewählt wird im Player.
+                    Button {
+                        playing = Abspielstart(item: item)
+                    } label: {
+                        Label(Titelseite.abspielen(item), systemImage: "play.fill")
+                            .lineLimit(1).fixedSize()
+                    }
+                    .focused($knopfFokus, equals: .abspielen)
+                    .accessibilityHint(hinweis ?? "")
+                    if Titelseite.kannVonVorn(item) {
+                        symbolKnopf(String(localized: "Von vorn", bundle: .lumen, locale: .lumen),
+                                    symbol: "backward.end", fokus: .vonVorn) {
+                            playing = Abspielstart(item: item, vonVorn: true)
+                        }
                     }
                 }
-            }
 
-            // Listen nehmen Filme und Serien auf, keine einzelnen Folgen.
-            if item.kind == "movie" || item.kind == "series" {
-                NavigationLink {
-                    TVListenwahlView(itemId: item.id, title: item.title)
-                } label: {
-                    Label("Zur Liste", systemImage: "text.badge.plus")
+                // Listen nehmen Filme und Serien auf, keine einzelnen Folgen.
+                if item.kind == "movie" || item.kind == "series" {
+                    NavigationLink {
+                        TVListenwahlView(itemId: item.id, title: item.title)
+                    } label: {
+                        symbolBild("text.badge.plus")
+                    }
+                    .focused($knopfFokus, equals: .liste)
+                    .accessibilityLabel(Text("Zur Liste"))
                 }
-            }
 
-            Button {
-                Task { await merken(item) }
-            } label: {
-                Label(item.isOnList ? "Aus der Merkliste" : "Merken",
-                      systemImage: item.isOnList ? "bookmark.fill" : "bookmark")
-            }
-
-            // Das Herz: was einem gefallen hat — anders als die
-            // Merkliste, die sammelt, was man noch sehen will.
-            if item.kind == "movie" || item.kind == "series" {
-                Button {
-                    Task { await favorit(item) }
-                } label: {
-                    // Auf drei Meter Abstand sagt das gefüllte Herz mehr als
-                    // eine Farbe; der Text bleibt, damit der Knopf einen Namen hat.
-                    Label("Favorit", systemImage: item.isFavorite ? "heart.fill" : "heart")
+                symbolKnopf(item.isOnList ? String(localized: "Aus der Merkliste", bundle: .lumen, locale: .lumen)
+                                          : String(localized: "Merken", bundle: .lumen, locale: .lumen),
+                            symbol: item.isOnList ? "bookmark.fill" : "bookmark", fokus: .merken,
+                            gewaehlt: item.isOnList) {
+                    Task { await merken(item) }
                 }
-                .accessibilityLabel(item.isFavorite ? "Aus den Favoriten" : "Zu den Favoriten")
-                .accessibilityAddTraits(item.isFavorite ? .isSelected : [])
-            }
 
-            Button {
-                Task { await gesehen(item) }
-            } label: {
+                // Das Herz: was einem gefallen hat — anders als die
+                // Merkliste, die sammelt, was man noch sehen will.
+                if item.kind == "movie" || item.kind == "series" {
+                    symbolKnopf(item.isFavorite ? String(localized: "Aus den Favoriten", bundle: .lumen, locale: .lumen)
+                                                : String(localized: "Zu den Favoriten", bundle: .lumen, locale: .lumen),
+                                symbol: item.isFavorite ? "heart.fill" : "heart", fokus: .favorit,
+                                gewaehlt: item.isFavorite) {
+                        Task { await favorit(item) }
+                    }
+                }
+
                 // Bei einer Serie heisst „gesehen": alle Folgen.
-                Label(item.kind == "series"
-                        ? (item.isSeen ? "Serie nicht gesehen" : "Ganze Serie gesehen")
-                        : (item.isSeen ? "Nicht gesehen" : "Gesehen"),
-                      systemImage: item.isSeen ? "checkmark.circle.fill" : "checkmark.circle")
+                symbolKnopf(item.kind == "series"
+                                ? (item.isSeen ? String(localized: "Serie nicht gesehen", bundle: .lumen, locale: .lumen)
+                                               : String(localized: "Ganze Serie gesehen", bundle: .lumen, locale: .lumen))
+                                : (item.isSeen ? String(localized: "Nicht gesehen", bundle: .lumen, locale: .lumen)
+                                               : String(localized: "Gesehen", bundle: .lumen, locale: .lumen)),
+                            symbol: item.isSeen ? "checkmark.circle.fill" : "checkmark.circle", fokus: .gesehen,
+                            gewaehlt: item.isSeen) {
+                    Task { await gesehen(item) }
+                }
             }
+            .font(.title3.weight(.semibold))
+            .focusSection()
+
+            // Der Name des Symbols im Fokus — eine Zeile, immer reserviert,
+            // damit darunter nichts springt.
+            Text(knopfText(item, hinweis: hinweis) ?? " ")
+                .font(.callout)
+                .foregroundStyle(Theme.label2)
+                .lineLimit(1)
+                .accessibilityHidden(true)
         }
-        .font(.title3.weight(.semibold))
-        .focusSection()
+    }
+
+    /// Welcher Knopf der Titelseite den Fokus hat.
+    enum Knopf: Hashable { case abspielen, vonVorn, liste, merken, favorit, gesehen }
+
+    /// Was unter der Zeile der Knöpfe steht.
+    private func knopfText(_ item: Item, hinweis: String?) -> String? {
+        switch knopfFokus {
+        case .abspielen?: return hinweis.map { String(localized: "\($0) – wählbar im Player", bundle: .lumen, locale: .lumen) }
+        case .vonVorn?: return String(localized: "Von vorn", bundle: .lumen, locale: .lumen)
+        case .liste?: return String(localized: "Zur Liste", bundle: .lumen, locale: .lumen)
+        case .merken?: return item.isOnList ? String(localized: "Aus der Merkliste", bundle: .lumen, locale: .lumen)
+                                            : String(localized: "Merken", bundle: .lumen, locale: .lumen)
+        case .favorit?: return item.isFavorite ? String(localized: "Aus den Favoriten", bundle: .lumen, locale: .lumen)
+                                               : String(localized: "Zu den Favoriten", bundle: .lumen, locale: .lumen)
+        case .gesehen?:
+            if item.kind == "series" {
+                return item.isSeen ? String(localized: "Serie nicht gesehen", bundle: .lumen, locale: .lumen)
+                                   : String(localized: "Ganze Serie gesehen", bundle: .lumen, locale: .lumen)
+            }
+            return item.isSeen ? String(localized: "Nicht gesehen", bundle: .lumen, locale: .lumen)
+                               : String(localized: "Gesehen", bundle: .lumen, locale: .lumen)
+        case nil: return hinweis
+        }
+    }
+
+    private func symbolBild(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.title3.weight(.semibold))
+            .frame(width: 44, height: 44)
+    }
+
+    /// Ein runder Knopf nur mit Symbol; der Name gilt für VoiceOver und
+    /// steht im Fokus unter der Zeile.
+    private func symbolKnopf(_ name: String, symbol: String, fokus: Knopf, gewaehlt: Bool = false,
+                             aktion: @escaping () -> Void) -> some View {
+        Button(action: aktion) { symbolBild(symbol) }
+            .buttonBorderShape(.circle)
+            .focused($knopfFokus, equals: fokus)
+            .accessibilityLabel(Text(name))
+            .accessibilityAddTraits(gewaehlt ? .isSelected : [])
     }
 
     // MARK: Besetzung

@@ -54,9 +54,11 @@ struct TVShell: View {
                 .tabItem { Label("Suche", systemImage: "magnifyingglass") }
                 .tag(Reiter.suche)
             NavigationStack { TVProfilView() }
-                // Der Zähler der Neuigkeiten steht am eigenen Namen — dort
-                // liegen sie jetzt. Nur die eigenen, ungelesenen.
-                .tabItem { Text(ichTitel) }
+                // „Ich" wie im Browser und auf Android, mit dem Zähler der
+                // eigenen ungelesenen Neuigkeiten als Abzeichen — vorher
+                // stand hier der Name mit „· 1", etwa „Admin · 1".
+                .tabItem { Label("Ich", systemImage: "person.crop.circle.fill") }
+                .badge(ungelesen)
                 .tag(Reiter.ich)
         }
         .onChange(of: reiter) { Self.zuletzt = reiter }
@@ -69,12 +71,8 @@ struct TVShell: View {
         }
     }
 
-    private var ichTitel: String {
-        let name = session.me?.account.name ?? String(localized: "Profil", bundle: .lumen, locale: .lumen)
-        let n = session.me?.ungelesen ?? 0
-        if n == 0 { return name }
-        return name + " · " + (n > 9 ? "9+" : String(n))
-    }
+    /// Ungelesene eigene Neuigkeiten. 0 zeigt kein Abzeichen.
+    private var ungelesen: Int { session.me?.ungelesen ?? 0 }
 }
 
 // MARK: - Seitenkopf

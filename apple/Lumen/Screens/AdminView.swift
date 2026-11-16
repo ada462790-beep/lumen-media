@@ -99,7 +99,7 @@ struct AdminView: View {
                     .font(.caption)
             }
         }
-        .navigationTitle("Verwaltung")
+        .navigationTitle(String(localized: "Verwaltung", bundle: .lumen, locale: .lumen))
         #if os(macOS)
         .task {
             uebersicht = try? await session.verwaltet { try await session.client.adminOverview() }
@@ -286,7 +286,7 @@ struct LibrariesView: View {
             }
         }
         .overlay { if loading { ProgressView() } }
-        .navigationTitle("Bibliotheken")
+        .navigationTitle(String(localized: "Bibliotheken", bundle: .lumen, locale: .lumen))
         .task { await load() }
         .refreshable { await load() }
         .onDisappear { takt?.cancel(); takt = nil }
@@ -526,7 +526,7 @@ struct SessionsView: View {
                 ContentUnavailableView("Gerade läuft nichts", systemImage: "play.slash")
             }
         }
-        .navigationTitle("Aktive Wiedergaben")
+        .navigationTitle(String(localized: "Aktive Wiedergaben", bundle: .lumen, locale: .lumen))
         .task { await load() }
         .refreshable { await load() }
     }
@@ -581,7 +581,7 @@ struct LogView: View {
             }
         }
         .overlay { if loading { ProgressView() } }
-        .navigationTitle("Protokoll")
+        .navigationTitle(String(localized: "Protokoll", bundle: .lumen, locale: .lumen))
         .task { await load() }
         .refreshable { await load() }
     }
