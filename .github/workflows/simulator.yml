@@ -230,9 +230,12 @@ jobs:
       - name: Testserver starten
         run: |
           tar -C /tmp -xzf bibliothek.tgz
-          # FFmpeg nur, wenn es schon da ist — die Titel sind bereits erfasst,
-          # und für den Rundgang spielen die Apps die Dateien direkt ab.
-          which ffmpeg || echo "(kein ffmpeg auf dem Mac — der Server läuft ohne)"
+          # FFmpeg braucht der Server, damit AVPlayer MKV-Dateien abspielen
+          # kann (Umverpacken zu HLS) und für Standbilder. Ohne lief die
+          # Wiedergabe am Apple TV ins Leere.
+          which ffmpeg || HOMEBREW_NO_AUTO_UPDATE=1 brew install ffmpeg >/dev/null 2>&1 \
+            || echo "(ffmpeg nicht installierbar — der Server läuft ohne)"
+          which ffmpeg || true
           LUMEN_HEIMNETZ=127.0.0.1,::1 nohup "$RUNNER_TEMP/lumen-mac" --addr 127.0.0.1:8097 --data "$SIM/daten" \
             > "$SIM/server.log" 2>&1 &
           for i in $(seq 60); do curl -fsS http://127.0.0.1:8097/api/v1/hello && break; sleep 1; done
