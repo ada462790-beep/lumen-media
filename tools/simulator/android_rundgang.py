@@ -205,9 +205,24 @@ def finde(muster: str, knoten: list[Knoten] | None = None, bereich: str = "",
     return treffer[0] if treffer else None
 
 
+def dialoge_weg(knoten: list[Knoten] | None = None):
+    """Systemdialoge des Emulators („Pixel Launcher isn't responding")
+    wegklicken — sie gehören nicht zu Lumen und verdecken alles."""
+    knoten = aufbau() if knoten is None else knoten
+    if any(re.search(r"isn.t responding|reagiert nicht", k.beschriftung) for k in knoten):
+        for k in knoten:
+            if re.fullmatch(r"Wait|Warten", k.beschriftung.strip()):
+                print("   Systemdialog weggeklickt", flush=True)
+                tippen_bei(*k.mitte)
+                time.sleep(1.5)
+                return True
+    return False
+
+
 def warte(muster: str, sek: float = 20, bereich: str = "") -> Knoten | None:
     ende = time.time() + sek
     while time.time() < ende:
+        dialoge_weg(LETZTER_AUFBAU)
         k = finde(muster, bereich=bereich)
         if k:
             return k
@@ -603,6 +618,7 @@ def main():
     sh(f"am force-stop {PAKET}")
     sh(f"monkey -p {PAKET} -c android.intent.category.{'LEANBACK_LAUNCHER' if TV else 'LAUNCHER'} 1")
     time.sleep(6)
+    dialoge_weg()
     try:
         if anmelden():
             rundgang_tv() if TV else rundgang_handy()
