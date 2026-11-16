@@ -280,7 +280,7 @@ def foto(name: str, notiz: str = "", ok: bool = True):
         f.write(png)
     knoten = aufbau()
     vorne = {k.paket for k in knoten if k.paket}
-    if knoten and PAKET not in vorne:
+    if knoten and PAKET not in vorne and not im_vordergrund():
         ok = False
         notiz = (notiz + " " if notiz else "") + f"App nicht im Vordergrund ({', '.join(sorted(vorne))})"
     with open(os.path.join(AUS, datei + ".txt"), "w", encoding="utf-8") as f:
@@ -528,6 +528,9 @@ def rundgang_handy():
 
 
 def rundgang_tv():
+    # Wo steht die Startseite nach der Anmeldung? Hinauf bis ganz oben.
+    taste(*(["KEYCODE_DPAD_UP"] * 8), pause=0.4)
+    foto("startseite-oben", "nach 8× hinauf")
     taste("KEYCODE_DPAD_DOWN")
     foto("startseite-zeile-2")
     taste("KEYCODE_DPAD_DOWN", "KEYCODE_DPAD_DOWN")
@@ -594,6 +597,8 @@ def main():
     # Ohne Animationen bleibt der Bildschirmaufbau ruhig genug zum Lesen.
     for k in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
         sh(f"settings put global {k} 0")
+    # Den Hinweis „Viewing full screen" im Player gleich als gelesen markieren.
+    sh("settings put secure immersive_mode_confirmations confirmed")
     adb("logcat", "-c")
     sh(f"am force-stop {PAKET}")
     sh(f"monkey -p {PAKET} -c android.intent.category.{'LEANBACK_LAUNCHER' if TV else 'LAUNCHER'} 1")
