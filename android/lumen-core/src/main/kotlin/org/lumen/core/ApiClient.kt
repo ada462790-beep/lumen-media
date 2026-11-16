@@ -490,7 +490,7 @@ class ApiClient(
                 throw LumenException.Server(messageOf(antwort.text), code, codeOf(antwort.text))
             }
             else -> throw LumenException.Server(messageOf(antwort.text), code, codeOf(antwort.text),
-                                                 feldOf(antwort.text, "art"))
+                                                 feldOf(antwort.text, "art"), feldOf(antwort.text, "itemId"))
         }
     }
 
@@ -1065,6 +1065,21 @@ class ApiClient(
             "/wishes"))
 
     /**
+     * Wünschen — und wenn der Titel schon in der Bibliothek steht (409
+     * „schon_da"), statt eines Fehlers den Satz des Servers und den Titel,
+     * damit die App „Ansehen" daneben stellen kann, wie der Browser.
+     */
+    fun wuenschen(title: String, year: Int = 0): WunschAntwort =
+        try {
+            WunschAntwort(wunsch = wish(title, year))
+        } catch (e: LumenException.Server) {
+            val id = e.itemId?.takeIf { it.isNotBlank() }
+            if (e.status == 409 && e.code == "schon_da" && id != null)
+                WunschAntwort(schonDa = SchonDa(e.message ?: "", id))
+            else throw e
+        }
+
+    /**
      * Den eigenen offenen Wunsch löschen oder einen angeschlossenen
      * verlassen (204). Ist der eigene schon in Arbeit oder erledigt,
      * antwortet der Server mit 409 `nicht_offen` und einem Satz dazu.
@@ -1414,7 +1429,9 @@ sealed class LumenException(message: String, cause: Throwable? = null) :
      * die App ihre eigenen, übersetzbaren Sätze.
      */
     /** [art]: nach einem Zurücksetzen, womit das Profil geschützt wird (pin/password). */
-    open class Server(message: String, val status: Int, val code: String? = null, val art: String? = null) :
+    /** [itemId]: bei 409 „schon_da" (Wunsch nach etwas, das schon da ist) der vorhandene Titel. */
+    open class Server(message: String, val status: Int, val code: String? = null, val art: String? = null,
+                      val itemId: String? = null) :
         LumenException(message)
 
     /**

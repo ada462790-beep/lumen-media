@@ -65,6 +65,8 @@ internal fun TvSuche(
     var fehler by remember { mutableStateOf<String?>(null) }
     var gewuenscht by remember { mutableStateOf<String?>(null) }
     var rueckmeldung by remember { mutableStateOf<String?>(null) }
+    // Oder: der Titel steht schon da — dann „Ansehen" dazu, wie im Browser.
+    var schonDa by remember { mutableStateOf<SchonDa?>(null) }
     val feld = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
 
@@ -197,15 +199,19 @@ internal fun TvSuche(
                              color = Tv.label2, fontSize = 18.sp)
                         Spacer(Modifier.height(20.dp))
                         val meldung = rueckmeldung
+                        val da = schonDa
                         if (gewuenscht == q && meldung != null) {
                             // Neu, schon eigen oder angeschlossen — wie im Browser.
                             Text(meldung, color = Tv.good, fontSize = 18.sp)
+                        } else if (gewuenscht == q && da != null) {
+                            TvSchonDa(client, da, onOpen) { fehler = it }
                         } else {
                             TvButton(tx(R.string.x_wuenschen, q)) {
                                 scope.launch {
                                     try {
-                                        val w = withContext(Dispatchers.IO) { client.wish(q) }
-                                        rueckmeldung = w.rueckmeldung
+                                        val a = withContext(Dispatchers.IO) { client.wuenschen(q) }
+                                        rueckmeldung = a.wunsch?.rueckmeldung
+                                        schonDa = a.schonDa
                                         gewuenscht = q
                                     } catch (ex: LumenException) {
                                         fehler = ex.message
@@ -228,10 +234,11 @@ internal fun TvSuche(
  * Verwaltung, und die gibt es nur im Browser.
  */
 @Composable
-internal fun TvWuensche(client: ApiClient, verwaltung: Boolean = false) {
+internal fun TvWuensche(client: ApiClient, verwaltung: Boolean = false, onOpen: (Item) -> Unit = {}) {
     var wuensche by remember { mutableStateOf<List<Wish>?>(null) }
     var eingabe by remember { mutableStateOf("") }
     var hinweis by remember { mutableStateOf<String?>(null) }
+    var schonDa by remember { mutableStateOf<SchonDa?>(null) }
     var fehler by remember { mutableStateOf<String?>(null) }
     var stand by remember { mutableStateOf(0) }
     // Löschen oder austreten: erst nach einer Rückfrage (Fokus auf „Abbrechen").
@@ -251,11 +258,14 @@ internal fun TvWuensche(client: ApiClient, verwaltung: Boolean = false) {
         if (t.isEmpty()) return
         scope.launch {
             try {
-                val w = withContext(Dispatchers.IO) { client.wish(t) }
-                eingabe = ""
-                hinweis = w.rueckmeldung
+                val a = withContext(Dispatchers.IO) { client.wuenschen(t) }
+                schonDa = a.schonDa
                 fehler = null
-                stand++
+                a.wunsch?.let { w ->
+                    eingabe = ""
+                    hinweis = w.rueckmeldung
+                    stand++
+                }
             } catch (e: LumenException) {
                 fehler = e.message
             }
@@ -270,7 +280,7 @@ internal fun TvWuensche(client: ApiClient, verwaltung: Boolean = false) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = eingabe,
-                        onValueChange = { eingabe = it; hinweis = null },
+                        onValueChange = { eingabe = it; hinweis = null; schonDa = null },
                         singleLine = true,
                         placeholder = { Text(tx(R.string.titel_wuenschen)) },
                         textStyle = TextStyle(fontSize = 20.sp),
@@ -282,6 +292,7 @@ internal fun TvWuensche(client: ApiClient, verwaltung: Boolean = false) {
                 Text(tx(R.string.der_besitzer_sieht_den_titel),
                      color = Tv.label3, fontSize = 15.sp)
                 hinweis?.let { Text(it, color = Tv.good, fontSize = 17.sp) }
+                schonDa?.let { da -> TvSchonDa(client, da, onOpen) { fehler = it } }
                 fehler?.let { Text(it, color = Tv.bad, fontSize = 17.sp) }
             }
         }
@@ -354,5 +365,24 @@ private fun TvWunschZeile(w: Wish, verwaltung: Boolean, onWeg: () -> Unit) {
         Text(w.stateLabel, color = schrift, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
              modifier = Modifier.clip(CircleShape).background(grund)
                  .padding(horizontal = 14.dp, vertical = 5.dp))
+    }
+}
+
+/** „„Matrix (2019)" steht schon in der Bibliothek." — und „Ansehen" dazu, wie im Browser. */
+@Composable
+private fun TvSchonDa(client: ApiClient, schonDa: SchonDa, onOpen: (Item) -> Unit, onFehler: (String?) -> Unit) {
+    val scope = rememberCoroutineScope()
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+        Text(schonDa.satz, color = Color.White, fontSize = 18.sp)
+        Spacer(Modifier.width(18.dp))
+        TvButton(Texte.t(Tx.ANSEHEN)) {
+            scope.launch {
+                try {
+                    onOpen(withContext(Dispatchers.IO) { client.item(schonDa.itemId) }.item)
+                } catch (e: LumenException) {
+                    onFehler(e.message)
+                }
+            }
+        }
     }
 }

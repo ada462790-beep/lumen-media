@@ -73,6 +73,10 @@ internal data class TvTitelZiel(
     val item: Item,
     val liste: Liste? = null,
     val index: Int = -1,
+    // Eine Serie, von einer Folge aus geöffnet: deren Staffel offen und
+    // der Fokus auf der Folge — nicht Staffel 1 und „Abspielen".
+    val staffel: String? = null,
+    val folge: String? = null,
 )
 
 @Composable
@@ -82,6 +86,7 @@ internal fun TvTitel(
     prefs: Map<String, String>,
     onPlay: (TvAbspielen) -> Unit,
     onOpen: (Item) -> Unit,
+    onOpenZiel: (TvTitelZiel) -> Unit = { onOpen(it.item) },
     onPerson: (String) -> Unit,
     onReihe: (String) -> Unit,
     onListeGeaendert: () -> Unit,
@@ -109,7 +114,10 @@ internal fun TvTitel(
         try {
             val d = withContext(Dispatchers.IO) { client.item(ziel.item.id) }
             detail = d
-            if (staffel == null) staffel = AmStueck.staffelnOrdnen(d.seasons).firstOrNull()?.id
+            if (staffel == null) {
+                val geordnet = AmStueck.staffelnOrdnen(d.seasons)
+                staffel = (geordnet.firstOrNull { it.id == ziel.staffel } ?: geordnet.firstOrNull())?.id
+            }
             val datei = d.playable
             if (datei != null && direkt == null) {
                 direkt = withContext(Dispatchers.IO) {
@@ -134,6 +142,26 @@ internal fun TvTitel(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(100)
         runCatching { anfang.requestFocus() }
+    }
+
+    // Von einer Folge aus geöffnet: sobald ihre Staffel da ist, die Folge
+    // ins Bild holen und den Fokus daraufsetzen — ein Druck spielt sie.
+    val seite = androidx.compose.foundation.lazy.rememberLazyListState()
+    val folgenLeiste = androidx.compose.foundation.lazy.rememberLazyListState()
+    val folgenFokus = remember { FocusRequester() }
+    var zurFolge by remember { mutableStateOf(ziel.folge) }
+    LaunchedEffect(folgen, zurFolge) {
+        val gesucht = zurFolge ?: return@LaunchedEffect
+        val f = folgen ?: return@LaunchedEffect
+        zurFolge = null
+        if (staffel != ziel.staffel) return@LaunchedEffect
+        val i = f.indexOfFirst { it.id == gesucht }
+        if (i < 0) return@LaunchedEffect
+        kotlinx.coroutines.delay(150)
+        seite.scrollToItem(1)
+        folgenLeiste.scrollToItem(maxOf(0, i - 1))
+        kotlinx.coroutines.delay(50)
+        runCatching { folgenFokus.requestFocus() }
     }
 
     val d = detail
@@ -208,7 +236,7 @@ internal fun TvTitel(
 
     Box(Modifier.fillMaxSize()) {
         TvHintergrund(client, item)
-        LazyColumn(contentPadding = PaddingValues(start = 56.dp, end = 56.dp, bottom = 56.dp)) {
+        LazyColumn(state = seite, contentPadding = PaddingValues(start = 56.dp, end = 56.dp, bottom = 56.dp)) {
             item(key = "lumen:kopf") {
                 Column(Modifier.fillParentMaxHeight(0.94f).padding(top = 48.dp),
                        verticalArrangement = Arrangement.Bottom) {
@@ -288,7 +316,9 @@ internal fun TvTitel(
                                 TvButton(tx(R.string.serie)) {
                                     scope.launch {
                                         try {
-                                            onOpen(withContext(Dispatchers.IO) { client.item(serie) }.item)
+                                            // Mit der Staffel dieser Folge, nicht mit Staffel 1.
+                                            onOpenZiel(TvTitelZiel(withContext(Dispatchers.IO) { client.item(serie) }.item,
+                                                                   staffel = item.parentId, folge = item.id))
                                         } catch (e: LumenException) {
                                             hinweis = e.message
                                         }
@@ -402,10 +432,12 @@ internal fun TvTitel(
                             }
                             f.isEmpty() -> Text(tx(R.string.in_dieser_staffel_liegt_noch),
                                                 color = Tv.label2, fontSize = 18.sp)
-                            else -> LazyRow(horizontalArrangement = Arrangement.spacedBy(24.dp),
+                            else -> LazyRow(state = folgenLeiste,
+                                            horizontalArrangement = Arrangement.spacedBy(24.dp),
                                             contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)) {
                                 items(f, key = { it.id }) { folge ->
                                     TvFolgenKarte(client, folge,
+                                        modifier = if (folge.id == ziel.folge) Modifier.focusRequester(folgenFokus) else Modifier,
                                         onGesehen = {
                                             aendern { c ->
                                                 if (folge.finished) c.clearFinished(folge.id) else c.markFinished(folge.id)
@@ -566,11 +598,12 @@ private fun TvTechnikZeile(abzeichen: List<TechAbzeichen>) {
 /** Eine Folge als breite Karte: Bild mit Balken, Nummer und Name, Haken, Länge und Datum. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun TvFolgenKarte(client: ApiClient, folge: Item, onGesehen: () -> Unit, onClick: () -> Unit) {
+private fun TvFolgenKarte(client: ApiClient, folge: Item, modifier: Modifier = Modifier,
+                          onGesehen: () -> Unit, onClick: () -> Unit) {
     var fokussiert by remember { mutableStateOf(false) }
     val skalierung by animateFloatAsState(if (fokussiert) 1.06f else 1f, label = "fokus")
     Column(
-        Modifier
+        modifier
             .width(280.dp)
             .scale(skalierung)
             .onFocusChanged { fokussiert = it.isFocused }

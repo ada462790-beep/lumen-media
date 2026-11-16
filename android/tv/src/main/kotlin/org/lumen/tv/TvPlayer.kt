@@ -10,6 +10,7 @@ package org.lumen.tv
 import android.content.Context
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -49,6 +50,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -421,17 +424,27 @@ private fun TvWiedergabe(
         p.playWhenReady = spielte
     }
 
+    // Was hier gemerkt wurde, noch bevor die Prefs von oben frisch ankommen —
+    // sonst überschriebe die Untertitelwahl gleich danach den Ton der Serie.
+    var gemerkt by remember { mutableStateOf(emptyMap<String, String>()) }
+    fun merken(werte: Map<String, String>) {
+        gemerkt = gemerkt + werte
+        werte.forEach { (k, w) -> onPref(k, w) }
+    }
+    // Bei einer Folge merkt sich Lumen Ton und Untertitel für die Serie — wie im Browser.
+    fun serie(): String? = detail?.seriesId ?: detail?.item?.seriesId ?: item.seriesId
+
     fun tonWaehlen(t: Track) {
         if (wahl.ton == t.index) return
         wahl = wahl.copy(ton = t.index)
-        Spuren.prefWertTon(t)?.let { onPref(Spuren.PREF_TON, it) }
+        merken(Spuren.tonMerken(prefs + gemerkt, serie(), t))
         // Der Ton steckt im Strom: neu öffnen, an derselben Stelle.
         player?.let { p -> laden(p, p.currentPosition) }
     }
 
     fun untertitelWaehlen(t: Track?) {
         wahl = wahl.copy(untertitel = t?.index)
-        onPref(Spuren.PREF_UNTERTITEL, Spuren.prefWertUntertitel(t))
+        merken(Spuren.untertitelMerken(prefs + gemerkt, serie(), t))
         player?.let { untertitelAnwenden(it) }
     }
 
@@ -538,7 +551,7 @@ private fun TvWiedergabe(
             val marken = d.marken(erste.id)
             intro = if (stelle.teil == 0) marken.intro else null
             abspannMs = marken.creditsMs
-            wahl = Spuren.vorbelegen(f.tracks, prefs)
+            wahl = Spuren.vorbelegen(f.tracks, prefs + gemerkt, seriesId = d.seriesId ?: d.item.seriesId ?: item.seriesId)
             // Nach einem Fassungswechsel: Ton und Untertitel nach Sprache übernehmen.
             uebernahme?.let { (alteSpuren, alteWahl) -> wahl = Spuren.uebernehmen(alteSpuren, alteWahl, f.tracks, wahl) }
             startHinweis?.let { h ->
@@ -834,10 +847,13 @@ private fun TvWiedergabe(
         onDispose { besitzer.lifecycle.removeObserver(beobachter) }
     }
 
+    // Zurück: erst ein offenes Feld oder die Leiste zu, dann die
+    // eingeblendete Steuerung weg — erst danach schliesst der Player.
     BackHandler {
         when {
             offen != null -> zumBild()
             leisteFokussiert -> zumBild()
+            steuerungSichtbar && ansicht?.isControllerFullyVisible == true -> ansicht?.hideController()
             else -> beenden()
         }
     }
@@ -851,6 +867,33 @@ private fun TvWiedergabe(
     // Die Bildfläche entsteht einmal; ihr Griff fürs Steuerkreuz liest
     // darum den jeweils aktuellen Stand, nicht den vom ersten Aufbau.
     val hochErlaubt by rememberUpdatedState(etwasZuWaehlen && naechstes == null)
+
+    /**
+     * „Hoch" aus der Zeitleiste: zu Lumens Leiste (Ton, Untertitel, Zahnrad)
+     * statt auf „Pause" von Media3. Solange die eingebettete Bildfläche den
+     * Fokus hält, verpufft ein FocusRequester — oder Android gibt den Fokus
+     * gleich an ihr erstes Kind zurück. Darum sperrt sie ihre Kinder kurz:
+     * so landet der Fokus bei der Compose-Fläche und von dort auf der Leiste.
+     */
+    fun zurLeiste(): Boolean {
+        if (!hochErlaubt) return false
+        val v = ansicht ?: return false
+        val halter = v.parent as? ViewGroup
+        val vorher = halter?.descendantFocusability
+        val vorherBild = v.descendantFocusability
+        halter?.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        v.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        v.findFocus()?.clearFocus()
+        composeFlaeche.requestFocus()
+        val ok = runCatching { leisteFokus.requestFocus() }.isSuccess
+        // Erst nach dem Fokuswechsel wieder freigeben — zurück ins Bild geht
+        // es mit runter oder Zurück (zumBild).
+        v.post {
+            v.descendantFocusability = vorherBild
+            if (halter != null && vorher != null) halter.descendantFocusability = vorher
+        }
+        return ok
+    }
 
     // Sobald die Bildfläche steht: Fokus darauf und einmal die Steuerung
     // zeigen — so weiss man, dass die Fernbedienung hier wirkt.
@@ -888,15 +931,7 @@ private fun TvWiedergabe(
         if (p != null) {
             AndroidView(
                 factory = { ctx ->
-                    LumenPlayerView(ctx, hoch = {
-                        if (hochErlaubt) {
-                            // Den Fokus erst der Compose-Fläche zurückgeben:
-                            // solange die eingebettete Bildfläche ihn hält,
-                            // verpufft der Wunsch nach der Leiste.
-                            composeFlaeche.requestFocus()
-                            runCatching { leisteFokus.requestFocus() }.isSuccess
-                        } else false
-                    }).apply {
+                    LumenPlayerView(ctx, hoch = { zurLeiste() }).apply {
                         this.player = p
                         useController = true
                         setShowSubtitleButton(false)
@@ -1226,10 +1261,18 @@ private fun TvSpurKnopf(
     var fokussiert by remember { mutableStateOf(false) }
     val hintergrund = if (fokussiert) Color.White else Color(0x8C000000)
     val glyph = if (fokussiert) Color.Black else Color.White
+    // Nur ein Symbol: der Name für Bildschirmleser (und den Rundgang).
+    val name = tx(when (feld) {
+        TvFeld.UNTERTITEL -> R.string.untertitel
+        TvFeld.TON -> R.string.tonspur
+        TvFeld.FOLGEN -> R.string.folgen_2
+        TvFeld.QUALITAET -> R.string.pl_qualitaet
+    })
     Box(
         modifier
             .size(60.dp)
             .onFocusChanged { fokussiert = it.isFocused; onFocus(it.isFocused) }
+            .semantics { contentDescription = name }
             .clickable(role = Role.Button, onClick = onClick)
             .clip(CircleShape)
             .background(hintergrund),

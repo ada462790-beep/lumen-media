@@ -78,8 +78,12 @@ fun DetailScreen(
     onReihe: (String) -> Unit = {},
     // „Heruntergeladen" führt zur Liste der Downloads.
     onDownloads: () -> Unit = {},
-    // Bei einer Folge: der Name der Serie darüber führt zur Serie.
-    onSerie: (String) -> Unit = {},
+    // Bei einer Folge: der Name der Serie darüber führt zur Serie (mit
+    // der Staffel dieser Folge).
+    onSerie: (Item) -> Unit = {},
+    // Eine Serie, von einer Folge aus geöffnet: diese Staffel offen, die Folge im Bild.
+    startStaffel: String? = null,
+    startFolge: String? = null,
 ) {
     var zurListe by remember(itemId) { mutableStateOf(false) }
     // Ob dieses Gerät die Datei direkt abspielt — für die Technik-Zeile.
@@ -102,7 +106,10 @@ fun DetailScreen(
         detail = model.fetch { it.item(itemId) }
         loading = false
         val d = detail ?: return@LaunchedEffect
-        if (staffel == null) staffel = AmStueck.staffelnOrdnen(d.seasons).firstOrNull()?.id
+        if (staffel == null) {
+            val geordnet = AmStueck.staffelnOrdnen(d.seasons)
+            staffel = (geordnet.firstOrNull { it.id == startStaffel } ?: geordnet.firstOrNull())?.id
+        }
         val datei = d.playable
         if (datei != null && direkt == null) {
             direkt = withContext(Dispatchers.IO) {
@@ -152,7 +159,23 @@ fun DetailScreen(
         }
     }
 
-    LazyColumn {
+    // Von einer Folge aus geöffnet: einmal zu ihr scrollen, sobald die
+    // Folgen ihrer Staffel da sind. Vor den Folgen stehen Kopfbild, Text,
+    // die Staffeln und (wenn es die Folgen gibt) „Staffel als gesehen".
+    val liste = rememberLazyListState()
+    var zurFolge by remember(itemId) { mutableStateOf(startFolge) }
+    LaunchedEffect(episodes, zurFolge) {
+        val ziel = zurFolge ?: return@LaunchedEffect
+        val folgen = episodes ?: return@LaunchedEffect
+        if (staffel != startStaffel) { zurFolge = null; return@LaunchedEffect }
+        val i = folgen.indexOfFirst { it.id == ziel }
+        zurFolge = null
+        if (i < 0) return@LaunchedEffect
+        // Eine Zeile davor, damit die Staffeln noch zu sehen sind.
+        liste.scrollToItem(3 + i)
+    }
+
+    LazyColumn(state = liste) {
         item {
             Box {
                 Artwork(
@@ -177,7 +200,9 @@ fun DetailScreen(
                     item.seriesTitle?.let { name ->
                         Text(name + if (serie != null) "  ›" else "", color = Lumen.label2, fontSize = 15.sp,
                              fontWeight = FontWeight.SemiBold,
-                             modifier = if (serie != null) Modifier.clickableRow { onSerie(serie) } else Modifier)
+                             modifier = if (serie != null) Modifier.clickableRow {
+                                 onSerie(item.copy(seriesId = serie))
+                             } else Modifier)
                     }
                     Titelseite.folgenKennung(item).takeIf { it.isNotBlank() }?.let {
                         Text(it, color = Lumen.label2, fontSize = 13.sp)

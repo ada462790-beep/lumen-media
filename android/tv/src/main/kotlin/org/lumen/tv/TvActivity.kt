@@ -833,6 +833,7 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
                 TvTitel(client, oben.ziel, prefs,
                     onPlay = { laeuft = it },
                     onOpen = titelOeffnen,
+                    onOpenZiel = { rueckkehr.id = it.item.id; oeffnen(TvSeite.Titel(it)) },
                     onPerson = { oeffnen(TvSeite.Person(it)) },
                     onReihe = { oeffnen(TvSeite.ReiheOffen(it)) },
                     onListeGeaendert = { listenStand++ },
@@ -910,7 +911,7 @@ private fun TvHome(client: ApiClient, me: Me, info: TvServerInfo, onAbmelden: ()
                         onGelesen = { ungelesen = 0 },
                         onOpen = titelOeffnen,
                         onHome = { bereich = TvBereich.HOME })
-                    TvBereich.WUENSCHE -> TvWuensche(client, verwaltung = me.account.isAdmin)
+                    TvBereich.WUENSCHE -> TvWuensche(client, verwaltung = me.account.isAdmin, onOpen = titelOeffnen)
                     TvBereich.PROFIL -> TvProfil(client, ich, prefs, info,
                         onPref = { k, w -> if (k == Sprachen.PREF) spracheSetzen(w) else prefSetzen(k, w) },
                         onIch = { ich = it },

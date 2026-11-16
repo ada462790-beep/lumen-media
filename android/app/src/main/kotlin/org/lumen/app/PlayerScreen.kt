@@ -372,21 +372,29 @@ private fun Wiedergabe(
         p.playWhenReady = spielte
     }
 
-    fun merken(key: String, wert: String) {
-        model.send(onDone = { model.refreshMe() }) { it.updatePrefs(mapOf(key to wert)) }
+    // Was hier gemerkt wurde, noch bevor das Profil frisch vom Server kommt —
+    // sonst überschriebe die Untertitelwahl gleich danach den Ton der Serie.
+    var gemerkt by remember { mutableStateOf(emptyMap<String, String>()) }
+    fun merken(werte: Map<String, String>) {
+        if (werte.isEmpty()) return
+        gemerkt = gemerkt + werte
+        model.send(onDone = { model.refreshMe() }) { it.updatePrefs(werte) }
     }
+    // Bei einer Folge merkt sich Lumen Ton und Untertitel für die Serie — wie im Browser.
+    fun serie(): String? = detail?.seriesId ?: detail?.item?.seriesId ?: item.seriesId
+    fun prefsJetzt(): Map<String, String> = (model.me?.prefs ?: emptyMap()) + gemerkt
 
     fun tonWaehlen(t: Track) {
         if (wahl.ton == t.index) return
         wahl = wahl.copy(ton = t.index)
-        Spuren.prefWertTon(t)?.let { merken(Spuren.PREF_TON, it) }
+        merken(Spuren.tonMerken(prefsJetzt(), serie(), t))
         // Der Ton steckt im Strom: neu öffnen, an derselben Stelle.
         player?.let { p -> laden(p, p.currentPosition) }
     }
 
     fun untertitelWaehlen(t: Track?) {
         wahl = wahl.copy(untertitel = t?.index)
-        merken(Spuren.PREF_UNTERTITEL, Spuren.prefWertUntertitel(t))
+        merken(Spuren.untertitelMerken(prefsJetzt(), serie(), t))
         player?.let { untertitelAnwenden(it) }
     }
 
@@ -554,7 +562,7 @@ private fun Wiedergabe(
         intro = if (stelle.teil == 0) marken.intro else null
         abspannMs = marken.creditsMs
         umgewandelt = !pl.direct
-        wahl = Spuren.vorbelegen(f.tracks, model.me?.prefs ?: emptyMap())
+        wahl = Spuren.vorbelegen(f.tracks, prefsJetzt(), seriesId = d.seriesId ?: d.item.seriesId ?: item.seriesId)
         // Nach einem Fassungswechsel: Ton und Untertitel nach Sprache übernehmen.
         uebernahme?.let { (alteSpuren, alteWahl) -> wahl = Spuren.uebernehmen(alteSpuren, alteWahl, f.tracks, wahl) }
         startHinweis?.let { h ->

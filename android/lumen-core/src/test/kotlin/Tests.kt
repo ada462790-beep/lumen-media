@@ -495,6 +495,30 @@ private fun spurenTests() {
     gleich("Pref Untertitel ohne Sprache", "und", Spuren.prefWertUntertitel(spur(8, "subtitle")))
     gleich("Pref Untertitel aus", "aus", Spuren.prefWertUntertitel(null))
 
+    // Ton und Untertitel je Serie — wie im Browser unter „spuren:<Serie>".
+    val serienPrefs = mapOf("spuren:se_1" to """{"ton":"en","ut":"en"}""", "untertitel" to "aus")
+    val inSerie = Spuren.vorbelegen(spuren, serienPrefs, seriesId = "se_1")
+    gleich("Serie: gemerkter Ton", 2, inSerie.ton)
+    gleich("Serie: gemerkte Untertitel gelten, auch wenn das Profil „aus\" sagt", 5, inSerie.untertitel)
+    gleich("andere Serie: Profil", 1, Spuren.vorbelegen(spuren, serienPrefs, seriesId = "se_2").ton)
+    gleich("Film: Profil", 1, Spuren.vorbelegen(spuren, serienPrefs).ton)
+    gleich("Serie mit „aus\": erzwungene laufen mit", 4,
+        Spuren.vorbelegen(spuren, mapOf("spuren:se_1" to """{"ut":"aus"}""", "untertitel" to "de",
+            "tonSprache" to "de"), seriesId = "se_1").untertitel)
+    gleich("Serie nur mit Ton: Untertitel nach dem Profil", 3,
+        Spuren.vorbelegen(spuren, mapOf("spuren:se_1" to """{"ton":"en"}"""), seriesId = "se_1").untertitel)
+    pruefe("unlesbarer Serieneintrag: kein Absturz",
+        Spuren.serienWahl(mapOf("spuren:se_1" to "kaputt{"), "se_1") == null)
+    gleich("Ton in einer Serie merken", mapOf("spuren:se_1" to """{"ton":"en"}"""),
+        Spuren.tonMerken(emptyMap(), "se_1", spuren[1]))
+    gleich("Untertitel dazu: der Ton bleibt", mapOf("spuren:se_1" to """{"ton":"en","ut":"aus"}"""),
+        Spuren.untertitelMerken(mapOf("spuren:se_1" to """{"ton":"en"}"""), "se_1", null))
+    gleich("Film: ins Profil", mapOf("tonSprache" to "en"), Spuren.tonMerken(emptyMap(), null, spuren[1]))
+    gleich("Film: Untertitel ins Profil", mapOf("untertitel" to "de"),
+        Spuren.untertitelMerken(emptyMap(), "", spuren[2]))
+    gleich("Ton ohne Sprache: nichts zu merken", emptyMap<String, String>(),
+        Spuren.tonMerken(emptyMap(), "se_1", spur(7, "audio")))
+
     // Die Datei trägt ihre Spuren; eine ältere Antwort ohne bleibt lesbar.
     val datei = MediaFile.from(Json.parse("""
         {"id":"f1","itemId":"it_1","path":"/x/y.mkv","durationMs":2700000,

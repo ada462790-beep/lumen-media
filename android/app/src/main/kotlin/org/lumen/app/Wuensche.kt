@@ -29,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import org.lumen.core.SchonDa
+import org.lumen.core.Texte
+import org.lumen.core.Tx
 import org.lumen.core.Wish
 import org.lumen.core.WunschWeg
 
@@ -42,10 +45,12 @@ import org.lumen.core.WunschWeg
  * einen Wunsch aber auch hier, wie im Browser.
  */
 @Composable
-fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
+fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit, onOpen: (String) -> Unit = {}) {
     var wuensche by remember { mutableStateOf<List<Wish>?>(null) }
     var eingabe by remember { mutableStateOf("") }
     var hinweis by remember { mutableStateOf<String?>(null) }
+    // Der Titel steht schon da: der Satz des Servers und „Ansehen" dazu.
+    var schonDa by remember { mutableStateOf<SchonDa?>(null) }
     var reload by remember { mutableStateOf(0) }
     // Löschen oder austreten: erst nach einer Rückfrage.
     var weg by remember { mutableStateOf<Wish?>(null) }
@@ -58,8 +63,9 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
         val t = eingabe.trim()
         if (t.isEmpty()) return
         scope.launch {
-            val w = model.fetch { it.wish(t) }
-            if (w != null) {
+            val a = model.fetch { it.wuenschen(t) } ?: return@launch
+            schonDa = a.schonDa
+            a.wunsch?.let { w ->
                 eingabe = ""
                 // Neu, schon eigen oder angeschlossen — wie im Browser.
                 hinweis = w.rueckmeldung
@@ -79,7 +85,7 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = eingabe,
-                    onValueChange = { eingabe = it; hinweis = null },
+                    onValueChange = { eingabe = it; hinweis = null; schonDa = null },
                     singleLine = true,
                     placeholder = { Text(tx(R.string.titel_wuenschen), color = Lumen.label3) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -99,6 +105,7 @@ fun WuenscheScreen(model: LumenViewModel, onBack: () -> Unit) {
             Text(tx(R.string.der_besitzer_sieht_den_titel),
                  color = Lumen.label3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             hinweis?.let { Text(it, color = Lumen.good, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp)) }
+            schonDa?.let { SchonDaZeile(it) { onOpen(it.itemId) } }
             error?.let { Text(it, color = Lumen.bad, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp)) }
             Spacer(Modifier.height(18.dp))
         }
@@ -168,4 +175,14 @@ fun wunschFarben(state: String): Pair<Color, Color> = when (state) {
     "done" -> Color(0x2930D158) to Color(0xFF30D158)
     "declined" -> Color(0x24FF453A) to Color(0xFFFF6961)
     else -> Color(0x3D787880) to Lumen.label2
+}
+
+/** „„Matrix (2019)" steht schon in der Bibliothek." — und „Ansehen" dazu, wie im Browser. */
+@Composable
+internal fun SchonDaZeile(schonDa: SchonDa, onAnsehen: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+        Text(schonDa.satz, color = Lumen.label, fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false))
+        Spacer(Modifier.width(10.dp))
+        QuietButton(Texte.t(Tx.ANSEHEN)) { onAnsehen() }
+    }
 }

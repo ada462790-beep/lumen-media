@@ -106,12 +106,15 @@ object Spuren {
      * englische Untertitel nahm, bekam sie bei jedem englischen Film.
      */
     fun vorbelegen(tracks: List<Track>, prefs: Map<String, String>,
-                   eigen: String = Texte.sprache.take(2).lowercase()): Wahl {
+                   eigen: String = Texte.sprache.take(2).lowercase(),
+                   seriesId: String? = null): Wahl {
         val tonSpuren = ton(tracks)
         val textSpuren = text(tracks)
+        // Was für diese Serie gewählt wurde, gilt vor dem Profil.
+        val serie = serienWahl(prefs, seriesId)
 
         var tonIndex = -1
-        var tonWunsch = prefs[PREF_TON]?.trim()?.takeIf { it.isNotEmpty() }
+        var tonWunsch = (serie?.ton ?: prefs[PREF_TON])?.trim()?.takeIf { it.isNotEmpty() }
         if (tonWunsch == null && prefs[PREF_TON_WAHL] == TON_ORIGINAL) {
             val original = Regex("""\boriginal|\bOV\b|\bO-?Ton\b""", RegexOption.IGNORE_CASE)
             (tonSpuren.firstOrNull { original.containsMatchIn(it.title ?: "") } ?: tonSpuren.firstOrNull())
@@ -128,13 +131,62 @@ object Spuren {
                 ?: textSpuren.firstOrNull { it.language == sprache }
 
         val gewaehlt = prefs[PREF_UNTERTITEL]?.trim().orEmpty()
+        val serienUt = serie?.ut
         val untertitel: Track? = when {
+            // Für die Serie gewählt: genau diese Sprache, „aus" bleibt aus.
+            serienUt != null -> if (serienUt.isEmpty() || serienUt == AUS) null else finden(serienUt)
             gewaehlt == AUS -> null
             tonSprache.isNotEmpty() && tonSprache != eigen -> finden(eigen)
             gewaehlt.isNotEmpty() && gewaehlt == tonSprache.ifEmpty { eigen } -> finden(gewaehlt)
             else -> null
         }
         return Wahl(tonIndex, untertitel?.index ?: erzwungene(tracks, tonIndex)?.index)
+    }
+
+    /**
+     * Ton und Untertitel je Serie — wie im Browser (app.js, serienSpuren):
+     * Wer einen Anime auf Japanisch mit deutschen Untertiteln schaut, will
+     * das in der nächsten Folge wieder, aber nicht im nächsten Film. Liegt
+     * in den Prefs des Profils unter „spuren:<Serie>" als JSON {"ton","ut"};
+     * ein fehlendes Feld heisst: dafür gilt das Profil.
+     */
+    data class SerienWahl(val ton: String? = null, val ut: String? = null)
+
+    /** Der Prefs-Schlüssel für die Spuren einer Serie. */
+    fun serienSchluessel(seriesId: String): String = "spuren:$seriesId"
+
+    /** Die gemerkte Wahl für diese Serie — oder null (kein Eintrag, keine Serie, unlesbar). */
+    fun serienWahl(prefs: Map<String, String>, seriesId: String?): SerienWahl? {
+        val id = seriesId?.takeIf { it.isNotBlank() } ?: return null
+        val roh = prefs[serienSchluessel(id)]?.takeIf { it.isNotBlank() } ?: return null
+        val j = oderNullJson { Json.parse(roh) } as? JsonValue.Obj ?: return null
+        val w = SerienWahl(j["ton"].text, j["ut"].text)
+        return if (w.ton == null && w.ut == null) null else w
+    }
+
+    /**
+     * Was in die Prefs kommt, wenn jemand die Tonspur [t] wählt: bei einer
+     * Folge ([seriesId]) unter dem Schlüssel der Serie, sonst „tonSprache".
+     * Leer, wenn die Spur keine Sprache hat.
+     */
+    fun tonMerken(prefs: Map<String, String>, seriesId: String?, t: Track?): Map<String, String> {
+        val wert = prefWertTon(t) ?: return emptyMap()
+        return serieMerken(prefs, seriesId, ton = wert) ?: mapOf(PREF_TON to wert)
+    }
+
+    /** Wie [tonMerken], für die Untertitel ([t] null: aus). */
+    fun untertitelMerken(prefs: Map<String, String>, seriesId: String?, t: Track?): Map<String, String> {
+        val wert = prefWertUntertitel(t)
+        return serieMerken(prefs, seriesId, ut = wert) ?: mapOf(PREF_UNTERTITEL to wert)
+    }
+
+    private fun serieMerken(prefs: Map<String, String>, seriesId: String?,
+                            ton: String? = null, ut: String? = null): Map<String, String>? {
+        val id = seriesId?.takeIf { it.isNotBlank() } ?: return null
+        val alt = serienWahl(prefs, id) ?: SerienWahl()
+        val neu = SerienWahl(ton ?: alt.ton, ut ?: alt.ut)
+        val felder = listOfNotNull(neu.ton?.let { "ton" to it }, neu.ut?.let { "ut" to it })
+        return mapOf(serienSchluessel(id) to JsonWriter.obj(*felder.toTypedArray()))
     }
 
     /**

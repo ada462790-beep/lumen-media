@@ -114,12 +114,29 @@ def main():
     # Noch etwas Ruhe für Spuren, Bilder und Filmreihen.
     time.sleep(10)
 
+    def kinder(id_: str) -> list:
+        k = rufe("GET", f"/items/{id_}/children") or []
+        if isinstance(k, dict):
+            k = k.get("items") or k.get("children") or []
+        return [x for x in k if isinstance(x, dict)]
+
     nach_titel = {f.get("title"): f for f in filme}
     # Weiterschauen: Interstellar zur Hälfte, Dark S01E02 angefangen.
     if "Interstellar" in nach_titel:
         rufe("POST", f"/items/{nach_titel['Interstellar']['id']}/progress",
              {"positionMs": 70_000, "durationMs": 150_000})
     for s in serien:
+        if s.get("title") == "Breaking Bad":
+            # Eine Folge aus Staffel 2 angefangen: von der Startseite aus
+            # soll die Serie mit Staffel 2 aufgehen, nicht mit Staffel 1.
+            for st in kinder(s["id"]):
+                if st.get("kind") != "season" or st.get("seasonNo") != 2:
+                    continue
+                for fo in kinder(st["id"]):
+                    if fo.get("episodeNo") == 1:
+                        rufe("POST", f"/items/{fo['id']}/progress", {"positionMs": 9_000, "durationMs": 30_000})
+                        print("Fortschritt: Breaking Bad", fo.get("title"))
+            continue
         if s.get("title") != "Dark":
             continue
         staffeln = rufe("GET", f"/items/{s['id']}/children") or []

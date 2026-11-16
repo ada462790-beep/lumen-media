@@ -239,7 +239,7 @@ private fun Suchergebnisse(
             }
         } else {
             // Nichts da: dann lässt sich der Titel wünschen — wie im Browser.
-            item(span = { GridItemSpan(maxLineSpan) }) { Wuenschen(model, q) }
+            item(span = { GridItemSpan(maxLineSpan) }) { Wuenschen(model, q, onOpen) }
         }
         item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(24.dp)) }
     }
@@ -247,9 +247,11 @@ private fun Suchergebnisse(
 
 /** „Nichts gefunden" — mit dem Angebot, sich den Titel zu wünschen. */
 @Composable
-private fun Wuenschen(model: LumenViewModel, q: String) {
+private fun Wuenschen(model: LumenViewModel, q: String, onOpen: (Item) -> Unit) {
     // Die Rückmeldung des Servers: neu, schon eigen oder angeschlossen.
     var geschickt by remember(q) { mutableStateOf<String?>(null) }
+    // Oder: der Titel steht schon da — dann „Ansehen" dazu.
+    var schonDa by remember(q) { mutableStateOf<SchonDa?>(null) }
     val scope = rememberCoroutineScope()
     Column(Modifier.padding(top = 8.dp)) {
         Text(tx(R.string.nichts_gefunden_fuer_x, q), fontSize = 16.sp)
@@ -258,11 +260,20 @@ private fun Wuenschen(model: LumenViewModel, q: String) {
              color = Lumen.label2, fontSize = 14.sp)
         Spacer(Modifier.height(14.dp))
         val meldung = geschickt
+        val da = schonDa
         if (meldung != null) {
             Text(meldung, color = Lumen.good, fontSize = 14.sp)
+        } else if (da != null) {
+            SchonDaZeile(da) {
+                scope.launch { model.fetch { it.item(da.itemId) }?.item?.let(onOpen) }
+            }
         } else {
             PrimaryButton(tx(R.string.x_wuenschen, q)) {
-                scope.launch { geschickt = model.fetch { it.wish(q) }?.rueckmeldung }
+                scope.launch {
+                    val a = model.fetch { it.wuenschen(q) } ?: return@launch
+                    schonDa = a.schonDa
+                    geschickt = a.wunsch?.rueckmeldung
+                }
             }
         }
     }

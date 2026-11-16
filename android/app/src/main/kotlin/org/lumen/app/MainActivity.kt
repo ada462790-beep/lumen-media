@@ -577,7 +577,9 @@ private enum class Tab(@StringRes private val titelId: Int, val icon: androidx.c
  * Film der Reihe — und „Zurück" soll jeden Schritt einzeln zurückgehen.
  */
 private sealed interface Ziel {
-    data class Titel(val id: String) : Ziel
+    /** [staffel]/[folge]: eine Serie, geöffnet von einer ihrer Folgen aus —
+     *  dann steht deren Staffel offen und die Folge im Bild. */
+    data class Titel(val id: String, val staffel: String? = null, val folge: String? = null) : Ziel
     data class ReiheOffen(val id: String) : Ziel
     /** Eine eigene Sammlung, von der Verwaltung zusammengestellt. */
     data class SammlungOffen(val id: String) : Ziel
@@ -607,7 +609,7 @@ private val ZielStapelSaver = listSaver<List<Ziel>, String>(
     save = { stapel ->
         stapel.map {
             when (it) {
-                is Ziel.Titel -> "titel:" + it.id
+                is Ziel.Titel -> "titel:" + listOf(it.id, it.staffel ?: "", it.folge ?: "").joinToString("\t")
                 is Ziel.ReiheOffen -> "reihe:" + it.id
                 is Ziel.SammlungOffen -> "sammlung:" + it.id
                 is Ziel.ListeOffen -> "liste:" + it.id
@@ -626,7 +628,9 @@ private val ZielStapelSaver = listSaver<List<Ziel>, String>(
         texte.mapNotNull { t ->
             val wert = t.substringAfter(':')
             when (t.substringBefore(':')) {
-                "titel" -> Ziel.Titel(wert)
+                "titel" -> wert.split('\t').let { t ->
+                    Ziel.Titel(t[0], t.getOrNull(1)?.ifEmpty { null }, t.getOrNull(2)?.ifEmpty { null })
+                }
                 "reihe" -> Ziel.ReiheOffen(wert)
                 "sammlung" -> Ziel.SammlungOffen(wert)
                 "liste" -> Ziel.ListeOffen(wert)
@@ -712,6 +716,9 @@ private fun LibraryScaffold(model: LumenViewModel) {
     fun oeffnen(ziel: Ziel) { stapel = stapel + ziel }
     fun zurueck() { stapel = stapel.dropLast(1) }
     val titelOeffnen: (Item) -> Unit = { oeffnen(Ziel.Titel(it.id)) }
+    // Eine Folge öffnet ihre Serie — mit der Staffel dieser Folge, nicht mit Staffel 1.
+    fun serieVon(t: Item): Ziel.Titel =
+        if (t.seiteId != t.id) Ziel.Titel(t.seiteId, staffel = t.parentId, folge = t.id) else Ziel.Titel(t.id)
 
     model.offline?.let { d ->
         key(d.itemId) { OfflineSpieler(model, d) { model.offline = null } }
@@ -747,13 +754,14 @@ private fun LibraryScaffold(model: LumenViewModel) {
             // Symbole beim Scrollen nicht auf Text stehen, liegt dort ein
             // dunkler Streifen.
             Box(Modifier.fillMaxSize()) {
-                DetailScreen(model, oben.id, onBack = { zurueck() },
+                DetailScreen(model, oben.id, startStaffel = oben.staffel, startFolge = oben.folge,
+                             onBack = { zurueck() },
                              onPlay = { model.abspielen = it },
                              onOpen = titelOeffnen,
                              onPerson = { oeffnen(Ziel.Person(it)) },
                              onReihe = { oeffnen(Ziel.ReiheOffen(it)) },
                              onDownloads = { oeffnen(Ziel.Downloads) },
-                             onSerie = { oeffnen(Ziel.Titel(it)) })
+                             onSerie = { folge -> oeffnen(serieVon(folge)) })
                 Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
                         .background(Color(0xB3050507)))
             }
@@ -812,7 +820,7 @@ private fun LibraryScaffold(model: LumenViewModel) {
         }
         Ziel.Wuensche -> {
             Rand {
-                WuenscheScreen(model, onBack = { zurueck() })
+                WuenscheScreen(model, onBack = { zurueck() }, onOpen = { oeffnen(Ziel.Titel(it)) })
             }
             return
         }
@@ -843,7 +851,7 @@ private fun LibraryScaffold(model: LumenViewModel) {
         val neuigkeiten = { oeffnen(Ziel.Neuigkeiten) }
         halter.SaveableStateProvider(tab.name) {
         when (tab) {
-            Tab.Home -> HomeScreen(model, heimListe, { oeffnen(Ziel.Titel(it.seiteId)) }, suchen, ungelesen, neuigkeiten,
+            Tab.Home -> HomeScreen(model, heimListe, { oeffnen(serieVon(it)) }, suchen, ungelesen, neuigkeiten,
                 onReihe = { oeffnen(Ziel.ReiheOffen(it.id)) },
                 onReihen = { tab = Tab.Movies; reihenZeigen = true },
                 onPlay = { model.abspielen = it })

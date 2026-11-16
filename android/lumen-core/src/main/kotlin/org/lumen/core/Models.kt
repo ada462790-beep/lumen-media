@@ -1256,6 +1256,12 @@ data class PlaybackPlan(
 
 // ---------------------------------------------------------------- Wünsche
 
+/** Der Titel, der schon da ist: der Satz des Servers und wohin „Ansehen" führt. */
+data class SchonDa(val satz: String, val itemId: String)
+
+/** Was aus einem Wunsch wurde: ein Wunsch — oder der Titel steht schon da. */
+data class WunschAntwort(val wunsch: Wish? = null, val schonDa: SchonDa? = null)
+
 data class Wish(
     val id: String,
     val by: String,

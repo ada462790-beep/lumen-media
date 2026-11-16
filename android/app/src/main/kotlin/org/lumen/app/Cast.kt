@@ -134,7 +134,8 @@ internal object CastHilfe {
             Vorbereitet(d, f, plan, stelle, alle)
         }
         val v = vorbereitet.wert ?: return vorbereitet.fehler ?: tx(R.string.zu_diesem_titel_gibt_es)
-        val wahl = Spuren.vorbelegen(v.datei.tracks, model.me?.prefs ?: emptyMap())
+        val wahl = Spuren.vorbelegen(v.datei.tracks, model.me?.prefs ?: emptyMap(),
+                                     seriesId = v.detail.seriesId ?: v.detail.item.seriesId)
         val direkt = client.istDirekt(v.datei, v.plan, DeviceProfile.chromecast)
         val adresse = CastAdresse.umschreiben(
             client.streamUrl(v.datei, v.plan, wahl.ton, DeviceProfile.chromecast), client.baseUrl, ziel)

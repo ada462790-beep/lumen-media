@@ -474,6 +474,50 @@ def player_verlassen():
     sicherstellen()
 
 
+FOLGE_S2 = r"Sieben Dreissig Sieben"
+
+
+def staffel_2_offen(knoten: list[Knoten]) -> bool:
+    """Steht „Staffel 2" als gewählte Staffel da (Chip oder Pille)?"""
+    return any(k.gewaehlt and re.search(r"^(Staffel 2|Season 2|2)$", k.beschriftung)
+               for k in knoten)
+
+
+def folge_von_startseite():
+    """Eine Folge aus Staffel 2 in „Weiterschauen" (einrichten.py): die
+    Serie soll mit Staffel 2 aufgehen und die Folge zeigen — nicht Staffel 1."""
+    muster = FOLGE_S2 + r"|S2 · F1|S2 · E1"
+    if not waehle(muster):
+        foto("folge-startseite", "Breaking Bad S2 F1 nicht auf der Startseite", False)
+        return
+    time.sleep(3)
+    if TV:
+        # Am Fernseher öffnet die Karte die Folge; „Serie" führt weiter.
+        foto("folge-startseite-folge")
+        if not waehle(r"^(Serie|Show|Series)$"):
+            foto("folge-startseite-serie", "Knopf „Serie“ nicht gefunden", False)
+            zurueck()
+            return
+        time.sleep(4)
+        knoten = aufbau()
+        f = fokussiert(knoten)
+        t = finde(FOLGE_S2, knoten)
+        # Die Karte trägt den Fokus, ihr Name steht in einem Kind.
+        auf_folge = bool(f and t and (f.enthaelt(*t.mitte) or re.search(FOLGE_S2, f.beschriftung)))
+        foto("folge-startseite-serie",
+             f"Fokus: {f.beschriftung if f else 'keiner'}; Staffel 2 gewählt: {staffel_2_offen(knoten)}",
+             auf_folge)
+        zurueck(2)
+    else:
+        knoten = aufbau()
+        offen = staffel_2_offen(knoten)
+        foto("folge-startseite-serie",
+             f"Staffel 2 gewählt: {offen}; Folge zu sehen: {bool(finde(FOLGE_S2, knoten))}",
+             offen and bool(finde(FOLGE_S2, knoten)))
+        zurueck()
+    sicherstellen()
+
+
 def rundgang_handy():
     # Hochkant festhalten: der Player dreht sonst ins Querformat.
     sh("settings put system accelerometer_rotation 0")
@@ -483,6 +527,8 @@ def rundgang_handy():
     wischen("hoch")
     foto("startseite-ganz-unten")
     wischen("runter"); wischen("runter"); wischen("runter")
+
+    folge_von_startseite()
 
     schritt("filme", r"^(Filme|Movies)$", bereich="unten")
     schritt("filmreihen", r"^(Filmreihen|Franchises)$", bereich="oben")
@@ -579,6 +625,8 @@ def rundgang_tv():
     taste(*(["KEYCODE_DPAD_UP"] * 8), pause=0.4)
     foto("startseite-oben", "nach 8× hinauf")
 
+    folge_von_startseite()
+
     schritt("filme", r"^(Filme|Movies)$", bereich="oben")
     if schritt("film-inception", r"^Inception$"):
         taste("KEYCODE_DPAD_DOWN", "KEYCODE_DPAD_DOWN")
@@ -626,11 +674,27 @@ def rundgang_tv():
             time.sleep(4)
             taste("KEYCODE_DPAD_RIGHT", pause=1)
             foto("wiedergabe-spulen")
+            # Hoch aus der Zeitleiste: auf Lumens Leiste (Ton, Untertitel,
+            # Zahnrad) — nicht auf „Pause" von Media3. Das Foto eben dauerte
+            # fast so lang, wie die Steuerung stehen bleibt: erst noch einmal
+            # spulen, damit sie sicher steht und die Zeitleiste den Fokus hat.
+            taste("KEYCODE_DPAD_RIGHT", pause=0.5)
             taste("KEYCODE_DPAD_UP", pause=1)
-            foto("wiedergabe-spuren")
-            zurueck(3)
+            f = fokussiert(aufbau())
+            leiste = r"^(Untertitel|Subtitles|Tonspur|Audio track|Qualität|Quality|Nächste Folge|Next episode)$"
+            foto("wiedergabe-spuren", f"Fokus: {f.beschriftung if f else 'keiner'}",
+                 bool(f and re.search(leiste, f.beschriftung)))
+            # Zurück: erst die Leiste zu (Steuerung bleibt), dann die
+            # Steuerung weg — der Player bleibt offen; erst dann zu.
+            # (Beide Drücke rasch hintereinander: die Steuerung blendet sich
+            # nach 3,5 Sekunden ohnehin aus.)
+            taste("KEYCODE_BACK", pause=0.8)
+            taste("KEYCODE_BACK", pause=1)
+            foto("wiedergabe-zurueck-2", "Leiste zu, Steuerung weg, Player noch offen",
+                 finde(r"^(Startseite|Home|Abspielen|Weiterschauen|Play|Resume)$") is None)
+            taste("KEYCODE_BACK", pause=1.5)
             time.sleep(2)
-            foto("nach-wiedergabe")
+            foto("nach-wiedergabe", "", finde(r"^Interstellar$") is not None)
 
 
 def main():
