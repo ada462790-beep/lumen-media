@@ -416,12 +416,13 @@ def anmelden():
             tippen_bei(*felder[0].mitte)
         time.sleep(0.8)
         eingeben(PASSWORT)
+        tastatur_zu()
         foto("passwort")
-        taste("KEYCODE_ENTER", pause=2)
-        if not warte(r"^(Startseite|Home)$", 6):
-            tastatur_zu()
-            if finde(r"^(Anmelden|Sign In|Entsperren|Unlock|Weiter|Continue|OK)$"):
-                waehle(r"^(Anmelden|Sign In|Entsperren|Unlock|Weiter|Continue|OK)$")
+        knopf = r"^(Anmelden|Sign In|Entsperren|Unlock|Weiter|Continue|OK)$"
+        if finde(knopf):
+            waehle(knopf)
+        else:
+            taste("KEYCODE_ENTER", pause=2)
     else:
         print("   kein Passwortfeld gefunden", flush=True)
     k = warte(r"^(Startseite|Home)$|Weiterschauen|Continue Watching", 40)
@@ -441,7 +442,19 @@ def fokussiere_feld(feld: Knoten):
 
 # ---------------------------------------------------------------- Rundgang
 
+def player_verlassen():
+    """Zurück aus dem Player, und das Telefon wieder hochkant."""
+    for _ in range(3):
+        if finde(r"^(Startseite|Home|Merken|Zurück)$"):
+            break
+        taste("KEYCODE_BACK", pause=1.5)
+    sicherstellen()
+
+
 def rundgang_handy():
+    # Hochkant festhalten: der Player dreht sonst ins Querformat.
+    sh("settings put system accelerometer_rotation 0")
+    sh("settings put system user_rotation 0")
     wischen("hoch")
     foto("startseite-weiter-unten")
     wischen("hoch")
@@ -458,10 +471,8 @@ def rundgang_handy():
         foto("film-inception-unten")
         zurueck()
     if schritt("film-avatar", r"^Avatar"):
-        # Zwei Dateien (de/en): als Fassung oder als Qualität angeboten?
-        if finde(r"Fassung|Version|Qualitäten|Qualität"):
-            schritt("film-avatar-fassung", r"Fassung|Version|Qualitäten|Qualität")
-            zurueck()
+        # Zwei Dateien (de/en): steht „Fassung" oder „Qualitäten" am Knopf?
+        # (Der Knopf selbst spielt ab — darum nur das Foto oben.)
         zurueck()
     if schritt("film-der-pate", r"^Der Pate$"):
         zurueck()
@@ -511,7 +522,7 @@ def rundgang_handy():
             tippen_bei(BREITE // 2, HOEHE // 2)
             time.sleep(1)
             foto("wiedergabe-steuerung")
-            zurueck()
+            player_verlassen()
             time.sleep(2)
             foto("nach-wiedergabe")
 
