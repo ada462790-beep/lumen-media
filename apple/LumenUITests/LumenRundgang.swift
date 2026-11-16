@@ -78,11 +78,13 @@ final class LumenRundgang: Rundgang {
             }
             if schritt("film-der-pate", "^Der Pate.*") { zurueck() }
         }
+        // Filmreihen: am iPhone über die Zeile auf der Startseite, an iPad
+        // und Mac in der Seitenleiste.
         if telefon {
-            // Am iPhone stecken die Filmreihen oben in den Filmen.
-            if schritt("filmreihen", "^(Filmreihen|Franchises|Collections)$") {
+            if bereich("startseite-filmreihen", "^(Startseite|Home)$"),
+               schritt("filmreihen", "^(Filmreihen|Franchises|Collections).*") {
                 if schritt("filmreihe-dark-knight", ".*Dark Knight Collection.*") { zurueck() }
-                if schritt("filmreihe-matrix", ".*Matrix Collection.*") { zurueck() }
+                zurueck()
             }
         } else if bereich("filmreihen", "^(Filmreihen|Franchises|Collections)$") {
             if schritt("filmreihe-dark-knight", ".*Dark Knight Collection.*") { zurueck() }

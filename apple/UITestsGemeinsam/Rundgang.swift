@@ -93,22 +93,15 @@ class Rundgang: XCTestCase {
         return (wurzel ?? app).descendants(matching: .any).matching(p)
     }
 
-    /// Das erste sichtbare Element zum Muster.
+    /// Das erste Element zum Muster — Knöpfe zuerst. Bewusst nur
+    /// `firstMatch`: jede weitere Abfrage liest den ganzen Elementbaum neu,
+    /// und auf dem Intel-Mac kostet das Sekunden.
     func element(_ muster: String, in wurzel: XCUIElement? = nil) -> XCUIElement? {
-        let q = alle(muster, in: wurzel)
-        let n = min(q.count, 25)
-        var erstes: XCUIElement?
-        for i in 0..<n {
-            let e = q.element(boundBy: i)
-            guard e.exists else { continue }
-            if erstes == nil { erstes = e }
-            #if os(tvOS)
-            if !e.frame.isEmpty { return e }
-            #else
-            if e.isHittable { return e }
-            #endif
-        }
-        return erstes
+        let p = NSPredicate(format: "label MATCHES[c] %@ OR identifier MATCHES[c] %@", muster, muster)
+        let knopf = (wurzel ?? app).buttons.matching(p).firstMatch
+        if knopf.exists { return knopf }
+        let e = alle(muster, in: wurzel).firstMatch
+        return e.exists ? e : nil
     }
 
     @discardableResult
@@ -128,6 +121,12 @@ class Rundgang: XCTestCase {
         _ = fokussieren(e)
         XCUIRemote.shared.press(.select)
         #else
+        // Liegt es ausserhalb des Bildschirms: hinscrollen.
+        var n = 0
+        while !e.isHittable && n < 4 {
+            if e.frame.minY > app.frame.maxY * 0.5 { app.swipeUp() } else { app.swipeDown() }
+            n += 1
+        }
         if e.isHittable {
             e.tap()
         } else {

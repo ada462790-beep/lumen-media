@@ -153,7 +153,7 @@ LETZTER_AUFBAU: list[Knoten] = []
 def aufbau(versuche: int = 3) -> list[Knoten]:
     global LETZTER_AUFBAU
     for _ in range(versuche):
-        aus = sh("uiautomator dump /sdcard/lumen-ui.xml", timeout=40)
+        aus = sh("uiautomator dump /sdcard/lumen-ui.xml", timeout=25)
         if "dumped" in aus:
             roh = adb("exec-out", "cat", "/sdcard/lumen-ui.xml", binaer=True)
             try:
@@ -289,12 +289,22 @@ def foto(name: str, notiz: str = "", ok: bool = True):
                 zeichen = ("*" if k.fokus else " ") + ("+" if k.gewaehlt else " ")
                 f.write(f"{zeichen} [{k.x1},{k.y1},{k.x2},{k.y2}] {k.beschriftung!r}\n")
     BERICHT.append({"foto": datei + ".png", "schritt": name, "ok": ok, "notiz": notiz})
-    print(f"[{'ok' if ok else '--'}] {datei} {notiz}", flush=True)
+    print(f"{time.strftime('%H:%M:%S')} [{'ok' if ok else '--'}] {datei} {notiz}", flush=True)
 
 
 def waehle(muster: str, bereich: str = "", warten: float = 8) -> bool:
     """Ein Element öffnen: tippen am Telefon, Fokus und OK am Fernseher."""
     k = warte(muster, warten, bereich=bereich)
+    if not k and not bereich:
+        # Vielleicht weiter unten: scrollen und noch einmal suchen.
+        for _ in range(4):
+            if TV:
+                taste("KEYCODE_DPAD_DOWN")
+            else:
+                wischen("hoch")
+            k = finde(muster)
+            if k:
+                break
     if not k:
         print(f"   nicht gefunden: {muster}", flush=True)
         return False
@@ -356,6 +366,16 @@ def anmelden():
         if finde(r"^Verbinden$|^Connect$"):
             waehle(r"^Verbinden$|^Connect$")
         time.sleep(4)
+        # Erreicht der Emulator den Server überhaupt? (fürs Protokoll)
+        print("   Server vom Emulator aus:", sh(
+            f"printf 'GET /api/v1/hello HTTP/1.0\\r\\n\\r\\n' | nc -w 5 {SERVER.replace(':', ' ')} | tail -1")[:200],
+            flush=True)
+        # Nach „Verbinden" kann ein Ladekreis stehen: warten, bis er weg ist.
+        for _ in range(12):
+            if finde(r"Profil|Profile|Mit Code|With code|" + re.escape(NAME)):
+                break
+            foto("verbinden-wartet", "noch keine Profilauswahl", False)
+            time.sleep(8)
     # Am Fernseher kommt zuerst „Mit Code anmelden"; das Profil steht daneben.
     if TV and warte(r"Profil hier wählen|Choose profile here|Pick a profile here", 10):
         foto("tv-code-anmelden")
@@ -416,8 +436,9 @@ def rundgang_handy():
         foto("film-inception-unten")
         zurueck()
     if schritt("film-avatar", r"^Avatar"):
-        if suche_nach_unten(r"Fassung|Version|Deutsch|English", 2):
-            schritt("film-avatar-fassung", r"Fassung|Version")
+        # Zwei Dateien (de/en): als Fassung oder als Qualität angeboten?
+        if finde(r"Fassung|Version|Qualitäten|Qualität"):
+            schritt("film-avatar-fassung", r"Fassung|Version|Qualitäten|Qualität")
             zurueck()
         zurueck()
     if schritt("film-der-pate", r"^Der Pate$"):
@@ -437,7 +458,7 @@ def rundgang_handy():
 
     # Suche: oben auf der Startseite (Lupe) oder in den Filmen.
     schritt("startseite-zurueck", r"^(Startseite|Home)$", bereich="unten")
-    if waehle(r"^(Suche|Suchen|Search)$"):
+    if waehle(r"^(Suche|Suchen|Search)$|Titel, Schauspieler|Title, actor"):
         felder = textfelder()
         if felder:
             tippen_bei(*felder[0].mitte)
@@ -462,7 +483,7 @@ def rundgang_handy():
     if waehle(r"^Interstellar$"):
         time.sleep(2)
         foto("film-interstellar")
-        if waehle(r"^(Weiterschauen|Fortsetzen|Weiter bei.*|Abspielen|Play|Resume.*|Continue.*)$"):
+        if waehle(r"(Weiterschauen|Fortsetzen|Weiter bei|Ansehen|Abspielen|Play|Resume|Continue)"):
             time.sleep(8)
             foto("wiedergabe")
             tippen_bei(BREITE // 2, HOEHE // 2)
@@ -488,8 +509,8 @@ def rundgang_tv():
         foto("film-inception-unten")
         zurueck()
     if schritt("film-avatar", r"^Avatar"):
-        if finde(r"Fassung|Version"):
-            schritt("film-avatar-fassung", r"Fassung|Version")
+        if finde(r"Fassung|Version|Qualitäten|Qualität"):
+            schritt("film-avatar-fassung", r"Fassung|Version|Qualitäten|Qualität")
             zurueck()
         zurueck()
 
@@ -521,7 +542,7 @@ def rundgang_tv():
     if waehle(r"^Interstellar$"):
         time.sleep(2)
         foto("film-interstellar")
-        if waehle(r"^(Weiterschauen|Fortsetzen|Weiter bei.*|Abspielen|Play|Resume.*|Continue.*)$"):
+        if waehle(r"(Weiterschauen|Fortsetzen|Weiter bei|Ansehen|Abspielen|Play|Resume|Continue)"):
             time.sleep(8)
             foto("wiedergabe")
             taste("KEYCODE_DPAD_CENTER", pause=1)

@@ -77,6 +77,12 @@ targets:
       path: Lumen/Info.plist
       properties:
         CFBundleDisplayName: Lumen
+        # Ohne Startbildschirm-Eintrag läuft eine iOS-App im alten
+        # Kompatibilitätsmodus: ein 2:3-Fenster mit schwarzen Rändern
+        # (im Simulator-Ablauf gesehen). INFOPLIST_KEY_UILaunchScreen_…
+        # oben wirkt nur bei erzeugter Info.plist, diese hier schreibt
+        # XcodeGen selbst.
+        UILaunchScreen: {}
         CFBundleDevelopmentRegion: en
         # Die Sprachen der App. Deutschland und die USA heissen „de" und
         # „en", wie Apple es hält. Quellsprache des Katalogs ist „en", damit auch

@@ -204,7 +204,7 @@ jobs:
     # Beim Hochschieben der Intel-Mac: die arm64-Macs sind bei GitHub oft so
     # ausgelastet, dass der Job ohne Rechner abbricht. Von Hand wählbar.
     runs-on: ${{ inputs.mac == 'macos-latest' && 'macos-latest' || 'macos-15-intel' }}
-    timeout-minutes: 120
+    timeout-minutes: 170
     env:
       # xcodebuild reicht TEST_RUNNER_… ohne den Vorsatz an die UI-Tests
       # weiter; die geben es der App beim Start mit (TestAnmeldung.swift).
@@ -278,7 +278,7 @@ jobs:
 
       - name: iPhone — Rundgang
         working-directory: apple
-        timeout-minutes: 20
+        timeout-minutes: 30
         continue-on-error: true
         run: |
           mkdir -p "$GITHUB_WORKSPACE/fotos/iphone"
@@ -289,7 +289,7 @@ jobs:
 
       - name: iPad — Rundgang
         working-directory: apple
-        timeout-minutes: 20
+        timeout-minutes: 30
         continue-on-error: true
         run: |
           mkdir -p "$GITHUB_WORKSPACE/fotos/ipad"
