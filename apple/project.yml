@@ -43,6 +43,10 @@ targets:
   Lumen:
     type: application
     supportedDestinations: [iOS, macOS]
+    # Das Schema trägt die UI-Tests des Simulator-Ablaufs
+    # (.github/workflows/simulator.yml); bauen geht wie bisher.
+    scheme:
+      testTargets: [LumenUITests]
     sources:
       - Lumen
       # Die String-Kataloge teilen sich App und Apple TV. Ausdrücklich als
@@ -93,6 +97,8 @@ targets:
   LumenTV:
     type: application
     supportedDestinations: [tvOS]
+    scheme:
+      testTargets: [LumenTVUITests]
     sources:
       - LumenTV
       - path: Lumen/Design
@@ -117,3 +123,35 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIBackgroundModes: [audio]
+
+  # Rundgänge mit Bildschirmfotos für den Simulator-Ablauf
+  # (.github/workflows/simulator.yml). Keine Behauptungen über die App —
+  # ein Gang durch die Seiten, nach jedem Schritt ein Foto. Die App meldet
+  # sich dabei in Debug-Bauten selbst an (Lumen/Design/TestAnmeldung.swift).
+  LumenUITests:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - LumenUITests
+      - UITestsGemeinsam
+    dependencies:
+      - target: Lumen
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.lumen.app.uitests
+        TEST_TARGET_NAME: Lumen
+        GENERATE_INFOPLIST_FILE: YES
+
+  LumenTVUITests:
+    type: bundle.ui-testing
+    supportedDestinations: [tvOS]
+    sources:
+      - LumenTVUITests
+      - UITestsGemeinsam
+    dependencies:
+      - target: LumenTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.lumen.app.tv.uitests
+        TEST_TARGET_NAME: LumenTV
+        GENERATE_INFOPLIST_FILE: YES

@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+# Lumen — eigener Streaming-Server fürs Heimnetz.
+# Copyright (C) 2026 Die Lumen-Autoren
+#
+# Veröffentlicht unter der GNU Affero General Public License v3.0.
+# Der vollständige Text steht in der Datei LICENSE.
+# SPDX-License-Identifier: AGPL-3.0-only
+
+"""Ein Rundgang durch die Android-Apps im Emulator — mit Bildschirmfotos.
+
+    python3 tools/simulator/android_rundgang.py handy  fotos/android-handy
+    python3 tools/simulator/android_rundgang.py tv     fotos/android-tv
+
+Läuft im Simulator-Ablauf (.github/workflows/simulator.yml) neben einem
+gestarteten Emulator und einem Lumen-Server auf dem Rechner (für den
+Emulator unter 10.0.2.2 erreichbar). Kein Testcode in der App: Das Skript
+bedient sie wie ein Mensch — über `adb shell input` — und findet, worauf
+es tippen soll, im Bildschirmaufbau von `uiautomator dump`. Am Fernseher
+geht es wie mit der Fernbedienung: Pfeiltasten, bis der Fokus auf dem
+Ziel liegt, dann OK.
+
+Ein Schritt, der sein Ziel nicht findet, bricht den Rundgang nicht ab: es
+gibt trotzdem ein Foto, und im Bericht steht, was fehlte. Neben jedem Foto
+liegt eine .txt-Datei mit den Texten, die auf dem Bildschirm standen — so
+lässt sich ein Schritt verbessern, ohne das Bild zu öffnen.
+
+Umgebung: SERVER (10.0.2.2:8097), LUMEN_TEST_NAME, LUMEN_TEST_PASSWORT,
+ANDROID_SERIAL (optional, wie bei adb).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+
+ART = sys.argv[1] if len(sys.argv) > 1 else "handy"
+AUS = sys.argv[2] if len(sys.argv) > 2 else f"fotos/android-{ART}"
+TV = ART == "tv"
+PAKET = "org.lumen.tv" if TV else "org.lumen.app"
+SERVER = os.environ.get("SERVER", "10.0.2.2:8097")
+NAME = os.environ.get("LUMEN_TEST_NAME", "Admin")
+PASSWORT = os.environ.get("LUMEN_TEST_PASSWORT", "lumen-test-2026")
+
+os.makedirs(AUS, exist_ok=True)
+BERICHT: list[dict] = []
+NR = [0]
+
+
+# ---------------------------------------------------------------- adb
+
+def adb(*args: str, timeout: int = 60, binaer: bool = False):
+    try:
+        r = subprocess.run(["adb", *args], capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return b"" if binaer else ""
+    return r.stdout if binaer else r.stdout.decode("utf-8", "replace")
+
+
+def sh(befehl: str, timeout: int = 60) -> str:
+    return adb("shell", befehl, timeout=timeout)
+
+
+def taste(*codes: str, pause: float = 0.6):
+    for c in codes:
+        sh(f"input keyevent {c}")
+        time.sleep(pause)
+
+
+def tippen_bei(x: int, y: int):
+    sh(f"input tap {x} {y}")
+
+
+def eingeben(text: str):
+    # `input text` kennt keine Leerzeichen; %s ist das Leerzeichen.
+    sicher = text.replace("\\", "\\\\").replace(" ", "%s").replace("'", "\\'") \
+                 .replace("&", "\\&").replace("(", "\\(").replace(")", "\\)")
+    sh(f"input text '{sicher}'")
+    time.sleep(0.8)
+
+
+def bildschirm() -> tuple[int, int]:
+    m = re.search(r"(\d+)x(\d+)", sh("wm size"))
+    return (int(m.group(1)), int(m.group(2))) if m else (1080, 1920)
+
+
+BREITE, HOEHE = 0, 0
+
+
+def wischen(richtung: str = "hoch"):
+    """Am Telefon: den Inhalt nach oben schieben (= weiter nach unten sehen)."""
+    x = BREITE // 2
+    if richtung == "hoch":
+        sh(f"input swipe {x} {int(HOEHE * 0.75)} {x} {int(HOEHE * 0.30)} 350")
+    else:
+        sh(f"input swipe {x} {int(HOEHE * 0.30)} {x} {int(HOEHE * 0.75)} 350")
+    time.sleep(1.2)
+
+
+# ---------------------------------------------------------------- Bildschirmaufbau
+
+@dataclass
+class Knoten:
+    text: str
+    desc: str
+    klasse: str
+    paket: str
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    fokus: bool
+    klickbar: bool
+    gewaehlt: bool
+
+    @property
+    def mitte(self) -> tuple[int, int]:
+        return (self.x1 + self.x2) // 2, (self.y1 + self.y2) // 2
+
+    @property
+    def flaeche(self) -> int:
+        return max(0, self.x2 - self.x1) * max(0, self.y2 - self.y1)
+
+    def enthaelt(self, x: int, y: int) -> bool:
+        return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
+
+    @property
+    def beschriftung(self) -> str:
+        return self.text or self.desc
+
+
+LETZTER_AUFBAU: list[Knoten] = []
+
+
+def aufbau(versuche: int = 3) -> list[Knoten]:
+    global LETZTER_AUFBAU
+    for _ in range(versuche):
+        aus = sh("uiautomator dump /sdcard/lumen-ui.xml", timeout=40)
+        if "dumped" in aus:
+            roh = adb("exec-out", "cat", "/sdcard/lumen-ui.xml", binaer=True)
+            try:
+                wurzel = ET.fromstring(roh)
+            except ET.ParseError:
+                time.sleep(1)
+                continue
+            knoten = []
+            for n in wurzel.iter("node"):
+                m = re.match(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", n.get("bounds", ""))
+                if not m:
+                    continue
+                knoten.append(Knoten(
+                    text=n.get("text", "") or "", desc=n.get("content-desc", "") or "",
+                    klasse=n.get("class", ""), paket=n.get("package", ""),
+                    x1=int(m.group(1)), y1=int(m.group(2)), x2=int(m.group(3)), y2=int(m.group(4)),
+                    fokus=n.get("focused") == "true", klickbar=n.get("clickable") == "true",
+                    gewaehlt=n.get("selected") == "true"))
+            LETZTER_AUFBAU = knoten
+            return knoten
+        time.sleep(1.5)
+    LETZTER_AUFBAU = []
+    return []
+
+
+def finde(muster: str, knoten: list[Knoten] | None = None, bereich: str = "",
+          nur_sichtbar: bool = True) -> Knoten | None:
+    """Der beste Treffer für ein Muster (regulärer Ausdruck, ohne Gross/klein)."""
+    knoten = aufbau() if knoten is None else knoten
+    rx = re.compile(muster, re.I)
+    treffer = [k for k in knoten if (k.text and rx.search(k.text)) or (k.desc and rx.search(k.desc))]
+    if nur_sichtbar:
+        treffer = [k for k in treffer if k.flaeche > 0 and k.y1 < HOEHE and k.x1 < BREITE and k.y2 > 0]
+    if bereich == "unten":
+        treffer = [k for k in treffer if k.mitte[1] > HOEHE * 0.80] or treffer
+        treffer.sort(key=lambda k: -k.mitte[1])
+    elif bereich == "oben":
+        treffer = [k for k in treffer if k.mitte[1] < HOEHE * 0.25] or treffer
+        treffer.sort(key=lambda k: k.mitte[1])
+    elif bereich == "links":
+        treffer = [k for k in treffer if k.mitte[0] < BREITE * 0.25] or treffer
+        treffer.sort(key=lambda k: k.mitte[0])
+    else:
+        # Genaue Treffer vor Teiltreffern, kleine (das Wort selbst) vor
+        # grossen (die ganze Zeile, in der es vorkommt).
+        treffer.sort(key=lambda k: (0 if rx.fullmatch(k.beschriftung.strip()) else 1, k.flaeche))
+    return treffer[0] if treffer else None
+
+
+def warte(muster: str, sek: float = 20, bereich: str = "") -> Knoten | None:
+    ende = time.time() + sek
+    while time.time() < ende:
+        k = finde(muster, bereich=bereich)
+        if k:
+            return k
+        time.sleep(1.5)
+    return None
+
+
+def textfelder(knoten: list[Knoten] | None = None) -> list[Knoten]:
+    knoten = aufbau() if knoten is None else knoten
+    return [k for k in knoten if k.klasse.endswith("EditText") and k.flaeche > 0]
+
+
+# ---------------------------------------------------------------- Fernbedienung
+
+RICHTUNG = {"hoch": "KEYCODE_DPAD_UP", "runter": "KEYCODE_DPAD_DOWN",
+            "links": "KEYCODE_DPAD_LEFT", "rechts": "KEYCODE_DPAD_RIGHT"}
+
+
+def fokussiert(knoten: list[Knoten]) -> Knoten | None:
+    f = [k for k in knoten if k.fokus and k.flaeche > 0]
+    # Das innerste fokussierte Element.
+    return min(f, key=lambda k: k.flaeche) if f else None
+
+
+def fokussiere(muster: str, max_schritte: int = 30, bereich: str = "") -> bool:
+    """Mit den Pfeiltasten zum Ziel, wie mit der Fernbedienung."""
+    letzte = None
+    gleich = 0
+    for _ in range(max_schritte):
+        knoten = aufbau()
+        ziel = finde(muster, knoten, bereich=bereich)
+        if not ziel:
+            return False
+        f = fokussiert(knoten)
+        if f is None:
+            taste("KEYCODE_DPAD_DOWN", pause=0.5)
+            continue
+        zx, zy = ziel.mitte
+        if f.enthaelt(zx, zy) or ziel.enthaelt(*f.mitte):
+            return True
+        fx, fy = f.mitte
+        dx, dy = zx - fx, zy - fy
+        # Erst in die Zeile, dann in der Zeile zum Ziel.
+        if abs(dy) > max(40, (f.y2 - f.y1) // 2):
+            r = "runter" if dy > 0 else "hoch"
+        else:
+            r = "rechts" if dx > 0 else "links"
+        stand = (f.x1, f.y1, f.x2, f.y2)
+        if stand == letzte:
+            gleich += 1
+            if gleich >= 3:
+                # Der Fokus bewegt sich nicht mehr: eine Querrichtung probieren.
+                r = {"runter": "rechts", "hoch": "links", "rechts": "runter", "links": "hoch"}[r]
+                gleich = 0
+        else:
+            gleich = 0
+        letzte = stand
+        taste(RICHTUNG[r], pause=0.5)
+    return False
+
+
+# ---------------------------------------------------------------- Schritte
+
+def foto(name: str, notiz: str = "", ok: bool = True):
+    NR[0] += 1
+    datei = f"{NR[0]:02d}-{name}"
+    time.sleep(0.8)
+    png = adb("exec-out", "screencap", "-p", binaer=True, timeout=30)
+    with open(os.path.join(AUS, datei + ".png"), "wb") as f:
+        f.write(png)
+    knoten = aufbau()
+    with open(os.path.join(AUS, datei + ".txt"), "w", encoding="utf-8") as f:
+        for k in knoten:
+            if k.beschriftung:
+                zeichen = ("*" if k.fokus else " ") + ("+" if k.gewaehlt else " ")
+                f.write(f"{zeichen} [{k.x1},{k.y1},{k.x2},{k.y2}] {k.beschriftung!r}\n")
+    BERICHT.append({"foto": datei + ".png", "schritt": name, "ok": ok, "notiz": notiz})
+    print(f"[{'ok' if ok else '--'}] {datei} {notiz}", flush=True)
+
+
+def waehle(muster: str, bereich: str = "", warten: float = 8) -> bool:
+    """Ein Element öffnen: tippen am Telefon, Fokus und OK am Fernseher."""
+    k = warte(muster, warten, bereich=bereich)
+    if not k:
+        print(f"   nicht gefunden: {muster}", flush=True)
+        return False
+    if TV:
+        if fokussiere(muster, bereich=bereich):
+            taste("KEYCODE_DPAD_CENTER", pause=1.5)
+            return True
+        print(f"   Fokus kam nicht an: {muster} — tippe stattdessen", flush=True)
+        k = finde(muster, bereich=bereich) or k
+    tippen_bei(*k.mitte)
+    time.sleep(1.5)
+    return True
+
+
+def schritt(name: str, muster: str, bereich: str = "", warten_danach: float = 3,
+            notiz: str = "") -> bool:
+    ok = waehle(muster, bereich=bereich)
+    time.sleep(warten_danach)
+    foto(name, notiz or ("" if ok else f"nicht gefunden: {muster}"), ok)
+    return ok
+
+
+def zurueck(n: int = 1):
+    taste(*(["KEYCODE_BACK"] * n), pause=1.2)
+
+
+def suche_nach_unten(muster: str, max_wischer: int = 5) -> bool:
+    """Am Telefon nach unten scrollen, bis das Ziel zu sehen ist."""
+    for _ in range(max_wischer):
+        if finde(muster):
+            return True
+        if TV:
+            taste("KEYCODE_DPAD_DOWN")
+        else:
+            wischen("hoch")
+    return bool(finde(muster))
+
+
+# ---------------------------------------------------------------- Anmeldung
+
+def anmelden():
+    adresse_muster = r"^(Adresse|Address)$|lumen\.local"
+    k = warte(adresse_muster + r"|Server hinzufügen|Add server|Mit Code|Profil hier|" + re.escape(NAME), 40)
+    foto("erster-start", "" if k else "kein Anmeldebildschirm erkannt", bool(k))
+    if finde(r"^Server hinzufügen$|^Add server$"):
+        waehle(r"^Server hinzufügen$|^Add server$")
+        time.sleep(2)
+    felder = textfelder()
+    if felder:
+        f = felder[0]
+        if TV:
+            fokussiere_feld(f)
+        else:
+            tippen_bei(*f.mitte)
+        time.sleep(0.8)
+        eingeben(SERVER)
+        if TV:
+            taste("KEYCODE_ENTER", pause=1)
+        foto("adresse")
+        if finde(r"^Verbinden$|^Connect$"):
+            if TV:
+                taste("KEYCODE_BACK", pause=0.8)  # Tastatur zu
+            waehle(r"^Verbinden$|^Connect$")
+        time.sleep(4)
+    # Am Fernseher kommt zuerst „Mit Code anmelden"; das Profil steht daneben.
+    if TV and warte(r"Profil hier wählen|Choose profile here|Pick a profile here", 10):
+        foto("tv-code-anmelden")
+        waehle(r"Profil hier wählen|Choose profile here|Pick a profile here")
+        time.sleep(2)
+    k = warte("^" + re.escape(NAME) + "$", 25)
+    foto("profile", "" if k else "Profil nicht gefunden", bool(k))
+    if k:
+        waehle("^" + re.escape(NAME) + "$")
+        time.sleep(2.5)
+    felder = textfelder()
+    if felder:
+        if TV:
+            fokussiere_feld(felder[0])
+        else:
+            tippen_bei(*felder[0].mitte)
+        time.sleep(0.8)
+        eingeben(PASSWORT)
+        foto("passwort")
+        taste("KEYCODE_ENTER", pause=2)
+        if not warte(r"^(Startseite|Home)$", 6):
+            if TV:
+                taste("KEYCODE_BACK", pause=0.8)
+            if finde(r"^(Anmelden|Sign In|Entsperren|Unlock|Weiter|Continue|OK)$"):
+                waehle(r"^(Anmelden|Sign In|Entsperren|Unlock|Weiter|Continue|OK)$")
+    else:
+        print("   kein Passwortfeld gefunden", flush=True)
+    k = warte(r"^(Startseite|Home)$|Weiterschauen|Continue Watching", 40)
+    time.sleep(4)
+    foto("startseite", "" if k else "nach der Anmeldung keine Startseite", bool(k))
+    return bool(k)
+
+
+def fokussiere_feld(feld: Knoten):
+    """Am Fernseher ein Textfeld per Fokus erreichen und die Tastatur öffnen."""
+    for _ in range(12):
+        knoten = aufbau()
+        f = fokussiert(knoten)
+        if f and (f.enthaelt(*feld.mitte) or feld.enthaelt(*f.mitte)):
+            break
+        if f and f.mitte[1] > feld.mitte[1] + 20:
+            taste("KEYCODE_DPAD_UP", pause=0.4)
+        else:
+            taste("KEYCODE_DPAD_DOWN", pause=0.4)
+    taste("KEYCODE_DPAD_CENTER", pause=1)
+
+
+# ---------------------------------------------------------------- Rundgang
+
+def rundgang_handy():
+    wischen("hoch")
+    foto("startseite-weiter-unten")
+    wischen("hoch")
+    foto("startseite-ganz-unten")
+    wischen("runter"); wischen("runter"); wischen("runter")
+
+    schritt("filme", r"^(Filme|Movies)$", bereich="unten")
+    schritt("filmreihen", r"^(Filmreihen|Franchises)$", bereich="oben")
+    schritt("filmreihe-dark-knight", r"Dark Knight Collection|Dark Knight")
+    zurueck()
+    schritt("alle-filme", r"^(Alle Filme|All movies|All Movies)$", bereich="oben")
+    if schritt("film-inception", r"^Inception$"):
+        wischen("hoch")
+        foto("film-inception-unten")
+        zurueck()
+    if schritt("film-avatar", r"^Avatar"):
+        if suche_nach_unten(r"Fassung|Version|Deutsch|English", 2):
+            schritt("film-avatar-fassung", r"Fassung|Version")
+            zurueck()
+        zurueck()
+    if schritt("film-der-pate", r"^Der Pate$"):
+        zurueck()
+
+    schritt("serien", r"^(Serien|Shows)$", bereich="unten")
+    if schritt("serie-breaking-bad", r"^Breaking Bad$"):
+        wischen("hoch")
+        foto("serie-breaking-bad-folgen")
+        schritt("serie-staffelwahl", r"^(Staffel 1|Season 1|Staffel 01)$|Staffel|Season")
+        schritt("serie-specials", r"^(Specials|Staffel 0|Season 0|Extras)$")
+        if finde(r"^(Staffel 2|Season 2)$") is None:
+            # Staffelwahl als Menü: noch einmal öffnen.
+            waehle(r"Specials|Staffel|Season")
+        schritt("serie-staffel-2", r"^(Staffel 2|Season 2)$")
+        zurueck(2)
+
+    # Suche: oben auf der Startseite (Lupe) oder in den Filmen.
+    schritt("startseite-zurueck", r"^(Startseite|Home)$", bereich="unten")
+    if waehle(r"^(Suche|Suchen|Search)$"):
+        felder = textfelder()
+        if felder:
+            tippen_bei(*felder[0].mitte)
+            eingeben("Dark")
+            taste("KEYCODE_ENTER", pause=2)
+        foto("suche-dark")
+        zurueck(2)
+    else:
+        foto("suche", "Suche nicht gefunden", False)
+
+    schritt("profil", r"^(Profil|Profile)$", bereich="unten")
+    wischen("hoch")
+    foto("profil-unten")
+    wischen("hoch")
+    foto("profil-ganz-unten")
+
+    schritt("merkliste", r"^(Merkliste|Watchlist)$", bereich="unten")
+
+    # Wiedergabe: Interstellar aus „Weiterschauen".
+    schritt("startseite-fuer-wiedergabe", r"^(Startseite|Home)$", bereich="unten")
+    if waehle(r"^Interstellar$"):
+        time.sleep(2)
+        foto("film-interstellar")
+        if waehle(r"^(Weiterschauen|Fortsetzen|Weiter bei.*|Abspielen|Play|Resume.*|Continue.*)$"):
+            time.sleep(8)
+            foto("wiedergabe")
+            tippen_bei(BREITE // 2, HOEHE // 2)
+            time.sleep(1)
+            foto("wiedergabe-steuerung")
+            zurueck()
+            time.sleep(2)
+            foto("nach-wiedergabe")
+
+
+def rundgang_tv():
+    taste("KEYCODE_DPAD_DOWN")
+    foto("startseite-zeile-2")
+    taste("KEYCODE_DPAD_DOWN", "KEYCODE_DPAD_DOWN")
+    foto("startseite-zeile-4")
+    taste("KEYCODE_BACK")
+    time.sleep(1)
+    foto("startseite-nach-zurueck", "wohin springt der Fokus mit Zurück?")
+
+    schritt("filme", r"^(Filme|Movies)$", bereich="oben")
+    if schritt("film-inception", r"^Inception$"):
+        taste("KEYCODE_DPAD_DOWN", "KEYCODE_DPAD_DOWN")
+        foto("film-inception-unten")
+        zurueck()
+    if schritt("film-avatar", r"^Avatar"):
+        if finde(r"Fassung|Version"):
+            schritt("film-avatar-fassung", r"Fassung|Version")
+            zurueck()
+        zurueck()
+
+    schritt("serien", r"^(Serien|Shows)$", bereich="oben")
+    if schritt("serie-breaking-bad", r"^Breaking Bad$"):
+        taste("KEYCODE_DPAD_DOWN")
+        foto("serie-breaking-bad-runter")
+        schritt("serie-specials", r"^(Specials|Staffel 0|Season 0|Extras)$")
+        schritt("serie-staffel-2", r"^(Staffel 2|Season 2)$")
+        zurueck()
+
+    if schritt("suche", r"^(Suche|Search)$", bereich="oben"):
+        felder = textfelder()
+        if felder:
+            fokussiere_feld(felder[0])
+            eingeben("Dark")
+            taste("KEYCODE_BACK", pause=1.5)
+        foto("suche-dark")
+
+    schritt("ich", r"^(Ich|Me)$", bereich="oben")
+    taste("KEYCODE_DPAD_DOWN", "KEYCODE_DPAD_DOWN", "KEYCODE_DPAD_DOWN")
+    foto("ich-runter")
+    if schritt("filmreihen", r"^(Filmreihen|Franchises)$"):
+        schritt("filmreihe-dark-knight", r"Dark Knight Collection|Dark Knight")
+        zurueck(2)
+
+    schritt("startseite-fuer-wiedergabe", r"^(Startseite|Home)$", bereich="oben")
+    if waehle(r"^Interstellar$"):
+        time.sleep(2)
+        foto("film-interstellar")
+        if waehle(r"^(Weiterschauen|Fortsetzen|Weiter bei.*|Abspielen|Play|Resume.*|Continue.*)$"):
+            time.sleep(8)
+            foto("wiedergabe")
+            taste("KEYCODE_DPAD_CENTER", pause=1)
+            foto("wiedergabe-steuerung")
+            taste("KEYCODE_DPAD_DOWN", pause=1)
+            foto("wiedergabe-spuren")
+            zurueck(2)
+            time.sleep(2)
+            foto("nach-wiedergabe")
+
+
+def main():
+    global BREITE, HOEHE
+    BREITE, HOEHE = bildschirm()
+    print(f"Bildschirm {BREITE}x{HOEHE}, Paket {PAKET}, Server {SERVER}", flush=True)
+    # Ohne Animationen bleibt der Bildschirmaufbau ruhig genug zum Lesen.
+    for k in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
+        sh(f"settings put global {k} 0")
+    adb("logcat", "-c")
+    sh(f"am force-stop {PAKET}")
+    sh(f"monkey -p {PAKET} -c android.intent.category.{'LEANBACK_LAUNCHER' if TV else 'LAUNCHER'} 1")
+    time.sleep(6)
+    try:
+        if anmelden():
+            rundgang_tv() if TV else rundgang_handy()
+    except Exception as e:  # noqa: BLE001 — der Bericht soll trotzdem entstehen
+        print("Abbruch:", repr(e), flush=True)
+        foto("abbruch", repr(e), False)
+    finally:
+        log = adb("logcat", "-d", "-v", "time", timeout=60)
+        with open(os.path.join(AUS, "logcat-voll.txt"), "w", encoding="utf-8") as f:
+            f.write(log)
+        rx = re.compile(r"FATAL|AndroidRuntime|ANR in|lumen|Lumen|" + re.escape(PAKET), re.I)
+        with open(os.path.join(AUS, "logcat.txt"), "w", encoding="utf-8") as f:
+            f.writelines(z + "\n" for z in log.splitlines() if rx.search(z))
+        absturz = [z for z in log.splitlines() if "FATAL EXCEPTION" in z or "ANR in" in z]
+        with open(os.path.join(AUS, "bericht.json"), "w", encoding="utf-8") as f:
+            json.dump({"art": ART, "schritte": BERICHT, "abstuerze": absturz}, f,
+                      ensure_ascii=False, indent=1)
+        print(f"{len(BERICHT)} Fotos, {sum(1 for b in BERICHT if not b['ok'])} Schritte ohne Ziel, "
+              f"{len(absturz)} Abstürze", flush=True)
+
+
+if __name__ == "__main__":
+    main()

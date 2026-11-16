@@ -1,0 +1,365 @@
+# Die Apps im Simulator — mit Bildschirmfotos.
+#
+# Ohne Mac und ohne Rechner mit KVM lässt sich keine der App-Oberflächen
+# laufen sehen. GitHub hat beides: Ubuntu-Maschinen mit KVM für die
+# Android-Emulatoren und Macs mit Xcode für iPhone-, iPad- und
+# Apple-TV-Simulatoren. Dieser Ablauf
+#
+#   1. baut einen Lumen-Server aus dem Stand und füllt ihn mit einer
+#      kleinen Testbibliothek (tools/simulator/bibliothek.sh: Filmreihen,
+#      zwei Sprachfassungen, eine Serie mit Specials, Untertitel …) — ohne
+#      TMDb, nur mit NFO-Dateien, also ohne Netz und API-Schlüssel;
+#   2. startet Emulatoren für Android-Handy und Android TV und geht mit
+#      tools/simulator/android_rundgang.py durch die App, wie ein Mensch:
+#      tippen bzw. Fernbedienung, Foto nach jedem Schritt;
+#   3. lässt auf dem Mac die UI-Tests LumenUITests (iPhone, iPad, Mac) und
+#      LumenTVUITests (Apple TV) dasselbe tun;
+#   4. legt alle Fotos, Elementbäume und Protokolle als Artefakt ab und
+#      schreibt eine Übersicht in die Zusammenfassung.
+#
+# Der Ablauf prüft nichts im Sinn von grün/rot: Er zeigt, wie die Apps
+# aussehen. Ein Schritt, der sein Ziel nicht findet, steht als ⚠️ in der
+# Übersicht. Rot wird der Lauf nur, wenn etwas gar nicht anlief.
+#
+# Die Anmeldedaten unten gelten nur für den Wegwerf-Server dieses Laufs.
+
+name: Simulator
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      mac:
+        description: 'Mac-Rechner (macos-latest oder macos-15-intel, wenn die arm64-Macs ausgelastet sind)'
+        type: choice
+        options: [macos-latest, macos-15-intel]
+        default: macos-latest
+  push:
+    branches: [arbeit/simulator]
+
+concurrency:
+  group: simulator-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LUMEN_TEST_NAME: Admin
+  LUMEN_TEST_PASSWORT: lumen-sim-2026
+  # Die Datenbank kennt die Medien unter diesem Pfad — er muss auf jedem
+  # Rechner gleich sein.
+  SIM: /tmp/lumen-sim
+
+jobs:
+
+  # ---------------------------------------------------------------- Bibliothek
+
+  bibliothek:
+    name: Testserver mit Bibliothek
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with: { go-version: '1.25' }
+
+      - name: FFmpeg und SQLite
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg sqlite3 fonts-dejavu-core
+
+      - name: Server bauen
+        working-directory: server
+        run: CGO_ENABLED=1 go build -mod=vendor -trimpath -o "$SIM/lumen-linux" ./cmd/lumen
+
+      - name: Testbibliothek erzeugen
+        run: tools/simulator/bibliothek.sh "$SIM/medien"
+
+      - name: Einrichten (Besitzer, Bibliotheken, Fortschritt)
+        run: |
+          mkdir -p "$SIM/daten"
+          LUMEN_HEIMNETZ=127.0.0.1,::1 "$SIM/lumen-linux" --addr 127.0.0.1:8097 --data "$SIM/daten" \
+            > "$SIM/server-einrichten.log" 2>&1 &
+          echo $! > server.pid
+          TOMATEN_SQL="$SIM/tomaten.sql" python3 tools/simulator/einrichten.py http://127.0.0.1:8097 "$SIM/medien"
+          kill "$(cat server.pid)"; sleep 3
+          # Rotten Tomatoes kommt sonst nur über OMDb.
+          sqlite3 "$SIM/daten/lumen.db" < "$SIM/tomaten.sql"
+          sqlite3 "$SIM/daten/lumen.db" "SELECT title, rt_wertung, imdb_rating FROM item WHERE kind='movie'"
+          tail -20 "$SIM/server-einrichten.log"
+
+      - name: Packen
+        run: tar -C /tmp -czf bibliothek.tgz lumen-sim && ls -lh bibliothek.tgz
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sim-bibliothek
+          path: bibliothek.tgz
+          retention-days: 1
+
+  # ---------------------------------------------------------------- Android
+
+  android:
+    name: Android — ${{ matrix.art }}
+    needs: bibliothek
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - art: handy
+            modul: app
+            target: google_apis
+            arch: x86_64
+            profil: pixel_6
+          - art: tv
+            modul: tv
+            target: android-tv
+            arch: x86
+            profil: tv_1080p
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Java 17
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+        with:
+          gradle-version: '8.11.1'
+
+      - name: App bauen (Debug)
+        working-directory: android
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          gradle :${{ matrix.modul }}:assembleDebug --no-daemon -q
+          cp ${{ matrix.modul }}/build/outputs/apk/debug/*.apk ../lumen.apk
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { name: sim-bibliothek }
+
+      - name: Testserver starten
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+          tar -C /tmp -xzf bibliothek.tgz
+          LUMEN_HEIMNETZ=127.0.0.1,::1 nohup "$SIM/lumen-linux" --addr 127.0.0.1:8097 --data "$SIM/daten" \
+            > "$SIM/server.log" 2>&1 &
+          for i in $(seq 60); do curl -fsS http://127.0.0.1:8097/api/v1/hello && break; sleep 1; done
+
+      # Wie in der Anleitung von android-emulator-runner: KVM für alle.
+      - name: KVM freischalten
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emulator und Rundgang
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          SERVER: 10.0.2.2:8097
+        with:
+          api-level: 34
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          profile: ${{ matrix.profil }}
+          ram-size: 4096M
+          disk-size: 4G
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          disable-animations: true
+          script: |
+            adb install -r -t lumen.apk
+            python3 tools/simulator/android_rundgang.py ${{ matrix.art }} fotos/android-${{ matrix.art }} || true
+
+      - name: Übersicht
+        if: always()
+        run: |
+          mkdir -p fotos/android-${{ matrix.art }}
+          cp "$SIM/server.log" fotos/android-${{ matrix.art }}/server.log 2>/dev/null || true
+          python3 tools/simulator/uebersicht.py "Android — ${{ matrix.art }}" fotos/android-${{ matrix.art }} \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: sim-fotos-android-${{ matrix.art }}
+          path: fotos
+          retention-days: 7
+
+  # ---------------------------------------------------------------- Apple
+
+  apple:
+    name: Apple — iPhone, iPad, Apple TV, Mac
+    needs: bibliothek
+    runs-on: ${{ inputs.mac == 'macos-15-intel' && 'macos-15-intel' || 'macos-latest' }}
+    timeout-minutes: 90
+    env:
+      # xcodebuild reicht TEST_RUNNER_… ohne den Vorsatz an die UI-Tests
+      # weiter; die geben es der App beim Start mit (TestAnmeldung.swift).
+      TEST_RUNNER_LUMEN_TEST_SERVER: http://127.0.0.1:8097
+      TEST_RUNNER_LUMEN_TEST_NAME: Admin
+      TEST_RUNNER_LUMEN_TEST_PASSWORT: lumen-sim-2026
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with: { go-version: '1.25' }
+
+      - name: Xcode-Fassung und Simulatoren
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+          brew install xcodegen
+
+      - name: Server bauen
+        working-directory: server
+        run: CGO_ENABLED=1 go build -mod=vendor -trimpath -o "$RUNNER_TEMP/lumen-mac" ./cmd/lumen
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { name: sim-bibliothek }
+
+      - name: Testserver starten
+        run: |
+          tar -C /tmp -xzf bibliothek.tgz
+          # FFmpeg nur, wenn es schon da ist — die Titel sind bereits erfasst,
+          # und für den Rundgang spielen die Apps die Dateien direkt ab.
+          which ffmpeg || echo "(kein ffmpeg auf dem Mac — der Server läuft ohne)"
+          LUMEN_HEIMNETZ=127.0.0.1,::1 nohup "$RUNNER_TEMP/lumen-mac" --addr 127.0.0.1:8097 --data "$SIM/daten" \
+            > "$SIM/server.log" 2>&1 &
+          for i in $(seq 60); do curl -fsS http://127.0.0.1:8097/api/v1/hello && break; sleep 1; done
+
+      - name: Projekt erzeugen
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Simulatoren wählen
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, subprocess
+          geraete = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "--json"]))["devices"]
+          def waehle(laufzeit, vorlieben):
+              kandidaten = [(rt, d) for rt, ds in geraete.items() if laufzeit in rt for d in ds]
+              kandidaten.sort(key=lambda x: x[0], reverse=True)   # neueste Laufzeit zuerst
+              for v in vorlieben:
+                  for rt, d in kandidaten:
+                      if d["name"].startswith(v):
+                          return d["udid"], d["name"], rt
+              return "", "", ""
+          for schluessel, laufzeit, vorlieben in (
+                  ("IPHONE", "iOS", ["iPhone 16 Pro", "iPhone 16", "iPhone 15", "iPhone"]),
+                  ("IPAD", "iOS", ["iPad Air 11", "iPad Air", "iPad (", "iPad Pro 11", "iPad"]),
+                  ("APPLETV", "tvOS", ["Apple TV 4K", "Apple TV"])):
+              udid, name, rt = waehle(laufzeit, vorlieben)
+              print(f"{schluessel}={udid}")
+              print(f"{schluessel}_NAME={name} ({rt.split('.')[-1]})")
+          PY
+          cat "$GITHUB_ENV"
+
+      - name: iPhone und iPad — bauen
+        working-directory: apple
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing -project Lumen.xcodeproj -scheme Lumen \
+            -destination "id=$IPHONE" -derivedDataPath "$RUNNER_TEMP/dd-ios" \
+            CODE_SIGNING_ALLOWED=NO -quiet 2>&1 | tail -50
+
+      - name: iPhone — Rundgang
+        working-directory: apple
+        timeout-minutes: 20
+        continue-on-error: true
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/fotos/iphone"
+          TEST_RUNNER_SIM_FOTOS="$GITHUB_WORKSPACE/fotos/iphone" \
+          xcodebuild test-without-building -project Lumen.xcodeproj -scheme Lumen \
+            -destination "id=$IPHONE" -derivedDataPath "$RUNNER_TEMP/dd-ios" \
+            -resultBundlePath "$RUNNER_TEMP/iphone.xcresult" 2>&1 | tail -60
+
+      - name: iPad — Rundgang
+        working-directory: apple
+        timeout-minutes: 20
+        continue-on-error: true
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/fotos/ipad"
+          TEST_RUNNER_SIM_FOTOS="$GITHUB_WORKSPACE/fotos/ipad" \
+          xcodebuild test-without-building -project Lumen.xcodeproj -scheme Lumen \
+            -destination "id=$IPAD" -derivedDataPath "$RUNNER_TEMP/dd-ios" \
+            -resultBundlePath "$RUNNER_TEMP/ipad.xcresult" 2>&1 | tail -60
+
+      - name: Apple TV — Rundgang
+        working-directory: apple
+        timeout-minutes: 40
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          mkdir -p "$GITHUB_WORKSPACE/fotos/appletv"
+          TEST_RUNNER_SIM_FOTOS="$GITHUB_WORKSPACE/fotos/appletv" \
+          xcodebuild test -project Lumen.xcodeproj -scheme LumenTV \
+            -destination "id=$APPLETV" -derivedDataPath "$RUNNER_TEMP/dd-tv" \
+            -resultBundlePath "$RUNNER_TEMP/appletv.xcresult" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | grep -v '^\s*$' | tail -80
+
+      # UI-Tests am Mac brauchen den Automatisierungsmodus ohne Rückfrage
+      # und eine Signatur — „zum lokalen Ausführen" genügt.
+      - name: Mac — Rundgang
+        working-directory: apple
+        timeout-minutes: 30
+        continue-on-error: true
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/fotos/mac"
+          sudo automationmodetool enable-automationmode-without-authentication || true
+          TEST_RUNNER_SIM_FOTOS="$GITHUB_WORKSPACE/fotos/mac" \
+          xcodebuild test -project Lumen.xcodeproj -scheme Lumen \
+            -destination 'platform=macOS' -derivedDataPath "$RUNNER_TEMP/dd-mac" \
+            -resultBundlePath "$RUNNER_TEMP/mac.xcresult" \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= 2>&1 | grep -v '^\s*$' | tail -80
+
+      # Hat der UI-Test am Mac nicht geklappt: die App wenigstens starten
+      # und den Bildschirm fotografieren.
+      - name: Mac — Bildschirmfoto ohne UI-Test
+        if: always()
+        continue-on-error: true
+        run: |
+          ls "$GITHUB_WORKSPACE/fotos/mac"/*.png >/dev/null 2>&1 && exit 0
+          app=$(find "$RUNNER_TEMP/dd-mac" -path '*Debug/Lumen.app' -maxdepth 5 | head -1)
+          echo "App: $app"
+          [ -n "$app" ] || exit 0
+          LUMEN_TEST_SERVER=http://127.0.0.1:8097 LUMEN_TEST_NAME=Admin LUMEN_TEST_PASSWORT=lumen-sim-2026 \
+            "$app/Contents/MacOS/Lumen" > "$GITHUB_WORKSPACE/fotos/mac/app.log" 2>&1 &
+          sleep 25
+          screencapture -x "$GITHUB_WORKSPACE/fotos/mac/01-mac-start-ohne-uitest.png" || true
+          kill %1 || true
+
+      - name: Fotos aus den Testergebnissen
+        if: always()
+        run: |
+          for g in iphone ipad appletv mac; do
+            r="$RUNNER_TEMP/$g.xcresult"
+            [ -d "$r" ] || continue
+            mkdir -p "fotos/$g/xcresult"
+            xcrun xcresulttool export attachments --path "$r" --output-path "fotos/$g/xcresult" \
+              > /dev/null 2>&1 || echo "Anhänge aus $g nicht lesbar"
+            # Die Zusammenfassung des Laufs (Fehler, Dauer) als Text daneben.
+            xcrun xcresulttool get test-results summary --path "$r" > "fotos/$g/ergebnis.json" 2>/dev/null || true
+          done
+          cp "$SIM/server.log" fotos/server-mac.log 2>/dev/null || true
+          find fotos -name '*.png' | wc -l
+
+      - name: Übersicht
+        if: always()
+        run: |
+          for g in iphone ipad appletv mac; do
+            case $g in iphone) t="iPhone — $IPHONE_NAME";; ipad) t="iPad — $IPAD_NAME";;
+                       appletv) t="Apple TV — $APPLETV_NAME";; mac) t="Mac";; esac
+            python3 tools/simulator/uebersicht.py "$t" "fotos/$g" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: sim-fotos-apple
+          path: fotos
+          retention-days: 7

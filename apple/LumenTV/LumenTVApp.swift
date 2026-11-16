@@ -37,7 +37,13 @@ struct LumenTVApp: App {
                 .environment(\.locale, session.locale)
                 .environment(session)
                 .preferredColorScheme(.dark)
-                .task { await session.start() }
+                .task {
+                    #if DEBUG
+                    // Nur für die UI-Tests (TestAnmeldung.swift).
+                    if await TestAnmeldung.versuchen(session) { return }
+                    #endif
+                    await session.start()
+                }
         }
     }
 }

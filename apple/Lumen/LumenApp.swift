@@ -41,6 +41,10 @@ struct LumenApp: App {
                     // wurde, während die App ruhte, liefert das System jetzt ab.
                     Downloads.shared.vorbereiten()
                     #endif
+                    #if DEBUG
+                    // Nur für die UI-Tests (TestAnmeldung.swift).
+                    if await TestAnmeldung.versuchen(session) { return }
+                    #endif
                     await session.start()
                 }
                 // Ein Einladungslink öffnet die App und füllt den Code aus.
