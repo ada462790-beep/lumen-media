@@ -158,3 +158,38 @@ public struct NetzStand: Codable, Sendable {
         }
     }
 }
+
+// MARK: - Wunsch-Vorschläge
+
+/// Ein Vorschlag von TMDb beim Wünschen (GET /wishes/vorschlaege): Titel,
+/// Jahr, Poster — und ob der Titel schon da oder schon gewünscht ist. Wer
+/// einen Vorschlag wählt, wünscht genau diesen Film, nicht einen Namen.
+public struct WunschVorschlag: Codable, Identifiable, Hashable, Sendable {
+    public let art: String            // movie | series
+    public let titel: String
+    public let originaltitel: String?
+    public let jahr: Int?
+    public let tmdbId: String
+    public let imdbId: String?
+    public let poster: String?
+    public let schonDa: Bool
+    public let itemId: String?
+    public let schonGewuenscht: Bool
+
+    public var id: String { art + ":" + tmdbId }
+
+    /// „2021 · Film" — die Zeile unter dem Titel.
+    public var zeile: String {
+        var teile: [String] = []
+        if let jahr, jahr > 0 { teile.append(String(jahr)) }
+        teile.append(art == "series" ? String(localized: "Serie", bundle: .lumenKit, locale: .lumen)
+                                     : String(localized: "Film", bundle: .lumenKit, locale: .lumen))
+        return teile.joined(separator: " · ")
+    }
+}
+
+public struct WunschVorschlaege: Codable, Sendable {
+    public let vorschlaege: [WunschVorschlag]
+    /// Der Server hat keinen TMDb-Schlüssel: dann gibt es keine Vorschläge.
+    public let ohneSchluessel: Bool?
+}

@@ -922,6 +922,31 @@ public actor APIClient {
         return try await send("POST", "/wishes", body: Body(title: title, year: year))
     }
 
+    /// Vorschläge von TMDb zu einer Eingabe (ab zwei Zeichen) — wie im
+    /// Browser beim Wünschen. Ein älterer Server kennt den Weg nicht (404).
+    public func wunschVorschlaege(_ text: String) async throws -> WunschVorschlaege {
+        try await get("/wishes/vorschlaege", ["q": text])
+    }
+
+    /// Genau diesen Titel wünschen: mit TMDb- und IMDb-Kennung, damit der
+    /// Besitzer weiss, welcher gemeint ist, und Doppel erkannt werden.
+    public func wish(vorschlag v: WunschVorschlag) async throws -> Wish {
+        struct Body: Encodable {
+            let title: String, year: Int, art: String, tmdbId: String, imdbId: String, originaltitel: String
+        }
+        return try await send("POST", "/wishes", body: Body(
+            title: v.titel, year: v.jahr ?? 0, art: v.art, tmdbId: v.tmdbId,
+            imdbId: v.imdbId ?? "", originaltitel: v.originaltitel ?? ""))
+    }
+
+    /// Das Poster eines Vorschlags über Lumen (der Server holt es von TMDb
+    /// und bewahrt es auf), mit dem Bildschlüssel.
+    public func wunschPosterURL(_ v: WunschVorschlag) -> URL? {
+        guard let pfad = v.poster, pfad.hasPrefix("/api/v1/"), token != nil,
+              let q = mitBildSchluessel() else { return nil }
+        return url(String(pfad.dropFirst("/api/v1".count)), q)
+    }
+
     /// Den eigenen offenen Wunsch löschen oder einen angeschlossenen
     /// verlassen (204). Ist der eigene schon in Arbeit oder erledigt,
     /// antwortet der Server mit 409 `nicht_offen` und einem Satz dazu.
