@@ -764,6 +764,17 @@ public final class Session {
         }
     }
 
+    // MARK: - Eigener Stand
+
+    /// Zählt hoch, sobald sich am eigenen Stand etwas geändert hat: eine
+    /// Wiedergabe ging zu, ein Haken, die Merkliste, ein Favorit. Startseite
+    /// („Weiterschauen"), Merkliste und Favoriten laden dann neu — wie im
+    /// Browser, wo sie nach jeder Änderung sofort stimmen. Vorher blieben
+    /// sie stehen, bis man sie von Hand auffrischte.
+    public private(set) var standAenderung = 0
+
+    public func standGeaendert() { standAenderung &+= 1 }
+
     // MARK: - Profilbild und Neuigkeiten
 
     /// Zählt hoch, sobald ein eigenes Bild hochgeladen wurde — es hängt als
@@ -828,8 +839,16 @@ public final class Session {
         return false
     }
 
+    /// Was in einer Meldung steht. Eine Meldung beginnt gross — auch eine
+    /// ältere, kleingeschriebene vom Server („nicht gefunden"), wie im
+    /// Browser (toast).
     public nonisolated static func text(_ error: any Error) -> String {
-        (error as? LumenError)?.errorDescription ?? error.localizedDescription
+        grossAnfang((error as? LumenError)?.errorDescription ?? error.localizedDescription)
+    }
+
+    public nonisolated static func grossAnfang(_ text: String) -> String {
+        guard let erstes = text.first else { return text }
+        return erstes.uppercased() + text.dropFirst()
     }
 }
 

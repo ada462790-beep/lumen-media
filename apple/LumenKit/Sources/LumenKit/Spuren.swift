@@ -97,25 +97,63 @@ public enum Spuren {
         return (tonIndex, untertitel)
     }
 
-    public static func vorbelegung(ton: [Track], text: [Track],
-                                   prefs: [String: String]) -> (ton: Int?, untertitel: Int?) {
+    /// Ob eine Tonspur als Original markiert ist: „Original", „OV",
+    /// „O-Ton" im Titel (wie im Browser: /\boriginal|\bOV\b|\bO-?Ton\b/i).
+    public static func istOriginal(_ t: Track) -> Bool {
+        let woerter = (t.title ?? "").lowercased()
+            .split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "-") }).map(String.init)
+        return woerter.contains { $0.hasPrefix("original") || $0 == "ov" || $0 == "o-ton" || $0 == "oton" }
+    }
+
+    /// Ton und Untertitel beim Start — wie im Browser (spurenVorbelegen):
+    ///
+    /// - Ton: die gemerkte Sprache, wenn die Datei sie hat; sonst die
+    ///   Sprache des Profils (`eigen`) — oder, wer „Originalton" gewählt hat
+    ///   (`tonWahl` „original"), die als Original markierte, sonst die erste
+    ///   Spur. Gibt es nichts davon, bleibt die erste Spur (nil).
+    /// - Untertitel: Läuft der Ton in einer anderen Sprache als der des
+    ///   Profils, kommen Untertitel in der Sprache des Profils, wenn es
+    ///   welche gibt — fremde schaltet Lumen nie von selbst ein. Läuft er in
+    ///   der Sprache des Profils, nur wenn jemand genau diese gewählt hat.
+    ///   „Aus" bleibt aus. Erzwungene in der Tonsprache laufen immer mit.
+    ///
+    /// Vorher galt die zuletzt gewählte Untertitelsprache überall: wer
+    /// einmal englische nahm, bekam sie bei jedem Film.
+    public static func vorbelegung(ton: [Track], text: [Track], prefs: [String: String],
+                                   eigen: String) -> (ton: Int?, untertitel: Int?) {
+        let profil = String(eigen.prefix(2)).lowercased()
         var tonIndex: Int?
-        if let sprache = prefs["tonSprache"], !sprache.isEmpty,
-           let t = ton.first(where: { $0.sprache == sprache }) {
+        var wunsch = prefs["tonSprache"].flatMap { $0.isEmpty ? nil : $0 }
+        if wunsch == nil, prefs["tonWahl"] == "original" {
+            let original = ton.first(where: istOriginal) ?? ton.first
+            tonIndex = original?.index
+        } else if wunsch == nil, !profil.isEmpty {
+            wunsch = profil
+        }
+        if let wunsch, let t = ton.first(where: { $0.sprache == wunsch }) {
             tonIndex = t.index
         }
-        var untertitel: Int?
-        if let sprache = prefs["untertitel"], !sprache.isEmpty, sprache != "aus" {
-            let u = text.first { $0.sprache == sprache && !$0.isForced }
-                ?? text.first { $0.sprache == sprache }
-            untertitel = u?.index
-        } else {
-            let aktuell = ton.first { $0.index == tonIndex } ?? ton.first
-            if let aktuell, let erzwungen = text.first(where: { $0.isForced && $0.sprache == aktuell.sprache }) {
-                untertitel = erzwungen.index
+        let aktuell = ton.first { $0.index == tonIndex } ?? ton.first
+        let tonSprache = aktuell.map { $0.sprache == "und" ? "" : $0.sprache } ?? ""
+
+        func finden(_ sprache: String) -> Track? {
+            text.first { $0.sprache == sprache && !$0.isForced } ?? text.first { $0.sprache == sprache }
+        }
+        var untertitel: Track?
+        let gewaehlt = prefs["untertitel"] ?? ""
+        if gewaehlt != "aus", !profil.isEmpty {
+            if !tonSprache.isEmpty, tonSprache != profil {
+                untertitel = finden(profil)
+            } else if !gewaehlt.isEmpty, gewaehlt == (tonSprache.isEmpty ? profil : tonSprache) {
+                untertitel = finden(gewaehlt)
             }
         }
-        return (tonIndex, untertitel)
+        if let untertitel { return (tonIndex, untertitel.index) }
+        if let aktuell, aktuell.sprache != "und",
+           let erzwungen = text.first(where: { $0.isForced && $0.sprache == aktuell.sprache }) {
+            return (tonIndex, erzwungen.index)
+        }
+        return (tonIndex, nil)
     }
 }
 

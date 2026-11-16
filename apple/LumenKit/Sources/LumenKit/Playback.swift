@@ -248,7 +248,7 @@ public final class Playback {
             // Spuren und Vorbelegung nach den gemerkten Sprachen.
             tonspuren = file.tonspuren
             textspuren = file.textspuren
-            var vor = Spuren.vorbelegung(ton: tonspuren, text: textspuren, prefs: prefs)
+            var vor = Spuren.vorbelegung(ton: tonspuren, text: textspuren, prefs: prefs, eigen: Sprache.aktuell)
             // Nach einem Fassungswechsel: Ton und Untertitel nach Sprache übernehmen.
             if let alt = uebernommen {
                 vor = Spuren.uebernehmen(alterTon: alt.ton, alterUntertitel: alt.untertitel, untertitelAus: alt.aus,
@@ -357,7 +357,10 @@ public final class Playback {
             // AVPlayer wählt die Untertitel: in der gemerkten Sprache, sonst
             // wie das System es will (erzwungene laufen von selbst mit).
             player.appliesMediaSelectionCriteriaAutomatically = true
-            if let sprache = prefs["untertitel"], !sprache.isEmpty, sprache != "aus" {
+            // Dieselbe Wahl wie bei direkter Wiedergabe (`Spuren.vorbelegung`):
+            // die vorbelegte Spur, nicht einfach die zuletzt gemerkte Sprache.
+            if let index = untertitelSpur,
+               let sprache = textspuren.first(where: { $0.index == index })?.sprache, sprache != "und" {
                 player.setMediaSelectionCriteria(
                     AVPlayerMediaSelectionCriteria(preferredLanguages: [sprache],
                                                    preferredMediaCharacteristics: nil),

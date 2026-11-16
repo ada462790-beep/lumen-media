@@ -35,6 +35,8 @@ struct DetailView: View {
     /// diese Runde liest `?staffel=` nicht und setzt den Haken nur an der
     /// Serie selbst — das lässt sich von hier aus nicht erkennen.)
     @State private var staffelGesehenGeht = true
+    /// Nach dem Haken an einer späten Folge: auch die davor? (wie im Browser)
+    @State private var vorherFrage: Item?
     #if os(macOS)
     /// Verwaltung am Titel: „Anderen Titel zuweisen" offen, und was zuletzt
     /// geschah („wird neu geholt …", „zugewiesen").
@@ -98,11 +100,15 @@ struct DetailView: View {
         // Am Mac läuft der Player in einem eigenen Fenster; es meldet sich,
         // wenn es zugeht.
         .onReceive(NotificationCenter.default.publisher(for: .lumenPlayerZu)) { _ in
+            // Den Stand der übrigen Ansichten frischt LibraryShell auf.
             Task { await load() }
         }
         #else
         .onChange(of: start == nil) { _, zu in
-            if zu { Task { await load() } }
+            if zu {
+                Task { await load() }
+                session.standGeaendert()
+            }
         }
         #endif
         .alert("Das hat nicht geklappt", isPresented: Binding(
@@ -110,6 +116,12 @@ struct DetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(aktionsFehler ?? "")
+        }
+        .confirmationDialog("Auch alle Folgen davor als gesehen markieren?", isPresented: Binding(
+            get: { vorherFrage != nil }, set: { if !$0 { vorherFrage = nil } }),
+            titleVisibility: .visible, presenting: vorherFrage) { folge in
+            Button("Ja, alle davor") { Task { await bisHier(folge) } }
+            Button("Nein", role: .cancel) {}
         }
         .sheet(isPresented: $showLists) {
             AddToPlaylistSheet(itemId: itemId, title: item?.title ?? "")
@@ -128,6 +140,10 @@ struct DetailView: View {
             if let original = item.originalTitle, original != item.title, !original.isEmpty {
                 Text(original).font(.subheadline).foregroundStyle(.white.opacity(0.72))
             }
+            // Die Wertungen eigens über der Eckdatenzeile, gut sichtbar — wie
+            // im Browser. Vorher standen sie klein in der grauen Zeile.
+            WertungsReihe(wertungen: detail.wertungen)
+                .padding(.top, 2)
             Text(metaLine(item)).font(.subheadline).foregroundStyle(.white.opacity(0.72))
             TechnikZeile(abzeichen: Technik.zeile(item: item, file: detail.playable, plan: plan))
                 .padding(.top, 2)
@@ -151,15 +167,6 @@ struct DetailView: View {
         if let age = item.ageYears { parts.append(String(localized: "ab \(age)", bundle: .lumen, locale: .lumen)) }
         if let ms = item.runtimeMs, ms > 0 { parts.append(Item.duration(ms: ms)) }
         if let genres = item.genres, !genres.isEmpty { parts.append(genres.joined(separator: " · ")) }
-        if let rating = item.imdbRating, rating > 0 {
-            var text = "IMDb " + rating.formatted(.number.precision(.fractionLength(1)).locale(.lumen))
-            if let votes = item.imdbVotes, votes > 0 {
-                text += " (" + votes.formatted(.number.locale(.lumen)) + ")"
-            }
-            parts.append(text)
-        }
-        if let t = item.tomatenText { parts.append(t) }
-        if let t = item.tmdbText { parts.append(t) }
         return parts.joined(separator: " · ")
     }
 
@@ -167,19 +174,19 @@ struct DetailView: View {
     /// bricht sie um, statt Knöpfe abzuschneiden.
     @ViewBuilder
     private func actions(_ item: Item, _ detail: ItemDetail) -> some View {
-        // Mehrere Fassungen desselben Films (MKV in 1080p, AVI in 400p):
-        // „Ansehen" startet die Standard-Fassung, eine andere wählt man im
-        // Player unter „Qualität". Teile
-        // eines Films (a/b/c) sind keine Fassungen; die laufen nacheinander.
-        let fassungen = Fassungen.liste(detail.files)
+        // Mehrere Fassungen desselben Films (MKV in 1080p und AVI in 400p,
+        // oder eine deutsche und eine englische Datei): „Ansehen" startet
+        // gleich die Standard-Fassung, eine andere wählt man im Player
+        // (Zahnrad) — gefragt wird vorher nicht mehr. Der kleine Hinweis
+        // sagt, ob es Sprachen, Qualitäten oder Fassungen sind. Teile eines
+        // Films (a/b/c) sind keine Fassungen; die laufen nacheinander.
+        let hinweis = Fassungen.hinweis(Fassungen.liste(detail.files))
         FlussLayout(abstand: 10) {
             if detail.playable != nil {
                 Button {
                     start = Abspielstart(item: item)
                 } label: {
-                    Label(fassungen.count > 1
-                            ? Titelseite.abspielen(item) + " · " + String(localized: "\(fassungen.count) Qualitäten", bundle: .lumen, locale: .lumen)
-                            : Titelseite.abspielen(item),
+                    Label(hinweis.map { Titelseite.abspielen(item) + " · " + $0 } ?? Titelseite.abspielen(item),
                           systemImage: "play.fill")
                 }
                 .buttonStyle(KopfHauptknopf())
@@ -320,21 +327,15 @@ struct DetailView: View {
     }
 
     /// Staffeln als Reiter, darunter die Folgen der gewählten — wie im
-    /// Browser. Die erste Staffel ist gleich offen; Specials stehen hinten.
+    /// Browser. Die erste Staffel ist gleich offen; Specials (Staffel 0 und
+    /// Staffeln ohne Nummer) stehen hinten. Ab sieben Staffeln nur die
+    /// Zahlen unter „Staffeln", ab sechzehn eine Auswahl (Staffelleiste).
     private var staffelTeil: some View {
         VStack(alignment: .leading, spacing: 12) {
             if staffeln.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(staffeln) { st in
-                            Chip(label: Folgenwahl.name(st), selected: staffel == st.id) {
-                                Task { await zeigeStaffel(st.id) }
-                            }
-                        }
-                    }
-                }
+                staffelWahl
             } else if let einzige = staffeln.first {
-                Text(Folgenwahl.name(einzige)).font(.headline)
+                Text(Staffelleiste.name(einzige)).font(.headline)
             }
             if staffelGesehenGeht, let gewaehlt = staffeln.first(where: { $0.id == staffel }),
                gewaehlt.seasonNo != nil, !episodes.isEmpty {
@@ -359,6 +360,50 @@ struct DetailView: View {
                         if episode.id != episodes.last?.id {
                             Divider().overlay(Theme.hairline)
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var staffelWahl: some View {
+        let art = Staffelleiste.art(staffeln)
+        if art == .auswahl {
+            HStack(spacing: 12) {
+                Text("Staffeln").font(.headline)
+                Picker("Staffel wählen", selection: Binding(
+                    get: { staffel ?? "" },
+                    set: { id in Task { await zeigeStaffel(id) } })) {
+                    ForEach(staffeln) { st in Text(Staffelleiste.name(st)).tag(st.id) }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                Text(Staffelleiste.anzahl(staffeln)).font(.caption).foregroundStyle(Theme.label2)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                if art == .zahlen {
+                    Text("Staffeln").font(.headline)
+                }
+                ScrollViewReader { leiste in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(staffeln) { st in
+                                Chip(label: Staffelleiste.knopf(st, art: art), selected: staffel == st.id) {
+                                    Task { await zeigeStaffel(st.id) }
+                                }
+                                .id(st.id)
+                                .accessibilityLabel(Staffelleiste.name(st))
+                            }
+                        }
+                        .padding(.horizontal, 1)
+                    }
+                    // Die gewählte Staffel rückt ins Sichtfeld — auch die
+                    // zwölfte bei einer langen Serie.
+                    .onAppear { if let staffel { leiste.scrollTo(staffel, anchor: .center) } }
+                    .onChange(of: staffel) { _, neu in
+                        if let neu { withAnimation { leiste.scrollTo(neu, anchor: .center) } }
                     }
                 }
             }
@@ -424,7 +469,7 @@ struct DetailView: View {
         do {
             let fresh = try await session.client.item(itemId)
             detail = fresh
-            backdrop = await session.client.artworkURL(for: fresh.item, wide: true)
+            backdrop = await session.client.artworkURL(for: fresh.item, wide: true, breite: Bildbreite.kopf)
             if let file = fresh.playable {
                 plan = (try? await session.client.plan(fileId: file.id))?.plan
             }
@@ -443,24 +488,39 @@ struct DetailView: View {
         if staffel == id { episodes = folgen }
     }
 
+    /// Den Knopf sofort umstellen, wie im Browser — nicht erst, wenn die
+    /// ganze Seite neu geladen ist. Schlägt es fehl, lädt `load` den
+    /// wahren Stand zurück.
+    private func sofort(_ aendern: (inout Item) -> Void) {
+        guard var d = detail else { return }
+        aendern(&d.item)
+        detail = d
+    }
+
     private func toggleList(_ item: Item) async {
+        let neu = !item.isOnList
+        sofort { $0.onList = neu }
         do {
-            if item.isOnList { try await session.client.removeFromWatchlist(item.id) }
-            else { try await session.client.addToWatchlist(item.id) }
+            if neu { try await session.client.addToWatchlist(item.id) }
+            else { try await session.client.removeFromWatchlist(item.id) }
+            session.standGeaendert()
         } catch {
             aktionsFehler = Session.text(error)
+            await load()
         }
-        await load()
     }
 
     private func toggleFavorit(_ item: Item) async {
+        let neu = !item.isFavorite
+        sofort { $0.favorite = neu }
         do {
-            if item.isFavorite { try await session.client.removeFavorite(item.id) }
-            else { try await session.client.addFavorite(item.id) }
+            if neu { try await session.client.addFavorite(item.id) }
+            else { try await session.client.removeFavorite(item.id) }
+            session.standGeaendert()
         } catch {
             aktionsFehler = Session.text(error)
+            await load()
         }
-        await load()
     }
 
     /// Bei einer Serie heisst „gesehen": alle Folgen.
@@ -472,9 +532,18 @@ struct DetailView: View {
     }
 
     private func toggleSeen(_ item: Item) async {
+        let neu = !item.isSeen
+        sofort {
+            $0.finished = neu
+            if neu { $0.resumeMs = 0; $0.progress = 0 }
+        }
+        if item.kind == "series" {
+            episodes = episodes.map { var f = $0; f.finished = neu; return f }
+        }
         do {
-            if item.isSeen { try await session.client.clearFinished(item.id) }
-            else { try await session.client.markFinished(item.id) }
+            if neu { try await session.client.markFinished(item.id) }
+            else { try await session.client.clearFinished(item.id) }
+            session.standGeaendert()
         } catch {
             aktionsFehler = Session.text(error)
         }
@@ -499,9 +568,43 @@ struct DetailView: View {
     }
 
     private func folgeGesehen(_ folge: Item) async {
+        let neu = !folge.isSeen
+        if let i = episodes.firstIndex(where: { $0.id == folge.id }) {
+            episodes[i].finished = neu
+            if neu { episodes[i].progress = 0; episodes[i].resumeMs = 0 }
+        }
+        var davorOffen = false
         do {
-            if folge.isSeen { try await session.client.clearFinished(folge.id) }
-            else { try await session.client.markFinished(folge.id) }
+            if neu { try await session.client.markFinished(folge.id) }
+            else { try await session.client.clearFinished(folge.id) }
+            session.standGeaendert()
+            if neu { davorOffen = await nochOffenDavor(folge) }
+        } catch {
+            aktionsFehler = Session.text(error)
+        }
+        await load()
+        // „Bis hier gesehen" ist der häufige Fall, wenn man eine Serie
+        // anderswo angefangen hat — einmal nachfragen.
+        if davorOffen { vorherFrage = folge }
+    }
+
+    /// Liegt vor `folge` noch Ungesehenes — in ihrer Staffel oder in einer
+    /// früheren (ohne Specials)?
+    private func nochOffenDavor(_ folge: Item) async -> Bool {
+        if Titelseite.davorOffen(folge, in: episodes) { return true }
+        guard let nr = folge.seasonNo, nr > 1 else { return false }
+        for st in staffeln {
+            guard let s = st.seasonNo, s > 0, s < nr else { continue }
+            let folgen = (try? await session.client.children(of: st.id)) ?? []
+            if folgen.contains(where: { !$0.isSeen }) { return true }
+        }
+        return false
+    }
+
+    private func bisHier(_ folge: Item) async {
+        do {
+            try await session.client.markFinishedBisHier(folge.id)
+            session.standGeaendert()
         } catch {
             aktionsFehler = Session.text(error)
         }
@@ -510,12 +613,13 @@ struct DetailView: View {
 
     private func rate(_ item: Item, stars: Int) async {
         let shares = session.me?.prefs["shareRatings"] == "1"
+        sofort { $0.myRating = stars }
         do {
             try await session.client.rate(item.id, stars: stars, shared: shares)
         } catch {
             aktionsFehler = Session.text(error)
+            await load()
         }
-        await load()
     }
 }
 
@@ -604,7 +708,7 @@ struct MitwirkenderBild: View {
         .clipShape(Circle())
         .task(id: person.bild) {
             guard let art = person.bildArt else { url = nil; return }
-            url = await session.client.artworkURL(itemId: itemId, kind: art)
+            url = await session.client.artworkURL(itemId: itemId, kind: art, breite: Bildbreite.stufe(size * 3))
         }
     }
 }
@@ -670,7 +774,7 @@ struct EpisodeRow: View {
         }
         .padding(.vertical, 8)
         .task {
-            thumb = await session.client.artworkURL(for: episode, wide: true)
+            thumb = await session.client.artworkURL(for: episode, wide: true, breite: Bildbreite.stufe(256))
         }
     }
 }

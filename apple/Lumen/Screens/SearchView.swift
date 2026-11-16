@@ -37,7 +37,10 @@ struct SuchErgebnisse: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            if let ergebnis, geladenFuer == query.trimmingCharacters(in: .whitespacesAndNewlines) {
+            // Beim Tippen bleiben die letzten Treffer stehen, bis die neuen
+            // da sind — statt bei jeder Taste eine Ladeanzeige (wie im
+            // Browser). „Nichts gefunden" gilt nur für die aktuelle Eingabe.
+            if let ergebnis, geladenFuer == query.trimmingCharacters(in: .whitespacesAndNewlines) || !ergebnis.leer {
                 if ergebnis.hatReihenOderSammlungen {
                     ReihenUndSammlungenReihe(reihen: ergebnis.reihen ?? [], sammlungen: ergebnis.sammlungen ?? [])
                 }

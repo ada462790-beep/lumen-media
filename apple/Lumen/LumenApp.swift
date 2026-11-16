@@ -17,6 +17,7 @@ struct LumenApp: App {
         // Bildschirm sie, bevor der Server geantwortet hat.
         Sprache.setzen(Sprache.beimStart, merken: false)
         _session = State(initialValue: Session())
+        Bildspeicher.einrichten()
     }
     /// Hell, dunkel oder wie das Gerät — wie im Browser gilt die Wahl für
     /// dieses Gerät, nicht fürs Konto.
@@ -49,9 +50,16 @@ struct LumenApp: App {
                         session.pendingInvite = code
                     }
                 }
+                #if os(macOS)
+                // Kleiner wird das Fenster nicht: darunter schnitt die
+                // Seitenleiste die Titelseite ab, und die Knöpfe im Kopf
+                // brachen in drei Zeilen um.
+                .frame(minWidth: 860, minHeight: 560)
+                #endif
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 820)
+        .windowResizability(.contentMinSize)
         .commands { LumenBefehle() }
         #endif
 

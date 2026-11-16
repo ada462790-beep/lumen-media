@@ -870,7 +870,7 @@ struct FolgenZeile: View {
                             + (folge.isSeen ? ", " + String(localized: "gesehen", bundle: .lumen, locale: .lumen) : "")
                             + (aktuell ? ", " + String(localized: "läuft", bundle: .lumen, locale: .lumen) : ""))
         .task(id: folge.id) {
-            bild = await session.client.artworkURL(for: folge, wide: true)
+            bild = await session.client.artworkURL(for: folge, wide: true, breite: Bildbreite.stufe(400))
         }
     }
 }
@@ -937,7 +937,7 @@ struct UpNextCard: View {
         .task(id: folge.naechster?.id) {
             guard let naechster = folge.naechster else { bild = nil; return }
             // Ein Standbild aus der Folge selbst, nicht das Poster der Serie.
-            bild = await session.client.artworkURL(itemId: naechster.id, kind: "frame")
+            bild = await session.client.artworkURL(itemId: naechster.id, kind: "frame", breite: Bildbreite.stufe(600))
         }
     }
 }

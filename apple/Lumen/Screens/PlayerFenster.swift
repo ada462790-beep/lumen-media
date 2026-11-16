@@ -42,6 +42,8 @@ extension Notification.Name {
     static let lumenPlayerZu = Notification.Name("org.lumen.player.zu")
     /// ⌘F aus dem Menü des Mac.
     static let lumenSuchen = Notification.Name("org.lumen.suchen")
+    /// ⌘1 … ⌘6 aus dem Menü „Gehe zu" des Mac; `object` ist das Ziel.
+    static let lumenGeheZu = Notification.Name("org.lumen.gehezu")
 }
 
 /// Die Kennung des Player-Fensters am Mac.
@@ -109,6 +111,15 @@ struct LumenBefehle: Commands {
             }
             .keyboardShortcut("f")
         }
+        // Wie die Seitenleiste, mit der Tastatur: ⌘1 Startseite, ⌘2 Filme …
+        CommandMenu("Gehe zu") {
+            geheZu(Text("Startseite"), "home", "1")
+            geheZu(Text("Filme"), "movies", "2")
+            geheZu(Text("Serien"), "series", "3")
+            geheZu(Text("Merkliste"), "watchlist", "4")
+            geheZu(Text("Filmreihen"), "collections", "5")
+            geheZu(Text("Suchen"), "search", "6")
+        }
         CommandMenu("Wiedergabe") {
             Button("Abspielen/Pause") { wiedergabe?.togglePlay() }
                 .keyboardShortcut(.space, modifiers: [])
@@ -120,6 +131,15 @@ struct LumenBefehle: Commands {
                 .keyboardShortcut(.rightArrow, modifiers: [])
                 .disabled(wiedergabe == nil)
         }
+    }
+
+    private func geheZu(_ titel: Text, _ ziel: String, _ taste: KeyEquivalent) -> some View {
+        Button {
+            NotificationCenter.default.post(name: .lumenGeheZu, object: ziel)
+        } label: {
+            titel
+        }
+        .keyboardShortcut(taste)
     }
 }
 #endif

@@ -25,6 +25,7 @@ struct LumenTVApp: App {
         // Zuerst die Sprache, die zuletzt galt (siehe `Sprache`).
         Sprache.setzen(Sprache.beimStart, merken: false)
         _session = State(initialValue: Session())
+        Bildspeicher.einrichten()
     }
 
     var body: some Scene {
@@ -258,7 +259,8 @@ struct TVHomeView: View {
                     if let item = focused ?? rows.first?.items.first {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(item.title).font(.system(size: 62, weight: .bold)).lineLimit(2)
-                            Text(item.subtitleLine).font(.title3).foregroundStyle(Theme.label2)
+                            Text([item.subtitleLine, Wertungen.kurz(item) ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.title3).foregroundStyle(Theme.label2)
                             if let overview = item.overview, !overview.isEmpty {
                                 Text(overview).font(.body).foregroundStyle(Theme.label2)
                                     .lineLimit(3).frame(maxWidth: 900, alignment: .leading)
@@ -326,8 +328,13 @@ struct TVHomeView: View {
         .onAppear {
             if geladen { Task { await ladeListen() } }
         }
+        // Zurück aus dem Player oder nach einem Haken: „Weiterschauen" gleich neu.
+        .onChange(of: session.standAenderung) { Task { await laden() } }
         .fullScreenCover(item: $playing) { s in
             TVPlayerView(item: s.item, vonVorn: s.vonVorn).environment(session)
+        }
+        .onChange(of: playing == nil) { _, zu in
+            if zu { session.standGeaendert() }
         }
     }
 
@@ -337,15 +344,19 @@ struct TVHomeView: View {
 
     private func laden() async {
         fehler = nil
+        // Startseite und Filmreihen gleichzeitig; für die Reihe genügen
+        // zwölf Filmreihen mit mindestens zwei Filmen (?limit=12).
+        let client = session.client
+        async let filmreihen = try? client.collections(limit: 12)
         do {
             // Leere Reihen gar nicht erst zeigen: eine Überschrift ohne
             // Karten ist ein Fokus-Loch.
-            rows = try await session.client.home().rows.filter { !$0.items.isEmpty }
+            rows = Startseite.aufbereitet(try await client.home().rows)
         } catch {
             if !APIClient.istAbbruch(error) { fehler = Session.text(error) }
         }
         await ladeListen()
-        reihen = (try? await session.client.collections()) ?? []
+        reihen = await filmreihen ?? []
         geladen = true
         // Der Zähler der Neuigkeiten in der Leiste — wie im Browser
         // nebenbei aufgefrischt.
@@ -373,7 +384,7 @@ struct TVBackdrop: View {
         .animation(.easeInOut(duration: 0.4), value: url)
         .task(id: item?.id) {
             guard let item else { url = nil; return }
-            url = await session.client.artworkURL(for: item, wide: true)
+            url = await session.client.artworkURL(for: item, wide: true, breite: Bildbreite.kopf)
         }
     }
 }
@@ -417,6 +428,9 @@ struct TVRail<Menu: View>: View {
                 .padding(.vertical, 24)
             }
         }
+        // Eine Reihe ist ein Fokus-Bereich: nach unten geht es in die
+        // nächste Reihe, auch wenn sie kürzer ist und rechts nichts steht.
+        .focusSection()
     }
 }
 
@@ -446,7 +460,7 @@ struct TVCard<Menu: View>: View {
         }
         .buttonStyle(.card)
         .contextMenu { menu() }
-        .task { url = await session.client.artworkURL(for: item) }
+        .task { url = await session.client.artworkURL(for: item, breite: Bildbreite.karte) }
         .task(id: vorschauAn) {
             guard vorschauAn else { vorschau = nil; return }
             try? await Task.sleep(for: .seconds(1))

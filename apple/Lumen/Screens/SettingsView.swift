@@ -78,7 +78,11 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("Ton", selection: sprache(Sprachwahl.prefTon, leer: "")) {
+                // „Profilsprache" (Standard) oder „Originalton" — wie im
+                // Browser; eine feste Sprache geht vor.
+                Picker("Ton", selection: Binding(
+                    get: { Sprachwahl.tonWert(prefs) },
+                    set: { neu in Task { await session.prefsSetzen(Sprachwahl.tonSetzen(neu)) } })) {
                     ForEach(Sprachwahl.ton) { w in Text(w.name).tag(w.wert) }
                 }
                 Picker("Untertitel", selection: sprache(Sprachwahl.prefUntertitel, leer: "aus")) {
@@ -470,6 +474,8 @@ struct WishesView: View {
     @State private var problem: String?
     /// Löschen oder austreten: erst nach einer Rückfrage.
     @State private var weg: Wish?
+    /// Vorschläge von TMDb zur Eingabe — wie im Browser.
+    @State private var vorschlaege: [WunschVorschlag] = []
 
     var body: some View {
         List {
@@ -487,6 +493,12 @@ struct WishesView: View {
                 }
             } footer: {
                 Text("Der Besitzer sieht den Titel und wer ihn gewünscht hat — sonst nichts.")
+            }
+
+            if !vorschlaege.isEmpty {
+                Section("Vorschläge") {
+                    ForEach(vorschlaege) { v in vorschlagZeile(v) }
+                }
             }
 
             ForEach(wishes) { wish in
@@ -545,6 +557,56 @@ struct WishesView: View {
         .problemAlert($problem)
         .task { await load() }
         .refreshable { await load() }
+        // Beim Tippen: kurz warten, ältere Anfragen verfallen (task(id:)).
+        .task(id: newTitle) {
+            let text = newTitle.trimmingCharacters(in: .whitespaces)
+            guard text.count >= 2 else { vorschlaege = []; return }
+            try? await Task.sleep(for: .milliseconds(300))
+            if Task.isCancelled { return }
+            let neu = (try? await session.client.wunschVorschlaege(text))?.vorschlaege ?? []
+            if !Task.isCancelled { vorschlaege = Array(neu.prefix(8)) }
+        }
+    }
+
+    @ViewBuilder
+    private func vorschlagZeile(_ v: WunschVorschlag) -> some View {
+        let inhalt = HStack(spacing: 12) {
+            WunschPoster(vorschlag: v)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(v.titel).lineLimit(2)
+                Text(v.zeile).font(.caption).foregroundStyle(Theme.label2)
+            }
+            Spacer()
+            if v.schonDa {
+                Text("Schon da").font(.caption.weight(.medium)).foregroundStyle(Theme.good)
+            } else if v.schonGewuenscht {
+                Text("Schon gewünscht").font(.caption.weight(.medium)).foregroundStyle(Theme.label2)
+            } else {
+                Image(systemName: "plus.circle").foregroundStyle(Theme.accent)
+            }
+        }
+        if v.schonDa, let itemId = v.itemId {
+            NavigationLink { DetailView(itemId: itemId) } label: { inhalt }
+        } else {
+            Button {
+                Task { await wuenschen(v) }
+            } label: { inhalt }
+            .buttonStyle(.plain)
+            .disabled(v.schonGewuenscht)
+        }
+    }
+
+    private func wuenschen(_ v: WunschVorschlag) async {
+        hinweis = nil
+        do {
+            let w = try await session.client.wish(vorschlag: v)
+            hinweis = w.rueckmeldung
+            newTitle = ""
+            vorschlaege = []
+        } catch {
+            problem = Session.text(error)
+        }
+        await load()
     }
 
     private var wegTitel: String {
@@ -599,5 +661,18 @@ struct WishesView: View {
             problem = Session.text(error)
         }
         await load()
+    }
+}
+
+/// Das kleine Poster eines Wunsch-Vorschlags.
+struct WunschPoster: View {
+    @Environment(Session.self) private var session
+    let vorschlag: WunschVorschlag
+    @State private var url: URL?
+
+    var body: some View {
+        Artwork(url: url, title: "", corner: 4)
+            .frame(width: 34, height: 51)
+            .task(id: vorschlag.id) { url = await session.client.wunschPosterURL(vorschlag) }
     }
 }

@@ -54,6 +54,7 @@ struct TVListenRail: View {
                 .padding(.vertical, 24)
             }
         }
+        .focusSection()
     }
 
     /// Bei fremden Listen, wem sie gehört — sonst wüsste man nicht, warum
@@ -80,9 +81,39 @@ struct TVReihenRail: View {
                         }
                         .buttonStyle(.card)
                     }
+                    // Am Ende: alle Filmreihen — die Startseite zeigt nur
+                    // zwölf, und nur solche mit mindestens zwei Filmen.
+                    NavigationLink {
+                        TVFilmreihenView()
+                    } label: {
+                        TVAlleLabel(titel: String(localized: "Alle Filmreihen", bundle: .lumen, locale: .lumen))
+                    }
+                    .buttonStyle(.card)
                 }
                 .padding(.vertical, 24)
             }
+        }
+        .focusSection()
+    }
+}
+
+/// Die letzte Karte einer Reihe: „Alle …" mit Pfeil.
+struct TVAlleLabel: View {
+    let titel: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Theme.surface)
+                .frame(width: 260, height: 390)
+                .overlay(
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 64, weight: .light))
+                        .foregroundStyle(Theme.label2))
+            Text(titel).font(.body).lineLimit(1)
+                .frame(width: 260, alignment: .leading)
+            Text(" ").font(.caption)
+                .frame(width: 260, alignment: .leading)
         }
     }
 }
@@ -112,15 +143,15 @@ struct TVStapelLabel: View {
         }
         .task(id: reihe?.id ?? sammlung?.id ?? bild?.id) {
             if let reihe {
-                url = await session.client.reiheBildURL(reihe)
+                url = await session.client.reiheBildURL(reihe, breite: Bildbreite.karte)
                 return
             }
             if let sammlung {
-                url = await session.client.sammlungBildURL(sammlung)
+                url = await session.client.sammlungBildURL(sammlung, breite: Bildbreite.karte)
                 return
             }
             guard let bild else { url = nil; return }
-            url = await session.client.artworkURL(for: bild)
+            url = await session.client.artworkURL(for: bild, breite: Bildbreite.karte)
         }
     }
 }
