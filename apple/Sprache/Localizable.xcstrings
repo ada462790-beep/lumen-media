@@ -1448,6 +1448,34 @@
         }
       }
     },
+    "%lld ungelesen" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ungelesen"
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ungelesen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld unread"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld unread"
+          }
+        }
+      }
+    },
     "%lld von %lld eingelesen" : {
       "localizations" : {
         "de" : {

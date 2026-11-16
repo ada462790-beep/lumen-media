@@ -54,11 +54,15 @@ struct TVShell: View {
                 .tabItem { Label("Suche", systemImage: "magnifyingglass") }
                 .tag(Reiter.suche)
             NavigationStack { TVProfilView() }
-                // „Ich" wie im Browser und auf Android, mit dem Zähler der
-                // eigenen ungelesenen Neuigkeiten als Abzeichen — vorher
-                // stand hier der Name mit „· 1", etwa „Admin · 1".
-                .tabItem { Label("Ich", systemImage: "person.crop.circle.fill") }
-                .badge(ungelesen)
+                // „Ich" wie im Browser und auf Android, mit einem Punkt für
+                // die eigenen ungelesenen Neuigkeiten — vorher stand hier
+                // der Name mit „· 1", etwa „Admin · 1".
+                // Ein Zähler (`badge`) kennt die Leiste des Apple TV nicht —
+                // der Punkt am Symbol sagt dasselbe.
+                .tabItem {
+                    Label("Ich", systemImage: ungelesen > 0 ? "person.crop.circle.badge" : "person.crop.circle")
+                        .accessibilityValue(ungelesen > 0 ? Text("\(ungelesen) ungelesen") : Text(""))
+                }
                 .tag(Reiter.ich)
         }
         .onChange(of: reiter) { Self.zuletzt = reiter }
