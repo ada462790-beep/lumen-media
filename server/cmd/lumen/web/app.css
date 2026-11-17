@@ -280,6 +280,24 @@ button.row:hover, .orow-link:focus-visible { background:rgba(255,255,255,.05) }
 .reihe-karte:hover .reihe-blatt--2, .reihe-karte:focus-visible .reihe-blatt--2 { transform:translateX(12%) scale(.88) }
 .reihe-karte:focus-visible .reihe-blatt--0 { box-shadow:0 0 0 3px #fff, 0 10px 26px rgba(0,0,0,.45) }
 
+/* ---- Filme und Serien: dieselbe ruhige Bewegung wie bei den Filmreihen ---
+   Das Plakat hebt sich ein wenig, der Schatten wird tiefer, und das Bild
+   rückt im Rahmen sanft näher. Der Rahmen selbst wächst nicht, damit nichts
+   am Rand der Reihe abgeschnitten wird (die Reihe hat oben nur 8px Luft). */
+.poster .thumb { transition:transform .35s var(--ease), box-shadow .35s var(--ease) }
+.poster .thumb .art-img, .poster .thumb .art-none { transition:transform .5s var(--ease), filter .35s var(--ease) }
+.poster:hover .thumb, .poster:focus-visible .thumb { transform:translateY(-4px); box-shadow:0 14px 30px rgba(0,0,0,.5) }
+.poster:focus-visible .thumb { box-shadow:0 0 0 3px var(--fokus, #fff), 0 14px 30px rgba(0,0,0,.5) }
+.poster--hier:hover .thumb { box-shadow:0 0 0 2px var(--accent), 0 14px 30px rgba(0,0,0,.5) }
+.poster:hover .thumb .art-img, .poster:focus-visible .thumb .art-img,
+.poster:hover .thumb .art-none, .poster:focus-visible .thumb .art-none { transform:scale(1.06); filter:brightness(1.06) }
+.poster:active .thumb { transform:translateY(-1px); transition-duration:.12s }
+@media (prefers-reduced-motion:reduce) {
+  .poster .thumb, .poster .thumb .art-img, .poster .thumb .art-none { transition:none }
+  .poster:hover .thumb .art-img, .poster:focus-visible .thumb .art-img,
+  .poster:hover .thumb .art-none, .poster:focus-visible .thumb .art-none { transform:none }
+}
+
 /* ---- Listen ------------------------------------------------------------- */
 .listen-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(240px,100%),1fr)); gap:26px 20px }
 .liste-karte { width:auto }
