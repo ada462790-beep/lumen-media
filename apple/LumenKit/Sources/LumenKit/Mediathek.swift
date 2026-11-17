@@ -472,6 +472,22 @@ public enum Titelseite {
         return geordnet.filter { ($0.seasonNo ?? 0) != 0 } + geordnet.filter { ($0.seasonNo ?? 0) == 0 }
     }
 
+    /// Welche Staffel offen ist, wenn eine Serie aufgeht — wie im Browser
+    /// (app.js, Fall „detail"): die zuletzt gewählte dieser Serie
+    /// (`gemerkt`), sonst die Staffel der nächsten Folge (`weiterParentId`,
+    /// GET /items/{id}/weiterschauen), sonst die erste. Nicht immer
+    /// Staffel 1, wenn man längst in Staffel 4 ist.
+    ///
+    /// Der Server nennt nie eine Folge der Specials, und ist alles gesehen,
+    /// die erste Folge überhaupt — dann ist es die erste reguläre Staffel.
+    /// Eine Kennung, die es unter `staffeln` nicht gibt, zählt nicht.
+    public static func startStaffel(_ staffeln: [Item], weiterParentId: String?, gemerkt: String? = nil) -> Item? {
+        let geordnet = Self.staffeln(staffeln)
+        if let gemerkt, let st = geordnet.first(where: { $0.id == gemerkt }) { return st }
+        if let weiterParentId, let st = geordnet.first(where: { $0.id == weiterParentId }) { return st }
+        return geordnet.first
+    }
+
     /// „Weiter bei 12:34" oder „Ansehen" — für Filme und Folgen.
     public static func abspielen(_ item: Item) -> String {
         item.resumeSeconds > weiterAb

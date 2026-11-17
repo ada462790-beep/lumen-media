@@ -58,7 +58,7 @@ struct PlaylistsView: View {
             }
         }
         .overlay { Loading(loading: loading, error: error, retry: load) }
-        .navigationTitle("Listen")
+        .navigationTitle(String(localized: "Listen", bundle: .lumen, locale: .lumen))
         .alert("Neue Liste", isPresented: $askName) {
             TextField("Name", text: $newName)
             Button("Anlegen") { Task { await create() } }
@@ -454,7 +454,7 @@ struct AddToPlaylistSheet: View {
                 Loading(loading: wahl?.loading ?? true, error: wahl?.error,
                         retry: { if let wahl { await wahl.load() } })
             }
-            .navigationTitle("Zur Liste")
+            .navigationTitle(String(localized: "Zur Liste", bundle: .lumen, locale: .lumen))
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

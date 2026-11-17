@@ -38,12 +38,28 @@ struct TVDetailView: View {
     @State private var staffeln: [Item] = []
     @State private var staffel: String?
     @State private var folgen: [Item] = []
+    /// Bei einer Serie die Folge, die „Weiterschauen" startet (der Server
+    /// weiss sie): ihre Staffel ist offen, sie steht in der Leiste im Bild,
+    /// und wer hinunter in die Folgen geht, landet auf ihr.
+    @State private var weiter: Item?
+    /// Fokus in den Staffeln und Folgen — für den Startpunkt beim Hineingehen.
+    @FocusState private var staffelFokus: String?
+    @FocusState private var folgenFokus: String?
     /// Ob der Server „gesehen" für eine Staffel kennt — sonst kein Knopf.
     @State private var staffelGesehenGeht = true
     /// Nach dem Haken an einer späten Folge: auch die davor?
     @State private var vorherFrage: Item?
+    /// Welcher der Knöpfe oben den Fokus hat — für die Zeile darunter.
+    @FocusState private var knopfFokus: Knopf?
 
     private var item: Item? { detail?.item ?? vorschau }
+
+    /// Die Folge, auf der der Fokus beim Hineingehen landet: die nächste,
+    /// wenn ihre Staffel offen ist.
+    private var naechsteFolge: String? {
+        guard let weiter, weiter.parentId == staffel, folgen.contains(where: { $0.id == weiter.id }) else { return nil }
+        return weiter.id
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -133,7 +149,8 @@ struct TVDetailView: View {
             Text(zeile(item)).font(.title3).foregroundStyle(Theme.label2)
             // 4K, Dolby Vision, 5.1, Sprachen, Untertitel —
             // kleine umrandete Abzeichen wie im Player.
-            TechnikZeile(abzeichen: Technik.zeile(item: item, file: detail?.playable, plan: plan),
+            TechnikZeile(abzeichen: Technik.zeile(item: item, file: detail?.playable, plan: plan,
+                                                 fassungen: Fassungen.liste(detail?.files ?? [])),
                          gross: true)
                 .padding(.top, 4)
             if let overview = item.overview, !overview.isEmpty {
@@ -152,80 +169,138 @@ struct TVDetailView: View {
 
     /// Abspielen, von vorn, zur Liste, merken, gesehen. Alles in einer
     /// Zeile, damit der Fokus nur nach rechts und links muss.
+    ///
+    /// Wie in der TV-App von Apple: Abspielen mit Text, der Rest als runde
+    /// Symbole — mit Text brachen „Merken" und „Ganze Serie gesehen" auf
+    /// drei Meter Abstand in zwei Zeilen um. Was ein Symbol tut, steht
+    /// darunter, sobald es den Fokus hat; „2 Sprachen" steht dort, solange
+    /// Abspielen ihn hat.
     @ViewBuilder
     private func knoepfe(_ item: Item) -> some View {
-        // Mehrere Fassungen desselben Films: „Abspielen" startet die
-        // Standard-Fassung, eine andere wählt man im Player unter „Qualität".
-        HStack(spacing: 24) {
-            // Eine Serie hat selbst keine Datei — der Player sucht ihre
-            // erste offene Folge. Ein Film braucht eine, die da ist.
-            if item.kind == "series" {
-                Button {
-                    playing = Abspielstart(item: item)
-                } label: {
-                    Label(Titelseite.serieAbspielen(item), systemImage: "play.fill")
-                }
-            } else if let detail, detail.playable != nil {
-                // Mehrere Fassungen (Sprachen, Qualitäten): „Abspielen"
-                // spielt gleich die erste, gewählt wird im Player.
-                let hinweis = Fassungen.hinweis(Fassungen.liste(detail.files))
-                Button {
-                    playing = Abspielstart(item: item)
-                } label: {
-                    Label(hinweis.map { Titelseite.abspielen(item) + " · " + $0 } ?? Titelseite.abspielen(item),
-                          systemImage: "play.fill")
-                }
-                if Titelseite.kannVonVorn(item) {
+        let hinweis = detail.flatMap { Fassungen.hinweis(Fassungen.liste($0.files)) }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 24) {
+                // Eine Serie hat selbst keine Datei — der Player sucht ihre
+                // erste offene Folge. Ein Film braucht eine, die da ist.
+                if item.kind == "series" {
                     Button {
-                        playing = Abspielstart(item: item, vonVorn: true)
+                        playing = Abspielstart(item: item)
                     } label: {
-                        Label("Von vorn", systemImage: "backward.end")
+                        Label(Titelseite.serieAbspielen(item), systemImage: "play.fill")
+                            .lineLimit(1).fixedSize()
+                    }
+                    .focused($knopfFokus, equals: .abspielen)
+                } else if let detail, detail.playable != nil {
+                    // Mehrere Fassungen (Sprachen, Qualitäten): „Abspielen"
+                    // spielt gleich die erste, gewählt wird im Player.
+                    Button {
+                        playing = Abspielstart(item: item)
+                    } label: {
+                        Label(Titelseite.abspielen(item), systemImage: "play.fill")
+                            .lineLimit(1).fixedSize()
+                    }
+                    .focused($knopfFokus, equals: .abspielen)
+                    .accessibilityHint(hinweis ?? "")
+                    if Titelseite.kannVonVorn(item) {
+                        symbolKnopf(String(localized: "Von vorn", bundle: .lumen, locale: .lumen),
+                                    symbol: "backward.end", fokus: .vonVorn) {
+                            playing = Abspielstart(item: item, vonVorn: true)
+                        }
                     }
                 }
-            }
 
-            // Listen nehmen Filme und Serien auf, keine einzelnen Folgen.
-            if item.kind == "movie" || item.kind == "series" {
-                NavigationLink {
-                    TVListenwahlView(itemId: item.id, title: item.title)
-                } label: {
-                    Label("Zur Liste", systemImage: "text.badge.plus")
+                // Listen nehmen Filme und Serien auf, keine einzelnen Folgen.
+                if item.kind == "movie" || item.kind == "series" {
+                    NavigationLink {
+                        TVListenwahlView(itemId: item.id, title: item.title)
+                    } label: {
+                        symbolBild("text.badge.plus")
+                    }
+                    .focused($knopfFokus, equals: .liste)
+                    .accessibilityLabel(Text("Zur Liste"))
                 }
-            }
 
-            Button {
-                Task { await merken(item) }
-            } label: {
-                Label(item.isOnList ? "Aus der Merkliste" : "Merken",
-                      systemImage: item.isOnList ? "bookmark.fill" : "bookmark")
-            }
-
-            // Das Herz: was einem gefallen hat — anders als die
-            // Merkliste, die sammelt, was man noch sehen will.
-            if item.kind == "movie" || item.kind == "series" {
-                Button {
-                    Task { await favorit(item) }
-                } label: {
-                    // Auf drei Meter Abstand sagt das gefüllte Herz mehr als
-                    // eine Farbe; der Text bleibt, damit der Knopf einen Namen hat.
-                    Label("Favorit", systemImage: item.isFavorite ? "heart.fill" : "heart")
+                symbolKnopf(item.isOnList ? String(localized: "Aus der Merkliste", bundle: .lumen, locale: .lumen)
+                                          : String(localized: "Merken", bundle: .lumen, locale: .lumen),
+                            symbol: item.isOnList ? "bookmark.fill" : "bookmark", fokus: .merken,
+                            gewaehlt: item.isOnList) {
+                    Task { await merken(item) }
                 }
-                .accessibilityLabel(item.isFavorite ? "Aus den Favoriten" : "Zu den Favoriten")
-                .accessibilityAddTraits(item.isFavorite ? .isSelected : [])
-            }
 
-            Button {
-                Task { await gesehen(item) }
-            } label: {
+                // Das Herz: was einem gefallen hat — anders als die
+                // Merkliste, die sammelt, was man noch sehen will.
+                if item.kind == "movie" || item.kind == "series" {
+                    symbolKnopf(item.isFavorite ? String(localized: "Aus den Favoriten", bundle: .lumen, locale: .lumen)
+                                                : String(localized: "Zu den Favoriten", bundle: .lumen, locale: .lumen),
+                                symbol: item.isFavorite ? "heart.fill" : "heart", fokus: .favorit,
+                                gewaehlt: item.isFavorite) {
+                        Task { await favorit(item) }
+                    }
+                }
+
                 // Bei einer Serie heisst „gesehen": alle Folgen.
-                Label(item.kind == "series"
-                        ? (item.isSeen ? "Serie nicht gesehen" : "Ganze Serie gesehen")
-                        : (item.isSeen ? "Nicht gesehen" : "Gesehen"),
-                      systemImage: item.isSeen ? "checkmark.circle.fill" : "checkmark.circle")
+                symbolKnopf(item.kind == "series"
+                                ? (item.isSeen ? String(localized: "Serie nicht gesehen", bundle: .lumen, locale: .lumen)
+                                               : String(localized: "Ganze Serie gesehen", bundle: .lumen, locale: .lumen))
+                                : (item.isSeen ? String(localized: "Nicht gesehen", bundle: .lumen, locale: .lumen)
+                                               : String(localized: "Gesehen", bundle: .lumen, locale: .lumen)),
+                            symbol: item.isSeen ? "checkmark.circle.fill" : "checkmark.circle", fokus: .gesehen,
+                            gewaehlt: item.isSeen) {
+                    Task { await gesehen(item) }
+                }
             }
+            .font(.title3.weight(.semibold))
+            .focusSection()
+
+            // Der Name des Symbols im Fokus — eine Zeile, immer reserviert,
+            // damit darunter nichts springt.
+            Text(knopfText(item, hinweis: hinweis) ?? " ")
+                .font(.callout)
+                .foregroundStyle(Theme.label2)
+                .lineLimit(1)
+                .accessibilityHidden(true)
         }
-        .font(.title3.weight(.semibold))
-        .focusSection()
+    }
+
+    /// Welcher Knopf der Titelseite den Fokus hat.
+    enum Knopf: Hashable { case abspielen, vonVorn, liste, merken, favorit, gesehen }
+
+    /// Was unter der Zeile der Knöpfe steht.
+    private func knopfText(_ item: Item, hinweis: String?) -> String? {
+        switch knopfFokus {
+        case .abspielen?: return hinweis.map { String(localized: "\($0) – wählbar im Player", bundle: .lumen, locale: .lumen) }
+        case .vonVorn?: return String(localized: "Von vorn", bundle: .lumen, locale: .lumen)
+        case .liste?: return String(localized: "Zur Liste", bundle: .lumen, locale: .lumen)
+        case .merken?: return item.isOnList ? String(localized: "Aus der Merkliste", bundle: .lumen, locale: .lumen)
+                                            : String(localized: "Merken", bundle: .lumen, locale: .lumen)
+        case .favorit?: return item.isFavorite ? String(localized: "Aus den Favoriten", bundle: .lumen, locale: .lumen)
+                                               : String(localized: "Zu den Favoriten", bundle: .lumen, locale: .lumen)
+        case .gesehen?:
+            if item.kind == "series" {
+                return item.isSeen ? String(localized: "Serie nicht gesehen", bundle: .lumen, locale: .lumen)
+                                   : String(localized: "Ganze Serie gesehen", bundle: .lumen, locale: .lumen)
+            }
+            return item.isSeen ? String(localized: "Nicht gesehen", bundle: .lumen, locale: .lumen)
+                               : String(localized: "Gesehen", bundle: .lumen, locale: .lumen)
+        case nil: return hinweis
+        }
+    }
+
+    private func symbolBild(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.title3.weight(.semibold))
+            .frame(width: 44, height: 44)
+    }
+
+    /// Ein runder Knopf nur mit Symbol; der Name gilt für VoiceOver und
+    /// steht im Fokus unter der Zeile.
+    private func symbolKnopf(_ name: String, symbol: String, fokus: Knopf, gewaehlt: Bool = false,
+                             aktion: @escaping () -> Void) -> some View {
+        Button(action: aktion) { symbolBild(symbol) }
+            .buttonBorderShape(.circle)
+            .focused($knopfFokus, equals: fokus)
+            .accessibilityLabel(Text(name))
+            .accessibilityAddTraits(gewaehlt ? .isSelected : [])
     }
 
     // MARK: Besetzung
@@ -258,28 +333,32 @@ struct TVDetailView: View {
                 // eigener Fokus-Bereich, damit „nach unten" in die Folgen führt.
                 let art = Staffelleiste.art(staffeln)
                 ScrollViewReader { leiste in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 20) {
-                            ForEach(staffeln) { st in
-                                Button {
-                                    Task { await zeigeStaffel(st.id) }
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        if staffel == st.id { Image(systemName: "checkmark") }
-                                        Text(Staffelleiste.knopf(st, art: art))
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 20) {
+                                ForEach(staffeln) { st in
+                                    Button {
+                                        session.staffelMerken(serie: itemId, staffel: st.id)
+                                        Task { await zeigeStaffel(st.id) }
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            if staffel == st.id { Image(systemName: "checkmark") }
+                                            Text(Staffelleiste.knopf(st, art: art))
+                                        }
+                                        .font(.callout.weight(staffel == st.id ? .semibold : .regular))
                                     }
-                                    .font(.callout.weight(staffel == st.id ? .semibold : .regular))
+                                    .id(st.id)
+                                    .focused($staffelFokus, equals: st.id)
+                                    .accessibilityLabel(Staffelleiste.name(st))
+                                    .accessibilityAddTraits(staffel == st.id ? .isSelected : [])
                                 }
-                                .id(st.id)
-                                .accessibilityLabel(Staffelleiste.name(st))
-                                .accessibilityAddTraits(staffel == st.id ? .isSelected : [])
                             }
+                            .padding(.vertical, 16)
                         }
-                        .padding(.vertical, 16)
-                    }
-                    .onAppear { if let staffel { leiste.scrollTo(staffel, anchor: .center) } }
+                        .onAppear { if let staffel { leiste.scrollTo(staffel, anchor: .center) } }
                 }
                 .focusSection()
+                // Von den Knöpfen hinunter: auf die gewählte Staffel.
+                .defaultFocus($staffelFokus, staffel, priority: .userInitiated)
             }
             if folgen.isEmpty {
                 Text("In dieser Staffel liegt noch keine Folge.")
@@ -296,25 +375,34 @@ struct TVDetailView: View {
                     }
                     .font(.callout.weight(.semibold))
                 }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 40) {
-                        ForEach(folgen) { f in
-                            // Ein langer Druck: die Folge als gesehen
-                            // markieren, ohne sie abzuspielen.
-                            TVFolgenKarte(folge: f) { playing = Abspielstart(item: f) }
-                                .contextMenu {
-                                    Button {
-                                        Task { await gesehen(f) }
-                                    } label: {
-                                        Label(f.isSeen ? "Nicht gesehen" : "Gesehen",
-                                              systemImage: f.isSeen ? "checkmark.circle.fill" : "checkmark.circle")
+                ScrollViewReader { leiste in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 40) {
+                            ForEach(folgen) { f in
+                                // Ein langer Druck: die Folge als gesehen
+                                // markieren, ohne sie abzuspielen.
+                                TVFolgenKarte(folge: f) { playing = Abspielstart(item: f) }
+                                    .id(f.id)
+                                    .focused($folgenFokus, equals: f.id)
+                                    .contextMenu {
+                                        Button {
+                                            Task { await gesehen(f) }
+                                        } label: {
+                                            Label(f.isSeen ? "Nicht gesehen" : "Gesehen",
+                                                  systemImage: f.isSeen ? "checkmark.circle.fill" : "checkmark.circle")
+                                        }
                                     }
-                                }
+                            }
                         }
+                        .padding(.vertical, 24)
                     }
-                    .padding(.vertical, 24)
+                    // Die nächste Folge rückt ins Bild — der Fokus bleibt oben
+                    // auf „Abspielen", bis man hinuntergeht.
+                    .onAppear { if let id = naechsteFolge { leiste.scrollTo(id, anchor: .leading) } }
+                    .onChange(of: naechsteFolge) { _, id in if let id { leiste.scrollTo(id, anchor: .leading) } }
                 }
                 .focusSection()
+                .defaultFocus($folgenFokus, naechsteFolge, priority: .userInitiated)
             }
         }
     }
@@ -367,7 +455,15 @@ struct TVDetailView: View {
             }
             let geordnet = Titelseite.staffeln(neu.seasons ?? [])
             staffeln = geordnet
-            let ziel = geordnet.first { $0.id == staffel }?.id ?? geordnet.first?.id
+            if neu.item.kind == "series", !geordnet.isEmpty {
+                weiter = try? await session.client.weiterInSerie(itemId)
+            }
+            // Die gewählte Staffel bleibt beim Neuladen stehen. Beim ersten
+            // Laden wie im Browser: die zuletzt gewählte dieser Serie, sonst
+            // die der nächsten Folge, sonst die erste — nicht immer Staffel 1.
+            let ziel = geordnet.first { $0.id == staffel }?.id
+                ?? Titelseite.startStaffel(geordnet, weiterParentId: weiter?.parentId,
+                                           gemerkt: session.gemerkteStaffel(serie: itemId))?.id
             if let ziel { await zeigeStaffel(ziel) }
         } catch { self.error = Session.text(error) }
     }

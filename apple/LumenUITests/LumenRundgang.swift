@@ -93,6 +93,7 @@ final class LumenRundgang: Rundgang {
         // Serien mit Staffelwahl
         if bereich("serien", "^(Serien|Shows|TV Shows)$") {
             if schritt("serie-breaking-bad", "^Breaking Bad.*") {
+                staffelDerNaechstenFolge()
                 nachUnten()
                 foto("serie-folgen")
                 if schritt("serie-staffelwahl", "^(Staffel 1|Season 1|Staffel 01).*") {
@@ -113,6 +114,12 @@ final class LumenRundgang: Rundgang {
                 feld.typeText("Dark")
                 Thread.sleep(forTimeInterval: 3)
                 foto("suche-dark")
+                #if os(iOS)
+                // Die Tastatur wieder weg — sie lag sonst über der Leiste
+                // unten, und „Ich" liess sich nicht mehr tippen.
+                feld.typeText("\n")
+                Thread.sleep(forTimeInterval: 1)
+                #endif
             }
         }
 
@@ -122,14 +129,18 @@ final class LumenRundgang: Rundgang {
             foto("ich-unten")
             nachUnten(2)
             foto("ich-ganz-unten")
-            if schritt("einstellungen", "^(Einstellungen|Settings|Darstellung|Appearance).*") { zurueck() }
+            // Am iPhone steht „Einstellungen" unten unter „Ich"; an iPad
+            // und Mac ist „Profil" schon die Einstellungsseite — dort geht
+            // es eine Ebene tiefer, zu „Profil schützen".
+            let ziel = telefon ? "^(Einstellungen|Settings)$" : "^(Profil schützen|Protect profile).*"
+            if schritt("einstellungen", ziel) { zurueck() }
         }
 
         // Wiedergabe aus „Weiterschauen"
         if bereich("startseite-wiedergabe", "^(Startseite|Home)$") {
             if schritt("film-interstellar", "^Interstellar.*") {
                 if schritt("wiedergabe", "^(Weiterschauen|Fortsetzen|Weiter bei.*|Abspielen|Ansehen|Play|Resume.*|Continue.*)$",
-                           warten: 8) {
+                           warten: 12) {
                     #if os(iOS)
                     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
                     #endif

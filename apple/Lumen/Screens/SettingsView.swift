@@ -244,7 +244,7 @@ struct SettingsView: View {
                      + (session.hasFFmpeg ? "" : "\n\n" + String(localized: "FFmpeg fehlt auf dem Server, darum kann er nicht umwandeln.", bundle: .lumen, locale: .lumen)))
             }
         }
-        .navigationTitle("Profil")
+        .navigationTitle(String(localized: "Profil", bundle: .lumen, locale: .lumen))
         .task {
             do {
                 devices = try await session.client.devices()
@@ -537,7 +537,7 @@ struct WishesView: View {
                 ContentUnavailableView("Noch keine Wünsche", systemImage: "plus.circle")
             }
         }
-        .navigationTitle("Wünsche")
+        .navigationTitle(String(localized: "Wünsche", bundle: .lumen, locale: .lumen))
         .confirmationDialog(wegTitel, isPresented: Binding(
             get: { weg != nil },
             set: { if !$0 { weg = nil } }), titleVisibility: .visible, presenting: weg) { wish in

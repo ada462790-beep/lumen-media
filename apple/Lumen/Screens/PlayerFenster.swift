@@ -104,30 +104,33 @@ extension FocusedValues {
 struct LumenBefehle: Commands {
     @FocusedValue(\.lumenWiedergabe) private var wiedergabe
 
+    // Die Menüleiste beschriftet AppKit — sie kennt die Sprache des
+    // Profils nicht und spräche sonst die des Macs („Go", „Playback").
+    // Darum hier fertige Texte statt Schlüssel.
     var body: some Commands {
         CommandGroup(after: .textEditing) {
-            Button("Suchen") {
+            Button(String(localized: "Suchen", bundle: .lumen, locale: .lumen)) {
                 NotificationCenter.default.post(name: .lumenSuchen, object: nil)
             }
             .keyboardShortcut("f")
         }
         // Wie die Seitenleiste, mit der Tastatur: ⌘1 Startseite, ⌘2 Filme …
-        CommandMenu("Gehe zu") {
-            geheZu(Text("Startseite"), "home", "1")
-            geheZu(Text("Filme"), "movies", "2")
-            geheZu(Text("Serien"), "series", "3")
-            geheZu(Text("Merkliste"), "watchlist", "4")
-            geheZu(Text("Filmreihen"), "collections", "5")
-            geheZu(Text("Suchen"), "search", "6")
+        CommandMenu(String(localized: "Gehe zu", bundle: .lumen, locale: .lumen)) {
+            geheZu(Text(verbatim: String(localized: "Startseite", bundle: .lumen, locale: .lumen)), "home", "1")
+            geheZu(Text(verbatim: String(localized: "Filme", bundle: .lumen, locale: .lumen)), "movies", "2")
+            geheZu(Text(verbatim: String(localized: "Serien", bundle: .lumen, locale: .lumen)), "series", "3")
+            geheZu(Text(verbatim: String(localized: "Merkliste", bundle: .lumen, locale: .lumen)), "watchlist", "4")
+            geheZu(Text(verbatim: String(localized: "Filmreihen", bundle: .lumen, locale: .lumen)), "collections", "5")
+            geheZu(Text(verbatim: String(localized: "Suchen", bundle: .lumen, locale: .lumen)), "search", "6")
         }
-        CommandMenu("Wiedergabe") {
-            Button("Abspielen/Pause") { wiedergabe?.togglePlay() }
+        CommandMenu(String(localized: "Wiedergabe", bundle: .lumen, locale: .lumen)) {
+            Button(String(localized: "Abspielen/Pause", bundle: .lumen, locale: .lumen)) { wiedergabe?.togglePlay() }
                 .keyboardShortcut(.space, modifiers: [])
                 .disabled(wiedergabe == nil)
-            Button("10 Sekunden zurück") { wiedergabe?.skip(-10) }
+            Button(String(localized: "10 Sekunden zurück", bundle: .lumen, locale: .lumen)) { wiedergabe?.skip(-10) }
                 .keyboardShortcut(.leftArrow, modifiers: [])
                 .disabled(wiedergabe == nil)
-            Button("10 Sekunden vor") { wiedergabe?.skip(10) }
+            Button(String(localized: "10 Sekunden vor", bundle: .lumen, locale: .lumen)) { wiedergabe?.skip(10) }
                 .keyboardShortcut(.rightArrow, modifiers: [])
                 .disabled(wiedergabe == nil)
         }

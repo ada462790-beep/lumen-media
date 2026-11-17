@@ -54,9 +54,15 @@ struct TVShell: View {
                 .tabItem { Label("Suche", systemImage: "magnifyingglass") }
                 .tag(Reiter.suche)
             NavigationStack { TVProfilView() }
-                // Der Zähler der Neuigkeiten steht am eigenen Namen — dort
-                // liegen sie jetzt. Nur die eigenen, ungelesenen.
-                .tabItem { Text(ichTitel) }
+                // „Ich" wie im Browser und auf Android, mit einem Punkt für
+                // die eigenen ungelesenen Neuigkeiten — vorher stand hier
+                // der Name mit „· 1", etwa „Admin · 1".
+                // Ein Zähler (`badge`) kennt die Leiste des Apple TV nicht —
+                // der Punkt am Symbol sagt dasselbe.
+                .tabItem {
+                    Label("Ich", systemImage: ungelesen > 0 ? "person.crop.circle.badge" : "person.crop.circle")
+                        .accessibilityValue(ungelesen > 0 ? Text("\(ungelesen) ungelesen") : Text(""))
+                }
                 .tag(Reiter.ich)
         }
         .onChange(of: reiter) { Self.zuletzt = reiter }
@@ -69,12 +75,8 @@ struct TVShell: View {
         }
     }
 
-    private var ichTitel: String {
-        let name = session.me?.account.name ?? String(localized: "Profil", bundle: .lumen, locale: .lumen)
-        let n = session.me?.ungelesen ?? 0
-        if n == 0 { return name }
-        return name + " · " + (n > 9 ? "9+" : String(n))
-    }
+    /// Ungelesene eigene Neuigkeiten. 0 zeigt kein Abzeichen.
+    private var ungelesen: Int { session.me?.ungelesen ?? 0 }
 }
 
 // MARK: - Seitenkopf

@@ -82,7 +82,7 @@ struct IchView: View {
                 }
             }
         }
-        .navigationTitle("Ich")
+        .navigationTitle(String(localized: "Ich", bundle: .lumen, locale: .lumen))
         // Den Zähler der Neuigkeiten auffrischen, wenn man hereinschaut.
         .task {
             await session.refreshMe()

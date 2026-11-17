@@ -194,7 +194,8 @@ struct TVProfilView: View {
                 Text("Lumen ist freie Software. Du darfst sie benutzen, verändern und weitergeben — wer sie verändert und betreibt, muss seine Änderungen ebenfalls offenlegen.")
             }
         }
-        .navigationTitle("Profil")
+        .navigationTitle(String(localized: "Profil", bundle: .lumen, locale: .lumen))
+        .labelStyle(TVZeilenLabel())
         .task {
             await wiedergabenLaden()
             bildschirmzeit = await BildschirmzeitAbschnitt.laden(session)
@@ -340,5 +341,17 @@ struct TVProfilbildView: View {
         .buttonStyle(.borderless)
         .accessibilityLabel(name)
         .accessibilityAddTraits(gewaehlt ? .isSelected : [])
+    }
+}
+
+/// Symbol und Text einer Zeile mit Abstand und gleich breiter Spalte für
+/// das Symbol — die Vorgabe des Apple TV klebte das Symbol an den Text,
+/// und jedes Symbol war anders breit.
+struct TVZeilenLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 22) {
+            configuration.icon.frame(width: 44, alignment: .center)
+            configuration.title
+        }
     }
 }

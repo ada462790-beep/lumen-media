@@ -407,7 +407,7 @@ struct SuchenView: View {
         }
         .searchable(text: $search, placement: suchfeldOrt, prompt: suchPlatzhalter)
         .modifier(SuchfeldFokus())
-        .navigationTitle("Suchen")
+        .navigationTitle(String(localized: "Suchen", bundle: .lumen, locale: .lumen))
     }
 
     /// Auf iPhone und iPad steht das Feld fest oben, statt sich beim

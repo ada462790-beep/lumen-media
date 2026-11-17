@@ -84,7 +84,7 @@ struct AdminLockView: View {
                 }
             }
         }
-        .navigationTitle("Verwaltungssperre")
+        .navigationTitle(String(localized: "Verwaltungssperre", bundle: .lumen, locale: .lumen))
         .problemAlert($problem)
         .task { await laden() }
     }

@@ -145,7 +145,8 @@ struct DetailView: View {
             WertungsReihe(wertungen: detail.wertungen)
                 .padding(.top, 2)
             Text(metaLine(item)).font(.subheadline).foregroundStyle(.white.opacity(0.72))
-            TechnikZeile(abzeichen: Technik.zeile(item: item, file: detail.playable, plan: plan))
+            TechnikZeile(abzeichen: Technik.zeile(item: item, file: detail.playable, plan: plan,
+                                                        fassungen: Fassungen.liste(detail.files)))
                 .padding(.top, 2)
             actions(item, detail)
         }
@@ -183,11 +184,22 @@ struct DetailView: View {
         let hinweis = Fassungen.hinweis(Fassungen.liste(detail.files))
         FlussLayout(abstand: 10) {
             if detail.playable != nil {
+                // Der Hinweis („2 Sprachen") leiser im Knopf, wie im
+                // Browser — er sagt, was im Player zur Wahl steht.
                 Button {
                     start = Abspielstart(item: item)
                 } label: {
-                    Label(hinweis.map { Titelseite.abspielen(item) + " · " + $0 } ?? Titelseite.abspielen(item),
-                          systemImage: "play.fill")
+                    Label {
+                        HStack(spacing: 5) {
+                            Text(Titelseite.abspielen(item))
+                            if let hinweis {
+                                Text(hinweis).fontWeight(.medium).opacity(0.6)
+                            }
+                        }
+                        .lineLimit(1)
+                    } icon: {
+                        Image(systemName: "play.fill")
+                    }
                 }
                 .buttonStyle(KopfHauptknopf())
             }
@@ -327,7 +339,7 @@ struct DetailView: View {
     }
 
     /// Staffeln als Reiter, darunter die Folgen der gewählten — wie im
-    /// Browser. Die erste Staffel ist gleich offen; Specials (Staffel 0 und
+    /// Browser. Offen ist die Staffel der nächsten Folge (load); Specials (Staffel 0 und
     /// Staffeln ohne Nummer) stehen hinten. Ab sieben Staffeln nur die
     /// Zahlen unter „Staffeln", ab sechzehn eine Auswahl (Staffelleiste).
     private var staffelTeil: some View {
@@ -374,7 +386,10 @@ struct DetailView: View {
                 Text("Staffeln").font(.headline)
                 Picker("Staffel wählen", selection: Binding(
                     get: { staffel ?? "" },
-                    set: { id in Task { await zeigeStaffel(id) } })) {
+                    set: { id in
+                        session.staffelMerken(serie: itemId, staffel: id)
+                        Task { await zeigeStaffel(id) }
+                    })) {
                     ForEach(staffeln) { st in Text(Staffelleiste.name(st)).tag(st.id) }
                 }
                 .pickerStyle(.menu)
@@ -391,6 +406,7 @@ struct DetailView: View {
                         HStack(spacing: 8) {
                             ForEach(staffeln) { st in
                                 Chip(label: Staffelleiste.knopf(st, art: art), selected: staffel == st.id) {
+                                    session.staffelMerken(serie: itemId, staffel: st.id)
                                     Task { await zeigeStaffel(st.id) }
                                 }
                                 .id(st.id)
@@ -475,8 +491,19 @@ struct DetailView: View {
             }
             let geordnet = Titelseite.staffeln(fresh.seasons ?? [])
             staffeln = geordnet
-            // Die gewählte Staffel bleibt beim Neuladen stehen.
-            let ziel = geordnet.first { $0.id == staffel }?.id ?? geordnet.first?.id
+            // Die gewählte Staffel bleibt beim Neuladen stehen. Beim ersten
+            // Laden wie im Browser: die zuletzt gewählte dieser Serie, sonst
+            // die der nächsten Folge, sonst die erste — nicht immer
+            // Staffel 1, wenn man längst in Staffel 4 ist.
+            var ziel = geordnet.first { $0.id == staffel }?.id
+            if ziel == nil, !geordnet.isEmpty {
+                let gemerkt = session.gemerkteStaffel(serie: itemId)
+                var weiter: Item?
+                if gemerkt == nil, fresh.item.kind == "series" {
+                    weiter = try? await session.client.weiterInSerie(itemId)
+                }
+                ziel = Titelseite.startStaffel(geordnet, weiterParentId: weiter?.parentId, gemerkt: gemerkt)?.id
+            }
             if let ziel { await zeigeStaffel(ziel) }
         } catch { self.error = Session.text(error) }
         loading = false
@@ -717,16 +744,30 @@ struct MitwirkenderBild: View {
 
 struct EpisodeRow: View {
     @Environment(Session.self) private var session
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var breite
+    #endif
     let episode: Item
     let play: () -> Void
     /// Den Haken an dieser Folge setzen oder wegnehmen.
     var gesehen: (() -> Void)? = nil
     @State private var thumb: URL?
 
+    /// Auf dem iPhone (schmal) ohne eigenen Knopf „Ansehen": Bild und
+    /// Text spielen die Folge. Daneben brach „Ansehen" in „Anse/hen" um,
+    /// und für Titel und Inhalt blieb kaum Platz.
+    private var schmal: Bool {
+        #if os(iOS)
+        return breite == .compact
+        #else
+        return false
+        #endif
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: schmal ? 12 : 14) {
             Artwork(url: thumb, title: episode.title, corner: 8)
-                .frame(width: 128, height: 72)
+                .frame(width: schmal ? 112 : 128, height: schmal ? 63 : 72)
                 .overlay(alignment: .bottom) {
                     if episode.percent > 1 && !episode.isSeen { ProgressStripe(percent: episode.percent) }
                 }
@@ -743,29 +784,24 @@ struct EpisodeRow: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(episode.title) abspielen")
                 }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(episode.folgenListenName)
-                        .font(.subheadline.weight(.medium))
-                    if episode.isSeen {
-                        Image(systemName: "checkmark").font(.caption2.weight(.bold))
-                            .foregroundStyle(Theme.label3)
-                    }
+            if schmal {
+                Button(action: play) { text.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text(Titelseite.folge(episode)))
+            } else {
+                text
+                Button(action: play) {
+                    Text(Titelseite.folge(episode)).lineLimit(1).fixedSize()
                 }
-                if let ms = episode.runtimeMs, ms > 0 {
-                    Text(Item.duration(ms: ms)).font(.caption).foregroundStyle(Theme.label3)
-                }
-                if let overview = episode.overview, !overview.isEmpty {
-                    Text(overview).font(.caption).foregroundStyle(Theme.label2).lineLimit(2)
-                }
+                .buttonStyle(QuietButtonStyle())
             }
-            Spacer()
-            Button(Titelseite.folge(episode), action: play).buttonStyle(QuietButtonStyle())
             if let gesehen {
                 Button(action: gesehen) {
                     Image(systemName: episode.isSeen ? "checkmark.circle.fill" : "checkmark.circle")
                         .font(.title3)
                         .foregroundStyle(episode.isSeen ? Theme.label : Theme.label3)
+                        .frame(minWidth: 32, minHeight: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help(episode.isSeen ? "Nicht mehr als gesehen" : "Als gesehen markieren")
@@ -776,6 +812,27 @@ struct EpisodeRow: View {
         .task {
             thumb = await session.client.artworkURL(for: episode, wide: true, breite: Bildbreite.stufe(256))
         }
+    }
+
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(episode.folgenListenName)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(2)
+                if episode.isSeen {
+                    Image(systemName: "checkmark").font(.caption2.weight(.bold))
+                        .foregroundStyle(Theme.label3)
+                }
+            }
+            if let ms = episode.runtimeMs, ms > 0 {
+                Text(Item.duration(ms: ms)).font(.caption).foregroundStyle(Theme.label3)
+            }
+            if let overview = episode.overview, !overview.isEmpty {
+                Text(overview).font(.caption).foregroundStyle(Theme.label2).lineLimit(schmal ? 3 : 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

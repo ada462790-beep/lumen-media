@@ -46,7 +46,7 @@ on:
       mac:
         description: 'Mac-Rechner (macos-latest oder macos-15-intel, wenn die arm64-Macs bei GitHub ausgelastet sind)'
         type: choice
-        options: [macos-latest, macos-15-intel]
+        options: [macos-latest, macos-15-intel, macos-26, macos-15]
         default: macos-latest
 
 jobs:
@@ -264,7 +264,7 @@ jobs:
     # Bei GitHub sind die arm64-Macs manchmal so ausgelastet, dass der Job
     # nach einer Viertelstunde ohne Rechner abbricht. Dann von Hand mit
     # mac=macos-15-intel starten.
-    runs-on: ${{ inputs.mac == 'macos-15-intel' && 'macos-15-intel' || 'macos-latest' }}
+    runs-on: ${{ inputs.mac || 'macos-latest' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

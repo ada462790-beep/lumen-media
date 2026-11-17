@@ -217,6 +217,10 @@ public final class Playback {
         offline = nil
         self.item = item
 
+        // Den frischen Medienschlüssel gleich nebenher holen, nicht erst
+        // nach Titel und Plan: das waren vier Anfragen hintereinander, und
+        // auf einem langsamen Gerät stand der Ladekreis Sekunden länger.
+        async let schluessel: Void = schluesselFrisch()
         do {
             let detail = try await client.item(item.id)
             guard gilt(meiner) else { return await verwerfen(meiner) }
@@ -272,7 +276,7 @@ public final class Playback {
             // vorn, statt im Leeren zu landen.
             if length > 0, start > length - 5 { start = 0 }
 
-            try await schluesselFrisch()
+            try await schluessel
             guard gilt(meiner) else { return await verwerfen(meiner) }
             let url = await client.streamURL(for: file, plan: planResponse.plan, spur: tonspur, profil: profil)
             guard gilt(meiner) else { return await verwerfen(meiner) }

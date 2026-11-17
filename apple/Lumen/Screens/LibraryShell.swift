@@ -205,7 +205,7 @@ struct LibraryShell: View {
                     Label("Profil", systemImage: Tab.ich.symbol).tag(Tab.ich)
                 }
             }
-            .navigationTitle("Lumen")
+            .navigationTitle(String(localized: "Lumen", bundle: .lumen, locale: .lumen))
             #if os(macOS)
             .listStyle(.sidebar)
             #endif
@@ -292,7 +292,7 @@ struct HomeView: View {
                 Loading(loading: loading, error: error, retry: load)
             }
         }
-        .navigationTitle("Startseite")
+        .navigationTitle(String(localized: "Startseite", bundle: .lumen, locale: .lumen))
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -350,7 +350,7 @@ struct HeroBanner: View {
 
     var body: some View {
         NavigationLink { DetailView(itemId: item.id) } label: {
-            Artwork(url: url, title: item.title, corner: 0)
+            Artwork(url: url, title: "", corner: 0)
                 .aspectRatio(16.0 / 9.0, contentMode: .fill)
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: 420)
@@ -790,7 +790,8 @@ struct WatchlistView: View {
                 ProgressView().controlSize(.large)
             }
         }
-        .navigationTitle(liste == "gesehen" ? "Gesehen" : "Merkliste")
+        .navigationTitle(liste == "gesehen" ? String(localized: "Gesehen", bundle: .lumen, locale: .lumen)
+                                                : String(localized: "Merkliste", bundle: .lumen, locale: .lumen))
         .task(id: liste) { await load() }
         .refreshable { await load() }
         // Gemerkt oder gesehen auf einer Titelseite: sofort hier.
@@ -856,7 +857,7 @@ struct FavoritenView: View {
                     description: Text("Auf einer Titelseite setzt du eins. Nur du siehst deine Favoriten."))
             }
         }
-        .navigationTitle("Favoriten")
+        .navigationTitle(String(localized: "Favoriten", bundle: .lumen, locale: .lumen))
         .task(id: art) { await load() }
         // Zurück von einer Titelseite: dort kann ein Herz dazugekommen
         // oder weggefallen sein.

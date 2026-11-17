@@ -33,6 +33,21 @@ final class AppAbgleichTests: XCTestCase {
         XCTAssertTrue(sieben.hasPrefix("7") && sieben.hasSuffix("0"), sieben)
     }
 
+    /// Punkt oder Komma nach der Sprache des Profils, wie im Browser
+    /// (toLocaleString): „7.9" in der Schweiz, „7,9" in Deutschland.
+    /// Gerundet wie Math.round: 6.75 → 6.8, 6.85 → 6.9.
+    func testNoteNachSprache() {
+        let vorher = Sprache.aktuell
+        defer { Sprache.setzen(vorher, merken: false) }
+        Sprache.setzen("de-CH", merken: false)
+        XCTAssertEqual(Wertungen.note(7.9), "7.9")
+        XCTAssertEqual(Wertungen.note(6.75), "6.8")
+        Sprache.setzen("de-DE", merken: false)
+        XCTAssertEqual(Wertungen.note(7.9), "7,9")
+        Sprache.setzen("en-US", merken: false)
+        XCTAssertEqual(Wertungen.note(7.9), "7.9")
+    }
+
     /// Rotten Tomatoes: ab 60 % frisch, darunter faul — nach dem echten Wert.
     func testRottenTomatoesSchwelle() throws {
         XCTAssertTrue(Wertungen.frisch(60))
@@ -136,6 +151,31 @@ final class AppAbgleichTests: XCTestCase {
         let sehrViele = try (1...16).map { try staffel($0) }
         XCTAssertEqual(Staffelleiste.art(sehrViele), .auswahl)
         XCTAssertEqual(Staffelleiste.art([]), .kapseln)
+    }
+
+    /// Welche Staffel beim Öffnen einer Serie offen ist — wie im Browser:
+    /// die gemerkte, sonst die der nächsten Folge (GET /weiterschauen),
+    /// sonst die erste reguläre (Specials stehen hinten).
+    func testStartStaffel() throws {
+        func staffel(_ id: String, _ nr: Int?) throws -> Item {
+            let no = nr.map { #","seasonNo":\#($0)"# } ?? ""
+            return try JSONDecoder.lumen.decode(Item.self, from: Data(
+                #"{"id":"\#(id)","libraryId":"lib_1","kind":"season","title":"S","matchState":"matched","addedAt":"2026-10-23T13:35:52+02:00"\#(no)}"#.utf8))
+        }
+        let alle = try [staffel("s0", nil), staffel("s2", 2), staffel("s1", 1)]
+        XCTAssertEqual(Titelseite.startStaffel(alle, weiterParentId: "s2")?.id, "s2", "Staffel der nächsten Folge")
+        XCTAssertEqual(Titelseite.startStaffel(alle, weiterParentId: "s2", gemerkt: "s0")?.id, "s0", "gemerkt vor der nächsten Folge")
+        XCTAssertEqual(Titelseite.startStaffel(alle, weiterParentId: nil)?.id, "s1", "ohne nächste Folge die erste reguläre")
+        XCTAssertEqual(Titelseite.startStaffel(alle, weiterParentId: "weg", gemerkt: "auch weg")?.id, "s1",
+                       "unbekannte Kennungen zählen nicht")
+        XCTAssertEqual(Titelseite.startStaffel(alle, weiterParentId: "s2", gemerkt: "andere")?.id, "s2")
+        XCTAssertNil(Titelseite.startStaffel([], weiterParentId: "s2"))
+
+        // Die Antwort von GET /items/{id}/weiterschauen: { item: Folge }.
+        struct Antwort: Decodable { let item: Item? }
+        let a = try JSONDecoder.lumen.decode(Antwort.self, from: Data(
+            #"{"item":{"id":"e5","libraryId":"lib_1","kind":"episode","parentId":"s2","title":"F","seasonNo":2,"episodeNo":1,"matchState":"matched","addedAt":"2026-10-23T13:35:52+02:00"}}"#.utf8))
+        XCTAssertEqual(a.item?.parentId, "s2")
     }
 
     // MARK: Bilder

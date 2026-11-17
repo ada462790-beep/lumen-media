@@ -205,13 +205,18 @@ public struct Artwork: View {
     }
 
     public var body: some View {
-        ZStack {
-            placeholder
-            if let url {
-                MedienBild(url: url)
+        // Die Fläche bestimmt die Grösse, nicht das Bild: ein Standbild im
+        // Breitformat (scaledToFill) machte den ZStack breiter als die
+        // Karte, der Zuschnitt griff am falschen Rand, und das Bild lag
+        // über den Nachbarkarten (im Raster „Filme" am iPad gesehen).
+        Color.clear
+            .overlay { placeholder }
+            .overlay {
+                if let url {
+                    MedienBild(url: url)
+                }
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
     }
 
     private var placeholder: some View {

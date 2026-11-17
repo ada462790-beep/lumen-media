@@ -71,7 +71,12 @@ public enum Technik {
     /// Die Datei geht vor, wo sie etwas weiss — sie ist das, was gespielt
     /// wird. Am Titel steht, was der Server für die Karten zusammenfasst
     /// (bei Serien: die beste Datei ihrer Folgen).
-    public static func zeile(item: Item, file: MediaFile?, plan: PlaybackPlan?) -> [Abzeichen] {
+    ///
+    /// `fassungen`: alle Fassungen des Titels (`Fassungen.liste`). Liegt
+    /// ein Film als zwei Dateien vor — eine deutsche, eine englische —,
+    /// stehen beide Sprachen da, nicht nur die der ersten Datei.
+    public static func zeile(item: Item, file: MediaFile?, plan: PlaybackPlan?,
+                             fassungen: [MediaFile] = []) -> [Abzeichen] {
         if file == nil && (item.qualitaet ?? "").isEmpty { return [] }
         var out: [Abzeichen] = []
 
@@ -84,7 +89,12 @@ public enum Technik {
         let kanaele = meisteKanaele > 0 ? meisteKanaele : (item.kanaele ?? 0)
         if let t = tonName(kanaele: kanaele) { out.append(Abzeichen(t)) }
 
-        let tonSprachen = sprachen(ton)
+        var tonSprachen = sprachen(ton)
+        for weitere in fassungen where weitere.id != file?.id {
+            for kurz in sprachen(weitere.tonspuren) where !tonSprachen.contains(kurz) {
+                tonSprachen.append(kurz)
+            }
+        }
         if !tonSprachen.isEmpty { out.append(Abzeichen(tonSprachen.joined(separator: " · "))) }
 
         let text = file?.textspuren ?? []

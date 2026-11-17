@@ -738,6 +738,21 @@ public actor APIClient {
         try await get("/items/\(id)/children")
     }
 
+    /// Welche Folge „Weiterschauen" auf der Seite einer Serie startet: die
+    /// angefangene oder die nächste ungesehene (ohne Specials), und wenn
+    /// alles gesehen ist, die erste. nil, wenn die Serie keine reguläre
+    /// Folge hat oder der Server die Frage nicht kennt.
+    public func weiterInSerie(_ serieId: String) async throws -> Item? {
+        struct Antwort: Decodable { let item: Item? }
+        do {
+            let a: Antwort = try await get("/items/\(serieId)/weiterschauen")
+            return a.item
+        } catch {
+            if LumenError.fehltAufServer(error) || (error as? LumenError)?.status == 400 { return nil }
+            throw error
+        }
+    }
+
     // MARK: - Personen
 
     /// Ein Name als einzelner Pfadteil: alles ausser Buchstaben, Ziffern
