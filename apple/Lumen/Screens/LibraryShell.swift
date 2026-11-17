@@ -490,6 +490,12 @@ struct PosterCard: View {
     @State private var url: URL?
     @State private var vorschau: URL?
     @State private var zeigerDrauf = false
+    @Environment(\.accessibilityReduceMotion) private var wenigBewegung
+
+    /// Wie im Browser und bei den Filmreihen: Unter dem Zeiger hebt sich das
+    /// Plakat ein wenig, der Schatten wird tiefer, und das Bild rückt im
+    /// Rahmen sanft näher. Der Rahmen selbst wächst nicht.
+    private var gehoben: Bool { zeigerDrauf && !wenigBewegung }
 
     private var width: CGFloat { wide ? Theme.wideWidth : Theme.posterWidth }
     private var height: CGFloat { wide ? Theme.wideWidth * 9 / 16 : Theme.posterWidth / Theme.posterRatio }
@@ -497,7 +503,10 @@ struct PosterCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             Artwork(url: url, title: item.title)
+                .scaleEffect(gehoben ? 1.06 : 1)
+                .brightness(gehoben ? 0.04 : 0)
                 .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.corner, style: .continuous))
                 .overlay {
                     if let vorschau {
                         StummeVorschau(url: vorschau)
@@ -518,8 +527,11 @@ struct PosterCard: View {
                             .strokeBorder(Theme.label, lineWidth: 2.5)
                     }
                 }
-                #if os(macOS)
+                .shadow(color: .black.opacity(gehoben ? 0.5 : 0), radius: gehoben ? 15 : 0, y: gehoben ? 14 : 0)
+                .offset(y: gehoben ? -4 : 0)
+                .animation(.easeOut(duration: 0.35), value: gehoben)
                 .onHover { zeigerDrauf = $0 }
+                #if os(macOS)
                 .task(id: zeigerDrauf) {
                     guard zeigerDrauf else { vorschau = nil; return }
                     try? await Task.sleep(for: .milliseconds(900))
