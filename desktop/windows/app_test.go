@@ -215,6 +215,7 @@ type attrappe struct {
 	extern    []string
 	gestartet string
 	zu        bool
+	ton       []string // „ursprung an/aus"
 }
 
 func (a *attrappe) Auftrag(f func()) { f() }
@@ -235,6 +236,12 @@ func (a *attrappe) Extern(s string) {
 }
 func (a *attrappe) InstallerStarten(p string) error { a.gestartet = p; return nil }
 func (a *attrappe) Schliessen()                     { a.zu = true }
+func (a *attrappe) TonausgabeErlauben(ursprung string, an bool, weiter func(error)) {
+	a.mu.Lock()
+	a.ton = append(a.ton, fmt.Sprintf("%s %v", ursprung, an))
+	a.mu.Unlock()
+	weiter(nil)
+}
 
 func (a *attrappe) letzteAntwort(t *testing.T) antwort {
 	t.Helper()
@@ -509,5 +516,62 @@ func TestUpdateLadenUndStarten(t *testing.T) {
 	app.Nachricht("http://lumen.localhost/", `{"id":1,"art":"updateStarten"}`)
 	if !strings.HasSuffix(h.gestartet, "Lumen-Setup-0.5.0-windows-x64.exe") || !h.zu {
 		t.Errorf("gestartet %q, zu %v", h.gestartet, h.zu)
+	}
+}
+
+// ---------------------------------------------------------------- Tonausgabe
+
+func TestTonausgabeNurFuerDenEigenenServer(t *testing.T) {
+	h := &attrappe{}
+	app, _ := NeueApp(h, t.TempDir(), t.TempDir())
+	if _, err := app.liste.Merken(Server{Adresse: "http://192.168.10.10:8097", Name: "NAS"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Die eingebaute Seite und fremde Seiten dürfen das nicht.
+	for i, quelle := range []string{seitenAdresse, "http://192.168.10.11:8097/", "https://example.org/"} {
+		app.Nachricht(quelle, fmt.Sprintf(`{"id":%d,"art":"tonausgabe","daten":{"an":true}}`, i+1))
+		if an := h.letzteAntwort(t); an.OK || an.Fehler != fehlerNichtErlaub {
+			t.Errorf("%s durfte die Tonausgabe freigeben: %+v", quelle, an)
+		}
+	}
+	if len(h.ton) != 0 {
+		t.Fatalf("Erlaubnis gesetzt: %v", h.ton)
+	}
+
+	// Die Web-App des Servers schon — für ihren Ursprung, ohne Pfad.
+	app.Nachricht("http://192.168.10.10:8097/#/einstellungen", `{"id":10,"art":"tonausgabe","daten":{"an":true}}`)
+	if an := h.letzteAntwort(t); !an.OK {
+		t.Errorf("freigeben: %+v", an)
+	}
+	app.Nachricht("http://192.168.10.10:8097/", `{"id":11,"art":"tonausgabe","daten":{"an":false}}`)
+	if an := h.letzteAntwort(t); !an.OK || an.ID != 11 {
+		t.Errorf("zurücknehmen: %+v", an)
+	}
+	soll := []string{"http://192.168.10.10:8097 true", "http://192.168.10.10:8097 false"}
+	if strings.Join(h.ton, "|") != strings.Join(soll, "|") {
+		t.Errorf("ton = %v, soll %v", h.ton, soll)
+	}
+}
+
+func TestUnsichereUrspruenge(t *testing.T) {
+	server := []Server{
+		{Adresse: "http://192.168.10.10:8097"},
+		{Adresse: "HTTP://NAS.fritz.box:8097"},
+		{Adresse: "https://lumen.example.org"},
+		{Adresse: "http://localhost:8097"},
+		{Adresse: "http://127.0.0.1:8097"},
+		{Adresse: "http://[fe80::1]:8097"},
+		{Adresse: "http://192.168.10.10:8097"},
+		{Adresse: "http://a,b:1"},
+		{Adresse: "kaputt"},
+	}
+	ist := strings.Join(UnsichereUrspruenge(server, "http://10.1.0.5:4711"), ",")
+	soll := "http://192.168.10.10:8097,http://nas.fritz.box:8097,http://[fe80::1]:8097,http://10.1.0.5:4711"
+	if ist != soll {
+		t.Errorf("UnsichereUrspruenge = %s\nsoll                %s", ist, soll)
+	}
+	if len(UnsichereUrspruenge(nil)) != 0 {
+		t.Error("ohne Server soll nichts dabei sein")
 	}
 }

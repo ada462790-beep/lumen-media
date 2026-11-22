@@ -433,6 +433,18 @@ func (f *fenster) webviewEinrichten(lokal string) error {
 	// Sperrbildschirm) folgen der Media Session API der Web-App. In
 	// WebView2 ist das aus, solange man es nicht einschaltet.
 	c.AdditionalBrowserArgs = []string{"--enable-features=HardwareMediaKeyHandling"}
+	// Tonausgabe (tonausgabe.go): Geräteliste und setSinkId gibt es nur in
+	// einem sicheren Kontext — die gemerkten Server über http gelten als
+	// sicher. Ein Server, der erst jetzt dazukommt, ab dem nächsten Start.
+	server, _ := f.app.liste.Kopie()
+	var dazu []string
+	if f.test != nil {
+		dazu = append(dazu, "http://"+f.test.adresse)
+	}
+	if u := UnsichereUrspruenge(server, dazu...); len(u) > 0 {
+		c.AdditionalBrowserArgs = append(c.AdditionalBrowserArgs, "--unsafely-treat-insecure-origin-as-secure="+strings.Join(u, ","))
+		log.Printf("Als sicher behandelt: %s", strings.Join(u, ", "))
+	}
 	if f.test != nil {
 		// Der Rechner von GitHub spricht Englisch; die Bilder sollen die
 		// Seite so zeigen, wie sie hier meist aussieht.
@@ -487,7 +499,8 @@ func (f *fenster) webviewEinrichten(lokal string) error {
 	f.wv = com(unsafe.Pointer(ew))
 	if !anmelden(f.wv, wvAddNavigationStarting, ereignis(f.navigationBeginnt)) ||
 		!anmelden(f.wv, wvAddNavigationCompleted, ereignis(f.navigationFertig)) ||
-		!anmelden(f.wv, wvAddNewWindowRequested, ereignis(f.neuesFenster)) {
+		!anmelden(f.wv, wvAddNewWindowRequested, ereignis(f.neuesFenster)) ||
+		!anmelden(f.wv, wvAddPermissionRequested, ereignis(f.berechtigungGefragt)) {
 		return errors.New("WebView2-Ereignisse liessen sich nicht anmelden")
 	}
 

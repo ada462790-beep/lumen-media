@@ -1721,5 +1721,16 @@
  "Als Fassungen eines Films zusammengelegt": "Merged as versions of one film",
  "Die Datei ist defekt und lässt sich nicht abspielen.": "The file is damaged and can’t be played.",
  "unvollständiger Download": "incomplete download",
- "Die Datei hat die volle Grösse, enthält aber an der geprüften Stelle nur Nullen – der Download wurde nie fertig.": "The file has its full size but contains only zeros at the checked spot – the download never finished."
+ "Die Datei hat die volle Grösse, enthält aber an der geprüften Stelle nur Nullen – der Download wurde nie fertig.": "The file has its full size but contains only zeros at the checked spot – the download never finished.",
+ "Tonausgabe": "Audio output",
+ "Systemstandard": "System default",
+ "Geräte werden gesucht …": "Looking for devices …",
+ "„{name}“ ist nicht verbunden.": "“{name}” isn’t connected.",
+ "Qualität und Tonausgabe": "Quality and audio output",
+ "„{name}“ ist nicht verbunden – der Ton kommt über den Systemstandard.": "“{name}” isn’t connected – sound is playing through the system default.",
+ "Ton über „{name}“": "Sound through “{name}”",
+ "Ton über den Systemstandard": "Sound through the system default",
+ "{name} (nicht verbunden)": "{name} (not connected)",
+ "Die Tonausgabe lässt sich wählen, sobald Lumen neu gestartet ist.": "You can choose the audio output once Lumen has been restarted.",
+ "Tonausgabe gilt für diesen Computer. Wähl ein Gerät, wenn ein Audio-Mischprogramm den Ton von Lumen sonst nicht bekommt.": "Audio output applies to this computer. Pick a device if an audio mixing app doesn’t get Lumen’s sound otherwise."
 }

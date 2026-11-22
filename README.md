@@ -473,6 +473,16 @@ eigenen Fenster:
   Vollbild-Knopf im Player füllt den ganzen Bildschirm.
 - **Medientasten:** Abspielen/Pause und Weiter auf der Tastatur und in der
   Mediensteuerung von Windows.
+- **Tonausgabe:** Unter *Ich › Wiedergabe* und im Player (Zahnrad) wählst
+  du, über welches Gerät der Ton kommt — Systemstandard oder ein bestimmter
+  Lautsprecher, Kopfhörer oder ein virtuelles Gerät. Das hilft, wenn ein
+  Audio-Mischprogramm (etwa Logi MIXLINE) den Ton der App sonst nicht
+  bekommt: Den spielt nämlich WebView2 (`msedgewebview2.exe`), nicht
+  Lumen selbst. Die Wahl gilt für diesen Computer. Damit die Geräte
+  erscheinen, erlaubt die App dem Server still die Geräteliste (nie eine
+  Aufnahme) und behandelt gemerkte Server über `http://` als sicheren
+  Ursprung; ein neu hinzugefügter Server braucht dafür einen Neustart der
+  App.
 - **Links zu IMDb, TMDb und Co.** gehen im Standardbrowser auf.
 - **Updates:** Höchstens einmal am Tag fragt Lumen bei GitHub nach einer
   neuen Fassung und bietet sie unten rechts an. Geladen wird nur auf

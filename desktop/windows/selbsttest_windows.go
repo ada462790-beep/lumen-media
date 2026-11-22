@@ -42,11 +42,13 @@ type selbsttest struct {
 	adresse  string // des Schein-Servers
 	geladenK chan string
 
-	mu       sync.Mutex
-	zeilen   []string
-	fehler   int
-	externOK bool
-	fertig   bool
+	mu        sync.Mutex
+	zeilen    []string
+	fehler    int
+	externOK  bool
+	fertig    bool
+	abgelehnt int  // Mikrofon/Kamera-Anfragen, die die App abgelehnt hat
+	imNetz    bool // Schein-Server auf einer Netzadresse statt 127.0.0.1
 }
 
 func neuerSelbsttest(f *fenster, ordner, web string) *selbsttest {
@@ -88,10 +90,41 @@ document.title = (d && ua) ? 'BRUECKE_OK' : 'BRUECKE_FEHLT';
 document.getElementById('vollbild').addEventListener('click', () => document.documentElement.requestFullscreen());
 </script></body></html>`
 
-func (t *selbsttest) serverStarten() error {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+// netzAdresse: eine IPv4-Adresse dieses Rechners, die nicht 127.0.0.1 ist.
+// Lumen läuft im Heimnetz meist über http://<Adresse>:8097 — für Chromium
+// kein sicherer Kontext. Der Selbsttest soll genau so laufen.
+func netzAdresse() string {
+	ifs, err := net.Interfaces()
 	if err != nil {
-		return err
+		return ""
+	}
+	for _, i := range ifs {
+		if i.Flags&net.FlagUp == 0 || i.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		adressen, _ := i.Addrs()
+		for _, a := range adressen {
+			if n, ok := a.(*net.IPNet); ok && n.IP.To4() != nil && !n.IP.IsLoopback() && !n.IP.IsLinkLocalUnicast() {
+				return n.IP.String()
+			}
+		}
+	}
+	return ""
+}
+
+func (t *selbsttest) serverStarten() error {
+	var ln net.Listener
+	if ip := netzAdresse(); ip != "" {
+		if l, err := net.Listen("tcp", net.JoinHostPort(ip, "0")); err == nil {
+			ln, t.imNetz = l, true
+		}
+	}
+	if ln == nil {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		ln = l
 	}
 	t.adresse = ln.Addr().String()
 	mux := http.NewServeMux()
@@ -106,7 +139,25 @@ func (t *selbsttest) serverStarten() error {
 	mux.HandleFunc("/api/v1/profiles", func(w http.ResponseWriter, r *http.Request) {
 		json(w, 200, `[{"id":"a","name":"Anna","lockKind":"none","avatar":"av-b"},{"id":"b","name":"Ben","lockKind":"pin","avatar":"av-c"},{"id":"k","name":"Kino","lockKind":"none","isKid":true,"avatar":"fig-stern"}]`)
 	})
+	// Angemeldet (Token „selbsttest"): gerade genug für die Einstellungen.
+	angemeldet := func(r *http.Request) bool { return r.Header.Get("Authorization") == "Bearer selbsttest" }
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, r *http.Request) {
+		if !angemeldet(r) {
+			json(w, 401, `{"error":"nicht angemeldet"}`)
+			return
+		}
+		json(w, 200, `{"account":{"id":"a","name":"Anna","avatar":"av-b","lockKind":"pin"},"prefs":{},"limits":{}}`)
+	})
+	mux.HandleFunc("/api/v1/me/media-key", func(w http.ResponseWriter, r *http.Request) {
+		json(w, 200, `{"key":"selbsttest","gueltigSek":86400}`)
+	})
+	mux.HandleFunc("/api/v1/me/devices", func(w http.ResponseWriter, r *http.Request) { json(w, 200, `[]`) })
+	mux.HandleFunc("/api/v1/me/playbacks", func(w http.ResponseWriter, r *http.Request) { json(w, 200, `[]`) })
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		if angemeldet(r) {
+			json(w, 404, `{"error":"gibt es im Selbsttest nicht"}`)
+			return
+		}
 		json(w, 401, `{"error":"nicht angemeldet"}`)
 	})
 	mux.HandleFunc("/selbsttest", func(w http.ResponseWriter, r *http.Request) {
@@ -121,6 +172,31 @@ func (t *selbsttest) serverStarten() error {
 		})
 	}
 	go http.Serve(ln, mux)
+	// Kommt WebView2 nicht an die Netzadresse (Firewall), wäre der ganze
+	// Test verloren — dann eben über 127.0.0.1, ohne den Teil „unsicherer
+	// Ursprung".
+	if t.imNetz {
+		c := http.Client{Timeout: 3 * time.Second}
+		r, err := c.Get("http://" + t.adresse + "/api/v1/hello")
+		if err == nil {
+			r.Body.Close()
+		} else {
+			log.Printf("Selbsttest: %s nicht erreichbar (%v), nehme 127.0.0.1", t.adresse, err)
+			ln.Close()
+			t.imNetz = false
+			return t.serverStarten127(mux)
+		}
+	}
+	return nil
+}
+
+func (t *selbsttest) serverStarten127(mux *http.ServeMux) error {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	t.adresse = ln.Addr().String()
+	go http.Serve(ln, mux)
 	return nil
 }
 
@@ -131,9 +207,9 @@ func (t *selbsttest) serverStarten() error {
 // wartet.
 
 func (t *selbsttest) beginnen() {
-	t.notiz(true, "Fenster und WebView2 bereit, Schein-Server auf %s", t.adresse)
+	t.notiz(true, "Fenster und WebView2 bereit, Schein-Server auf %s (Netzadresse: %v)", t.adresse, t.imNetz)
 	go func() {
-		ende := time.AfterFunc(120*time.Second, func() {
+		ende := time.AfterFunc(180*time.Second, func() {
 			t.notiz(false, "Zeit abgelaufen")
 			t.ui(t.abschliessen)
 		})
@@ -178,6 +254,25 @@ func (t *selbsttest) titel() string {
 	var s string
 	t.ui(func() { s, _ = comText(t.f.wv, wvGetDocumentTitle) })
 	return s
+}
+
+// frageWarte wie frage, aber für einen Ausdruck mit await. Das Ergebnis
+// kommt, wenn es da ist; höchstens 15 Sekunden.
+func (t *selbsttest) frageWarte(ausdruck string) string {
+	t.skript(`document.title='WARTE';(async()=>{let e;try{e=String(await (` + ausdruck + `))}catch(x){e='FEHLER '+(x&&x.name)+' '+(x&&x.message)}document.title='ERG:'+e})()`)
+	for i := 0; i < 75; i++ {
+		time.Sleep(200 * time.Millisecond)
+		if s := t.titel(); strings.HasPrefix(s, "ERG:") {
+			return strings.TrimPrefix(s, "ERG:")
+		}
+	}
+	return "keine Antwort"
+}
+
+func (t *selbsttest) aufnahmeAbgelehnt() {
+	t.mu.Lock()
+	t.abgelehnt++
+	t.mu.Unlock()
 }
 
 // frage legt das Ergebnis eines Ausdrucks in den Titel der Seite und
@@ -289,12 +384,78 @@ func (t *selbsttest) ablauf() {
 		t.notiz(!t.f.domVollbild && !t.f.vollbild, "exitFullscreen gibt das Fenster zurück")
 	}
 
-	// 5. Strg+Umschalt+S: die Auswahl mit dem gemerkten Server.
+	// 5. Tonausgabe (tonausgabe.go, web/tonausgabe.js).
+	if t.web != "" {
+		t.tonausgabe(server)
+	}
+
+	// 6. Strg+Umschalt+S: die Auswahl mit dem gemerkten Server.
 	t.ui(t.f.app.ServerWechseln)
 	if t.notiz(t.warteGeladen(seitenAdresse+"?wechseln=1"), "Serverauswahl über das Tastenkürzel") {
 		time.Sleep(1200 * time.Millisecond)
 		t.bildWarte("6-serverliste.png")
 		t.bildschirmWarte("7-bildschirm-liste.png")
+	}
+}
+
+// tonausgabe prüft die Wahl des Lautsprechers. Der Rechner von GitHub hat
+// meist kein Audiogerät — geprüft wird darum vor allem, dass alles da ist
+// und Fehler sauber abgefangen werden.
+func (t *selbsttest) tonausgabe(server string) {
+	// Auf der Prüfseite (selber Ursprung wie die Web-App).
+	if t.imNetz {
+		t.notiz(t.frage(`window.isSecureContext`) == "true", "http-Server im Netz gilt als sicherer Kontext (%s)", server)
+	} else {
+		t.notiz(true, "kein Netz-Ursprung — sicherer Kontext über 127.0.0.1 (Flag nicht geprüft)")
+	}
+	t.notiz(t.frage(`'setSinkId' in HTMLMediaElement.prototype`) == "true", "setSinkId vorhanden")
+	t.notiz(t.frage(`typeof lumenDesktop.tonausgabe.freigeben`) == "function", "Brücke: lumenDesktop.tonausgabe")
+	m := `(await import('/tonausgabe.js'))`
+	stand := t.frageWarte(m + `.tonausgabeStand()`)
+	t.notiz(stand == "ja", "Tonausgabe wählbar (Stand %q)", stand)
+
+	vorher := t.frageWarte(`(await navigator.permissions.query({name:'microphone'})).state`)
+	geraete := t.frageWarte(`(async()=>{const g=await ` + m + `.tonausgabeLaden(true);return g.liste.length+' Geräte: '+g.liste.map(x=>x.name).join(' | ')})()`)
+	t.notiz(!strings.HasPrefix(geraete, "FEHLER"), "Geräteliste: %s", geraete)
+	nachher := t.frageWarte(`(await navigator.permissions.query({name:'microphone'})).state`)
+	t.notiz(nachher == "granted", "Erlaubnis für die Geräteliste gesetzt (vorher %q, nachher %q)", vorher, nachher)
+	roh := t.frageWarte(`(await navigator.mediaDevices.enumerateDevices()).map(d=>d.kind+':'+(d.deviceId?'id':'-')+':'+(d.label||'-')).join(', ')`)
+	t.notiz(true, "enumerateDevices: %s", roh)
+
+	// Ein Gerät, das es nicht gibt: kein Absturz, Systemstandard, Hinweis.
+	fehlt := t.frageWarte(`(async()=>{localStorage.setItem('lumen.tonausgabe',JSON.stringify({id:'gibt-es-nicht',name:'Testgerät'}));` +
+		`const v=document.createElement('video');const r=await ` + m + `.tonausgabeAnwenden(v);return JSON.stringify(r)+' sinkId='+JSON.stringify(v.sinkId)})()`)
+	t.notiz(fehlt == `{"ok":false,"fehlt":"Testgerät"} sinkId=""`, "fehlendes Gerät sauber abgefangen (%s)", fehlt)
+
+	// Ein Mikrofon bekommt die Seite trotzdem nicht.
+	gum := t.frageWarte(`navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{s.getTracks().forEach(x=>x.stop());return 'offen'},e=>e.name)`)
+	t.notiz(gum == "NotAllowedError", "getUserMedia abgelehnt (%s)", gum)
+	// … auch nicht aus einem Rahmen ohne Brücke (dort lehnt die App ab —
+	// ohne Mikrofon am Rechner kommt Chromium oft gar nicht so weit).
+	rahmen := t.frageWarte(`(async()=>{const f=document.createElement('iframe');document.body.appendChild(f);` +
+		`try{const s=await f.contentWindow.navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(x=>x.stop());return 'offen'}catch(e){return e.name}finally{f.remove()}})()`)
+	t.mu.Lock()
+	abgelehnt := t.abgelehnt
+	t.mu.Unlock()
+	t.notiz(rahmen != "offen", "getUserMedia aus einem Rahmen: %s (von der App abgelehnt: %d)", rahmen, abgelehnt)
+
+	// Die Einstellung in der echten Web-App (angemeldet beim Schein-Server).
+	t.skript(`localStorage.setItem('lumen.token','selbsttest');localStorage.setItem('lumen.tonausgabe',JSON.stringify({id:'gibt-es-nicht',name:'Testgerät'}))`)
+	t.ui(func() { t.f.Navigieren(server + "/#/ich") })
+	if t.notiz(t.warteGeladen(server+"/#/ich"), "Einstellungen geladen") {
+		time.Sleep(3 * time.Second)
+		zeile := t.frage(`(()=>{const s=document.querySelector('select[data-tonausgabe]');return s?(s.disabled?'gesperrt':'da')+':'+s.options.length+':'+[...s.options].map(o=>o.textContent).join(' | '):'fehlt'})()`)
+		t.notiz(strings.HasPrefix(zeile, "da:"), "Einstellung „Tonausgabe“ erscheint (%s)", zeile)
+		t.skript(`document.querySelector('select[data-tonausgabe]')?.scrollIntoView({block:'center'})`)
+		time.Sleep(600 * time.Millisecond)
+		t.bildWarte("8-einstellungen-tonausgabe.png")
+		// Zurück auf „Systemstandard": Die Erlaubnis geht wieder weg.
+		t.skript(`(()=>{const s=document.querySelector('select[data-tonausgabe]');if(s){s.value='';s.dispatchEvent(new Event('change',{bubbles:true}))}})()`)
+		time.Sleep(1500 * time.Millisecond)
+		zurueck := t.frageWarte(`(await navigator.permissions.query({name:'microphone'})).state`)
+		gemerkt := t.frage(`localStorage.getItem('lumen.tonausgabe')`)
+		t.notiz(zurueck != "granted" && gemerkt == "null", "„Systemstandard“ nimmt die Erlaubnis zurück (%s, gemerkt %s)", zurueck, gemerkt)
+		t.skript(`localStorage.removeItem('lumen.token')`)
 	}
 }
 

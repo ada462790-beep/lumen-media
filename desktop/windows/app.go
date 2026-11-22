@@ -39,6 +39,10 @@ type Host interface {
 	Extern(adresse string)
 	InstallerStarten(pfad string) error
 	Schliessen()
+	// TonausgabeErlauben erlaubt (an) oder nimmt zurück, dass die Seite
+	// dieses Ursprungs die Audio-Ausgabegeräte sieht und wählt
+	// (tonausgabe.go). fertig kommt im Fenster-Thread.
+	TonausgabeErlauben(ursprung string, an bool, fertig func(error))
 }
 
 type App struct {
@@ -183,6 +187,7 @@ func (a *App) Nachricht(quelle, roh string) {
 	var d struct {
 		Adresse string `json:"adresse"`
 		ID      string `json:"id"`
+		An      bool   `json:"an"`
 	}
 	_ = json.Unmarshal(n.Daten, &d)
 
@@ -210,6 +215,23 @@ func (a *App) Nachricht(quelle, roh string) {
 	case "updateSpaeter":
 		antworte(nil, nil)
 		a.updateSpaeter()
+	case "tonausgabe":
+		// Nur die Web-App eines gemerkten Servers, für ihren eigenen
+		// Ursprung — nie die eingebaute Seite, nie eine fremde.
+		ursprung, ok := a.serverUrsprung(quelle)
+		if !ok {
+			antworte(nil, codeFehler{fehlerNichtErlaub})
+			return
+		}
+		an := d.An
+		a.host.Auftrag(func() {
+			a.host.TonausgabeErlauben(ursprung, an, func(err error) {
+				if err != nil {
+					log.Printf("Tonausgabe für %s: %v", ursprung, err)
+				}
+				antworte(nil, err)
+			})
+		})
 
 	// Nur für die eingebaute Seite.
 	default:

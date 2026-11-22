@@ -32,6 +32,9 @@ import { tastaturEinrichten } from './tastatur.js';
 // Eigene Bedienelemente (Uhrzeit, Zahl) statt der Systemoptik.
 import { zeitWahl, zahlFeld } from './fenster.js';
 import { wunschFeld, wunschFeldEinrichten, wunschBild, wunschZusatz, wunschVerweise } from './wuensche.js';
+// Lautsprecher wählen — nur in Lumen für Windows.
+import { tonausgabeAngeboten, tonausgabeStand, tonausgabeGewaehlt, tonausgabeLaden, tonausgabeWaehlen,
+  tonausgabeAnwenden, tonGeraete } from './tonausgabe.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -623,7 +626,11 @@ document.addEventListener('click', async e => {
   const ton = e.target.closest('[data-vorschau-ton]');
   if (ton) {
     const v = ton.parentElement.querySelector('video') || ton.closest('.hero')?.querySelector('video');
-    if (v) { v.muted = !v.muted; ton.setAttribute('aria-pressed', String(!v.muted)); ton.classList.toggle('an', !v.muted); }
+    if (v) {
+      // Erst mit Ton zählt das Gerät; stumm bleibt die Vorschau, wo sie ist.
+      if (v.muted) tonausgabeSetzen(v);
+      v.muted = !v.muted; ton.setAttribute('aria-pressed', String(!v.muted)); ton.classList.toggle('an', !v.muted);
+    }
     return;
   }
   if (!hoverKarte || !hoverKarte.contains(e.target)) return;
@@ -1163,6 +1170,7 @@ function render() {
   }
   if (S.view === 'player') mountPlayer();
   else nachDemZeichnen(vorherFokus);
+  if (S.view === 'settings') tonausgabeAuffrischen();
   if (gleicheSeite && !S.busy) {
     const seite = app.querySelector('.page');
     if (seite && altScroll) seite.scrollTop = altScroll;
@@ -2421,6 +2429,7 @@ function extraAbspielen(url, titel, { strom = '' } = {}) {
     <p class="t-caption extra-hinweis" data-extra-hinweis hidden role="status"></p>`;
   document.body.appendChild(d);
   const v = d.querySelector('video');
+  tonausgabeSetzen(v);
   const hinweis = (text, fehler = false) => {
     const el = d.querySelector('[data-extra-hinweis]');
     el.hidden = !text; el.textContent = text || ''; el.classList.toggle('extra-hinweis--fehler', fehler);
@@ -2680,7 +2689,45 @@ function qualitaetPanel(p, zeile, abschnitt) {
       ? `<div class="spuren-hinweis">${tr('Diese Fassung ist der Standard.')}</div>`
       : `<button class="spur" data-pl-standard><span class="spur-name">${tr('Diese Fassung als Standard nehmen')}</span></button>`);
   }
-  return `<div class="spuren spuren--qualitaet" role="menu" aria-label="${tr('Qualität')}">${html}</div>`;
+  // Lumen für Windows: über welches Gerät der Ton kommt (tonausgabe.js).
+  if (tonausgabeImMenue()) {
+    const w = tonausgabeGewaehlt();
+    const liste = tonGeraete.liste;
+    html += abschnitt(tr('Tonausgabe'),
+      eintrag(!w, 'data-tonausgabe-wahl=""', tr('Systemstandard')) +
+      liste.map(g => eintrag(w?.id === g.id, `data-tonausgabe-wahl="${esc(g.id)}"`, g.name)).join('') +
+      (!tonGeraete.geladen ? `<div class="spuren-hinweis" role="status">${tr('Geräte werden gesucht …')}</div>`
+        : w && !liste.some(g => g.id === w.id) ? `<div class="spuren-hinweis">${esc(tr('„{name}“ ist nicht verbunden.', { name: w.name || '?' }))}</div>` : ''));
+  }
+  return `<div class="spuren spuren--qualitaet" role="menu" aria-label="${esc(zahnradName())}">${html}</div>`;
+}
+
+/* Tonausgabe (Lumen für Windows): Das Zahnrad heisst dann „Qualität und
+   Tonausgabe". Die Geräte holt erst das Öffnen des Menüs. */
+const tonausgabeImMenue = () => tonausgabeAngeboten() && tonausgabeStand() === 'ja';
+const zahnradName = () => tonausgabeImMenue() ? tr('Qualität und Tonausgabe') : tr('Qualität');
+
+/* Das gewählte Gerät auf ein <video> legen. Fehlt es, spielt der
+   Systemstandard, und einmal pro Gerät sagt Lumen es. */
+let tonHinweisFuer = '';
+function tonausgabeSetzen(el) {
+  if (!tonausgabeAngeboten()) return;
+  tonausgabeAnwenden(el).then(r => {
+    if (r.ok || tonHinweisFuer === r.fehlt) return;
+    tonHinweisFuer = r.fehlt;
+    toast(tr('„{name}“ ist nicht verbunden – der Ton kommt über den Systemstandard.', { name: r.fehlt }));
+  });
+}
+
+async function tonausgabeImPlayer(id) {
+  const w = await tonausgabeWaehlen(id);
+  tonHinweisFuer = '';
+  const p = S.playing;
+  if (p) { p.spurenOffen = false; p.spurenHtml = ''; patchChrome(); }
+  app.querySelector('[data-spuren="qualitaet"]')?.focus({ preventScroll: true });
+  const v = $('#v');
+  if (v) tonausgabeSetzen(v);
+  toast(w ? tr('Ton über „{name}“', { name: w.name || '?' }) : tr('Ton über den Systemstandard'));
 }
 
 /* Eine andere Stufe: dieselbe Datei an derselben Stelle neu holen, mit
@@ -3154,7 +3201,7 @@ function viewPlayer() {
         ${p.kapitel?.length ? `<button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'kapitel' ? ' pl-knopf--an' : ''}" data-spuren="kapitel"
           aria-label="${tr('Kapitel')}" aria-expanded="${p.spurenOffen === 'kapitel'}">${svg(I.kapitel, 21, 2)}</button>` : ''}
         <button class="btn btn-round sm glass glass--clear pl-knopf${p.spurenOffen === 'qualitaet' ? ' pl-knopf--an' : ''}" data-spuren="qualitaet"
-          aria-label="${tr('Qualität')}" title="${tr('Qualität')}" aria-expanded="${p.spurenOffen === 'qualitaet'}">${svg(I.zahnrad, 21, 1.9)}</button>
+          aria-label="${esc(zahnradName())}" title="${esc(zahnradName())}" aria-expanded="${p.spurenOffen === 'qualitaet'}">${svg(I.zahnrad, 21, 1.9)}</button>
         <button class="btn btn-pill glass glass--clear pl-knopf pl-knopf--tempo${p.spurenOffen === 'tempo' ? ' pl-knopf--an' : ''}" data-spuren="tempo"
           aria-label="${esc(tr('Wiedergabetempo: {tempo}', { tempo: tempoText(p.tempo || 1) }))}" aria-expanded="${p.spurenOffen === 'tempo'}">${esc(tempoZahl(p.tempo || 1))}</button>
         ${bildImBildDa() ? `<button class="btn btn-round sm glass glass--clear pl-knopf" data-pip aria-label="${tr('Bild im Bild')}" title="${tr('Bild im Bild (P)')}">${svg(I.bildImBild, 20, 2)}</button>` : ''}
@@ -3440,6 +3487,7 @@ function mountPlayer() {
 
   p.textspur = null; // gehört zum neuen <video>
   lautstaerkeAnwenden(v);
+  tonausgabeSetzen(v);
   v.defaultPlaybackRate = v.playbackRate = p.tempo || 1;
   v.onloadedmetadata = () => { p.loading = false; v.playbackRate = p.tempo || 1; patchChrome(); mediensitzungStand(p); };
   v.onplaying = () => { p.loading = false; clearTimeout(p.wartenZeit); p.wartenZeit = null; p.paused = false; patchChrome(); showChrome(); mediensitzungStand(p); };
@@ -4707,6 +4755,35 @@ function datenquellenZeilen() {
       <img src="/tmdb.svg" alt="TMDB" width="92" height="12" style="height:12px;width:auto;display:block"></a>`;
 }
 
+/* Tonausgabe (nur Lumen für Windows): Systemstandard oder ein bestimmtes
+   Gerät. Die Liste füllt sich nach dem Zeichnen (tonausgabeAuffrischen). */
+function tonausgabeOptionen() {
+  const w = tonausgabeGewaehlt();
+  const liste = tonGeraete.liste.slice();
+  if (w && !liste.some(g => g.id === w.id)) liste.push({ id: w.id, name: w.name || '?', fehlt: tonGeraete.geladen });
+  return `<option value="">${tr('Systemstandard')}</option>` + liste.map(g =>
+    `<option value="${esc(g.id)}"${w?.id === g.id ? ' selected' : ''}>${esc(g.fehlt ? tr('{name} (nicht verbunden)', { name: g.name }) : g.name)}</option>`).join('');
+}
+function tonausgabeZeile() {
+  if (!tonausgabeAngeboten() || tonausgabeStand() === 'nein') return '';
+  const aus = tonausgabeStand() !== 'ja';
+  return `<div class="row" style="min-height:54px;gap:12px;flex-wrap:wrap"><label for="preftonausgabe" class="t-body" style="flex:1">${tr('Tonausgabe')}</label>
+    <select id="preftonausgabe" class="takt" data-tonausgabe style="flex:0 1 auto;min-width:0;max-width:100%"${aus ? ' disabled' : ''}>${tonausgabeOptionen()}</select></div>`;
+}
+function tonausgabeFuss() {
+  if (!tonausgabeAngeboten() || tonausgabeStand() === 'nein') return '';
+  return tonausgabeStand() === 'neustart'
+    ? tr('Die Tonausgabe lässt sich wählen, sobald Lumen neu gestartet ist.')
+    : tr('Tonausgabe gilt für diesen Computer. Wähl ein Gerät, wenn ein Audio-Mischprogramm den Ton von Lumen sonst nicht bekommt.');
+}
+function tonausgabeAuffrischen() {
+  if (!tonausgabeAngeboten() || tonausgabeStand() !== 'ja') return;
+  tonausgabeLaden(true).then(() => {
+    const sel = app.querySelector('select[data-tonausgabe]');
+    if (sel && document.activeElement !== sel) sel.innerHTML = tonausgabeOptionen();
+  });
+}
+
 function viewSettings() {
   const a = S.me.account, lim = S.me.limits || {}, prefs = S.me.prefs || {};
   const devices = (S.data?.devices || []).map(geraetZeile).join('');
@@ -4748,7 +4825,8 @@ function viewSettings() {
             ${segment(tr('Tonsprache'), [['profil', tr('Profilsprache')], ['original', tr('Originalton')]].map(([v, n]) =>
               ({ name: n, an: (prefs.tonWahl === 'original' ? 'original' : 'profil') === v, attr: `data-prefwert="tonWahl:${v}"` })))}
             </div>` +
-          swRow(tr('Qualität unterwegs'), null, lim.remoteQuality === 'original' ? tr('Original') : lim.remoteQuality || '1080p'))}
+          swRow(tr('Qualität unterwegs'), null, lim.remoteQuality === 'original' ? tr('Original') : lim.remoteQuality || '1080p') +
+          tonausgabeZeile(), tonausgabeFuss())}
         ${grp(tr('Profilbild'), `<div class="avatar-wahl">
             ${['av-a', 'av-b', 'av-c', 'av-d', 'av-k'].map(c => `<button class="avatar ${c}${a.avatar === c ? ' gewaehlt' : ''}" style="--av:44px;border:0" data-avatar="${c}" aria-label="${tr('Farbe {nr}', { nr: c.slice(3).toUpperCase() })}">${esc(a.name[0])}</button>`).join('')}
             ${Object.keys(FIGUREN).map(f => `<button class="avatar avatar--figur${a.avatar === 'fig-' + f ? ' gewaehlt' : ''}" style="--av:44px;border:0;background:${FIGUREN[f][0]}" data-avatar="fig-${f}" aria-label="${f}">
@@ -6434,6 +6512,9 @@ app.addEventListener('click', async e => {
     const p = S.playing;
     if (p) {
       p.spurenOffen = p.spurenOffen === n.dataset.spuren ? false : n.dataset.spuren; p.spurenHtml = ''; showChrome(true);
+      if (p.spurenOffen === 'qualitaet' && tonausgabeImMenue()) {
+        tonausgabeLaden(true).then(() => { if (S.playing === p && p.spurenOffen === 'qualitaet') { p.spurenHtml = ''; patchChrome(); } });
+      }
       // Mit Tastatur oder Fernbedienung geöffnet (ein Klick ohne Maus hat
       // detail 0): der Fokus geht in das Menü, auf den gewählten Eintrag —
       // sonst käme man mit den Pfeilen nicht hinein.
@@ -6443,6 +6524,7 @@ app.addEventListener('click', async e => {
   }
   if ((n = hit('data-spur'))) return spurWaehlen(Number(n.dataset.spur));
   if ((n = hit('data-qualitaet'))) return qualitaetWaehlen(n.dataset.qualitaet);
+  if ((n = hit('data-tonausgabe-wahl'))) return tonausgabeImPlayer(n.dataset.tonausgabeWahl);
   if ((n = hit('data-fassungwahl'))) return fassungWechseln(n.dataset.fassungwahl);
   if (hit('data-pl-standard')) return fassungAlsStandard();
   if (hit('data-pl-fehler-zu')) return stopPlayer();
@@ -7484,6 +7566,11 @@ app.addEventListener('change', async e => {
     // Eine neue Sortierung beginnt in ihrer üblichen Richtung.
     return sortierungWaehlen(S.view, z.value, SORTIER_VORGABE[z.value] || 'asc');
   }
+  if (z.matches && z.matches('select[data-tonausgabe]')) {
+    const w = await tonausgabeWaehlen(z.value);
+    tonHinweisFuer = '';
+    return toast(w ? tr('Ton über „{name}“', { name: w.name || '?' }) : tr('Ton über den Systemstandard'));
+  }
   if (z.matches && z.matches('select[data-prefsprache]')) {
     try {
       S.me = await api.updateMe({ prefs: { sprache: z.value } });
@@ -8272,8 +8359,11 @@ addEventListener('online', () => {
 });
 
 // Die Hülle der App für den Fall ohne Netz (sw.js). Nur über https oder
-// localhost — anders lassen Browser keinen Service Worker zu.
-if ('serviceWorker' in navigator && window.isSecureContext) {
+// localhost — anders lassen Browser keinen Service Worker zu. Nicht in
+// Lumen für Windows: Dort zeigt die App selbst die Serverauswahl, wenn der
+// Server nicht antwortet — und seit der Tonausgabe gilt dort auch ein
+// Server im Heimnetz über http als sicher.
+if ('serviceWorker' in navigator && window.isSecureContext && !inDesktopApp()) {
   const swAnmelden = () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); };
   if (document.readyState === 'complete') swAnmelden(); else addEventListener('load', swAnmelden);
 }

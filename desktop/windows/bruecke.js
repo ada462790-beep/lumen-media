@@ -117,11 +117,30 @@
       plattform: 'windows',
       // Zeigt die Serverauswahl der App (wie Strg+Umschalt+S).
       serverWechseln: () => frage('serverWechseln'),
+      // Tonausgabe (server/cmd/lumen/web/tonausgabe.js): Die App erlaubt
+      // dem Server still, die Lautsprecher zu sehen und zu wählen — nur
+      // seinem eigenen Ursprung, und nur, solange ein Gerät gewählt ist.
+      tonausgabe: Object.freeze({
+        freigeben: () => frage('tonausgabe', { an: true }),
+        zuruecknehmen: () => frage('tonausgabe', { an: false }),
+      }),
       // Für die eingebaute Seite; die App prüft selbst, wer fragt.
       _frage: frage,
       _update: zeigeUpdate,
     }),
   });
+
+  // Lumen nimmt nie etwas auf. Die Erlaubnis, mit der die Tonausgabe die
+  // Geräte sieht, soll kein Mikrofon öffnen können — die App lehnt solche
+  // Anfragen ausserdem selbst ab (berechtigungGefragt in ton_windows.go).
+  const md = navigator.mediaDevices;
+  if (md && typeof md.getUserMedia === 'function') {
+    try {
+      Object.defineProperty(md, 'getUserMedia', {
+        value: () => Promise.reject(new DOMException('Lumen does not record.', 'NotAllowedError')),
+      });
+    } catch { /* bleibt die Ablehnung in der App */ }
+  }
 
   const nachLaden = () => frage('updateStand').then(s => { if (s && s.verfuegbar) zeigeUpdate(s); }).catch(() => {});
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', nachLaden, { once: true });

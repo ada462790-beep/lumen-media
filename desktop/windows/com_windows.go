@@ -25,9 +25,32 @@ const (
 	wvGetSource              = 4
 	wvAddNavigationStarting  = 7
 	wvAddNavigationCompleted = 15
+	wvAddPermissionRequested = 23
 	wvCapturePreview         = 30
 	wvAddNewWindowRequested  = 44
 	wvGetDocumentTitle       = 48
+)
+
+// ICoreWebView2_13::get_Profile und ICoreWebView2Profile4::SetPermissionState.
+const (
+	wv13GetProfile            = 105
+	profil4SetPermissionState = 15
+	berechtGetUri             = 3
+	berechtGetKind            = 4
+	berechtPutState           = 7
+	berecht3PutSavesInProfile = 12
+	berechtigungMikrofon      = 1 // COREWEBVIEW2_PERMISSION_KIND_MICROPHONE
+	berechtigungKamera        = 2 // COREWEBVIEW2_PERMISSION_KIND_CAMERA
+	berechtigungStandard      = 0 // COREWEBVIEW2_PERMISSION_STATE_DEFAULT
+	berechtigungErlaubt       = 1 // COREWEBVIEW2_PERMISSION_STATE_ALLOW
+	berechtigungAbgelehnt     = 2 // COREWEBVIEW2_PERMISSION_STATE_DENY
+)
+
+// Schnittstellen-Kennungen aus WebView2.h.
+var (
+	iidWebView2_13  = windows.GUID{Data1: 0xf75f09a8, Data2: 0x667e, Data3: 0x4983, Data4: [8]byte{0x88, 0xd6, 0xc8, 0x77, 0x3f, 0x31, 0x5e, 0x84}}
+	iidProfil4      = windows.GUID{Data1: 0x8f4ae680, Data2: 0x192e, Data3: 0x4ec8, Data4: [8]byte{0x83, 0x3a, 0x21, 0xcf, 0xad, 0xae, 0xf6, 0x28}}
+	iidBerechtArgs3 = windows.GUID{Data1: 0xe61670bc, Data2: 0x3dce, Data3: 0x4177, Data4: [8]byte{0x86, 0xd2, 0xc6, 0x29, 0xae, 0x3c, 0xb6, 0xac}}
 )
 
 // Methoden von ICoreWebView2Settings2.
@@ -66,9 +89,26 @@ const (
 type com unsafe.Pointer
 
 func comAufruf(obj com, methode int, args ...uintptr) uintptr {
-	tabelle := *(**[64]uintptr)(obj)
+	tabelle := *(**[128]uintptr)(obj)
 	r, _, _ := syscall.SyscallN(tabelle[methode], append([]uintptr{uintptr(obj)}, args...)...)
 	return r
+}
+
+// comFrage holt eine andere Schnittstelle desselben Objekts
+// (QueryInterface). Das Ergebnis mit comLos wieder freigeben.
+func comFrage(obj com, iid *windows.GUID) (com, bool) {
+	var p unsafe.Pointer
+	if obj == nil || comAufruf(obj, 0, uintptr(unsafe.Pointer(iid)), uintptr(unsafe.Pointer(&p))) != 0 || p == nil {
+		return nil, false
+	}
+	return com(p), true
+}
+
+// comLos gibt einen Verweis frei (Release).
+func comLos(obj com) {
+	if obj != nil {
+		comAufruf(obj, 2)
+	}
 }
 
 // comText ruft eine Methode, die einen mit CoTaskMemAlloc angelegten
