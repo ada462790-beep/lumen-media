@@ -67,7 +67,9 @@ export const tonGeraete = { liste: [], geladen: false };
 let laden = null;
 
 /* Geräte holen. Die App erlaubt vorher (still) die Geräteliste für
- * diesen Server; ohne das gäbe es nur „Standard" ohne Namen. */
+ * diesen Server; ohne das gäbe es nur „Standard" ohne Namen. Ist kein
+ * Gerät gewählt, nimmt sie die Erlaubnis danach gleich wieder zurück: Sie
+ * bleibt nur, solange der Player sie für setSinkId braucht. */
 export function tonausgabeLaden(neu = false) {
   if (tonausgabeStand() !== 'ja') return Promise.resolve(tonGeraete);
   if (laden && !neu) return laden;
@@ -80,6 +82,7 @@ export function tonausgabeLaden(neu = false) {
     const aus = alle.filter(d => d.kind === 'audiooutput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
     tonGeraete.liste = aus.map((d, i) => ({ id: d.deviceId, name: d.label || `#${i + 1}` }));
     tonGeraete.geladen = true;
+    if (!tonausgabeGewaehlt()) await zuruecknehmen();
     return tonGeraete;
   })();
   return laden;
@@ -92,16 +95,21 @@ if (desktop() && geraeteDa()) {
 
 /* Wählen: id '' heisst Systemstandard. Dann braucht der Server auch die
  * Geräteliste nicht mehr — die App nimmt die Erlaubnis zurück. */
+async function zuruecknehmen() {
+  try { await window.lumenDesktop?.tonausgabe?.zuruecknehmen(); } catch {}
+}
+
 export async function tonausgabeWaehlen(id) {
   if (!id) {
     merken(null);
-    try { await window.lumenDesktop?.tonausgabe?.zuruecknehmen(); } catch {}
+    await zuruecknehmen();
     laden = null;
     return null;
   }
   const g = tonGeraete.liste.find(x => x.id === id);
   const w = { id, name: g ? g.name : '' };
   merken(w);
+  try { await window.lumenDesktop?.tonausgabe?.freigeben(); } catch {}
   return w;
 }
 

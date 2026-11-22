@@ -418,9 +418,11 @@ func (t *selbsttest) tonausgabe(server string) {
 	geraete := t.frageWarte(`(async()=>{const g=await ` + m + `.tonausgabeLaden(true);return g.liste.length+' Geräte: '+g.liste.map(x=>x.name).join(' | ')})()`)
 	t.notiz(!strings.HasPrefix(geraete, "FEHLER"), "Geräteliste: %s", geraete)
 	nachher := t.frageWarte(`(await navigator.permissions.query({name:'microphone'})).state`)
-	t.notiz(nachher == "granted", "Erlaubnis für die Geräteliste gesetzt (vorher %q, nachher %q)", vorher, nachher)
-	roh := t.frageWarte(`(await navigator.mediaDevices.enumerateDevices()).map(d=>d.kind+':'+(d.deviceId?'id':'-')+':'+(d.label||'-')).join(', ')`)
-	t.notiz(true, "enumerateDevices: %s", roh)
+	t.notiz(vorher == "prompt" && nachher == "prompt", "ohne gewähltes Gerät bleibt keine Erlaubnis (vorher %q, nachher %q)", vorher, nachher)
+	gewaehlt := t.frageWarte(`(async()=>{await ` + m + `.tonausgabeWaehlen('gibt-es-nicht');` +
+		`const s=(await navigator.permissions.query({name:'microphone'})).state;` +
+		`const r=(await navigator.mediaDevices.enumerateDevices()).map(d=>d.kind+':'+(d.deviceId?'id':'-')+':'+(d.label||'-')).join(', ');return s+' | '+r})()`)
+	t.notiz(strings.HasPrefix(gewaehlt, "granted"), "mit gewähltem Gerät: Erlaubnis gesetzt, enumerateDevices: %s", gewaehlt)
 
 	// Ein Gerät, das es nicht gibt: kein Absturz, Systemstandard, Hinweis.
 	fehlt := t.frageWarte(`(async()=>{localStorage.setItem('lumen.tonausgabe',JSON.stringify({id:'gibt-es-nicht',name:'Testgerät'}));` +
