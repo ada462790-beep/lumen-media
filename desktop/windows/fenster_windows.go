@@ -22,7 +22,6 @@ import (
 	"unsafe"
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
-	"github.com/wailsapp/go-webview2/pkg/webview2"
 	"github.com/wailsapp/go-webview2/webviewloader"
 	"golang.org/x/sys/windows"
 )
@@ -52,7 +51,7 @@ const (
 type fenster struct {
 	hwnd     uintptr
 	chromium *edge.Chromium
-	wv       *webview2.ICoreWebView2
+	wv       com // ICoreWebView2, für das, was edge nicht anbietet
 	app      *App
 	bereit   bool
 	debug    bool
@@ -66,12 +65,6 @@ type fenster struct {
 	domVollbild     bool // die Seite hat ein Element im Vollbild
 	vorVollbild     fensterLage
 	stilVorVollbild uintptr
-
-	// Die Ereignis-Empfänger müssen leben, solange WebView2 sie kennt.
-	ereignisse *ereignisse
-	navStart   *webview2.ICoreWebView2NavigationStartingEventHandler
-	navEnde    *webview2.ICoreWebView2NavigationCompletedEventHandler
-	neuFenster *webview2.ICoreWebView2NewWindowRequestedEventHandler
 
 	test *selbsttest
 }
@@ -469,26 +462,17 @@ func (f *fenster) webviewEinrichten(lokal string) error {
 		}
 	}
 
-	// Die übrigen Ereignisse über die vollständigere Schnittstelle des
-	// Pakets webview2 — dasselbe COM-Objekt, nur mehr Methoden.
-	ctl := c.GetController()
-	ew, err := ctl.GetCoreWebView2()
+	// Die übrigen Ereignisse direkt über die Methodentabelle
+	// (com_windows.go) — edge bietet sie nicht an.
+	ew, err := c.GetController().GetCoreWebView2()
 	if err != nil {
 		return err
 	}
-	f.wv = (*webview2.ICoreWebView2)(unsafe.Pointer(ew))
-	f.ereignisse = &ereignisse{f: f}
-	f.navStart = webview2.NewICoreWebView2NavigationStartingEventHandler(f.ereignisse)
-	f.navEnde = webview2.NewICoreWebView2NavigationCompletedEventHandler(f.ereignisse)
-	f.neuFenster = webview2.NewICoreWebView2NewWindowRequestedEventHandler(f.ereignisse)
-	if _, err := f.wv.AddNavigationStarting(f.navStart); err != nil {
-		return fmt.Errorf("NavigationStarting: %w", err)
-	}
-	if _, err := f.wv.AddNavigationCompleted(f.navEnde); err != nil {
-		return fmt.Errorf("NavigationCompleted: %w", err)
-	}
-	if _, err := f.wv.AddNewWindowRequested(f.neuFenster); err != nil {
-		return fmt.Errorf("NewWindowRequested: %w", err)
+	f.wv = com(unsafe.Pointer(ew))
+	if !anmelden(f.wv, wvAddNavigationStarting, ereignis(f.navigationBeginnt)) ||
+		!anmelden(f.wv, wvAddNavigationCompleted, ereignis(f.navigationFertig)) ||
+		!anmelden(f.wv, wvAddNewWindowRequested, ereignis(f.neuesFenster)) {
+		return errors.New("WebView2-Ereignisse liessen sich nicht anmelden")
 	}
 
 	c.AddWebResourceRequestedFilter("http://"+seitenHost+"/*", edge.COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)
@@ -526,78 +510,62 @@ func (f *fenster) eingebauteSeite(req *edge.ICoreWebView2WebResourceRequest, arg
 	args.PutResponse(antwort)
 }
 
-// ereignisse empfängt Navigation und neue Fenster.
-type ereignisse struct{ f *fenster }
-
-func (e *ereignisse) QueryInterface(_, _ uintptr) uintptr { return 0 }
-func (e *ereignisse) AddRef() uintptr                     { return 1 }
-func (e *ereignisse) Release() uintptr                    { return 1 }
-
-func (e *ereignisse) NavigationStarting(_ *webview2.ICoreWebView2, args *webview2.ICoreWebView2NavigationStartingEventArgs) uintptr {
-	adresse, err := args.GetUri()
-	if err != nil {
-		return 0
+// navigationBeginnt: Was nicht zur Web-App des Servers oder zur
+// eingebauten Seite gehört, öffnet der Standardbrowser (App.Wohin).
+func (f *fenster) navigationBeginnt(_, args com) {
+	adresse, ok := comText(args, navStartGetUri)
+	if !ok {
+		return
 	}
-	switch e.f.app.Wohin(adresse) {
+	switch f.app.Wohin(adresse) {
 	case WegErlauben:
-		return 0
+		return
 	case WegExtern:
-		args.PutCancel(true)
-		e.f.Extern(adresse)
+		comBoolSetzen(args, navStartPutCancel, true)
+		f.Extern(adresse)
 	default:
-		args.PutCancel(true)
+		comBoolSetzen(args, navStartPutCancel, true)
 		log.Printf("Navigation gesperrt: %s", adresse)
 	}
-	return 0
 }
 
-func (e *ereignisse) NavigationCompleted(sender *webview2.ICoreWebView2, args *webview2.ICoreWebView2NavigationCompletedEventArgs) uintptr {
-	adresse, _ := sender.GetSource()
-	ok, _ := args.GetIsSuccess()
-	if ok {
-		if e.f.test != nil {
-			e.f.test.geladen(adresse)
+// navigationFertig: Ging das Laden schief, weil der Server nicht
+// antwortet, erscheint die Auswahl mit Hinweis statt einer Fehlerseite.
+func (f *fenster) navigationFertig(sender, args com) {
+	adresse, _ := comText(sender, wvGetSource)
+	if comBool(args, navEndeIsSuccess) {
+		if f.test != nil {
+			f.test.geladen(adresse)
 		}
-		return 0
+		return
 	}
-	status, _ := args.GetWebErrorStatus()
+	status := comZahl(args, navEndeErrorStatus)
 	log.Printf("Laden fehlgeschlagen (%d): %s", status, adresse)
 	switch status {
-	case webview2.COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED:
-		e.f.app.LadenFehlgeschlagen(adresse, fehlerErreichbar)
-	case webview2.COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_COMMON_NAME_IS_INCORRECT,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_EXPIRED,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_REVOKED,
-		webview2.COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_IS_INVALID:
-		e.f.app.LadenFehlgeschlagen(adresse, fehlerZertifikat)
+	case webFehlerUnerreichbar, webFehlerZeit, webFehlerAbgebrochen, webFehlerZurueckgesetzt,
+		webFehlerGetrennt, webFehlerKeineVerbindung, webFehlerNameUnbekannt:
+		f.app.LadenFehlgeschlagen(adresse, fehlerErreichbar)
+	case webFehlerZertNameFalsch, webFehlerZertAbgelaufen, webFehlerZertWiderrufen, webFehlerZertUngueltig:
+		f.app.LadenFehlgeschlagen(adresse, fehlerZertifikat)
 	}
-	return 0
 }
 
-// NewWindowRequested: target="_blank" und window.open. Ein zweites
-// Fenster gibt es nicht — Fremdes öffnet der Standardbrowser, Eigenes
-// lädt im Fenster.
-func (e *ereignisse) NewWindowRequested(_ *webview2.ICoreWebView2, args *webview2.ICoreWebView2NewWindowRequestedEventArgs) uintptr {
-	adresse, err := args.GetUri()
-	args.PutHandled(true)
-	if err != nil || adresse == "" {
-		return 0
+// neuesFenster: target="_blank" und window.open. Ein zweites Fenster gibt
+// es nicht — Fremdes öffnet der Standardbrowser, Eigenes lädt im Fenster.
+func (f *fenster) neuesFenster(_, args com) {
+	adresse, ok := comText(args, neuFensterGetUri)
+	comBoolSetzen(args, neuFensterPutHandled, true)
+	if !ok || adresse == "" {
+		return
 	}
-	switch e.f.app.Wohin(adresse) {
+	switch f.app.Wohin(adresse) {
 	case WegExtern:
-		e.f.Extern(adresse)
+		f.Extern(adresse)
 	case WegErlauben:
 		if strings.HasPrefix(adresse, "http") {
-			e.f.Navigieren(adresse)
+			f.Navigieren(adresse)
 		}
 	}
-	return 0
 }
 
 // ---------------------------------------------------------------- Host

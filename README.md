@@ -11,8 +11,8 @@ und braucht weder Konto noch Abo noch Cloud.
 Lumen ist bewusst ein Server für **Filme und Serien** — und nur dafür.
 Musik- und Fotobibliotheken gibt es nicht.
 
-- **Ein Server, alle Geräte:** Browser, iPhone, iPad, Mac, Apple TV,
-  Android, Android TV und Fire TV.
+- **Ein Server, alle Geräte:** Browser, Windows-App, iPhone, iPad, Mac,
+  Apple TV, Android, Android TV und Fire TV.
 - **Erkennt deine Sammlung:** Filme, Serien, Filmreihen, mehrere Fassungen
   eines Films, Filme in Teilen, NFO-Dateien und lokale Poster.
 - **Spielt alles ab:** direkt, wenn das Gerät die Datei kann, sonst
@@ -453,6 +453,53 @@ cd server && make        # baut ./lumen für diesen Rechner
 make test                # alle Tests
 make release             # für alle Plattformen (braucht Zig, s. Makefile)
 ```
+
+---
+
+## Lumen für Windows
+
+Lumen gibt es auch als eigenes Programm für Windows 10 und 11 (64 Bit) —
+mit Eintrag im Startmenü, Symbol auf dem Desktop und in der Taskleiste.
+Darin läuft die Oberfläche deines Servers, so wie im Browser, nur in einem
+eigenen Fenster:
+
+- **Mehrere Server:** Beim ersten Start gibst du die Adresse ein, etwa
+  `192.168.10.10:8097` (ohne Anschluss nimmt Lumen 8097). Lumen prüft, ob
+  dort ein Lumen-Server antwortet, und zeigt seinen Namen. Weitere Server
+  kommen dazu wie in Emby; wechseln mit **Strg+Umschalt+S**, über
+  „Server wechseln" (bei „Wer schaut?" und unter *Ich*) oder im
+  Fenstermenü (Alt+Leertaste). Angemeldet bleibst du auf jedem Server.
+- **Vollbild:** F11 (oder Alt+Eingabe) für das ganze Fenster; der
+  Vollbild-Knopf im Player füllt den ganzen Bildschirm.
+- **Medientasten:** Abspielen/Pause und Weiter auf der Tastatur und in der
+  Mediensteuerung von Windows.
+- **Links zu IMDb, TMDb und Co.** gehen im Standardbrowser auf.
+- **Updates:** Höchstens einmal am Tag fragt Lumen bei GitHub nach einer
+  neuen Fassung und bietet sie unten rechts an. Geladen wird nur auf
+  Knopfdruck; vor dem Start prüft Lumen Unterschrift und Prüfsumme wie
+  beim Server-Update. Still im Hintergrund aktualisiert sich nichts.
+
+**Herunterladen:** `Lumen-Setup-<Fassung>-windows-x64.exe` unter
+[Releases](https://github.com/ada462790-beep/lumen-media/releases/latest).
+Der Installer braucht keine Administratorrechte (er installiert nur für
+dich nach `%LOCALAPPDATA%\Programs\Lumen`). Fehlt die
+WebView2-Laufzeit von Microsoft — auf Windows 11 ist sie immer da, auf
+Windows 10 fast immer —, holt er sie nach.
+
+**Windows warnt beim ersten Start („Der Computer wurde durch Windows
+geschützt").** Das liegt daran, dass der Installer nicht mit einem
+gekauften Code-Signatur-Zertifikat unterschrieben ist — nicht an Lumen.
+Klicke auf **Weitere Informationen › Trotzdem ausführen**. Wer sichergehen
+will, vergleicht vorher die Prüfsumme mit `pruefsummen.txt` derselben
+Veröffentlichung (`Get-FileHash Lumen-Setup-….exe` in PowerShell).
+
+Entfernen geht unter *Einstellungen › Apps*. Dabei fragt Lumen, ob auch die
+Serverliste und die Anmeldungen weg sollen (`%APPDATA%\Lumen`,
+`%LOCALAPPDATA%\Lumen`).
+
+Gebaut wird die App mit Go und WebView2, dem Chromium, das in Windows
+steckt — kein eigener Browser, kein Electron; der Installer ist wenige
+Megabyte gross. Der Quelltext liegt in [`desktop/windows/`](desktop/windows/).
 
 ---
 
@@ -1311,6 +1358,11 @@ ein Pull-Request aus einem Fork braucht nichts weiter.
 
 Server und Weboberfläche lassen sich überall bauen. Die vier App-Oberflächen
 nicht: Android braucht das Android-SDK, Apple braucht einen Mac mit Xcode.
+(Die Windows-App baut `.github/workflows/desktop.yml` auf einem
+Windows-Rechner von GitHub, bei jeder Änderung unter `desktop/windows/`:
+Sie startet die App dort einmal im Selbsttest — mit Bildern unter
+*Artifacts › selbsttest-windows* — und legt den Installer als Artefakt
+`lumen-windows-app` ab.)
 
 Beides steht auf den Maschinen von GitHub bereit. Schieb das Projekt dorthin,
 und `.github/workflows/apps.yml` übersetzt alles:
@@ -1382,7 +1434,7 @@ wiederholen. **Wichtig:** Wurde die Veröffentlichung von Hand gestartet
 selbst — dann ihn einmal von Hand mit derselben Fassung starten.
 
 Heraus kommt eine Seite mit allem darauf: der Server für sechs Plattformen,
-der Vermittler, beide APKs, Prüfsummen. Die Zwischenergebnisse der Abläufe
+der Vermittler, beide APKs, der Windows-Installer, Prüfsummen. Die Zwischenergebnisse der Abläufe
 (Artefakte) bleiben nur drei Tage liegen, damit der Speicher dafür nicht
 voll läuft.
 

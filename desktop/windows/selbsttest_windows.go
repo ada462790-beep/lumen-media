@@ -33,8 +33,6 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
-
-	"github.com/wailsapp/go-webview2/pkg/webview2"
 )
 
 type selbsttest struct {
@@ -148,7 +146,7 @@ func (t *selbsttest) geladen(adresse string) {
 }
 
 func (t *selbsttest) webAppPruefen() {
-	titel, _ := t.f.wv.GetDocumentTitle()
+	titel, _ := comText(t.f.wv, wvGetDocumentTitle)
 	t.notiz(titel == "BRUECKE_OK", "Brücke und User-Agent in der Web-App (Titel %q)", titel)
 	t.bild("2-web-app.png", func() {
 		t.bildschirm("2b-bildschirm.png")
@@ -159,7 +157,7 @@ func (t *selbsttest) webAppPruefen() {
 			ok := t.externOK
 			t.mu.Unlock()
 			t.notiz(ok, "externer Link geht an den Standardbrowser")
-			quelle, _ := t.f.wv.GetSource()
+			quelle, _ := comText(t.f.wv, wvGetSource)
 			t.notiz(strings.HasPrefix(quelle, "http://"+t.adresse), "Fenster bleibt auf der Web-App (%s)", quelle)
 			t.schritt = 3
 			t.f.f11()
@@ -220,8 +218,8 @@ func (t *selbsttest) bild(name string, weiter func()) {
 		weiter()
 		return
 	}
-	h := &bildFertig{fertig: func(code uintptr) {
-		defer (*webview2.IStream)(strom).Release()
+	h := fertig(func(code uintptr) {
+		defer comAufruf(com(strom), 2) // Release
 		if code != 0 {
 			t.notiz(false, "Bild %s: Fehler %#x", name, code)
 		} else if b := stromInhalt(strom); len(b) == 0 {
@@ -231,26 +229,13 @@ func (t *selbsttest) bild(name string, weiter func()) {
 			t.notiz(err == nil, "Bild %s (%d Bytes)", name, len(b))
 		}
 		weiter()
-	}}
-	handler := webview2.NewICoreWebView2CapturePreviewCompletedHandler(h)
-	bildHandler = append(bildHandler, handler, h)
-	if err := t.f.wv.CapturePreview(webview2.COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, (*webview2.IStream)(strom), handler); err != nil {
-		t.notiz(false, "Bild %s: %v", name, err)
+	})
+	// COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG = 0
+	if hr := comAufruf(t.f.wv, wvCapturePreview, 0, uintptr(strom), uintptr(unsafe.Pointer(h))); hr != 0 {
+		t.notiz(false, "Bild %s: Fehler %#x", name, hr)
+		comAufruf(com(strom), 2)
 		weiter()
 	}
-}
-
-// Die Empfänger dürfen nicht eingesammelt werden, solange WebView2 sie hält.
-var bildHandler []any
-
-type bildFertig struct{ fertig func(uintptr) }
-
-func (b *bildFertig) QueryInterface(_, _ uintptr) uintptr { return 0 }
-func (b *bildFertig) AddRef() uintptr                     { return 1 }
-func (b *bildFertig) Release() uintptr                    { return 1 }
-func (b *bildFertig) CapturePreviewCompleted(code uintptr) uintptr {
-	b.fertig(code)
-	return 0
 }
 
 // stromInhalt liest einen IStream aus CreateStreamOnHGlobal: so viele

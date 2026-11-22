@@ -23,8 +23,8 @@ Tests make sure it stays that way. What is stored and what isn't is listed
 
 ## Features
 
-- **One server, every device:** browser, iPhone, iPad, Mac, Apple TV,
-  Android, Android TV and Fire TV.
+- **One server, every device:** browser, Windows app, iPhone, iPad, Mac,
+  Apple TV, Android, Android TV and Fire TV.
 - **Understands your library:** movies, shows, collections, several
   versions of one movie, movies split into parts, NFO files and local
   artwork. Metadata from TMDb, IMDb and Rotten Tomatoes ratings via OMDb.
@@ -40,6 +40,45 @@ Tests make sure it stays that way. What is stored and what isn't is listed
 - **Moving from Emby or Jellyfin:** each profile brings over its own
   watched state, progress and favorites.
 - **Languages:** German (Switzerland, Germany, Austria) and English (US, UK).
+
+## Windows app
+
+Lumen is also available as a Windows program (Windows 10 and 11, 64-bit)
+with a Start menu entry and its own icon on the desktop and taskbar. It
+shows your server's web interface in a window of its own:
+
+- **Several servers:** On first launch, enter the address, for example
+  `192.168.10.10:8097` (without a port Lumen tries 8097). Lumen checks that
+  a Lumen server answers there and shows its name. Add more servers like in
+  Emby and switch with **Ctrl+Shift+S**, with "Switch Server" (on "Who’s
+  Watching?" and under *Me*) or from the window menu (Alt+Space). You stay
+  signed in on each server.
+- **Full screen:** F11 (or Alt+Enter) for the window; the player's full
+  screen button fills the whole screen.
+- **Media keys:** play/pause and next on the keyboard and in Windows' media
+  controls.
+- **Links to IMDb, TMDb etc.** open in your default browser.
+- **Updates:** At most once a day Lumen asks GitHub for a newer version and
+  offers it in the bottom right corner. It downloads only when you click,
+  and checks signature and checksum like the server update does. Nothing
+  updates silently.
+
+**Download** `Lumen-Setup-<version>-windows-x64.exe` from the
+[releases](https://github.com/ada462790-beep/lumen-media/releases/latest).
+The installer doesn't need administrator rights (it installs just for you
+into `%LOCALAPPDATA%\Programs\Lumen`). If Microsoft's WebView2 Runtime is
+missing (it ships with Windows 11 and nearly every Windows 10), the
+installer fetches it.
+
+**Windows warns on first run ("Windows protected your PC").** The installer
+isn't signed with a paid code signing certificate. Click **More info › Run
+anyway**. To be sure, compare its checksum with `pruefsummen.txt` of the
+same release first (`Get-FileHash Lumen-Setup-….exe` in PowerShell).
+
+Uninstall it under *Settings › Apps*; Lumen asks whether to remove the
+server list and sign-ins as well. Built with Go and WebView2 (the Chromium
+that comes with Windows) — no bundled browser, no Electron. Source:
+[`desktop/windows/`](desktop/windows/).
 
 ## Install with Docker
 
