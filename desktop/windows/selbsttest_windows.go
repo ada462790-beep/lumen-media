@@ -72,6 +72,7 @@ align-items:center;justify-content:center;height:100vh;gap:14px}h1{font-size:28p
 .ok{color:#30d158}.nein{color:#ff6961}a{color:#0a84ff}</style></head><body>
 <h1>Schein-Server für den Selbsttest</h1><p id="b">…</p><p id="u">…</p>
 <p><a id="extern" href="https://www.themoviedb.org/movie/603" target="_blank" rel="noopener">TMDb (soll im Browser aufgehen)</a></p>
+<p><button id="vollbild" style="font:inherit;padding:8px 16px;border-radius:999px;border:0">Vollbild wie im Player</button></p>
 <script>
 const d = window.lumenDesktop;
 const b = document.getElementById('b'), u = document.getElementById('u');
@@ -81,6 +82,7 @@ const ua = /LumenDesktop\/\S+/.exec(navigator.userAgent);
 u.textContent = ua ? 'User-Agent: ' + ua[0] : 'User-Agent ohne LumenDesktop';
 u.className = ua ? 'ok' : 'nein';
 document.title = (d && ua) ? 'BRUECKE_OK' : 'BRUECKE_FEHLT';
+document.getElementById('vollbild').addEventListener('click', () => document.documentElement.requestFullscreen());
 </script></body></html>`
 
 func (t *selbsttest) serverStarten() error {
@@ -167,13 +169,56 @@ func (t *selbsttest) webAppPruefen() {
 				t.f.f11()
 				t.spaeter(600*time.Millisecond, func() {
 					t.notiz(!t.f.vollbild, "F11 beendet das Vollbild")
-					t.schritt = 4
-					t.f.app.ServerWechseln()
+					t.playerVollbild()
 				})
 			})
 		})
 	})
 }
+
+// playerVollbild klickt wirklich (mit der Maus) auf einen Knopf, der
+// Element.requestFullscreen aufruft — ohne echten Klick verweigert der
+// Browser das Vollbild.
+func (t *selbsttest) playerVollbild() {
+	t.f.Skript(`(()=>{const r=document.getElementById('vollbild').getBoundingClientRect();` +
+		`document.title='POS:'+Math.round((r.left+r.width/2)*devicePixelRatio)+','+Math.round((r.top+r.height/2)*devicePixelRatio)})()`)
+	t.spaeter(500*time.Millisecond, func() {
+		titel, _ := comText(t.f.wv, wvGetDocumentTitle)
+		var x, y int32
+		if _, err := fmt.Sscanf(titel, "POS:%d,%d", &x, &y); err != nil {
+			t.notiz(false, "Knopf für das Player-Vollbild nicht gefunden (%q)", titel)
+			t.zurAuswahl()
+			return
+		}
+		p := punkt{x, y}
+		pClientToScreen.Call(t.f.hwnd, uintptr(unsafe.Pointer(&p)))
+		pSetForegroundWindow.Call(t.f.hwnd)
+		pSetCursorPos.Call(uintptr(p.X), uintptr(p.Y))
+		const links, losgelassen = 0x0002, 0x0004
+		pMouseEvent.Call(links, 0, 0, 0, 0)
+		pMouseEvent.Call(losgelassen, 0, 0, 0, 0)
+		t.spaeter(1500*time.Millisecond, func() {
+			t.notiz(t.f.domVollbild && t.f.vollbild, "requestFullscreen im Player füllt den Bildschirm")
+			t.bildschirm("3b-player-vollbild.png")
+			t.f.Skript(`document.fullscreenElement&&document.exitFullscreen()`)
+			t.spaeter(1200*time.Millisecond, func() {
+				t.notiz(!t.f.domVollbild && !t.f.vollbild, "exitFullscreen gibt das Fenster zurück")
+				t.zurAuswahl()
+			})
+		})
+	})
+}
+
+func (t *selbsttest) zurAuswahl() {
+	t.schritt = 4
+	t.f.app.ServerWechseln()
+}
+
+var (
+	pClientToScreen = user32.NewProc("ClientToScreen")
+	pSetCursorPos   = user32.NewProc("SetCursorPos")
+	pMouseEvent     = user32.NewProc("mouse_event")
+)
 
 func (t *selbsttest) extern(adresse string) {
 	t.mu.Lock()

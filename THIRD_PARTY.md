@@ -1,6 +1,6 @@
 # Third-party software and data sources
 
-*As of 12 November 2026 · [Deutsche Fassung](DRITTSOFTWARE.md)*
+*As of 22 November 2026 · [Deutsche Fassung](DRITTSOFTWARE.md)*
 
 Lumen itself is licensed under the **AGPL-3.0-only** (see [LICENSE](LICENSE)).
 This file lists everything that is **not** written by the Lumen authors: what
@@ -174,8 +174,33 @@ GitHub Actions (used, not shipped): `actions/checkout`, `actions/setup-go`,
 (MIT), `docker/setup-qemu-action`, `docker/setup-buildx-action`,
 `docker/login-action`, `docker/build-push-action` (Apache-2.0),
 `gradle/actions/setup-gradle` (MIT), `softprops/action-gh-release` (MIT).
+The Windows app is packaged with NSIS (on GitHub's Windows runner, via
+Chocolatey if needed).
 The scripts in `tools/` are Lumen's own; `tools/symbol_bauen.py` uses Pillow
 (MIT-CMU), which is not shipped.
+
+## 9. Windows app (`desktop/windows/`)
+
+| Name | Version | License (SPDX) | Source | How | Obligations / met |
+|---|---|---|---|---|---|
+| Go standard library and runtime | 1.25 | BSD-3-Clause | <https://go.dev/LICENSE> | built in (`Lumen.exe`) | text in the appendix; THIRD_PARTY.md is installed next to the program |
+| github.com/wailsapp/go-webview2 (packages `edge`, `webviewloader`) | v1.0.23 | MIT (`webviewloader`: ISC) | <https://github.com/wailsapp/go-webview2> | built in | texts in the appendix |
+| github.com/jchv/go-winloader | v0.0.0-20210711035445-715c2860da7e | ISC | <https://github.com/jchv/go-winloader> | built in | text in the appendix |
+| golang.org/x/sys | v0.27.0 | BSD-3-Clause | <https://go.googlesource.com/sys> | built in | same text as Go (appendix) |
+| github.com/tc-hib/winres (with nfnt/resize, golang.org/x/image) | v0.3.1 | 0BSD-style (ISC without notice requirement); ISC; BSD-3-Clause | <https://github.com/tc-hib/winres> | build only | creates icon, manifest and version info of the `.exe` (`werkzeuge/ressourcen`) |
+| NSIS (installer framework) | 3.x | zlib/libpng (some parts bzip2, CPL) | <https://nsis.sourceforge.io/License> | in the installer (the small stub that runs it) | zlib requires no notice in binaries; listed for completeness |
+| Microsoft Edge WebView2 Runtime | Evergreen | Microsoft license (proprietary) | <https://developer.microsoft.com/microsoft-edge/webview2/> | **separate** – part of Windows or downloaded from Microsoft | Lumen neither ships nor links it; it is a system component |
+| WebView2 bootstrapper (`MicrosoftEdgeWebview2Setup.exe`) | current at build time | Microsoft, redistribution permitted (WebView2 distribution) | <https://developer.microsoft.com/microsoft-edge/webview2/#download> | inside the installer, unmodified; only runs if WebView2 is missing | downloaded from Microsoft at build time and checked for Microsoft's signature; not in the repository |
+
+The built-in licenses (MIT, ISC, BSD-3-Clause) are compatible with the
+AGPL-3.0. The WebView2 Runtime is an operating system component (a "System
+Library" in the GPL's sense) that Lumen calls at run time. `go-webview2`
+also contains a copy of Microsoft's `WebView2Loader.dll`; it is only
+embedded with the build tag `native_webview2loader`, which Lumen doesn't
+set — `Lumen.exe` doesn't contain it (the loader is reimplemented in Go).
+
+The installer puts `LICENSE.txt`, `LICENSE-EXCEPTIONS.txt`,
+`THIRD_PARTY.md` and `DRITTSOFTWARE.md` next to `Lumen.exe`.
 
 ---
 
@@ -324,3 +349,74 @@ THE SOFTWARE.
 ### SQLite
 
 SQLite is in the public domain: "The author disclaims copyright to this source code. In place of a legal notice, here is a blessing: May you do good and not evil. May you find forgiveness for yourself and forgive others. May you share freely, never taking more than you give." (<https://sqlite.org/copyright.html>)
+
+### github.com/wailsapp/go-webview2 (MIT)
+
+```
+MIT License
+
+Copyright (c) 2020 John Chadwick
+Some portions Copyright (c) 2017 Serge Zaitsev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### github.com/wailsapp/go-webview2/webviewloader (ISC)
+
+```
+ISC License (ISC)
+
+Copyright (c) 2020 John Chadwick
+Copyright (c) 2022 Wails Project Developers
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+```
+
+### github.com/jchv/go-winloader (ISC)
+
+```
+ISC License
+
+Copyright © 2021, John Chadwick <john@jchw.io>
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+```
+
+golang.org/x/sys is under the same BSD-3-Clause text as Go ("Copyright 2009
+The Go Authors"), see above.

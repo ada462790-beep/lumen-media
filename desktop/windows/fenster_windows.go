@@ -454,10 +454,18 @@ func (f *fenster) webviewEinrichten(lokal string) error {
 		s.PutAreDevToolsEnabled(f.debug)
 		s.PutIsStatusBarEnabled(false)
 		s.PutIsZoomControlEnabled(true)
+		// Die Web-App erkennt die Hülle auch am User-Agent. (Direkt über
+		// die Tabelle: GetUserAgent in edge gibt den Zeiger falsch weiter.)
 		if s2 := s.GetICoreWebView2Settings2(); s2 != nil {
-			// Die Web-App erkennt die Hülle auch am User-Agent.
-			if ua, err := s2.GetUserAgent(); err == nil && !strings.Contains(ua, "LumenDesktop/") {
-				s2.PutUserAgent(ua + " LumenDesktop/" + version)
+			o := com(unsafe.Pointer(s2))
+			ua, ok := comText(o, settingsGetUserAgent)
+			if ok && !strings.Contains(ua, "LumenDesktop/") {
+				neu, _ := windows.UTF16PtrFromString(ua + " LumenDesktop/" + version)
+				if hr := comAufruf(o, settingsPutUserAgent, uintptr(unsafe.Pointer(neu))); hr != 0 {
+					log.Printf("User-Agent: %#x", hr)
+				}
+			} else if !ok {
+				log.Printf("User-Agent nicht lesbar")
 			}
 		}
 	}

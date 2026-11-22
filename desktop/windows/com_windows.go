@@ -30,6 +30,12 @@ const (
 	wvGetDocumentTitle       = 48
 )
 
+// Methoden von ICoreWebView2Settings2.
+const (
+	settingsGetUserAgent = 21
+	settingsPutUserAgent = 22
+)
+
 // Methoden der Ereignis-Argumente.
 const (
 	navStartGetUri       = 3

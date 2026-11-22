@@ -1,6 +1,6 @@
 # Drittsoftware und Datenquellen
 
-*Stand: 12. November 2026 · [English version](THIRD_PARTY.md)*
+*Stand: 22. November 2026 · [English version](THIRD_PARTY.md)*
 
 Lumen selbst steht unter der **AGPL-3.0-only** (siehe [LICENSE](LICENSE)).
 Diese Datei listet alles, was **nicht** von den Lumen-Autoren stammt: was in
@@ -177,9 +177,34 @@ GitHub Actions (nur benutzt, nicht ausgeliefert): `actions/checkout`,
 `actions/download-artifact` (MIT), `docker/setup-qemu-action`,
 `docker/setup-buildx-action`, `docker/login-action`,
 `docker/build-push-action` (Apache-2.0), `gradle/actions/setup-gradle`
-(MIT), `softprops/action-gh-release` (MIT). Die Skripte in `tools/` sind
+(MIT), `softprops/action-gh-release` (MIT). Für die Windows-App kommt NSIS
+dazu (auf dem Windows-Rechner von GitHub, nötigenfalls über Chocolatey). Die Skripte in `tools/` sind
 eigene Arbeit; `tools/symbol_bauen.py` benutzt Pillow (MIT-CMU), das nicht
 ausgeliefert wird.
+
+## 9. Windows-App (`desktop/windows/`)
+
+| Name | Fassung | Lizenz (SPDX) | Quelle | Wie | Pflichten / erfüllt |
+|---|---|---|---|---|---|
+| Go-Standardbibliothek und -Laufzeit | 1.25 | BSD-3-Clause | <https://go.dev/LICENSE> | eingebaut (`Lumen.exe`) | Text im Anhang; THIRD_PARTY.md liegt im Installationsordner |
+| github.com/wailsapp/go-webview2 (Pakete `edge`, `webviewloader`) | v1.0.23 | MIT (`webviewloader`: ISC) | <https://github.com/wailsapp/go-webview2> | eingebaut | Texte im Anhang von THIRD_PARTY.md |
+| github.com/jchv/go-winloader | v0.0.0-20210711035445-715c2860da7e | ISC | <https://github.com/jchv/go-winloader> | eingebaut | Text im Anhang von THIRD_PARTY.md |
+| golang.org/x/sys | v0.27.0 | BSD-3-Clause | <https://go.googlesource.com/sys> | eingebaut | derselbe Text wie für Go (Anhang) |
+| github.com/tc-hib/winres (mit nfnt/resize, golang.org/x/image) | v0.3.1 | 0BSD-artig (ISC ohne Hinweispflicht); ISC; BSD-3-Clause | <https://github.com/tc-hib/winres> | nur Bau | legt Symbol, Manifest und Versionsangaben der `.exe` an (`werkzeuge/ressourcen`) |
+| NSIS (Installer-Rahmen) | 3.x | zlib/libpng (einzelne Teile bzip2, CPL) | <https://nsis.sourceforge.io/License> | im Installer (der kleine Entpacker, der den Installer ausführt) | zlib verlangt keinen Hinweis in Binärdateien; genannt der Vollständigkeit halber |
+| Microsoft Edge WebView2 Runtime | Evergreen | Microsoft-Lizenz (proprietär) | <https://developer.microsoft.com/microsoft-edge/webview2/> | **getrennt** – Teil von Windows bzw. von Microsoft geladen | Lumen liefert sie nicht aus und linkt sie nicht; sie ist eine Systemkomponente |
+| WebView2-Bootstrapper (`MicrosoftEdgeWebview2Setup.exe`) | aktuell beim Bau | Microsoft, weitergeben erlaubt (WebView2 Distribution) | <https://developer.microsoft.com/microsoft-edge/webview2/#download> | im Installer, unverändert; läuft nur, wenn WebView2 fehlt | beim Bau von Microsoft geladen und auf Microsofts Unterschrift geprüft; steht nicht im Repository |
+
+Die eingebauten Lizenzen (MIT, ISC, BSD-3-Clause) sind mit der AGPL-3.0
+vereinbar. Die WebView2-Laufzeit ist eine Komponente des Betriebssystems
+(„System Library" im Sinne der GPL): Lumen ruft sie zur Laufzeit auf, wie
+ein Programm Windows aufruft. `go-webview2` enthält auch eine Kopie von
+Microsofts `WebView2Loader.dll`; die wird nur mit dem Bau-Schalter
+`native_webview2loader` eingebunden, den Lumen nicht setzt — `Lumen.exe`
+enthält sie nicht (der Lader ist in Go nachgebaut).
+
+Der Installer legt neben `Lumen.exe` auch `LICENSE.txt`,
+`LICENSE-EXCEPTIONS.txt`, `THIRD_PARTY.md` und `DRITTSOFTWARE.md` ab.
 
 ---
 

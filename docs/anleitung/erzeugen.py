@@ -351,7 +351,12 @@ grep -qs LUMEN_AKTUALISIERER_TOKEN /volume1/docker/lumen/.env || \\
         "Bei Kindern sieht die Verwaltung nur ungefähr, wie viel heute geschaut wurde.",
         "<b>Apps:</b> iPhone, iPad, Mac, Apple TV, Android und Android TV verbinden sich mit der "
         "Adresse deines NAS. Am Fernseher meldet man sich mit einem 6-stelligen Code an, den man "
-        "auf dem Handy oder im Browser bestätigt.")
+        "auf dem Handy oder im Browser bestätigt.",
+        "<b>Windows:</b> <i>Lumen-Setup-…-windows-x64.exe</i> von der Release-Seite installieren "
+        "(ohne Administratorrechte) und beim ersten Start die Adresse eingeben, etwa "
+        "<font face='%s'>192.168.10.10:8097</font>. Warnt Windows („Der Computer wurde durch "
+        "Windows geschützt“), auf <b>Weitere Informationen › Trotzdem ausführen</b> klicken – "
+        "der Installer ist nicht mit einem gekauften Zertifikat unterschrieben." % MONO)
 
     # ---------------------------------------------------------- 9 Updates
     s += [P("9. Updates", "h1"),

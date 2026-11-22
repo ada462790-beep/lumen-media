@@ -248,8 +248,6 @@ function start() {
       fokus('#erneut');
     } else if (S.modus === 'form') {
       fokus('#adresse');
-    } else {
-      fokus('[data-waehlen]');
     }
   });
 }
