@@ -124,7 +124,7 @@ func starten(opt optionen) int {
 	app, _ := NeueApp(f, ordner, lokal)
 	f.app = app
 	if opt.selbsttest != "" {
-		f.test = neuerSelbsttest(f, opt.selbsttest)
+		f.test = neuerSelbsttest(f, opt.selbsttest, opt.selbsttestWeb)
 		app.keinNetz = true
 		if err := f.test.serverStarten(); err != nil {
 			log.Printf("Selbsttest: %v", err)
@@ -430,6 +430,11 @@ func (f *fenster) webviewEinrichten(lokal string) error {
 	// Sperrbildschirm) folgen der Media Session API der Web-App. In
 	// WebView2 ist das aus, solange man es nicht einschaltet.
 	c.AdditionalBrowserArgs = []string{"--enable-features=HardwareMediaKeyHandling"}
+	if f.test != nil {
+		// Der Rechner von GitHub spricht Englisch; die Bilder sollen die
+		// Seite so zeigen, wie sie hier meist aussieht.
+		c.AdditionalBrowserArgs = append(c.AdditionalBrowserArgs, "--lang=de-CH")
+	}
 	c.SetErrorCallback(func(err error) { log.Printf("WebView2-Fehler: %v", err) })
 	c.MessageCallback = func(nachricht string, sender *edge.ICoreWebView2, args *edge.ICoreWebView2WebMessageReceivedEventArgs) {
 		quelle, _ := args.GetSource()

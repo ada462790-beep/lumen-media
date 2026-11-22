@@ -36,24 +36,24 @@ import (
 )
 
 type selbsttest struct {
-	f       *fenster
-	ordner  string
-	adresse string // des Schein-Servers
+	f        *fenster
+	ordner   string
+	web      string // Ordner der echten Web-App (server/cmd/lumen/web), wenn angegeben
+	adresse  string // des Schein-Servers
+	geladenK chan string
 
-	mu        sync.Mutex
-	zeilen    []string
-	fehler    int
-	schritt   int
-	externOK  bool
-	brueckeOK bool
-	fertig    bool
+	mu       sync.Mutex
+	zeilen   []string
+	fehler   int
+	externOK bool
+	fertig   bool
 }
 
-func neuerSelbsttest(f *fenster, ordner string) *selbsttest {
-	return &selbsttest{f: f, ordner: ordner}
+func neuerSelbsttest(f *fenster, ordner, web string) *selbsttest {
+	return &selbsttest{f: f, ordner: ordner, web: web, geladenK: make(chan string, 16)}
 }
 
-func (t *selbsttest) notiz(ok bool, format string, a ...any) {
+func (t *selbsttest) notiz(ok bool, format string, a ...any) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	zeichen := "ok  "
@@ -64,23 +64,26 @@ func (t *selbsttest) notiz(ok bool, format string, a ...any) {
 	z := zeichen + " " + fmt.Sprintf(format, a...)
 	t.zeilen = append(t.zeilen, z)
 	log.Print("Selbsttest: " + z)
+	return ok
 }
 
 const testSeite = `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Testserver</title>
 <style>body{margin:0;background:#050507;color:#fff;font:16px "Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column;
 align-items:center;justify-content:center;height:100vh;gap:14px}h1{font-size:28px;margin:0}p{margin:0;color:rgba(235,235,245,.7)}
 .ok{color:#30d158}.nein{color:#ff6961}a{color:#0a84ff}</style></head><body>
-<h1>Schein-Server für den Selbsttest</h1><p id="b">…</p><p id="u">…</p>
+<h1>Schein-Server für den Selbsttest</h1><p id="b">…</p><p id="u">…</p><p id="m">…</p>
 <p><a id="extern" href="https://www.themoviedb.org/movie/603" target="_blank" rel="noopener">TMDb (soll im Browser aufgehen)</a></p>
 <p><button id="vollbild" style="font:inherit;padding:8px 16px;border-radius:999px;border:0">Vollbild wie im Player</button></p>
 <script>
 const d = window.lumenDesktop;
-const b = document.getElementById('b'), u = document.getElementById('u');
+const b = document.getElementById('b'), u = document.getElementById('u'), m = document.getElementById('m');
 b.textContent = d ? 'Brücke da: lumenDesktop ' + d.version + ', serverWechseln: ' + typeof d.serverWechseln : 'keine Brücke';
 b.className = d && typeof d.serverWechseln === 'function' ? 'ok' : 'nein';
 const ua = /LumenDesktop\/\S+/.exec(navigator.userAgent);
 u.textContent = ua ? 'User-Agent: ' + ua[0] : 'User-Agent ohne LumenDesktop';
 u.className = ua ? 'ok' : 'nein';
+m.textContent = 'navigator.mediaSession: ' + ('mediaSession' in navigator ? 'da' : 'fehlt');
+m.className = 'mediaSession' in navigator ? 'ok' : 'nein';
 document.title = (d && ua) ? 'BRUECKE_OK' : 'BRUECKE_FEHLT';
 document.getElementById('vollbild').addEventListener('click', () => document.documentElement.requestFullscreen());
 </script></body></html>`
@@ -92,104 +95,109 @@ func (t *selbsttest) serverStarten() error {
 	}
 	t.adresse = ln.Addr().String()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/hello", func(w http.ResponseWriter, r *http.Request) {
+	json := func(w http.ResponseWriter, status int, text string) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"server":"Lumen","name":"Selbsttest-Server","version":"0.0.0","setUp":true}`)
+		w.WriteHeader(status)
+		fmt.Fprint(w, text)
+	}
+	mux.HandleFunc("/api/v1/hello", func(w http.ResponseWriter, r *http.Request) {
+		json(w, 200, `{"server":"Lumen","name":"Selbsttest-Server","version":"0.0.0","setUp":true,"sprache":"de-CH","license":"AGPL-3.0-only"}`)
 	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/profiles", func(w http.ResponseWriter, r *http.Request) {
+		json(w, 200, `[{"id":"a","name":"Anna","lockKind":"none","avatar":"av-b"},{"id":"b","name":"Ben","lockKind":"pin","avatar":"av-c"},{"id":"k","name":"Kino","lockKind":"none","isKid":true,"avatar":"fig-stern"}]`)
+	})
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		json(w, 401, `{"error":"nicht angemeldet"}`)
+	})
+	mux.HandleFunc("/selbsttest", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, testSeite)
 	})
+	if t.web != "" {
+		mux.Handle("/", http.FileServer(http.Dir(t.web)))
+	} else {
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/selbsttest", http.StatusFound)
+		})
+	}
 	go http.Serve(ln, mux)
 	return nil
 }
 
+// ---------------------------------------------------------------- Ablauf
+//
+// Der Ablauf läuft nebenher und schiebt jeden Schritt, der das Fenster
+// anfasst, in den Fenster-Thread (ui) — wie ein Mensch, der klickt und
+// wartet.
+
 func (t *selbsttest) beginnen() {
 	t.notiz(true, "Fenster und WebView2 bereit, Schein-Server auf %s", t.adresse)
-	// Nach spätestens 90 Sekunden ist Schluss, was auch geschieht.
-	time.AfterFunc(90*time.Second, func() {
-		t.f.Auftrag(func() {
-			t.notiz(false, "Zeit abgelaufen in Schritt %d", t.schritt)
-			t.abschliessen()
+	go func() {
+		ende := time.AfterFunc(120*time.Second, func() {
+			t.notiz(false, "Zeit abgelaufen")
+			t.ui(t.abschliessen)
 		})
-	})
+		defer ende.Stop()
+		t.ablauf()
+		t.ui(t.abschliessen)
+	}()
 }
 
-func (t *selbsttest) spaeter(d time.Duration, fn func()) {
-	time.AfterFunc(d, func() { t.f.Auftrag(fn) })
+func (t *selbsttest) ui(fn func()) {
+	fertig := make(chan struct{})
+	t.f.Auftrag(func() { fn(); close(fertig) })
+	<-fertig
 }
 
-// geladen: Eine Seite ist fertig geladen. Daran hängen die Schritte.
 func (t *selbsttest) geladen(adresse string) {
 	log.Printf("Selbsttest: geladen %s", adresse)
-	switch {
-	case t.schritt == 0 && strings.HasPrefix(adresse, seitenAdresse):
-		t.schritt = 1
-		t.notiz(true, "eingebaute Seite geladen")
-		t.spaeter(1500*time.Millisecond, func() {
-			t.bild("1-server-hinzufuegen.png", func() {
-				t.f.Skript(fmt.Sprintf(`(()=>{const e=document.getElementById('adresse');e.value=%q;document.getElementById('form').requestSubmit();})()`, t.adresse))
-			})
-		})
-	case t.schritt == 1 && strings.HasPrefix(adresse, "http://"+t.adresse):
-		t.schritt = 2
-		t.notiz(true, "Server über die eingebaute Seite hinzugefügt und geladen")
-		t.spaeter(1500*time.Millisecond, t.webAppPruefen)
-	case t.schritt == 4 && strings.HasPrefix(adresse, seitenAdresse):
-		t.schritt = 5
-		t.notiz(true, "Strg+Umschalt+S zeigt die Serverauswahl")
-		t.spaeter(1200*time.Millisecond, func() {
-			t.bild("4-serverliste.png", func() {
-				t.bildschirm("5-bildschirm-liste.png")
-				t.abschliessen()
-			})
-		})
+	select {
+	case t.geladenK <- adresse:
+	default:
 	}
 }
 
-func (t *selbsttest) webAppPruefen() {
-	titel, _ := comText(t.f.wv, wvGetDocumentTitle)
-	t.notiz(titel == "BRUECKE_OK", "Brücke und User-Agent in der Web-App (Titel %q)", titel)
-	t.bild("2-web-app.png", func() {
-		t.bildschirm("2b-bildschirm.png")
-		// Ein Link mit target=_blank soll nicht im Fenster aufgehen.
-		t.f.Skript(`document.getElementById('extern').click()`)
-		t.spaeter(800*time.Millisecond, func() {
-			t.mu.Lock()
-			ok := t.externOK
-			t.mu.Unlock()
-			t.notiz(ok, "externer Link geht an den Standardbrowser")
-			quelle, _ := comText(t.f.wv, wvGetSource)
-			t.notiz(strings.HasPrefix(quelle, "http://"+t.adresse), "Fenster bleibt auf der Web-App (%s)", quelle)
-			t.schritt = 3
-			t.f.f11()
-			t.spaeter(1200*time.Millisecond, func() {
-				t.notiz(t.f.vollbild, "F11 füllt den Bildschirm")
-				t.bildschirm("3-vollbild.png")
-				t.f.f11()
-				t.spaeter(600*time.Millisecond, func() {
-					t.notiz(!t.f.vollbild, "F11 beendet das Vollbild")
-					t.playerVollbild()
-				})
-			})
-		})
-	})
+// warteGeladen wartet, bis eine Seite mit diesem Anfang fertig ist.
+func (t *selbsttest) warteGeladen(anfang string) bool {
+	frist := time.After(20 * time.Second)
+	for {
+		select {
+		case a := <-t.geladenK:
+			if strings.HasPrefix(a, anfang) {
+				return true
+			}
+		case <-frist:
+			return false
+		}
+	}
 }
 
-// playerVollbild klickt wirklich (mit der Maus) auf einen Knopf, der
-// Element.requestFullscreen aufruft — ohne echten Klick verweigert der
-// Browser das Vollbild.
-func (t *selbsttest) playerVollbild() {
-	t.f.Skript(`(()=>{const r=document.getElementById('vollbild').getBoundingClientRect();` +
-		`document.title='POS:'+Math.round((r.left+r.width/2)*devicePixelRatio)+','+Math.round((r.top+r.height/2)*devicePixelRatio)})()`)
-	t.spaeter(500*time.Millisecond, func() {
-		titel, _ := comText(t.f.wv, wvGetDocumentTitle)
-		var x, y int32
-		if _, err := fmt.Sscanf(titel, "POS:%d,%d", &x, &y); err != nil {
-			t.notiz(false, "Knopf für das Player-Vollbild nicht gefunden (%q)", titel)
-			t.zurAuswahl()
-			return
-		}
+func (t *selbsttest) skript(js string) { t.ui(func() { t.f.Skript(js) }) }
+
+func (t *selbsttest) titel() string {
+	var s string
+	t.ui(func() { s, _ = comText(t.f.wv, wvGetDocumentTitle) })
+	return s
+}
+
+// frage legt das Ergebnis eines Ausdrucks in den Titel der Seite und
+// liest es von dort (ExecuteScript mit Ergebnis bietet edge nicht an).
+func (t *selbsttest) frage(ausdruck string) string {
+	t.skript(`document.title='ERG:'+String(` + ausdruck + `)`)
+	time.Sleep(400 * time.Millisecond)
+	return strings.TrimPrefix(t.titel(), "ERG:")
+}
+
+// klick klickt wirklich mit der Maus auf ein Element: Vollbild verlangt
+// eine echte Geste.
+func (t *selbsttest) klick(selektor string) bool {
+	pos := t.frage(fmt.Sprintf(`(()=>{const e=document.querySelector(%q);if(!e)return 'nichts';const r=e.getBoundingClientRect();`+
+		`return Math.round((r.left+r.width/2)*devicePixelRatio)+','+Math.round((r.top+r.height/2)*devicePixelRatio)})()`, selektor))
+	var x, y int32
+	if _, err := fmt.Sscanf(pos, "%d,%d", &x, &y); err != nil {
+		return t.notiz(false, "%s nicht gefunden (%q)", selektor, pos)
+	}
+	t.ui(func() {
 		p := punkt{x, y}
 		pClientToScreen.Call(t.f.hwnd, uintptr(unsafe.Pointer(&p)))
 		pSetForegroundWindow.Call(t.f.hwnd)
@@ -197,21 +205,97 @@ func (t *selbsttest) playerVollbild() {
 		const links, losgelassen = 0x0002, 0x0004
 		pMouseEvent.Call(links, 0, 0, 0, 0)
 		pMouseEvent.Call(losgelassen, 0, 0, 0, 0)
-		t.spaeter(1500*time.Millisecond, func() {
-			t.notiz(t.f.domVollbild && t.f.vollbild, "requestFullscreen im Player füllt den Bildschirm")
-			t.bildschirm("3b-player-vollbild.png")
-			t.f.Skript(`document.fullscreenElement&&document.exitFullscreen()`)
-			t.spaeter(1200*time.Millisecond, func() {
-				t.notiz(!t.f.domVollbild && !t.f.vollbild, "exitFullscreen gibt das Fenster zurück")
-				t.zurAuswahl()
-			})
-		})
 	})
+	return true
 }
 
-func (t *selbsttest) zurAuswahl() {
-	t.schritt = 4
-	t.f.app.ServerWechseln()
+func (t *selbsttest) bildWarte(name string) {
+	fertig := make(chan struct{})
+	t.f.Auftrag(func() { t.bild(name, func() { close(fertig) }) })
+	select {
+	case <-fertig:
+	case <-time.After(10 * time.Second):
+		t.notiz(false, "Bild %s: keine Antwort", name)
+	}
+}
+
+func (t *selbsttest) bildschirmWarte(name string) { t.ui(func() { t.bildschirm(name) }) }
+
+func (t *selbsttest) ablauf() {
+	server := "http://" + t.adresse
+
+	// 1. Erster Start: die eingebaute Seite.
+	if !t.notiz(t.warteGeladen(seitenAdresse), "eingebaute Seite geladen") {
+		return
+	}
+	time.Sleep(1200 * time.Millisecond)
+	t.bildWarte("1-server-hinzufuegen.png")
+
+	// 2. Adresse eintippen wie ein Mensch (ohne http://), verbinden.
+	t.skript(fmt.Sprintf(`(()=>{const e=document.getElementById('adresse');e.value=%q;document.getElementById('form').requestSubmit();})()`, t.adresse))
+	if !t.notiz(t.warteGeladen(server), "Server über die eingebaute Seite hinzugefügt, Web-App geladen") {
+		return
+	}
+
+	// 3. Die echte Web-App: „Wer schaut?" mit „Server wechseln".
+	if t.web != "" {
+		time.Sleep(3 * time.Second)
+		t.bildWarte("2-web-app.png")
+		t.notiz(t.frage(`document.querySelectorAll('[data-desktop-server]').length`) == "1", "Web-App zeigt „Server wechseln“")
+		t.bildschirmWarte("2b-bildschirm.png")
+		if t.klick("[data-desktop-server]") {
+			t.notiz(t.warteGeladen(seitenAdresse+"?wechseln=1"), "„Server wechseln“ in der Web-App öffnet die Auswahl")
+		}
+		time.Sleep(800 * time.Millisecond)
+	}
+
+	// 4. Prüfseite: Brücke, User-Agent, Update-Hinweis, Links, Vollbild.
+	t.ui(func() { t.f.Navigieren(server + "/selbsttest") })
+	if !t.notiz(t.warteGeladen(server+"/selbsttest"), "Prüfseite geladen") {
+		return
+	}
+	time.Sleep(800 * time.Millisecond)
+	titel := t.titel()
+	t.notiz(titel == "BRUECKE_OK", "Brücke und User-Agent (Titel %q)", titel)
+	t.skript(`lumenDesktop._update({verfuegbar:true,version:'9.9.9',phase:'angeboten'})`)
+	time.Sleep(600 * time.Millisecond)
+	t.bildWarte("3-pruefseite-update-hinweis.png")
+	t.skript(`lumenDesktop._update(null)`)
+
+	t.skript(`document.getElementById('extern').click()`)
+	time.Sleep(800 * time.Millisecond)
+	t.mu.Lock()
+	ok := t.externOK
+	t.mu.Unlock()
+	t.notiz(ok, "externer Link geht an den Standardbrowser")
+	var quelle string
+	t.ui(func() { quelle, _ = comText(t.f.wv, wvGetSource) })
+	t.notiz(strings.HasPrefix(quelle, server), "Fenster bleibt auf der Web-App (%s)", quelle)
+
+	t.ui(t.f.f11)
+	time.Sleep(1200 * time.Millisecond)
+	t.notiz(t.f.vollbild, "F11 füllt den Bildschirm")
+	t.bildschirmWarte("4-f11-vollbild.png")
+	t.ui(t.f.f11)
+	time.Sleep(800 * time.Millisecond)
+	t.notiz(!t.f.vollbild, "F11 beendet das Vollbild")
+
+	if t.klick("#vollbild") {
+		time.Sleep(1500 * time.Millisecond)
+		t.notiz(t.f.domVollbild && t.f.vollbild, "requestFullscreen (wie im Player) füllt den Bildschirm")
+		t.bildschirmWarte("5-player-vollbild.png")
+		t.skript(`document.fullscreenElement&&document.exitFullscreen()`)
+		time.Sleep(1200 * time.Millisecond)
+		t.notiz(!t.f.domVollbild && !t.f.vollbild, "exitFullscreen gibt das Fenster zurück")
+	}
+
+	// 5. Strg+Umschalt+S: die Auswahl mit dem gemerkten Server.
+	t.ui(t.f.app.ServerWechseln)
+	if t.notiz(t.warteGeladen(seitenAdresse+"?wechseln=1"), "Serverauswahl über das Tastenkürzel") {
+		time.Sleep(1200 * time.Millisecond)
+		t.bildWarte("6-serverliste.png")
+		t.bildschirmWarte("7-bildschirm-liste.png")
+	}
 }
 
 var (
