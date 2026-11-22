@@ -50,6 +50,12 @@ jobs:
         shell: bash
         working-directory: desktop/windows
     steps:
+      # Git für Windows macht sonst aus jedem Zeilenende CRLF — gofmt hielte
+      # dann jede Datei für unformatiert, und die eingebauten Seiten wären
+      # nicht mehr dieselben wie im Repository.
+      - name: Zeilenenden wie im Repository
+        run: git config --global core.autocrlf false
+        working-directory: .
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
