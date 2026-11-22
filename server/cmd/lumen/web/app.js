@@ -1333,6 +1333,13 @@ function viewRedeem() {
   </div></div>`;
 }
 
+/* Lumen für Windows (desktop/windows) legt window.lumenDesktop an. Dort
+   gibt es „Server wechseln": Die Liste der Server führt die App, nicht der
+   Server — die Web-App sagt ihr nur, dass sie die Auswahl zeigen soll. */
+const inDesktopApp = () => typeof window.lumenDesktop?.serverWechseln === 'function';
+const serverWechselKnopf = () => inDesktopApp()
+  ? `<button class="btn btn-pill btn-pill--fill" style="flex:none" data-desktop-server>${tr('Server wechseln')}</button>` : '';
+
 function viewProfiles() {
   // Von unterwegs zeigt der Server keine Profile — sie verrieten die Namen
   // im Haushalt. Angemeldet wird mit Name und PIN oder Passwort.
@@ -1346,7 +1353,7 @@ function viewProfiles() {
           placeholder="${tr('PIN oder Passwort')}" required></div>
         <div class="err" style="text-align:center">${esc(S.error)}</div>
         <button class="btn btn-primary" style="height:46px">${tr('Anmelden')}</button>
-      </form></div>`;
+      </form>${serverWechselKnopf()}</div>`;
   }
   const list = S.data?.profiles || [];
   const cards = list.map(p => `
@@ -1359,6 +1366,7 @@ function viewProfiles() {
     <h1 class="t-large" style="margin:0">${tr('Wer schaut?')}</h1>
     <div class="pgrid">${cards || `<p class="hint">${tr('Noch keine Profile.')}</p>`}</div>
     <div class="err">${esc(S.error)}</div>
+    ${serverWechselKnopf()}
   </div>`;
 }
 
@@ -3231,6 +3239,8 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
     S.playing = {
       itemId: it.id, fileId: file.id,
       title: it.title,
+      // Für die Mediensteuerung des Systems (mediensitzung).
+      bild: it.poster || it.backdrop || '',
       kind: it.kind, parentId: it.parentId || null,
       sub: S.warteschlange
         ? `${S.warteschlange.name} · ${tr('{nr} von {n}', { nr: S.warteschlange.i + 1, n: S.warteschlange.ids.length })}`
@@ -3431,12 +3441,12 @@ function mountPlayer() {
   p.textspur = null; // gehört zum neuen <video>
   lautstaerkeAnwenden(v);
   v.defaultPlaybackRate = v.playbackRate = p.tempo || 1;
-  v.onloadedmetadata = () => { p.loading = false; v.playbackRate = p.tempo || 1; patchChrome(); };
-  v.onplaying = () => { p.loading = false; clearTimeout(p.wartenZeit); p.wartenZeit = null; p.paused = false; patchChrome(); showChrome(); };
+  v.onloadedmetadata = () => { p.loading = false; v.playbackRate = p.tempo || 1; patchChrome(); mediensitzungStand(p); };
+  v.onplaying = () => { p.loading = false; clearTimeout(p.wartenZeit); p.wartenZeit = null; p.paused = false; patchChrome(); showChrome(); mediensitzungStand(p); };
   // Pause und Sprung sind gute Momente zum Sichern: Wer pausiert, steht
   // vielleicht gleich auf und schaut auf dem Handy weiter.
-  v.onpause = () => { p.paused = true; showChrome(true); if (!v.ended) standSichern(); };
-  v.onseeked = () => { standSichern(); };
+  v.onpause = () => { p.paused = true; showChrome(true); if (!v.ended) standSichern(); mediensitzungStand(p); };
+  v.onseeked = () => { standSichern(); mediensitzungStand(p); };
   v.onvolumechange = () => { lautstaerkeMerken(v); patchLautstaerke(); };
   // Hängt der Strom länger, sagt Lumen es — vorher drehte sich der Kringel
   // nach einem Verbindungsabbruch wortlos weiter.
@@ -3466,9 +3476,52 @@ function mountPlayer() {
     stromAbgerissen(p, !p.paused);
   };
   showChrome();
+  mediensitzung(p);
   // Der Fokus geht in den Player (auf Abspielen/Pause): Tastatur und
   // Bildschirmleser wissen so, dass er offen ist.
   app.querySelector('[data-toggle]')?.focus({ preventScroll: true });
+}
+
+/* Medientasten und die Mediensteuerung des Systems (Windows, macOS,
+   Android, ChromeOS): Titel und Bild, Abspielen/Pause, zehn Sekunden zurück
+   und vor, nächste Folge. Lumen für Windows schaltet die Medientasten in
+   WebView2 eigens ein (desktop/windows). Die Stellen zählen wie bei den
+   Pfeiltasten im laufenden Teil. */
+const MEDIEN_AKTIONEN = ['play', 'pause', 'stop', 'seekbackward', 'seekforward', 'seekto', 'nexttrack'];
+function mediensitzung(p) {
+  const ms = navigator.mediaSession;
+  if (!ms) return;
+  const setzen = (aktion, fn) => { try { ms.setActionHandler(aktion, fn); } catch { /* nicht jede Aktion gibt es überall */ } };
+  if (!p) {
+    try { ms.metadata = null; ms.playbackState = 'none'; } catch {}
+    for (const a of MEDIEN_AKTIONEN) setzen(a, null);
+    return;
+  }
+  try {
+    const bild = !p.bild ? '' : p.bild.startsWith('/api/v1/art/') ? bildMitBreite(p.bild, 500) : p.bild + tokenSuffix(p.bild);
+    ms.metadata = new MediaMetadata({
+      title: p.title || '', artist: p.sub || '', album: p.kind === 'episode' ? p.seriesTitle || '' : '',
+      artwork: bild ? [{ src: new URL(bild, location.href).href }] : [],
+    });
+  } catch {}
+  const hier = fn => d => { if (S.playing === p) fn(d || {}); };
+  const pos = () => { const v = $('#v'); return p.offset + (v ? v.currentTime : p.current); };
+  setzen('play', hier(() => $('#v')?.play().catch(() => {})));
+  setzen('pause', hier(() => $('#v')?.pause()));
+  setzen('stop', hier(() => stopPlayer()));
+  setzen('seekbackward', hier(d => seekTo(pos() - (d.seekOffset || 10))));
+  setzen('seekforward', hier(d => seekTo(pos() + (d.seekOffset || 10))));
+  setzen('seekto', hier(d => { if (Number.isFinite(d.seekTime)) seekTo(d.seekTime); }));
+  setzen('nexttrack', p.kind === 'episode' || S.warteschlange ? hier(() => naechsteFolgeJetzt(p)) : null);
+}
+function mediensitzungStand(p) {
+  const ms = navigator.mediaSession, v = $('#v');
+  if (!ms || !v || S.playing !== p) return;
+  try {
+    ms.playbackState = v.paused ? 'paused' : 'playing';
+    const dauer = p.duration || 0, pos = p.offset + v.currentTime;
+    if (dauer > 0 && pos >= 0 && pos <= dauer) ms.setPositionState({ duration: dauer, position: pos, playbackRate: v.playbackRate || 1 });
+  } catch {}
 }
 
 /* patchChrome bessert die Steuerung nach: ein-/ausblenden, Pause-Symbol,
@@ -4095,6 +4148,14 @@ async function abspielbar(x) {
   return { id: x.id, title: x.title };
 }
 
+/* Gleich zum Nächsten: Taste N und die Medientaste „Weiter". */
+function naechsteFolgeJetzt(p) {
+  if (p.kind !== 'episode' && !S.warteschlange) return false;
+  app.querySelector('[data-naechste-folge]')?.click();
+  if (S.warteschlange) { const box = document.getElementById('naechster'); if (box?.dataset.id) naechsterStarten(box.dataset.id); }
+  return true;
+}
+
 async function naechsterTitel(p) {
   const w = S.warteschlange;
   if (w) {
@@ -4219,6 +4280,7 @@ async function spielerAnhalten() {
   clearTimeout(p.wartenZeit);
   document.getElementById('nochda')?.remove();
   vollbildVerlassen();
+  mediensitzung(null);
   S.warteschlange = null;
   S.playing = null;
   clearTimeout(saveTimer);
@@ -4662,6 +4724,7 @@ function viewSettings() {
       ${avatar(a, 64)}
       <div class="profil-kopf-name"><h1 class="t-large" style="margin:0" title="${esc(a.name)}">${esc(a.name)}</h1>
         <div class="t-sub c-2" style="margin-top:2px">${a.isOwner ? tr('Besitzer dieses Servers') : a.vollzugriff ? tr('Vollzugriff') : a.isAdmin ? tr('Mitverwalter') + (a.groupName ? ' · ' + esc(a.groupName) : '') : a.isKid ? tr('Kinderprofil') : a.groupName ? esc(a.groupName) : tr('Haushalt')}</div></div>
+      ${serverWechselKnopf()}
       <button class="btn btn-pill btn-pill--fill" style="flex:none" data-signout>${tr('Abmelden')}</button>
     </header>
     ${S.schutzNoetig ? `<div class="surface" role="alert" style="margin-top:22px;padding:16px 18px;border-radius:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
@@ -6823,6 +6886,7 @@ app.addEventListener('click', async e => {
     darstellungAnwenden();
     return render();
   }
+  if (hit('data-desktop-server')) { window.lumenDesktop?.serverWechseln(); return; }
   if (hit('data-signout')) {
     if (!(await rueckfrage(abmeldeFrage(false)))) return;
     // Auch beim Server abmelden — sonst bliebe das Gerät dort eingetragen.
@@ -7616,10 +7680,7 @@ function playerTaste(e) {
     case 'm':
       e.preventDefault(); stummUmschalten(); return toast($('#v')?.muted ? tr('Stumm') : tr('Ton an'));
     case 'n':
-      if (p.kind !== 'episode' && !S.warteschlange) return;
-      e.preventDefault();
-      app.querySelector('[data-naechste-folge]')?.click();
-      if (S.warteschlange) { const box = document.getElementById('naechster'); if (box?.dataset.id) naechsterStarten(box.dataset.id); }
+      if (naechsteFolgeJetzt(p)) e.preventDefault();
       return;
     case 's':
       if (document.getElementById('vorspann')) { e.preventDefault(); vorspannUeberspringen(); }

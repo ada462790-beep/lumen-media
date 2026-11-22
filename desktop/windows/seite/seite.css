@@ -1,0 +1,103 @@
+/*
+ Lumen — eigener Streaming-Server fürs Heimnetz.
+ Copyright (C) 2026 Die Lumen-Autoren
+
+ Veröffentlicht unter der GNU Affero General Public License v3.0.
+ Der vollständige Text steht in der Datei LICENSE.
+ SPDX-License-Identifier: AGPL-3.0-only
+*/
+
+/* Die eingebaute Seite „Server hinzufügen". Farben, Schrift und Masse wie
+   in der Web-App (server/cmd/lumen/web/ds-shared.css und app.css) — wer
+   danach die Web-App sieht, soll keinen Bruch merken. */
+:root {
+  --bg:#050507;
+  --label:rgba(255,255,255,.94);
+  --label-2:rgba(235,235,245,.68);
+  --label-3:rgba(235,235,245,.56);
+  --fill:rgba(255,255,255,.07);
+  --fill-2:rgba(255,255,255,.11);
+  --hair:rgba(255,255,255,.08);
+  --accent:#0a84ff;
+  --text-rot:#ff6961;
+  --text-gruen:#30d158;
+  --tint-rot:rgba(255,69,58,.14);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",Inter,system-ui,sans-serif;
+  --ease:cubic-bezier(.32,.72,0,1);
+  color-scheme:dark;
+}
+* { box-sizing:border-box }
+html, body { margin:0; min-height:100%; background:var(--bg) }
+body { font-family:var(--font); color:var(--label); -webkit-font-smoothing:antialiased; letter-spacing:-.01em;
+       background:radial-gradient(1200px 600px at 50% -10%, rgba(10,132,255,.10), transparent 60%), var(--bg) }
+[hidden] { display:none !important }
+
+.t-large { font-size:2.125rem; line-height:2.5625rem; font-weight:700; letter-spacing:-.025em; margin:0 }
+.t-title3 { font-size:1.1875rem; line-height:1.5rem; font-weight:600; letter-spacing:-.015em; margin:0 }
+.t-body { font-size:.9375rem; line-height:1.3125rem; margin:0 }
+.t-headline { font-size:.9375rem; line-height:1.25rem; font-weight:600 }
+.t-caption { font-size:.75rem; line-height:1rem }
+.t-overline { font-size:.6875rem; line-height:.875rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; margin:0 0 10px 4px }
+.c-2 { color:var(--label-2) } .c-3 { color:var(--label-3) }
+
+.seite { min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:64px 24px 28px; gap:28px }
+.kopf { display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center }
+.symbol { width:72px; height:72px; filter:drop-shadow(0 10px 28px rgba(80,140,255,.28)); margin-bottom:6px }
+.block, .meldung { width:min(460px, 100%) }
+
+/* ---- Knöpfe ---- */
+.btn { border:0; font:inherit; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+       color:var(--label); background:none; padding:0; transition:transform .35s var(--ease), background .2s }
+.btn:active { transform:scale(.97) }
+.btn:focus-visible { outline:2px solid #fff; outline-offset:2px }
+.btn-primary { height:44px; padding:0 22px; border-radius:999px; background:#fff; color:#000; font-size:.9375rem; font-weight:600;
+               box-shadow:0 4px 14px rgba(0,0,0,.22) }
+.btn-primary:disabled { opacity:.5; cursor:default; transform:none }
+.btn-pill { height:36px; padding:0 16px; border-radius:999px; font-size:.8125rem; font-weight:600 }
+.btn-pill--fill { background:var(--fill-2) }
+.btn-pill--fill:hover { background:rgba(255,255,255,.16) }
+.btn-rot { background:var(--tint-rot); color:var(--text-rot) }
+
+/* ---- Liste ---- */
+.gruppe { background:var(--fill); border-radius:16px; overflow:hidden }
+.zeile { display:flex; align-items:center; gap:12px; min-height:62px; padding:10px 10px 10px 16px; position:relative }
+.zeile + .zeile::before { content:""; position:absolute; left:16px; right:0; top:0; height:.5px; background:var(--hair) }
+.zeile-haupt { flex:1; min-width:0; display:flex; align-items:center; gap:12px; text-align:left; color:inherit;
+               background:none; border:0; font:inherit; cursor:pointer; padding:4px 0; border-radius:10px }
+.zeile-haupt:focus-visible { outline:2px solid #fff; outline-offset:2px }
+.zeile-text { min-width:0; display:flex; flex-direction:column; gap:2px }
+.zeile-text > * { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.punkt { width:8px; height:8px; border-radius:50%; background:transparent; flex:none }
+.punkt--an { background:var(--text-gruen) }
+.zeile:hover { background:rgba(255,255,255,.03) }
+.weg { width:32px; height:32px; border-radius:50%; color:var(--label-3); flex:none }
+.weg:hover { background:var(--fill-2); color:var(--label) }
+.frage { display:flex; gap:8px; align-items:center; flex:none }
+.neu { margin-top:14px }
+
+/* ---- Formular ---- */
+.panel { display:flex; flex-direction:column; gap:16px; background:var(--fill); border-radius:20px; padding:24px }
+.field { display:flex; flex-direction:column; gap:7px }
+.field > label { font-size:.8125rem; color:var(--label-2) }
+.field input { height:46px; padding:0 15px; border-radius:12px; border:0; outline:0; background:var(--fill); color:var(--label);
+               font:inherit; font-size:1rem; font-family:ui-monospace,"Cascadia Mono",Consolas,monospace }
+.field input::placeholder { color:var(--label-3) }
+.field input:focus-visible { box-shadow:0 0 0 2px var(--accent) inset }
+.field input[aria-invalid=true] { box-shadow:0 0 0 2px var(--text-rot) inset }
+.hint { color:var(--label-2); font-size:.8125rem; line-height:1.45; margin:0 }
+.status { min-height:20px; font-size:.875rem; display:flex; align-items:center; gap:10px; color:var(--label-2) }
+.status--fehler { color:var(--text-rot) }
+.status--ok { color:var(--text-gruen) }
+.knoepfe { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap }
+
+.meldung { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:14px 16px; border-radius:16px;
+           background:var(--tint-rot); color:var(--label) }
+.meldung-text { flex:1; min-width:200px; font-size:.9375rem; line-height:1.35 }
+
+.spin { width:16px; height:16px; border-radius:50%; border:2px solid var(--fill-2); border-top-color:var(--label-2);
+        animation:spin .8s linear infinite; flex:none }
+@keyframes spin { to { transform:rotate(360deg) } }
+@media (prefers-reduced-motion:reduce) { .spin { animation-duration:2.4s } .btn { transition:none } }
+
+.fuss { margin-top:auto; padding-top:24px; text-align:center }
+.pfeil { flex:none; color:var(--label-3) }

@@ -1,0 +1,59 @@
+<!doctype html>
+<!--
+  Lumen — eigener Streaming-Server fürs Heimnetz.
+  Copyright (C) 2026 Die Lumen-Autoren
+
+  Veröffentlicht unter der GNU Affero General Public License v3.0.
+  Der vollständige Text steht in der Datei LICENSE.
+  SPDX-License-Identifier: AGPL-3.0-only
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Lumen</title>
+<link rel="icon" href="/symbol.png">
+<link rel="stylesheet" href="/seite.css">
+<script src="/seite.js" defer></script>
+</head>
+<body>
+<main class="seite" id="seite">
+  <header class="kopf">
+    <img class="symbol" src="/symbol.png" alt="" width="72" height="72">
+    <h1 class="t-large" id="titel">Lumen</h1>
+    <p class="t-body c-2" id="untertitel"></p>
+  </header>
+
+  <div class="meldung" id="meldung" role="alert" hidden>
+    <span class="meldung-text" id="meldung-text"></span>
+    <button type="button" class="btn btn-pill btn-pill--fill" id="erneut" hidden></button>
+  </div>
+
+  <section class="block" id="liste-block" hidden>
+    <h2 class="t-overline c-3" id="liste-titel"></h2>
+    <div class="gruppe" id="liste" role="list"></div>
+    <button type="button" class="btn btn-pill btn-pill--fill neu" id="neu"></button>
+  </section>
+
+  <section class="block" id="form-block" hidden>
+    <form id="form" class="panel" novalidate autocomplete="off">
+      <h2 class="t-title3" id="form-titel"></h2>
+      <div class="field">
+        <label for="adresse" id="adresse-label"></label>
+        <input id="adresse" name="adresse" inputmode="url" spellcheck="false" autocapitalize="off"
+               placeholder="192.168.10.10:8097" required aria-describedby="hinweis status">
+        <p class="hint" id="hinweis"></p>
+      </div>
+      <div class="status" id="status" aria-live="polite"></div>
+      <div class="knoepfe">
+        <button type="button" class="btn btn-pill btn-pill--fill" id="abbrechen" hidden></button>
+        <button type="submit" class="btn btn-primary" id="verbinden"></button>
+      </div>
+    </form>
+  </section>
+
+  <footer class="fuss t-caption c-3" id="fuss"></footer>
+</main>
+</body>
+</html>

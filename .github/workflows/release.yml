@@ -254,11 +254,22 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  # Lumen für Windows: Programm, Selbsttest und Installer — derselbe
+  # Ablauf wie bei jeder Änderung an der App (desktop.yml), hier mit der
+  # Fassungsnummer. Der Installer kommt als Artefakt lumen-windows-app
+  # zurück und landet unten mit allen anderen Dateien in pruefsummen.txt.
+  windows-app:
+    name: Windows-App
+    needs: pruefen
+    uses: ./.github/workflows/desktop.yml
+    with:
+      version: ${{ needs.pruefen.outputs.fassung }}
+
   veroeffentlichen:
     name: Veröffentlichung anlegen
     # Auch die Apple-Tests müssen durch sein. Fehlen dürfen sie nur, wenn
     # ausdrücklich ohne Mac veröffentlicht wird.
-    needs: [pruefen, bauen, apps, apple]
+    needs: [pruefen, bauen, apps, apple, windows-app]
     runs-on: ubuntu-latest
     # Entweder ein Versions-Tag wurde geschoben, oder jemand hat den
     # Ablauf von Hand mit einer Fassungsnummer gestartet. Ohne beides
@@ -269,6 +280,7 @@ jobs:
           && needs.pruefen.result == 'success'
           && needs.bauen.result == 'success'
           && needs.apps.result == 'success'
+          && needs.windows-app.result == 'success'
           && (needs.apple.result == 'success'
               || (needs.apple.result == 'skipped' && inputs.ohne_mac)) }}
     # Das einzige Schreibrecht in diesem Ablauf: Veröffentlichung und Tag
@@ -282,8 +294,9 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version: '1.25'
+      # Nur die Pakete (lumen-*), nicht die Bilder des Windows-Selbsttests.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with: { path: dateien, merge-multiple: true }
+        with: { path: dateien, pattern: 'lumen-*', merge-multiple: true }
       # Die erste Zeile nennt die Fassung. Sie steht damit unter der
       # Unterschrift: eine ältere Veröffentlichung lässt sich nicht unter
       # neuem Tag wieder einspielen (internal/update, PruefeSummen).

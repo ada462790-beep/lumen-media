@@ -761,6 +761,8 @@ function isHomeNetwork() {
 
 function deviceName() {
   const ua = navigator.userAgent;
+  // Lumen für Windows (desktop/windows) hängt „LumenDesktop/…" an.
+  if (/LumenDesktop\//.test(ua)) return 'Lumen · Windows';
   const browser = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome'
     : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : tr('Browser');
   const os = /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows'

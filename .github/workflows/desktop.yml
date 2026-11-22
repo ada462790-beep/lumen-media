@@ -1,0 +1,184 @@
+# Lumen für Windows bauen: Programm, Selbsttest, Installer.
+#
+# Läuft bei jeder Änderung unter desktop/windows/ (auch auf Arbeitszweigen:
+# Ohne Windows-Rechner ist das hier die einzige Stelle, an der die App
+# wirklich startet) und von Hand. Der Installer liegt danach als Artefakt
+# am Lauf — zum Ausprobieren ohne Veröffentlichung.
+#
+# release.yml ruft denselben Ablauf mit einer Fassungsnummer auf und hängt
+# den Installer an die Veröffentlichung (workflow_call).
+#
+# Was entsteht:
+#   Lumen-Setup-<fassung>-windows-x64.exe   Installer (NSIS), Artefakt lumen-windows-app
+#   selbsttest-windows                      Bilder und Protokoll des Selbsttests
+
+name: Windows-App
+
+on:
+  push:
+    paths:
+      - 'desktop/windows/**'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    paths:
+      - 'desktop/windows/**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Fassung für den Dateinamen, etwa v0.4.0 — leer = dev. Veröffentlicht wird hier nichts.'
+        required: false
+        default: ''
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: false
+        default: ''
+
+# Nur lesen. Der Installer wandert als Artefakt weiter; an die
+# Veröffentlichung hängt ihn release.yml.
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows — bauen, Selbsttest, Installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop/windows
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.25'
+          cache-dependency-path: desktop/windows/go.sum
+
+      # Die Fassung nur über die Umgebung, nie als Ausdruck im Skript —
+      # sonst liesse sich über die Eingabe Code einschleusen.
+      - name: Fassung
+        env:
+          EINGABE: ${{ inputs.version }}
+        run: |
+          V="$EINGABE"
+          if [ -z "$V" ]; then
+            echo "FASSUNG=dev" >> "$GITHUB_ENV"
+            echo "ZAHL=0.0.0" >> "$GITHUB_ENV"
+            echo "DATEI=Lumen-Setup-dev-windows-x64.exe" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if ! printf '%s' "$V" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Die Fassung muss so aussehen: v1.2.3"
+            exit 1
+          fi
+          echo "FASSUNG=${V#v}" >> "$GITHUB_ENV"
+          echo "ZAHL=${V#v}" >> "$GITHUB_ENV"
+          echo "DATEI=Lumen-Setup-${V#v}-windows-x64.exe" >> "$GITHUB_ENV"
+
+      - name: Formatierung
+        run: |
+          f=$(gofmt -l . || true)
+          if [ -n "$f" ]; then echo "Nicht formatiert:"; echo "$f"; exit 1; fi
+
+      - name: Prüfen und testen
+        run: |
+          go vet ./...
+          go test ./...
+
+      # Symbol, Manifest und Versionsangaben für die .exe, das Symbol für
+      # den Installer — beides aus seite/symbol.png.
+      - name: Ressourcen
+        run: go run ./werkzeuge/ressourcen -version "$ZAHL"
+
+      - name: Bauen
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$FASSUNG" -o dist/Lumen.exe .
+          ls -l dist
+
+      # Die App wirklich starten: Fenster, WebView2, eingebaute Seite,
+      # Server hinzufügen, Web-App laden, Vollbild, Serverauswahl. Die
+      # Bilder liegen danach am Lauf (selbsttest-windows).
+      - name: Selbsttest
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\Lumen.exe -ArgumentList '--selbsttest', "$PWD\selbsttest" -PassThru -Wait
+          Get-Content selbsttest\protokoll.txt -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) {
+            Get-Content selbsttest\lumen.log -ErrorAction SilentlyContinue
+            Write-Error "Selbsttest gescheitert ($($p.ExitCode))"
+            exit 1
+          }
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: selbsttest-windows
+          path: |
+            desktop/windows/selbsttest/*.png
+            desktop/windows/selbsttest/*.txt
+            desktop/windows/selbsttest/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Der Bootstrapper von Microsoft (gut 1 MB) holt WebView2 nach, falls
+      # es fehlt. Er muss von Microsoft unterschrieben sein — sonst nicht.
+      - name: WebView2-Bootstrapper
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile installer\MicrosoftEdgeWebview2Setup.exe
+          $s = Get-AuthenticodeSignature installer\MicrosoftEdgeWebview2Setup.exe
+          if ($s.Status -ne 'Valid' -or $s.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            Write-Error "Unterschrift des Bootstrappers ungültig: $($s.Status) $($s.SignerCertificate.Subject)"
+            exit 1
+          }
+          (Get-Item installer\MicrosoftEdgeWebview2Setup.exe).Length
+
+      - name: NSIS
+        shell: pwsh
+        run: |
+          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $nsis)) {
+            choco install nsis -y --no-progress
+          }
+          if (-not (Test-Path $nsis)) { Write-Error "makensis fehlt"; exit 1 }
+          "NSIS=$nsis" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Installer
+        shell: pwsh
+        working-directory: desktop/windows/installer
+        run: |
+          & $env:NSIS /V3 "/DVERSION=$env:ZAHL" "/DEXE=..\dist\Lumen.exe" "/DAUSGABE=..\dist\$env:DATEI" `
+            "/DWEBVIEW2_SETUP=MicrosoftEdgeWebview2Setup.exe" "/DDOKU=..\..\.." lumen.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Item "..\dist\$env:DATEI" | Format-List Name, Length
+
+      # Einmal still installieren und wieder entfernen: Liegen Programm,
+      # Startmenü-Eintrag und Deinstallation da, wo sie sollen?
+      - name: Installer ausprobieren
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\$env:DATEI" -ArgumentList '/S' -PassThru -Wait
+          if ($p.ExitCode -ne 0) { Write-Error "Installer: $($p.ExitCode)"; exit 1 }
+          $ziel = "$env:LOCALAPPDATA\Programs\Lumen"
+          foreach ($d in "$ziel\Lumen.exe", "$ziel\Deinstallieren.exe", "$ziel\LICENSE.txt", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Lumen.lnk") {
+            if (-not (Test-Path $d)) { Write-Error "fehlt: $d"; exit 1 }
+          }
+          $reg = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Lumen'
+          "$($reg.DisplayName) $($reg.DisplayVersion)"
+          & "$ziel\Lumen.exe" --version | Out-Host
+          # Der Deinstaller kopiert sich nach %TEMP% und kehrt sofort zurück.
+          Start-Process -FilePath "$ziel\Deinstallieren.exe" -ArgumentList '/S' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path "$ziel\Lumen.exe"); $i++) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path "$ziel\Lumen.exe") { Write-Error "Deinstallation liess Lumen.exe zurück"; exit 1 }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Lumen.lnk") { Write-Error "Startmenü-Eintrag blieb"; exit 1 }
+          "Installieren und Entfernen in Ordnung."
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lumen-windows-app
+          path: desktop/windows/dist/${{ env.DATEI }}
+          if-no-files-found: error
+          retention-days: 7

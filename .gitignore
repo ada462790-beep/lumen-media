@@ -35,3 +35,11 @@ __pycache__/
 *.pyc
 .idea/
 .vscode/
+
+# Windows-App: entsteht beim Bauen (desktop/windows/werkzeuge/ressourcen,
+# Bootstrapper von Microsoft, Installer)
+desktop/windows/rsrc_windows_amd64.syso
+desktop/windows/installer/lumen.ico
+desktop/windows/installer/MicrosoftEdgeWebview2Setup.exe
+desktop/windows/dist/
+desktop/windows/selbsttest/
