@@ -220,7 +220,7 @@ func (f *fenster) erstellen() error {
 		return fmt.Errorf("CreateWindowEx: %w", err)
 	}
 	f.hwnd = hwnd
-	dunklerRahmen(hwnd)
+	rahmenFaerben(hwnd)
 	f.systemmenue()
 
 	zeigen := uintptr(swShowNormal)
@@ -316,6 +316,9 @@ func wndProc(hwnd, m, wp, lp uintptr) uintptr {
 			f.ueber()
 			return 0
 		}
+	case wmSettingChange:
+		// Hell/Dunkel in Windows umgestellt: Titelleiste mitziehen.
+		rahmenFaerben(hwnd)
 	case wmClose:
 		f.zustandSichern()
 		pDestroyWindow.Call(hwnd)

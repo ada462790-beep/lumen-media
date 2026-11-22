@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -85,6 +86,7 @@ const (
 	wmSetFocus      = 0x0007
 	wmClose         = 0x0010
 	wmGetMinMaxInfo = 0x0024
+	wmSettingChange = 0x001A
 	wmSysCommand    = 0x0112
 	wmDpiChanged    = 0x02E0
 	wmApp           = 0x8000
@@ -269,16 +271,36 @@ func deutsch() bool {
 	return r&0x3FF == 0x07
 }
 
-// dunklerRahmen färbt die Titelleiste dunkel (Windows 10 ab 20H1 und 11)
-// und unter Windows 11 im Farbton der Web-App.
-func dunklerRahmen(hwnd uintptr) {
+// systemDunkel: Sind Apps unter Windows auf „Dunkel" gestellt? Danach
+// richtet sich auch die Web-App (Darstellung „Wie das Gerät").
+func systemDunkel() bool {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, registry.QUERY_VALUE)
+	if err != nil {
+		return true
+	}
+	defer k.Close()
+	hell, _, err := k.GetIntegerValue("AppsUseLightTheme")
+	return err != nil || hell == 0
+}
+
+// rahmenFaerben färbt die Titelleiste wie das System: dunkel (Windows 10
+// ab 20H1 und 11), unter Windows 11 dann im Farbton der Web-App — oder
+// hell, wenn Windows hell eingestellt ist.
+func rahmenFaerben(hwnd uintptr) {
 	if pDwmSetWindowAttr.Find() != nil {
 		return
 	}
-	an := int32(1)
+	dunkel := systemDunkel()
+	an := int32(0)
+	if dunkel {
+		an = 1
+	}
 	if r, _, _ := pDwmSetWindowAttr.Call(hwnd, dwmwaUseImmersiveDarkMode, uintptr(unsafe.Pointer(&an)), 4); r != 0 {
 		pDwmSetWindowAttr.Call(hwnd, dwmwaUseImmersiveDarkModeAlt, uintptr(unsafe.Pointer(&an)), 4)
 	}
 	farbe := uint32(0x00070505) // #050507 als COLORREF (0x00BBGGRR)
+	if !dunkel {
+		farbe = 0xFFFFFFFF // DWMWA_COLOR_DEFAULT
+	}
 	pDwmSetWindowAttr.Call(hwnd, dwmwaCaptionColor, uintptr(unsafe.Pointer(&farbe)), 4)
 }

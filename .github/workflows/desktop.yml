@@ -15,7 +15,10 @@
 name: Windows-App
 
 on:
+  # Nur Zweige: Bei einem Versions-Tag baut release.yml die App ohnehin
+  # (über workflow_call), ein zweiter Lauf wäre doppelt.
   push:
+    branches: ['**']
     paths:
       - 'desktop/windows/**'
       - 'server/cmd/lumen/web/**'
