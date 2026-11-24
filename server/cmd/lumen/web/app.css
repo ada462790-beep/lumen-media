@@ -1331,3 +1331,11 @@ span.konto-rolle { display:inline-block; padding-left:12px }
 .ff .zahl-feld { min-height:41px }
 .ff .zahl-feld input[type=number] { font-size:.9375rem }
 .ff .zahl-knopf { width:40px }
+
+/* Lumen für Windows mit eigenem Player (desktopplayer.js): Das Bild zeichnet
+   mpv in einem Fenster unter der Seite. Im Player ist die Seite darum
+   durchsichtig — bis auf die Bedienelemente, die wie gewohnt darüber
+   liegen. Auch im Vollbild: kein schwarzer Hintergrund des Browsers. */
+html.mpv-spielt, html.mpv-spielt body, html.mpv-spielt .lumen, html.mpv-spielt .lumen.light,
+.player.pl-mpv, .player.pl-mpv .pl-video, .player.pl-mpv:fullscreen { background:transparent !important }
+.player.pl-mpv::backdrop, html.mpv-spielt ::backdrop { background:transparent !important }

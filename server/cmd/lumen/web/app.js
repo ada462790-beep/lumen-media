@@ -35,6 +35,8 @@ import { wunschFeld, wunschFeldEinrichten, wunschBild, wunschZusatz, wunschVerwe
 // Lautsprecher wählen — nur in Lumen für Windows.
 import { tonausgabeAngeboten, tonausgabeStand, tonausgabeGewaehlt, tonausgabeLaden, tonausgabeWaehlen,
   tonausgabeAnwenden, tonGeraete } from './tonausgabe.js';
+import { mpvDa, mpvAbschalten, mpvFaehigkeiten, mpvBefehl, mpvAnbinden, mpvGeraete, mpvTonausgabe,
+  mpvTonausgabeWaehlen } from './desktopplayer.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -1132,6 +1134,9 @@ function render() {
       default:          html = viewHome();
     }
   }
+  // Lumen für Windows mit eigenem Player: Die Seite wird durchsichtig, das
+  // Bild von mpv liegt darunter (desktopplayer.js, app.css).
+  document.documentElement.classList.toggle('mpv-spielt', S.view === 'player' && !!S.playing?.mpv);
   // Der Player wird genau einmal aufgebaut. Würde er sich neu zeichnen,
   // entstünde jedes Mal ein neues <video> — das löst wieder ein Ereignis
   // aus, das neu zeichnet, und so fort. Darum ab hier nur noch Nachbessern.
@@ -2509,7 +2514,8 @@ const bildspuren = p => (p.tracks || []).filter(t => t.kind === 'subtitle' && t.
 const alleUntertitel = p => [...textspuren(p), ...bildspuren(p)];
 /* Welcher Bild-Untertitel eingebrannt wird (-1: keiner) — steht in der
    Adresse des Stroms, also ändert eine Wahl hier den Strom. */
-const einbrennenVon = p => (p.untertitel != null && bildspuren(p).some(t => t.index === p.untertitel) ? p.untertitel : -1);
+const einbrennenVon = p => (p.mpv && !p.hls ? -1
+  : p.untertitel != null && bildspuren(p).some(t => t.index === p.untertitel) ? p.untertitel : -1);
 
 /* Vorbelegen nach den gemerkten Sprachen: Ton in der gewünschten Sprache,
    Untertitel nur, wenn jemand sie will. Erzwungene Untertitel laufen
@@ -2689,8 +2695,17 @@ function qualitaetPanel(p, zeile, abschnitt) {
       ? `<div class="spuren-hinweis">${tr('Diese Fassung ist der Standard.')}</div>`
       : `<button class="spur" data-pl-standard><span class="spur-name">${tr('Diese Fassung als Standard nehmen')}</span></button>`);
   }
+  // Lumen für Windows mit eigenem Player: die Geräte nennt mpv.
+  if (p.mpv) {
+    const w = mpvTonausgabe();
+    const liste = mpvGeraete.liste;
+    html += abschnitt(tr('Tonausgabe'),
+      eintrag(!w, 'data-mpv-tonausgabe="auto"', tr('Systemstandard')) +
+      liste.map(g => eintrag(w?.name === g.name, `data-mpv-tonausgabe="${esc(g.name)}"`, g.description || g.name)).join('') +
+      (!mpvGeraete.geladen ? `<div class="spuren-hinweis" role="status">${tr('Geräte werden gesucht …')}</div>`
+        : w && !liste.some(g => g.name === w.name) ? `<div class="spuren-hinweis">${esc(tr('„{name}“ ist nicht verbunden.', { name: w.beschreibung || '?' }))}</div>` : ''));
   // Lumen für Windows: über welches Gerät der Ton kommt (tonausgabe.js).
-  if (tonausgabeImMenue()) {
+  } else if (tonausgabeImMenue()) {
     const w = tonausgabeGewaehlt();
     const liste = tonGeraete.liste;
     html += abschnitt(tr('Tonausgabe'),
@@ -2704,7 +2719,7 @@ function qualitaetPanel(p, zeile, abschnitt) {
 
 /* Tonausgabe (Lumen für Windows): Das Zahnrad heisst dann „Qualität und
    Tonausgabe". Die Geräte holt erst das Öffnen des Menüs. */
-const tonausgabeImMenue = () => tonausgabeAngeboten() && tonausgabeStand() === 'ja';
+const tonausgabeImMenue = () => !!S.playing?.mpv || (tonausgabeAngeboten() && tonausgabeStand() === 'ja');
 const zahnradName = () => tonausgabeImMenue() ? tr('Qualität und Tonausgabe') : tr('Qualität');
 
 /* Das gewählte Gerät auf ein <video> legen. Fehlt es, spielt der
@@ -2744,7 +2759,8 @@ async function qualitaetWaehlen(id) {
   const v = $('#v');
   const pos = p.offset + (v ? v.currentTime : p.current);
   // Ob jetzt umgewandelt wird, sagt der Plan (für den Hinweis oben).
-  api.plan(p.fileId, qualitaetParameter(p.quellHoehe))
+  // (Mit mpv fragt mpvOeffnen selbst.)
+  if (!p.mpv) api.plan(p.fileId, qualitaetParameter(p.quellHoehe))
     .then(pl => { if (S.playing === p && pl?.plan) { p.mode = pl.plan.direct ? 'direct' : 'transcode'; patchChrome(); } })
     .catch(() => {});
   await openStream(pos, { abspielen: !p.paused });
@@ -2969,6 +2985,8 @@ async function untertitelHolen(p, idx) {
 async function untertitelAnwenden() {
   const p = S.playing, v = $('#v');
   if (!p || !v) return;
+  // mpv zeichnet Untertitel selbst — auch ASS mit Stil und PGS.
+  if (p.mpv) return mpvUntertitel(p);
   // Jeder Aufruf bekommt eine Nummer; nur der jüngste darf Zeilen setzen.
   // Zwei überlappende Aufrufe (Start und gleich danach ein Sprung, bevor
   // die .vtt da war) legten sonst jede Zeile doppelt hin.
@@ -3036,6 +3054,8 @@ async function spurWaehlen(idx) {
   p.spur = idx;
   const t = tonspuren(p).find(x => x.index === idx);
   if (t?.language) spurenMerken(p, { ton: t.language });
+  // mpv hat alle Tonspuren der Datei: umschalten, ohne neu zu laden.
+  if (p.mpv && !p.hls) { mpvBefehl('ton', null, { index: idx }); p.spurenHtml = ''; patchChrome(); return; }
   // Der Ton steckt im Strom: neu öffnen, an derselben Stelle.
   const pos = p.offset + p.current;
   await openStream(pos);
@@ -3100,7 +3120,7 @@ const imVollbild = () => !!(document.fullscreenElement || document.webkitFullscr
 const lautRegler = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
 // Bild im Bild: Standard-API (Chrome, Edge, Safari 13.1+) oder die ältere
 // von Safari. Firefox hat keine, dort fehlt der Knopf.
-const bildImBildDa = () => !!(document.pictureInPictureEnabled || HTMLVideoElement.prototype.webkitSetPresentationMode);
+const bildImBildDa = () => !S.playing?.mpv && !!(document.pictureInPictureEnabled || HTMLVideoElement.prototype.webkitSetPresentationMode);
 async function bildImBildUmschalten() {
   const v = $('#v'), p = S.playing;
   if (!v || !p) return;
@@ -3156,7 +3176,7 @@ function viewPlayer() {
   const laut = v ? v.volume : (p.lautstaerke ?? 1);
 
   const prefs = S.me?.prefs || {};
-  return `<div class="player${p.ui ? '' : ' pl-nocursor'} ut-${prefs.utGroesse || 'normal'}${prefs.utHintergrund === '0' ? ' ut-ohne' : ''}"
+  return `<div class="player${p.ui ? '' : ' pl-nocursor'}${p.mpv ? ' pl-mpv' : ''} ut-${prefs.utGroesse || 'normal'}${prefs.utHintergrund === '0' ? ' ut-ohne' : ''}"
     role="dialog" aria-modal="true" aria-label="${esc(tr('{titel} – Wiedergabe', { titel: p.title }))}">
     <video id="v" class="pl-video" playsinline autoplay
       style="position:absolute;inset:0;width:100%;height:100%;background:#000;object-fit:contain"></video>
@@ -3271,7 +3291,11 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
     }
     // Eine defekte oder verschwundene Datei: gleich sagen, statt einen
     // schwarzen Player zu öffnen.
-    const plan = await api.plan(file.id, qualitaetParameter(quellHoehe)).catch(e => {
+    // Lumen für Windows: Filme spielt mpv (desktopplayer.js) — der Plan
+    // fragt dann mit dem, was mpv kann (fast alles direkt).
+    const mitMpv = mpvDa();
+    const plan = await api.plan(file.id, qualitaetParameter(quellHoehe),
+      mitMpv ? mpvFaehigkeiten(qualitaetParameter(quellHoehe)) : null).catch(e => {
       if (e?.code === 'bildschirmzeit' || e?.code === 'datei_defekt' || e?.status === 410 || e?.status === 422) throw e;
       return null;
     });
@@ -3302,6 +3326,9 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
       offset: 0, current: 0, paused: false, ui: true, loading: true,
       mounted: false,
       mode: plan?.plan?.direct ? 'direct' : 'transcode',
+      // Eigener Player (mpv) — und ob er über HLS spielt (unterwegs mit
+      // Bandbreitengrenze) statt die Datei direkt.
+      mpv: mitMpv, hls: mitMpv && !!plan && !plan.plan?.direct,
       // Ton und Untertitel: was die Datei hat, und was gewählt ist.
       tracks: file.tracks || [],
       // Kapitel der Datei (Blu-ray-Rips haben oft zwanzig und mehr). Bei
@@ -3378,6 +3405,7 @@ async function openStream(atSec, { abspielen = false, anhalten = false } = {}) {
   try { await api.medienSchluessel(); } catch {}
   const p = S.playing;
   if (!p) return;
+  if (p.mpv) return mpvOeffnen(p, atSec, { abspielen, anhalten });
   p.loading = true;
   p.fehler = '';
   patchChrome();
@@ -3412,6 +3440,139 @@ async function openStream(atSec, { abspielen = false, anhalten = false } = {}) {
   v.defaultPlaybackRate = v.playbackRate = p.tempo || 1;
   if (warPausiert) { p.paused = true; patchChrome(); return; }
   try { await v.play(); } catch {}
+}
+
+/* ---------------------------------------------------------------- Eigener Player (mpv)
+ *
+ * Lumen für Windows spielt Filme mit mpv (desktopplayer.js): die Datei
+ * direkt vom Server, ohne Umwandeln. Die Bedienelemente bleiben diese hier;
+ * das <video> leitet nur weiter. Gesprungen wird in mpv selbst, Ton und
+ * Untertitel wechseln ohne neuen Strom, und Bild-Untertitel (PGS) zeichnet
+ * mpv, statt dass der Server sie einbrennt. */
+async function mpvOeffnen(p, atSec, { abspielen = false, anhalten = false } = {}) {
+  const warPausiert = anhalten || (!abspielen && p.paused && !!p.mpvGestartet);
+  p.loading = true;
+  p.fehler = '';
+  patchChrome();
+  // Direkt oder HLS: Unterwegs mit Bandbreitengrenze sagt der Plan „nicht
+  // direkt" — dann HLS, das mpv ebenso spielt (der Server wandelt um).
+  const q = qualitaetParameter(p.quellHoehe);
+  const faehig = mpvFaehigkeiten(q);
+  try {
+    const pl = await api.plan(p.fileId, q, faehig);
+    if (pl?.plan) { p.hls = !pl.plan.direct; p.mode = pl.plan.direct ? 'direct' : 'transcode'; }
+  } catch (e) {
+    if (e?.code === 'bildschirmzeit') { await stopPlayer(); return bzSchluss(e.message); }
+  }
+  if (S.playing !== p) return;
+  p.offset = 0;
+  p.current = atSec || 0;
+  const id = encodeURIComponent(p.fileId);
+  const ton = tonspuren(p);
+  const spur = p.spur >= 0 ? p.spur : (ton[0] ? ton[0].index : -1);
+  const ut = p.untertitel == null ? null : alleUntertitel(p).find(t => t.index === p.untertitel);
+  const qs = new URLSearchParams(faehig);
+  if (p.hls) {
+    if (spur >= 0) qs.set('spur', String(spur));
+    // In HLS steckt kein Untertitel: Bild-Untertitel brennt der Server ein,
+    // Text holt mpv als Datei dazu.
+    qs.set('untertitel', String(ut?.bitmap ? ut.index : -1));
+  }
+  const v = $('#v');
+  p.mpvBindung?.neu(p.current);
+  const auftrag = {
+    pfad: p.hls ? `/api/v1/stream/${id}/hls/master.m3u8?${qs}` : `/api/v1/stream/${id}?${qs}`,
+    token: api.token || '',
+    hls: !!p.hls,
+    start: p.current,
+    pausiert: warPausiert,
+    ton: p.hls ? -1 : spur,
+    ...mpvUntertitelWahl(p, ut),
+    lautstaerke: v ? v.volume : 1,
+    stumm: v ? v.muted : false,
+    tempo: p.tempo || 1,
+    tonausgabe: mpvTonausgabe()?.name || '',
+    itemId: p.itemId, fileId: p.fileId, titel: p.title || '', unter: p.sub || '',
+    kapitel: (p.kapitel || []).map(k => ({ startMs: k.startMs, titel: k.title || '' })),
+    intro: p.intro ? { vonMs: p.intro.vonMs, bisMs: p.intro.bisMs } : null,
+    abspannMs: p.creditsMs || 0,
+  };
+  p.paused = warPausiert;
+  p.strom = (p.strom || 0) + 1;
+  try {
+    await window.lumenDesktop.player.abspielen(auftrag);
+    p.mpvGestartet = true;
+  } catch {
+    return mpvRueckfall(p, p.current, warPausiert);
+  }
+  patchChrome();
+}
+
+/* Welche Untertitel mpv zeigt: eine Spur der Datei (auch PGS und ASS) —
+   oder, was der Server als Datei liefert (eine .srt neben dem Film, und in
+   HLS jeder Text-Untertitel). */
+function mpvUntertitelWahl(p, ut) {
+  if (!ut || (p.hls && ut.bitmap)) return { untertitel: -1, untertitelPfad: '' };
+  if (ut.external || p.hls) {
+    return { untertitel: -1, untertitelPfad: `/api/v1/stream/${encodeURIComponent(p.fileId)}/subtitles/${ut.index}.vtt` };
+  }
+  return { untertitel: ut.index, untertitelPfad: '' };
+}
+
+function mpvUntertitel(p) {
+  const ut = p.untertitel == null ? null : alleUntertitel(p).find(t => t.index === p.untertitel);
+  const w = mpvUntertitelWahl(p, ut);
+  mpvBefehl('untertitel', null, { index: w.untertitel, pfad: w.untertitelPfad });
+}
+
+function mpvBinden(p, v) {
+  p.mpvBindung = mpvAnbinden(v, {
+    fehler: e => mpvFehler(p, e),
+    taste: art => mpvTaste(p, art),
+    // mpv ist von selbst ausgestiegen (sollte nicht vorkommen): zu.
+    geschlossen: () => { if (S.playing === p && p.mpvGestartet) stopPlayer(); },
+    geraete: () => { if (S.playing === p && p.spurenOffen === 'qualitaet') { p.spurenHtml = ''; patchChrome(); } },
+  });
+  p.mpvBindung.vorbelegen(1, false, p.tempo || 1);
+}
+
+/* Sagt der Server nein (Bildschirmzeit, zu viele Geräte …), steht sein Satz
+   im Bild. Sonst wie im Browser: nachfragen und einmal neu ansetzen. */
+function mpvFehler(p, e) {
+  if (S.playing !== p) return;
+  if (e.status) {
+    if (e.code === 'bildschirmzeit') { stopPlayer().then(() => bzSchluss(e.text)); return; }
+    const t = String(e.text || '');
+    p.loading = false;
+    p.paused = true;
+    p.fehler = t ? t.charAt(0).toUpperCase() + t.slice(1) + (/[.!?]$/.test(t) ? '' : '.') : tr('Wiedergabe nicht möglich.');
+    patchChrome(); showChrome(true);
+    return;
+  }
+  stromAbgerissen(p, !p.paused);
+}
+
+/* Medientasten: Im Browser-Player kommen sie über die Media Session; mit mpv
+   meldet die App sie (es gibt kein klingendes <video> in der Seite). */
+function mpvTaste(p, art) {
+  if (S.playing !== p) return;
+  const v = $('#v');
+  if (art === 'abspielen' && v) { if (v.paused) v.play(); else v.pause(); showChrome(); }
+  else if (art === 'naechste') naechsteFolgeJetzt(p);
+  else if (art === 'stopp') stopPlayer();
+  else if (art === 'zurueck') seekTo(p.offset + p.current - 10);
+}
+
+/* mpv liess sich nicht starten: für diese Sitzung der Browser-Player. */
+function mpvRueckfall(p, ab, pausiert) {
+  mpvAbschalten();
+  if (S.playing !== p) return;
+  p.mpvBindung?.loesen();
+  p.mpvBindung = null;
+  p.mpv = false; p.hls = false; p.mounted = false;
+  toast(tr('Der eigene Player liess sich nicht starten – Lumen spielt im Browser-Player.'));
+  render();
+  return openStream(ab, { anhalten: pausiert });
 }
 
 /* Wie weit vor dem Ende ein „ended" noch als Ende des Films gilt. Die
@@ -3484,6 +3645,7 @@ function mountPlayer() {
   const p = S.playing;
   if (!v || !p || p.mounted) return;
   p.mounted = true;
+  if (p.mpv) mpvBinden(p, v);
 
   p.textspur = null; // gehört zum neuen <video>
   lautstaerkeAnwenden(v);
@@ -4014,6 +4176,14 @@ async function trickplayLaden(p) {
   } finally { p.trickLaedt = false; }
 }
 
+/* Doppelklick ins Bild: Vollbild, wie in jedem Player am Computer. (Die
+   beiden Klicks davor heben sich auf: Pause und wieder Abspielen.) */
+app.addEventListener('dblclick', e => {
+  if (S.view !== 'player' || !(e.target instanceof Element) || !e.target.closest('[data-surface]')) return;
+  e.preventDefault();
+  vollbildUmschalten();
+});
+
 app.addEventListener('pointerdown', e => {
   const bar = e.target instanceof Element && e.target.closest('[data-bar]');
   const p = S.playing;
@@ -4332,6 +4502,7 @@ async function spielerAnhalten() {
   S.warteschlange = null;
   S.playing = null;
   clearTimeout(saveTimer);
+  if (p.mpv) { mpvBefehl('stopp'); p.mpvBindung?.loesen(); }
   const v = $('#v');
   if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
   await standAbschliessen(p);
@@ -6512,7 +6683,8 @@ app.addEventListener('click', async e => {
     const p = S.playing;
     if (p) {
       p.spurenOffen = p.spurenOffen === n.dataset.spuren ? false : n.dataset.spuren; p.spurenHtml = ''; showChrome(true);
-      if (p.spurenOffen === 'qualitaet' && tonausgabeImMenue()) {
+      if (p.spurenOffen === 'qualitaet' && p.mpv) mpvBefehl('geraete');
+      else if (p.spurenOffen === 'qualitaet' && tonausgabeImMenue()) {
         tonausgabeLaden(true).then(() => { if (S.playing === p && p.spurenOffen === 'qualitaet') { p.spurenHtml = ''; patchChrome(); } });
       }
       // Mit Tastatur oder Fernbedienung geöffnet (ein Klick ohne Maus hat
@@ -6525,6 +6697,13 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-spur'))) return spurWaehlen(Number(n.dataset.spur));
   if ((n = hit('data-qualitaet'))) return qualitaetWaehlen(n.dataset.qualitaet);
   if ((n = hit('data-tonausgabe-wahl'))) return tonausgabeImPlayer(n.dataset.tonausgabeWahl);
+  if ((n = hit('data-mpv-tonausgabe'))) {
+    const g = mpvTonausgabeWaehlen(n.dataset.mpvTonausgabe);
+    const p = S.playing;
+    if (p) { p.spurenOffen = false; p.spurenHtml = ''; patchChrome(); }
+    app.querySelector('[data-spuren="qualitaet"]')?.focus({ preventScroll: true });
+    return toast(g ? tr('Ton über „{name}“', { name: g.description || g.name }) : tr('Ton über den Systemstandard'));
+  }
   if ((n = hit('data-fassungwahl'))) return fassungWechseln(n.dataset.fassungwahl);
   if (hit('data-pl-standard')) return fassungAlsStandard();
   if (hit('data-pl-fehler-zu')) return stopPlayer();
@@ -7291,6 +7470,14 @@ function seekTo(sec) {
   const p = S.playing, v = $('#v');
   if (!p || !v) return;
   sec = Math.max(0, Math.min(sec, (p.duration || sec) - 1));
+  // mpv springt in der Datei (und in HLS) selbst, ohne neuen Strom.
+  if (p.mpv) {
+    v.currentTime = sec;
+    p.current = sec;
+    patchPlayer();
+    showChrome();
+    return;
+  }
 
   // Liegt die Stelle in dem, was schon da ist, reicht ein Sprung im Video.
   // Sonst muss der Server neu ansetzen.

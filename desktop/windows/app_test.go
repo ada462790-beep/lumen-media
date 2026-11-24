@@ -216,6 +216,8 @@ type attrappe struct {
 	gestartet string
 	zu        bool
 	ton       []string // „ursprung an/aus"
+	spielt    string
+	befehle   []string
 }
 
 func (a *attrappe) Auftrag(f func()) { f() }
@@ -241,6 +243,23 @@ func (a *attrappe) TonausgabeErlauben(ursprung string, an bool, weiter func(erro
 	a.ton = append(a.ton, fmt.Sprintf("%s %v", ursprung, an))
 	a.mu.Unlock()
 	weiter(nil)
+}
+
+func (a *attrappe) PlayerDa() bool { return true }
+func (a *attrappe) PlayerAbspielen(ursprung string, auftrag PlayerAuftrag) error {
+	if _, err := auftrag.Adresse(ursprung); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.spielt = ursprung + " " + auftrag.FileID
+	a.mu.Unlock()
+	return nil
+}
+func (a *attrappe) PlayerBefehl(ursprung string, b PlayerBefehl) error {
+	a.mu.Lock()
+	a.befehle = append(a.befehle, b.Art)
+	a.mu.Unlock()
+	return nil
 }
 
 func (a *attrappe) letzteAntwort(t *testing.T) antwort {
@@ -354,7 +373,7 @@ func TestSeite(t *testing.T) {
 			t.Errorf("%s: %d", p, st)
 		}
 	}
-	if !strings.Contains(brueckeSkript(), "version: '"+version+"'") {
+	if !strings.Contains(brueckeSkript(""), "version: '"+version+"'") {
 		t.Error("Fassung fehlt in der Brücke")
 	}
 }

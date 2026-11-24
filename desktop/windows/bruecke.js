@@ -111,10 +111,33 @@
     zu.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   }
 
+  // ---------------------------------------------------------- Eigener Player
+  //
+  // Liegt libmpv bei, spielt die App Filme selbst (player_windows.go): Die
+  // Web-App übergibt mit abspielen(), was sie sonst in ihr <video> legte,
+  // und zeichnet darüber weiter ihre Bedienelemente. Was mpv meldet
+  // (Zeit, Pause, Ende …), kommt über _player an die Hörer zurück
+  // (server/cmd/lumen/web/desktopplayer.js).
+  const PLAYER = '__LUMEN_PLAYER__';
+  const hoerer = new Set();
+  const player = PLAYER ? Object.freeze({
+    art: PLAYER,
+    // Was mpv dem Server als abspielbar meldet (für /plan und den Strom).
+    faehigkeiten: '__LUMEN_FAEHIGKEITEN__',
+    abspielen: auftrag => frage('playerAbspielen', auftrag),
+    befehl: (art, wert, mehr) => frage('playerBefehl', Object.assign({ art, wert }, mehr || {})),
+    beiEreignis: fn => { hoerer.add(fn); return () => hoerer.delete(fn); },
+  }) : null;
+
   Object.defineProperty(window, 'lumenDesktop', {
     value: Object.freeze({
       version: '__LUMEN_VERSION__',
       plattform: 'windows',
+      // Was die Hülle kann: player 'mpv' — Filme spielt die App selbst.
+      faehigkeiten: Object.freeze({ player: PLAYER || null }),
+      player,
+      abspielen: player ? player.abspielen : undefined,
+      _player: e => { for (const fn of hoerer) { try { fn(e); } catch { /* ein Hörer bricht die anderen nicht */ } } },
       // Zeigt die Serverauswahl der App (wie Strg+Umschalt+S).
       serverWechseln: () => frage('serverWechseln'),
       // Tonausgabe (server/cmd/lumen/web/tonausgabe.js): Die App erlaubt

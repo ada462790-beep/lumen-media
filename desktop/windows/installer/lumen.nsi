@@ -8,7 +8,11 @@
 ; Installer für Lumen für Windows (NSIS 3).
 ;
 ;   makensis /DVERSION=0.4.0 /DEXE=..\Lumen.exe /DAUSGABE=..\Lumen-Setup-0.4.0-windows-x64.exe
-;            [/DWEBVIEW2_SETUP=MicrosoftEdgeWebview2Setup.exe] [/DDOKU=..\..\..] lumen.nsi
+;            [/DWEBVIEW2_SETUP=MicrosoftEdgeWebview2Setup.exe] [/DLIBMPV=..\libmpv-2.dll]
+;            [/DDOKU=..\..\..] lumen.nsi
+;
+; LIBMPV: libmpv-2.dll für den eigenen Player (mpv, GPL-3.0-or-later; siehe
+; THIRD_PARTY.md). Ohne sie spielt Lumen im Player der Web-App.
 ;
 ; Installiert wird für den angemeldeten Benutzer nach
 ; %LOCALAPPDATA%\Programs\Lumen — ohne Administratorrechte, ohne
@@ -91,8 +95,8 @@ VIAddVersionKey /LANG=0 "ProductVersion" "${VERSION}"
 ; schreibt Schweizer Hochdeutsch und meidet ß-Wörter, damit es überall passt.
 LangString TitelWillkommen ${LANG_GERMAN} "Lumen installieren"
 LangString TitelWillkommen ${LANG_ENGLISH} "Install Lumen"
-LangString TextWillkommen ${LANG_GERMAN} "Lumen bringt deine Filme und Serien von deinem Lumen-Server in ein eigenes Fenster – mit Vollbild, Medientasten und mehreren Servern.$\r$\n$\r$\nLumen wird nur für dich installiert und braucht keine Administratorrechte.$\r$\n$\r$\n$_CLICK"
-LangString TextWillkommen ${LANG_ENGLISH} "Lumen brings the movies and shows on your Lumen server into a window of its own – with full screen, media keys and multiple servers.$\r$\n$\r$\nLumen is installed just for you and doesn't need administrator rights.$\r$\n$\r$\n$_CLICK"
+LangString TextWillkommen ${LANG_GERMAN} "Lumen bringt deine Filme und Serien von deinem Lumen-Server in ein eigenes Fenster – mit eigenem Player (mpv), der jede Datei direkt abspielt, Vollbild, Medientasten und mehreren Servern.$\r$\n$\r$\nLumen wird nur für dich installiert und braucht keine Administratorrechte.$\r$\n$\r$\n$_CLICK"
+LangString TextWillkommen ${LANG_ENGLISH} "Lumen brings the movies and shows on your Lumen server into a window of its own – with its own player (mpv) that plays every file directly, full screen, media keys and multiple servers.$\r$\n$\r$\nLumen is installed just for you and doesn't need administrator rights.$\r$\n$\r$\n$_CLICK"
 LangString TextFertig ${LANG_GERMAN} "Lumen ist installiert. Du findest es im Startmenü.$\r$\n$\r$\nBeim ersten Start gibst du die Adresse deines Servers ein, etwa 192.168.10.10:8097."
 LangString TextFertig ${LANG_ENGLISH} "Lumen is installed. You'll find it in the Start menu.$\r$\n$\r$\nWhen you first open it, enter your server's address, for example 192.168.10.10:8097."
 LangString TextStarten ${LANG_GERMAN} "Lumen jetzt öffnen"
@@ -139,6 +143,9 @@ Section "Lumen" SecLumen
   SetOutPath "$INSTDIR"
   ; Ist die Datei noch gesperrt, bietet NSIS selbst „Wiederholen" an.
   File "/oname=Lumen.exe" "${EXE}"
+!ifdef LIBMPV
+  File "/oname=libmpv-2.dll" "${LIBMPV}"
+!endif
   ; Die AGPL verlangt, dass der Lizenztext jede Kopie begleitet.
   File "/oname=LICENSE.txt" "${DOKU}\LICENSE"
   File "/oname=LICENSE-EXCEPTIONS.txt" "${DOKU}\LICENSE-EXCEPTIONS"
@@ -200,6 +207,7 @@ FunctionEnd
 Section "Uninstall"
   !insertmacro LumenSchliessen
   Delete "$INSTDIR\Lumen.exe"
+  Delete "$INSTDIR\libmpv-2.dll"
   Delete "$INSTDIR\LICENSE.txt"
   Delete "$INSTDIR\LICENSE-EXCEPTIONS.txt"
   Delete "$INSTDIR\THIRD_PARTY.md"

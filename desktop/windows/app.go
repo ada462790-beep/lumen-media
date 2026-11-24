@@ -43,6 +43,11 @@ type Host interface {
 	// dieses Ursprungs die Audio-Ausgabegeräte sieht und wählt
 	// (tonausgabe.go). fertig kommt im Fenster-Thread.
 	TonausgabeErlauben(ursprung string, an bool, fertig func(error))
+	// Der eigene Player (player.go, player_windows.go). PlayerDa sagt, ob
+	// libmpv bereitliegt; ohne spielt die Web-App wie bisher selbst.
+	PlayerDa() bool
+	PlayerAbspielen(ursprung string, a PlayerAuftrag) error
+	PlayerBefehl(ursprung string, b PlayerBefehl) error
 }
 
 type App struct {
@@ -195,6 +200,33 @@ func (a *App) Nachricht(quelle, roh string) {
 	// Für jede Seite, auch die Web-App eines Servers.
 	case "info":
 		antworte(map[string]any{"version": version, "plattform": "windows"}, nil)
+	case "playerAbspielen", "playerBefehl":
+		// Wie die Tonausgabe: nur die Web-App eines gemerkten Servers, und
+		// mpv holt nur von genau diesem Server (PlayerAuftrag.Adresse).
+		ursprung, ok := a.serverUrsprung(quelle)
+		if !ok {
+			antworte(nil, codeFehler{fehlerNichtErlaub})
+			return
+		}
+		if n.Art == "playerAbspielen" {
+			var auftrag PlayerAuftrag
+			if err := json.Unmarshal(n.Daten, &auftrag); err != nil {
+				antworte(nil, codeFehler{fehlerUnbekannt})
+				return
+			}
+			err := a.host.PlayerAbspielen(ursprung, auftrag)
+			if err != nil {
+				log.Printf("Player: %v", err)
+			}
+			antworte(nil, err)
+			return
+		}
+		var b PlayerBefehl
+		if err := json.Unmarshal(n.Daten, &b); err != nil {
+			antworte(nil, codeFehler{fehlerUnbekannt})
+			return
+		}
+		antworte(nil, a.host.PlayerBefehl(ursprung, b))
 	case "serverWechseln":
 		antworte(nil, nil)
 		a.host.Auftrag(a.ServerWechseln)

@@ -20,9 +20,17 @@ var seitenDateien embed.FS
 //go:embed bruecke.js
 var brueckeQuelle string
 
-// brueckeSkript ist bruecke.js mit der Fassung dieser App.
-func brueckeSkript() string {
-	return strings.ReplaceAll(brueckeQuelle, "__LUMEN_VERSION__", strings.ReplaceAll(version, "'", ""))
+// brueckeSkript ist bruecke.js mit der Fassung dieser App und dem, was
+// ihr Player kann: player = "mpv", wenn libmpv bereitliegt (dann übergibt
+// die Web-App Filme an die App), sonst leer. faehigkeiten: was mpv dem
+// Server als abspielbar meldet (mpvFaehigkeiten).
+func brueckeSkript(player string) string {
+	ersatz := strings.NewReplacer(
+		"__LUMEN_VERSION__", strings.ReplaceAll(version, "'", ""),
+		"__LUMEN_PLAYER__", map[bool]string{true: "mpv", false: ""}[player == "mpv"],
+		"__LUMEN_FAEHIGKEITEN__", strings.ReplaceAll(mpvFaehigkeiten(), "'", ""),
+	)
+	return ersatz.Replace(brueckeQuelle)
 }
 
 // seitenKopf: Die eingebaute Seite lädt nur, was von ihr selbst kommt.

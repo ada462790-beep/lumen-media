@@ -42,6 +42,7 @@ func main() {
 	zeigeVersion := flag.Bool("version", false, "Fassung ausgeben und beenden")
 	selbsttest := flag.String("selbsttest", "", "Fenster öffnen, Bilder in diesen Ordner schreiben, beenden (für die Prüfung beim Bauen)")
 	selbsttestWeb := flag.String("selbsttest-web", "", "Ordner der Web-App (server/cmd/lumen/web), die der Schein-Server im Selbsttest ausliefert")
+	selbsttestFilm := flag.String("selbsttest-film", "", "Testfilm (MKV), den der Schein-Server im Selbsttest für den eigenen Player ausliefert")
 	debug := flag.Bool("debug", false, "Entwicklerwerkzeuge (F12) erlauben")
 	flag.Parse()
 
@@ -49,11 +50,12 @@ func main() {
 		fmt.Println("Lumen für Windows", version)
 		return
 	}
-	os.Exit(starten(optionen{selbsttest: *selbsttest, selbsttestWeb: *selbsttestWeb, debug: *debug}))
+	os.Exit(starten(optionen{selbsttest: *selbsttest, selbsttestWeb: *selbsttestWeb, selbsttestFilm: *selbsttestFilm, debug: *debug}))
 }
 
 type optionen struct {
-	selbsttest    string
-	selbsttestWeb string
-	debug         bool
+	selbsttest     string
+	selbsttestWeb  string
+	selbsttestFilm string
+	debug          bool
 }

@@ -9,8 +9,12 @@
 # den Installer an die Veröffentlichung (workflow_call).
 #
 # Was entsteht:
-#   Lumen-Setup-<fassung>-windows-x64.exe   Installer (NSIS), Artefakt lumen-windows-app
+#   Lumen-Setup-<fassung>-windows-x64.exe   Installer (NSIS) mit libmpv, Artefakt lumen-windows-app
 #   selbsttest-windows                      Bilder und Protokoll des Selbsttests
+#
+# Der eigene Player braucht libmpv-2.dll (mpv, GPL-3.0-or-later). Sie kommt
+# fest gepinnt mit Prüfsumme von shinchiro/mpv-winbuild-cmake
+# (desktop/windows/mpv/libmpv.txt) und liegt nie im Repository.
 
 name: Windows-App
 
@@ -23,6 +27,8 @@ on:
       - 'desktop/windows/**'
       - 'server/cmd/lumen/web/**'
       - '.github/workflows/desktop.yml'
+      - 'DRITTSOFTWARE.md'
+      - 'THIRD_PARTY.md'
   pull_request:
     paths:
       - 'desktop/windows/**'
@@ -109,16 +115,85 @@ jobs:
           go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=$FASSUNG" -o dist/Lumen.exe .
           ls -l dist
 
+      # Der eigene Player (player_windows.go): libmpv-2.dll neben Lumen.exe.
+      # Für eine Veröffentlichung muss sie gepinnt sein (STRENG).
+      - name: libmpv
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STRENG: ${{ inputs.version != '' && '1' || '0' }}
+        run: bash mpv/laden.sh dist
+
+      # Ein kleiner Testfilm für den eigenen Player: MKV mit HEVC 10 Bit,
+      # AC3 5.1 (de) und AC3 Stereo (en), zwei ASS-Untertitel (de, en) —
+      # genau das, was der Browser-Player nicht direkt kann.
+      - name: Testfilm
+        run: |
+          choco install ffmpeg -y --no-progress > /dev/null
+          mkdir -p testfilm
+          for s in de en; do
+            {
+              printf '[Script Info]\nScriptType: v4.00+\nPlayResX: 1280\nPlayResY: 720\n\n'
+              printf '[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV\n'
+              printf 'Style: Default,Arial,48,&H00FFFFFF,&H00000000,&H80000000,1,0,1,3,0,2,40,40,60\n\n'
+              printf '[Events]\nFormat: Layer, Start, End, Style, Text\n'
+              for i in $(seq 0 2 58); do
+                if [ "$s" = de ]; then t="Deutscher Untertitel $((i / 2 + 1))"; else t="English subtitle $((i / 2 + 1))"; fi
+                printf 'Dialogue: 0,0:00:%02d.00,0:00:%02d.80,Default,%s\n' "$i" "$((i + 1))" "$t"
+              done
+            } > "testfilm/$s.ass"
+          done
+          ffmpeg -hide_banner -loglevel error -y \
+            -f lavfi -i "testsrc2=size=1280x720:rate=25:duration=60" \
+            -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=60" \
+            -f lavfi -i "sine=frequency=660:sample_rate=48000:duration=60" \
+            -i testfilm/de.ass -i testfilm/en.ass \
+            -map 0:v -map 1:a -map 2:a -map 3 -map 4 \
+            -c:v libx265 -preset ultrafast -pix_fmt yuv420p10le -x265-params log-level=error \
+            -c:a ac3 -b:a 192k -filter:a:0 "aformat=channel_layouts=5.1" -ac:a:1 2 -c:s ass \
+            -metadata:s:a:0 language=ger -metadata:s:a:1 language=eng \
+            -metadata:s:s:0 language=ger -metadata:s:s:1 language=eng \
+            testfilm/testfilm.mkv
+          ffprobe -hide_banner -v error -show_entries stream=index,codec_name,pix_fmt,channels:stream_tags=language -of compact testfilm/testfilm.mkv
+          ls -l testfilm
+
+      # Ohne Audiogerät spielt mpv stumm, und niemand sieht, welchem Prozess
+      # die Audio-Sitzung gehört. Darum ein virtuelles Gerät (Scream, ein
+      # signierter Treiber) — wenn es nicht klappt, prüft der Selbsttest den
+      # Ton eben nicht.
+      - name: Virtuelles Audiogerät
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Set-Service -Name Audiosrv -StartupType Automatic -ErrorAction SilentlyContinue
+          Start-Service -Name Audiosrv -ErrorAction SilentlyContinue
+          $zip = "$env:RUNNER_TEMP\scream.zip"; $ordner = "$env:RUNNER_TEMP\scream"
+          Invoke-WebRequest -Uri 'https://github.com/duncanthrax/scream/releases/download/4.0/Scream4.0.zip' -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $ordner -Force
+          $inf = Get-ChildItem -Recurse $ordner -Filter 'Scream.inf' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          $sys = Get-ChildItem -Recurse $ordner -Filter 'Scream.sys' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          $devcon = Get-ChildItem -Recurse $ordner -Filter 'devcon*.exe' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          if (-not $inf -or -not $sys -or -not $devcon) { Get-ChildItem -Recurse $ordner | Select-Object FullName; throw 'Scream: Dateien nicht gefunden' }
+          $cert = (Get-AuthenticodeSignature $sys.FullName).SignerCertificate
+          $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'LocalMachine')
+          $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
+          Push-Location $inf.DirectoryName
+          & $devcon.FullName install $inf.FullName '*Scream'
+          Pop-Location
+          Start-Sleep -Seconds 5
+          Get-CimInstance Win32_SoundDevice | Format-Table Name, Status
+
       # Die App wirklich starten: Fenster, WebView2, eingebaute Seite,
       # Server hinzufügen, die echte Web-App (von einem Schein-Server, der
       # server/cmd/lumen/web ausliefert) mit „Server wechseln", Brücke,
-      # externe Links, F11 und Player-Vollbild, Serverauswahl. Die Bilder
-      # liegen danach am Lauf (selbsttest-windows).
+      # externe Links, F11 und Player-Vollbild, der eigene Player (mpv mit
+      # dem Testfilm: Bild, Zeit, Spuren, Fortschritt, Esc, Audio-Sitzung),
+      # Serverauswahl. Die Bilder liegen danach am Lauf (selbsttest-windows).
       - name: Selbsttest
         shell: pwsh
         run: |
           $web = (Resolve-Path ..\..\server\cmd\lumen\web).Path
-          $p = Start-Process -FilePath dist\Lumen.exe -ArgumentList '--selbsttest', "$PWD\selbsttest", '--selbsttest-web', $web -PassThru -Wait
+          $film = (Resolve-Path testfilm\testfilm.mkv).Path
+          $p = Start-Process -FilePath dist\Lumen.exe -ArgumentList '--selbsttest', "$PWD\selbsttest", '--selbsttest-web', $web, '--selbsttest-film', $film -PassThru -Wait
           Get-Content selbsttest\protokoll.txt -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) {
             Get-Content selbsttest\lumen.log -ErrorAction SilentlyContinue
@@ -165,9 +240,12 @@ jobs:
         working-directory: desktop/windows/installer
         run: |
           & $env:NSIS /V3 "/DVERSION=$env:ZAHL" "/DEXE=..\dist\Lumen.exe" "/DAUSGABE=..\dist\$env:DATEI" `
-            "/DWEBVIEW2_SETUP=MicrosoftEdgeWebview2Setup.exe" "/DDOKU=..\..\.." lumen.nsi
+            "/DWEBVIEW2_SETUP=MicrosoftEdgeWebview2Setup.exe" "/DLIBMPV=..\dist\libmpv-2.dll" "/DDOKU=..\..\.." lumen.nsi
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Item "..\dist\$env:DATEI" | Format-List Name, Length
+          $mb = [math]::Round((Get-Item "..\dist\$env:DATEI").Length / 1MB, 1)
+          $dll = [math]::Round((Get-Item "..\dist\libmpv-2.dll").Length / 1MB, 1)
+          "Installer: $mb MB (libmpv-2.dll ausgepackt: $dll MB)" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       # Einmal still installieren und wieder entfernen: Liegen Programm,
       # Startmenü-Eintrag und Deinstallation da, wo sie sollen?
@@ -177,7 +255,7 @@ jobs:
           $p = Start-Process -FilePath "dist\$env:DATEI" -ArgumentList '/S' -PassThru -Wait
           if ($p.ExitCode -ne 0) { Write-Error "Installer: $($p.ExitCode)"; exit 1 }
           $ziel = "$env:LOCALAPPDATA\Programs\Lumen"
-          foreach ($d in "$ziel\Lumen.exe", "$ziel\Deinstallieren.exe", "$ziel\LICENSE.txt", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Lumen.lnk") {
+          foreach ($d in "$ziel\Lumen.exe", "$ziel\libmpv-2.dll", "$ziel\Deinstallieren.exe", "$ziel\LICENSE.txt", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Lumen.lnk") {
             if (-not (Test-Path $d)) { Write-Error "fehlt: $d"; exit 1 }
           }
           $reg = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Lumen'
@@ -187,6 +265,7 @@ jobs:
           Start-Process -FilePath "$ziel\Deinstallieren.exe" -ArgumentList '/S' -Wait
           for ($i = 0; $i -lt 30 -and (Test-Path "$ziel\Lumen.exe"); $i++) { Start-Sleep -Milliseconds 500 }
           if (Test-Path "$ziel\Lumen.exe") { Write-Error "Deinstallation liess Lumen.exe zurück"; exit 1 }
+          if (Test-Path "$ziel\libmpv-2.dll") { Write-Error "Deinstallation liess libmpv-2.dll zurück"; exit 1 }
           if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Lumen.lnk") { Write-Error "Startmenü-Eintrag blieb"; exit 1 }
           "Installieren und Entfernen in Ordnung."
 

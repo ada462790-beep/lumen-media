@@ -67,6 +67,8 @@ type fenster struct {
 	stilVorVollbild uintptr
 
 	test *selbsttest
+
+	spieler *spieler // eigener Player (mpv), player_windows.go
 }
 
 var dasFenster *fenster
@@ -120,11 +122,13 @@ func starten(opt optionen) int {
 	log.Printf("WebView2 %s", laufzeit)
 
 	f := &fenster{debug: opt.debug, ordner: ordner}
+	f.spieler = neuerSpieler(f)
 	dasFenster = f
 	app, _ := NeueApp(f, ordner, lokal)
 	f.app = app
 	if opt.selbsttest != "" {
 		f.test = neuerSelbsttest(f, opt.selbsttest, opt.selbsttestWeb)
+		f.test.film = opt.selbsttestFilm
 		app.keinNetz = true
 		if err := f.test.serverStarten(); err != nil {
 			log.Printf("Selbsttest: %v", err)
@@ -285,8 +289,18 @@ func wndProc(hwnd, m, wp, lp uintptr) uintptr {
 	case wmSize:
 		if f.bereit && wp != sizeMinimized {
 			f.chromium.Resize()
+			f.spieler.groesse()
 		}
 		return 0
+	case wmHotkey:
+		art := map[uintptr]string{tasteAbspielen: "abspielen", tasteNaechste: "naechste", tasteStopp: "stopp", tasteZurueck: "zurueck"}[wp]
+		if art != "" && f.spieler.medientaste(art) {
+			return 0
+		}
+	case wmAppCommand:
+		if art := appCommandTaste(lp); art != "" && f.spieler.medientaste(art) {
+			return 1
+		}
 	case wmMove:
 		if f.bereit {
 			f.chromium.NotifyParentWindowPositionChanged()
@@ -320,6 +334,7 @@ func wndProc(hwnd, m, wp, lp uintptr) uintptr {
 		// Hell/Dunkel in Windows umgestellt: Titelleiste mitziehen.
 		rahmenFaerben(hwnd)
 	case wmClose:
+		f.spieler.stoppen()
 		f.zustandSichern()
 		pDestroyWindow.Call(hwnd)
 		return 0
@@ -505,7 +520,14 @@ func (f *fenster) webviewEinrichten(lokal string) error {
 	}
 
 	c.AddWebResourceRequestedFilter("http://"+seitenHost+"/*", edge.COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)
-	c.Init(brueckeSkript())
+	player := ""
+	if mpvDa() {
+		player = "mpv"
+		log.Printf("Eigener Player: libmpv %s (%s)", dieLibmpv.fassung(), dieLibmpv.pfad)
+	} else {
+		log.Printf("Eigener Player aus: %v", libmpvFehler)
+	}
+	c.Init(brueckeSkript(player))
 
 	f.bereit = true
 	c.Resize()
@@ -655,4 +677,14 @@ func (f *fenster) InstallerStarten(pfad string) error {
 
 func (f *fenster) Schliessen() {
 	pPostMessageW.Call(f.hwnd, wmClose, 0, 0)
+}
+
+func (f *fenster) PlayerDa() bool { return mpvDa() }
+
+func (f *fenster) PlayerAbspielen(ursprung string, a PlayerAuftrag) error {
+	return f.spieler.abspielen(ursprung, a)
+}
+
+func (f *fenster) PlayerBefehl(ursprung string, b PlayerBefehl) error {
+	return f.spieler.befehl(ursprung, b)
 }

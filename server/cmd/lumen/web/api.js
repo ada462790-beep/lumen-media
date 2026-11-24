@@ -423,8 +423,10 @@ export const api = {
   /* qualitaet: die im Player gewählte Stufe ({ maxHeight, maxBitrate }),
      null für „Auto". Plan, Sprung und Strom bekommen dieselbe — sonst
      rechnete /seek mit einem anderen Einstieg als der Strom. */
-  plan(fileId, qualitaet = null) {
-    return this.call(`/stream/${encodeURIComponent(fileId)}/plan?${browserCaps(qualitaet)}`);
+  plan(fileId, qualitaet = null, faehigkeiten = null) {
+    // faehigkeiten: was ein anderer Player als der Browser kann (mpv in
+    // Lumen für Windows, desktopplayer.js) — fertig als Abfrage.
+    return this.call(`/stream/${encodeURIComponent(fileId)}/plan?${faehigkeiten || browserCaps(qualitaet)}`);
   },
 
   /* Wo ein Strom wirklich beginnen würde. Beim blossen Umpacken ist der

@@ -1,0 +1,24 @@
+# Lumen — eigener Streaming-Server fürs Heimnetz.
+# Copyright (C) 2026 Die Lumen-Autoren
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Welche libmpv in den Installer von Lumen für Windows kommt (laden.sh).
+# Fest gepinnt: Veröffentlichung, Datei und SHA-256 von
+# https://github.com/shinchiro/mpv-winbuild-cmake/releases — die Datei
+# selbst liegt nicht im Repository.
+#
+# shinchiro behält nur die letzten 30 Veröffentlichungen (etwa ein Monat).
+# Ist die gepinnte weg, bricht der Bau mit einem klaren Hinweis ab. Dann:
+# TAG auf eine neue Veröffentlichung setzen, DATEI und SHA256 leeren und den
+# Ablauf „Windows-App" auf einem Arbeitszweig laufen lassen — laden.sh sucht
+# die Datei, nennt Name und Prüfsumme (Protokoll und Zusammenfassung des
+# Laufs); beides hier eintragen, REZEPT auf den Commit des Tags setzen
+# (git ls-remote --tags https://github.com/shinchiro/mpv-winbuild-cmake).
+#
+# Gebaut wird für x86-64 ohne AVX2-Pflicht (nicht die „-v3"-Fassung), damit
+# auch ältere Rechner Lumen abspielen.
+
+TAG=20261111
+DATEI=
+SHA256=
+REZEPT=bda10a2816ce9908d419b3f4b564227330457e76

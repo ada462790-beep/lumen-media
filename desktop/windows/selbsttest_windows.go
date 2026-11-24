@@ -39,6 +39,8 @@ type selbsttest struct {
 	f        *fenster
 	ordner   string
 	web      string // Ordner der echten Web-App (server/cmd/lumen/web), wenn angegeben
+	film     string // Testfilm für den eigenen Player (selbsttest_player_windows.go)
+	srv      scheinPlayer
 	adresse  string // des Schein-Servers
 	geladenK chan string
 
@@ -146,13 +148,16 @@ func (t *selbsttest) serverStarten() error {
 			json(w, 401, `{"error":"nicht angemeldet"}`)
 			return
 		}
-		json(w, 200, `{"account":{"id":"a","name":"Anna","avatar":"av-b","lockKind":"pin"},"prefs":{},"limits":{}}`)
+		// Untertitel „de": Der eigene Player soll mit deutschen Untertiteln
+		// starten (Regeln der Web-App, spurenVorbelegen).
+		json(w, 200, `{"account":{"id":"a","name":"Anna","avatar":"av-b","lockKind":"pin"},"prefs":{"untertitel":"de"},"limits":{}}`)
 	})
 	mux.HandleFunc("/api/v1/me/media-key", func(w http.ResponseWriter, r *http.Request) {
 		json(w, 200, `{"key":"selbsttest","gueltigSek":86400}`)
 	})
 	mux.HandleFunc("/api/v1/me/devices", func(w http.ResponseWriter, r *http.Request) { json(w, 200, `[]`) })
 	mux.HandleFunc("/api/v1/me/playbacks", func(w http.ResponseWriter, r *http.Request) { json(w, 200, `[]`) })
+	t.playerRouten(mux, angemeldet)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		if angemeldet(r) {
 			json(w, 404, `{"error":"gibt es im Selbsttest nicht"}`)
@@ -209,7 +214,7 @@ func (t *selbsttest) serverStarten127(mux *http.ServeMux) error {
 func (t *selbsttest) beginnen() {
 	t.notiz(true, "Fenster und WebView2 bereit, Schein-Server auf %s (Netzadresse: %v)", t.adresse, t.imNetz)
 	go func() {
-		ende := time.AfterFunc(180*time.Second, func() {
+		ende := time.AfterFunc(330*time.Second, func() {
 			t.notiz(false, "Zeit abgelaufen")
 			t.ui(t.abschliessen)
 		})
@@ -389,7 +394,12 @@ func (t *selbsttest) ablauf() {
 		t.tonausgabe(server)
 	}
 
-	// 6. Strg+Umschalt+S: die Auswahl mit dem gemerkten Server.
+	// 6. Der eigene Player (mpv): Film abspielen, Spuren, Fortschritt, zurück.
+	if t.web != "" {
+		t.eigenerPlayer(server)
+	}
+
+	// 7. Strg+Umschalt+S: die Auswahl mit dem gemerkten Server.
 	t.ui(t.f.app.ServerWechseln)
 	if t.notiz(t.warteGeladen(seitenAdresse+"?wechseln=1"), "Serverauswahl über das Tastenkürzel") {
 		time.Sleep(1200 * time.Millisecond)

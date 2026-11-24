@@ -1719,6 +1719,7 @@
  "Vielleicht Fassungen desselben Films · {n}": "Maybe versions of the same film · {n}",
  "Verschiedene Titel im selben Ordner, gleiches Jahr, andere Tonsprache und gleiche Laufzeit – vielleicht derselbe Film in zwei Sprachen. Zusammengelegt wählt man die Sprache im Player, und der Scan trennt sie nicht wieder. „Abtrennen“ macht es rückgängig.": "Different titles in the same folder, same year, different audio language and the same running time – perhaps the same film in two languages. Once merged, you choose the language in the player, and the scan won’t split them again. “Split off” undoes it.",
  "Als Fassungen eines Films zusammengelegt": "Merged as versions of one film",
+ "Der eigene Player liess sich nicht starten – Lumen spielt im Browser-Player.": "Lumen’s own player couldn’t start – playing in the browser player instead.",
  "Die Datei ist defekt und lässt sich nicht abspielen.": "The file is damaged and can’t be played.",
  "unvollständiger Download": "incomplete download",
  "Die Datei hat die volle Grösse, enthält aber an der geprüften Stelle nur Nullen – der Download wurde nie fertig.": "The file has its full size but contains only zeros at the checked spot – the download never finished.",

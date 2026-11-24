@@ -58,6 +58,9 @@ var (
 	pGetKeyState          = user32.NewProc("GetKeyState")
 	pGetSystemMetrics     = user32.NewProc("GetSystemMetrics")
 	pSetWindowTextW       = user32.NewProc("SetWindowTextW")
+	pGetClientRect        = user32.NewProc("GetClientRect")
+	pRegisterHotKey       = user32.NewProc("RegisterHotKey")
+	pUnregisterHotKey     = user32.NewProc("UnregisterHotKey")
 	pCreateSolidBrush     = gdi32.NewProc("CreateSolidBrush")
 	pDwmSetWindowAttr     = dwmapi.NewProc("DwmSetWindowAttribute")
 	pGetModuleHandleW     = kernel32.NewProc("GetModuleHandleW")
@@ -72,13 +75,17 @@ var (
 const (
 	wsOverlappedWindow = 0x00CF0000
 	wsClipChildren     = 0x02000000
+	wsClipSiblings     = 0x04000000
+	wsChild            = 0x40000000
+	hwndBottom         = 1
 	cwUseDefault       = ^uintptr(0x7FFFFFFF) // 0x80000000 als uintptr
 
-	swHide          = 0
-	swShowNormal    = 1
-	swShowMaximized = 3
-	swShow          = 5
-	swRestore       = 9
+	swHide           = 0
+	swShowNormal     = 1
+	swShowMaximized  = 3
+	swShow           = 5
+	swShowNoActivate = 4
+	swRestore        = 9
 
 	wmDestroy       = 0x0002
 	wmMove          = 0x0003
@@ -88,6 +95,8 @@ const (
 	wmGetMinMaxInfo = 0x0024
 	wmSettingChange = 0x001A
 	wmSysCommand    = 0x0112
+	wmHotkey        = 0x0312
+	wmAppCommand    = 0x0319
 	wmDpiChanged    = 0x02E0
 	wmApp           = 0x8000
 
