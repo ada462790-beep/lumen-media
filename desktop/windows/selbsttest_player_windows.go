@@ -202,7 +202,7 @@ func (t *selbsttest) taste(vk uintptr) {
 
 func (t *selbsttest) abspielenKlicken() {
 	// Wie ein Knopf „Abspielen" der Web-App (data-play).
-	t.skript(`(()=>{const b=document.createElement('button');b.dataset.play='` + filmID + `';document.body.appendChild(b);b.click();b.remove()})()`)
+	t.skript(`(()=>{const b=document.createElement('button');b.dataset.play='` + filmID + `';b.hidden=true;document.getElementById('app').appendChild(b);b.click();b.remove()})()`)
 }
 
 func (t *selbsttest) eigenerPlayer(server string) {
