@@ -162,12 +162,13 @@ jobs:
       # Ton eben nicht.
       - name: Virtuelles Audiogerät
         continue-on-error: true
+        timeout-minutes: 4
         shell: pwsh
         run: |
           Set-Service -Name Audiosrv -StartupType Automatic -ErrorAction SilentlyContinue
           Start-Service -Name Audiosrv -ErrorAction SilentlyContinue
           $zip = "$env:RUNNER_TEMP\scream.zip"; $ordner = "$env:RUNNER_TEMP\scream"
-          Invoke-WebRequest -Uri 'https://github.com/duncanthrax/scream/releases/download/4.0/Scream4.0.zip' -OutFile $zip
+          Invoke-WebRequest -Uri 'https://github.com/duncanthrax/scream/releases/download/3.6/Scream3.6.zip' -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath $ordner -Force
           $inf = Get-ChildItem -Recurse $ordner -Filter 'Scream.inf' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
           $sys = Get-ChildItem -Recurse $ordner -Filter 'Scream.sys' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
@@ -189,6 +190,7 @@ jobs:
       # dem Testfilm: Bild, Zeit, Spuren, Fortschritt, Esc, Audio-Sitzung),
       # Serverauswahl. Die Bilder liegen danach am Lauf (selbsttest-windows).
       - name: Selbsttest
+        timeout-minutes: 10
         shell: pwsh
         run: |
           $web = (Resolve-Path ..\..\server\cmd\lumen\web).Path

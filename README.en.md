@@ -53,10 +53,22 @@ shows your server's web interface in a window of its own:
   Emby and switch with **Ctrl+Shift+S**, with "Switch Server" (on "Who’s
   Watching?" and under *Me*) or from the window menu (Alt+Space). You stay
   signed in on each server.
+- **Own player (mpv):** the app plays movies and episodes itself with
+  [mpv](https://mpv.io) — the original file straight from the server, no
+  transcoding on the NAS: MKV, HEVC and AV1 (10-bit, 4K, HDR too), AC3,
+  E-AC3, DTS and TrueHD audio, PGS and styled ASS subtitles. The controls
+  are the familiar ones of the web app (timeline with previews, ±10 s,
+  audio, subtitles, chapters, skip intro, next episode with countdown, full
+  screen via double-click, F or F11, Esc to go back). The sound comes from
+  **Lumen.exe itself**, so the volume mixer and mixing tools such as Logi
+  MIXLINE list it as "Lumen"; pick the output device under the gear icon.
+  When the server limits bandwidth away from home, mpv plays the
+  transcoded stream (HLS). Progress and "watched" reach the server as in
+  the browser.
 - **Full screen:** F11 (or Alt+Enter) for the window; the player's full
   screen button fills the whole screen.
-- **Media keys:** play/pause and next on the keyboard and in Windows' media
-  controls.
+- **Media keys:** play/pause, next, previous and stop on the keyboard; with
+  the browser player also in Windows' media controls.
 - **Links to IMDb, TMDb etc.** open in your default browser.
 - **Updates:** At most once a day Lumen asks GitHub for a newer version and
   offers it in the bottom right corner. It downloads only when you click,
@@ -77,7 +89,11 @@ same release first (`Get-FileHash Lumen-Setup-….exe` in PowerShell).
 
 Uninstall it under *Settings › Apps*; Lumen asks whether to remove the
 server list and sign-ins as well. Built with Go and WebView2 (the Chromium
-that comes with Windows) — no bundled browser, no Electron. Source:
+that comes with Windows) — no bundled browser, no Electron — plus
+`libmpv-2.dll` (mpv with FFmpeg, GPL-3.0-or-later, pinned from
+[shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake),
+see [THIRD_PARTY.md](THIRD_PARTY.md)); the installer is about __GROESSE__ MB.
+Without the DLL Lumen falls back to the web app's player. Source:
 [`desktop/windows/`](desktop/windows/).
 
 ## Install with Docker

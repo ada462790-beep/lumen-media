@@ -469,11 +469,23 @@ eigenen Fenster:
   kommen dazu wie in Emby; wechseln mit **Strg+Umschalt+S**, über
   „Server wechseln" (bei „Wer schaut?" und unter *Ich*) oder im
   Fenstermenü (Alt+Leertaste). Angemeldet bleibst du auf jedem Server.
+- **Eigener Player (mpv):** Filme und Folgen spielt die App selbst, mit
+  [mpv](https://mpv.io) — die Originaldatei direkt vom Server, ohne dass
+  das NAS umwandeln muss: MKV, HEVC und AV1 (auch 10 Bit, 4K, HDR), Ton in
+  AC3, E-AC3, DTS und TrueHD, Untertitel in PGS und ASS (mit Stil). Die
+  Bedienung bleibt die gewohnte der Web-App — Zeitleiste mit
+  Vorschaubildern, ±10 s, Ton, Untertitel, Kapitel, Vorspann überspringen,
+  nächste Folge mit Countdown, Vollbild (Doppelklick, F, F11), Esc zurück.
+  Den Ton spielt dabei **Lumen.exe selbst**: Im Lautstärkemixer und in
+  Mischprogrammen wie Logi MIXLINE heisst er „Lumen". Im Zahnrad wählst du
+  das Ausgabegerät. Unterwegs, wenn der Server die Bandbreite begrenzt,
+  spielt mpv die umgewandelte Fassung (HLS). Fortschritt und „gesehen"
+  gehen wie im Browser an den Server.
 - **Vollbild:** F11 (oder Alt+Eingabe) für das ganze Fenster; der
   Vollbild-Knopf im Player füllt den ganzen Bildschirm.
-- **Medientasten:** Abspielen/Pause und Weiter auf der Tastatur und in der
-  Mediensteuerung von Windows.
-- **Tonausgabe:** Unter *Ich › Wiedergabe* und im Player (Zahnrad) wählst
+- **Medientasten:** Abspielen/Pause, Weiter, Zurück und Stopp auf der
+  Tastatur; im Browser-Player auch in der Mediensteuerung von Windows.
+- **Tonausgabe (Trailer, Browser-Player):** Unter *Ich › Wiedergabe* wählst
   du, über welches Gerät der Ton kommt — Systemstandard oder ein bestimmter
   Lautsprecher, Kopfhörer oder ein virtuelles Gerät. Das hilft, wenn ein
   Audio-Mischprogramm (etwa Logi MIXLINE) den Ton der App sonst nicht
@@ -508,8 +520,12 @@ Serverliste und die Anmeldungen weg sollen (`%APPDATA%\Lumen`,
 `%LOCALAPPDATA%\Lumen`).
 
 Gebaut wird die App mit Go und WebView2, dem Chromium, das in Windows
-steckt — kein eigener Browser, kein Electron; der Installer ist wenige
-Megabyte gross. Der Quelltext liegt in [`desktop/windows/`](desktop/windows/).
+steckt — kein eigener Browser, kein Electron. Dazu kommt `libmpv-2.dll`
+(mpv mit FFmpeg, GPL-3.0-or-later, fest gepinnt aus
+[shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake),
+siehe [DRITTSOFTWARE.md](DRITTSOFTWARE.md)); damit ist der Installer rund
+__GROESSE__ MB gross. Fehlt die DLL, spielt Lumen im Player der Web-App.
+Der Quelltext liegt in [`desktop/windows/`](desktop/windows/).
 
 ---
 

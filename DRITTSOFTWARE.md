@@ -194,6 +194,7 @@ ausgeliefert wird.
 | NSIS (Installer-Rahmen) | 3.x | zlib/libpng (einzelne Teile bzip2, CPL) | <https://nsis.sourceforge.io/License> | im Installer (der kleine Entpacker, der den Installer ausführt) | zlib verlangt keinen Hinweis in Binärdateien; genannt der Vollständigkeit halber |
 | Microsoft Edge WebView2 Runtime | Evergreen | Microsoft-Lizenz (proprietär) | <https://developer.microsoft.com/microsoft-edge/webview2/> | **getrennt** – Teil von Windows bzw. von Microsoft geladen | Lumen liefert sie nicht aus und linkt sie nicht; sie ist eine Systemkomponente |
 | WebView2-Bootstrapper (`MicrosoftEdgeWebview2Setup.exe`) | aktuell beim Bau | Microsoft, weitergeben erlaubt (WebView2 Distribution) | <https://developer.microsoft.com/microsoft-edge/webview2/#download> | im Installer, unverändert; läuft nur, wenn WebView2 fehlt | beim Bau von Microsoft geladen und auf Microsofts Unterschrift geprüft; steht nicht im Repository |
+| libmpv (`libmpv-2.dll`: mpv mit FFmpeg, libass, libplacebo, HarfBuzz, FreeType, dav1d, x264/x265 u. a., statisch gebaut) | gepinnt in [`desktop/windows/mpv/libmpv.txt`](desktop/windows/mpv/libmpv.txt) (Veröffentlichung, Datei, SHA-256, Bau-Rezept) | **GPL-3.0-or-later** als Ganzes (mpv GPL-2.0-or-later/LGPL-2.1-or-later; FFmpeg mit `--enable-gpl --enable-version3`, ohne `--enable-nonfree`; die übrigen Bibliotheken BSD, MIT, ISC, LGPL, Apache-2.0) | <https://github.com/shinchiro/mpv-winbuild-cmake> (Bau-Rezept), <https://github.com/mpv-player/mpv> | im Installer neben `Lumen.exe`, unverändert; `Lumen.exe` lädt sie zur Laufzeit in den eigenen Prozess (eigener Player, `player_windows.go`) | siehe unten; beim Bau mit Prüfsumme geladen, steht nicht im Repository |
 
 Die eingebauten Lizenzen (MIT, ISC, BSD-3-Clause) sind mit der AGPL-3.0
 vereinbar. Die WebView2-Laufzeit ist eine Komponente des Betriebssystems
@@ -203,7 +204,29 @@ Microsofts `WebView2Loader.dll`; die wird nur mit dem Bau-Schalter
 `native_webview2loader` eingebunden, den Lumen nicht setzt — `Lumen.exe`
 enthält sie nicht (der Lader ist in Go nachgebaut).
 
-Der Installer legt neben `Lumen.exe` auch `LICENSE.txt`,
+**libmpv und die AGPL.** `Lumen.exe` lädt `libmpv-2.dll` in den eigenen
+Prozess und ruft ihre Funktionen auf — das ist, anders als bei FFmpeg im
+Docker-Abbild, ein *kombiniertes Werk*. Die AGPL-3.0 (Abschnitt 13) und die
+GPL-3.0 (Abschnitt 13) erlauben ausdrücklich, ein AGPL-Werk mit einem
+GPL-3.0-Werk zu einem Werk zu verbinden; jeder Teil behält seine Lizenz.
+Mit einer Bibliothek unter „GPL-2.0-only" ginge das nicht — die gepinnte
+libmpv ist als Ganzes GPL-3.0-or-later (FFmpeg mit `--enable-version3`,
+mpv GPL-2.0-or-later). Bauten mit `--enable-nonfree` (etwa mit libfdk-aac)
+dürfen nicht weitergegeben werden; das Rezept von shinchiro setzt den
+Schalter nicht (`packages/ffmpeg.cmake`). Die Zusatzerlaubnisse in
+`LICENSE-EXCEPTIONS` gelten nur für den Lumen-Teil, nicht für libmpv.
+
+**Quelltext von libmpv.** Wer `libmpv-2.dll` weitergibt, muss den
+zugehörigen Quelltext anbieten (GPL-3.0 Abschnitt 6). Dazu gehören das
+Bau-Rezept von shinchiro beim Commit `REZEPT` aus `libmpv.txt`, mpv beim
+Commit, der im Dateinamen steht (`…-git-<commit>.7z`), und die Quellen der
+statisch eingebauten Bibliotheken. Das Rezept holt die meisten davon als
+jeweils neuesten Stand von Git am Bautag (Datum = `TAG`).
+[`tools/mpv_quellen.sh`](tools/mpv_quellen.sh) sammelt Rezept, mpv und für
+jede Bibliothek den letzten Commit vor dem Bautag in ein Archiv — siehe
+offene Punkte.
+
+Der Installer legt neben `Lumen.exe` auch `libmpv-2.dll`, `LICENSE.txt`,
 `LICENSE-EXCEPTIONS.txt`, `THIRD_PARTY.md` und `DRITTSOFTWARE.md` ab.
 
 ---
@@ -225,6 +248,15 @@ davon ist umgesetzt.
    Quellarchiven aller GPL- und LGPL-Pakete des Abbilds an.
 4. **TMDB-Logo.** Erledigt: klein und unverändert unter Einstellungen ›
    Datenquellen und Drittsoftware, mit Link auf themoviedb.org.
+5. **Quelltext von libmpv (Windows-App).** Offen. `tools/mpv_quellen.sh`
+   sammelt Rezept, mpv und die Bibliotheken (letzter Commit vor dem Bautag)
+   in `lumen-media-vX-libmpv-quellen.tar`; `quellen.yml` hängt es an jede
+   Veröffentlichung. Weil das Rezept von shinchiro die meisten Bibliotheken
+   ungepinnt vom neuesten Stand baut, ist das eine sehr genaue Annäherung,
+   aber kein Beweis, dass genau diese Commits in der DLL stecken.
+   Vorschlag: libmpv in einem eigenen Ablauf mit festen Fassungen selbst
+   bauen (dauert auf GitHub gut eine Stunde) oder zusätzlich ein
+   schriftliches Angebot nach GPL-3.0 Abschnitt 6 b beilegen.
 
 ### Erteilt: zusätzliche Erlaubnis für Google Play services (AGPL §7)
 

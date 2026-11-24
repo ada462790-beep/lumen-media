@@ -1,5 +1,6 @@
 # Quelltext der GPL- und LGPL-Pakete im Docker-Abbild (FFmpeg, BusyBox …)
-# als Datei an die Veröffentlichung hängen. Die GPL verlangt, dass dieser
+# und der libmpv im Installer der Windows-App als Dateien an die
+# Veröffentlichung hängen. Die GPL verlangt, dass dieser
 # Quelltext mit dem Abbild angeboten wird. Das Abbild selbst wird dadurch
 # nicht grösser — das Archiv liegt nur auf GitHub.
 name: GPL-Quellen
@@ -35,7 +36,11 @@ jobs:
       - name: Quellen sammeln
         run: |
           tools/gpl_quellen.sh "ghcr.io/${GITHUB_REPOSITORY}:${V}" "$V" "lumen-media-${V}-gpl-quellen.tar"
+      # Die libmpv-2.dll im Installer der Windows-App (GPL-3.0-or-later):
+      # Bau-Rezept, mpv und die eingebauten Bibliotheken.
+      - name: libmpv-Quellen (Windows-App)
+        run: tools/mpv_quellen.sh "$V" "lumen-media-${V}-libmpv-quellen.tar"
       - name: An die Veröffentlichung hängen
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$V" "lumen-media-${V}-gpl-quellen.tar" --clobber -R "$GITHUB_REPOSITORY"
+        run: gh release upload "$V" "lumen-media-${V}-gpl-quellen.tar" "lumen-media-${V}-libmpv-quellen.tar" --clobber -R "$GITHUB_REPOSITORY"
