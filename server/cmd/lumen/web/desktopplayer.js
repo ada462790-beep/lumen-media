@@ -80,7 +80,10 @@ let aktuell = null;
 if (brueckeDa()) {
   window.lumenDesktop.player.beiEreignis(e => {
     if (e?.art === 'geraete' && Array.isArray(e.liste)) {
-      mpvGeraete.liste = e.liste.filter(g => g && g.name && g.name !== 'auto');
+      // Nur WASAPI: Das ist der Ausgang, den mpv unter Windows nimmt; die
+      // Geräte anderer Ausgänge (OpenAL …) wären doppelt und wechselten
+      // den Ausgang mit.
+      mpvGeraete.liste = e.liste.filter(g => g && typeof g.name === 'string' && g.name.startsWith('wasapi/'));
       mpvGeraete.geladen = true;
     }
     if (aktuell) aktuell(e);

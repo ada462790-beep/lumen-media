@@ -1005,7 +1005,9 @@ async function fetchFor(view) {
       // mit losschicken, nicht erst nach den Folgen (eine Anfrage nach der
       // anderen kostete auf einer langsamen NAS jedes Mal eine Runde).
       const f = (d.files || []).find(x => !x.missing);
-      const planUnterwegs = f ? api.plan(f.id).catch(() => null) : null;
+      // In der Windows-App mit eigenem Player: was mpv kann (die Technik-
+      // Zeile sagt dann nicht „Wird umgewandelt" für eine MKV mit DTS).
+      const planUnterwegs = f ? api.plan(f.id, null, mpvDa() ? mpvFaehigkeiten() : null).catch(() => null) : null;
       const ladenUnterwegs = f ? api.downloadInfo(S.id).catch(() => null) : null;
       // Bei einer Serie gleich die Folgen der ersten Staffel dazu — die
       // Seite soll nicht mit einer leeren Liste aufgehen.
@@ -3032,6 +3034,18 @@ async function untertitelAnwenden() {
    hinter den Zeiten bzw. am Handy zwischen den Knöpfen. */
 function untertitelLage() {
   const p = S.playing, v = $('#v');
+  // mpv: Text-Untertitel über die Leiste schieben (sub-pos, in Prozent der
+  // Bildhöhe). ASS-Untertitel stehen, wo ihre Datei sie hinsetzt.
+  if (p?.mpv) {
+    const pl = app.querySelector('.player'), bot = app.querySelector('.pl-bot');
+    let lage = 100;
+    if (p.ui && pl && bot) {
+      const r = pl.getBoundingClientRect(), b = bot.getBoundingClientRect();
+      if (r.height) lage = Math.max(10, Math.min(100, Math.floor((b.top - r.top) / r.height * 100) - 1));
+    }
+    if (p.mpvUtLage !== lage) { p.mpvUtLage = lage; mpvBefehl('untertitelLage', lage); }
+    return;
+  }
   const spur = p?.textspur;
   if (!p || !v || !spur || spur.mode !== 'showing' || !spur.cues) return;
   let linie = 'auto';
@@ -3503,6 +3517,8 @@ async function mpvOeffnen(p, atSec, { abspielen = false, anhalten = false } = {}
   try {
     await window.lumenDesktop.player.abspielen(auftrag);
     p.mpvGestartet = true;
+    p.mpvUtLage = undefined;
+    untertitelLage();
   } catch {
     return mpvRueckfall(p, p.current, warPausiert);
   }

@@ -9,6 +9,11 @@ package main
 
 // Tonausgabe: über welches Gerät der Player spielt.
 //
+// Seit es den eigenen Player gibt (player_windows.go), spielt Lumen.exe den
+// Ton von Filmen selbst, und die Geräte nennt mpv. Was hier steht, gilt
+// noch für alles, was die Web-App selbst abspielt — Trailer und Extras, und
+// Filme, wenn libmpv fehlt.
+//
 // Warum: Den Ton einer WebView2-App spielt nicht Lumen.exe, sondern ein
 // Hilfsprozess von WebView2 (msedgewebview2.exe), und Windows führt ihn als
 // „Microsoft Edge WebView2" — nicht als Lumen. Programme, die den Ton nach

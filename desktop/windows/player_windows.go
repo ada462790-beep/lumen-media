@@ -536,6 +536,13 @@ func (s *spieler) befehl(ursprung string, b PlayerBefehl) error {
 			}
 			w.ton = false // neues Gerät, neue Sitzung: wieder benennen
 		})
+	case "untertitelLage":
+		// Text-Untertitel über die Leiste der Web-App (sub-pos, 0 … 100).
+		v, ok := b.zahl()
+		if !ok || v < 0 || v > 150 {
+			return codeFehler{fehlerUnbekannt}
+		}
+		w.schicke(func(m *mpv) { _ = m.setzen("sub-pos", strconv.Itoa(int(v))) })
 	case "geraete":
 		w.schicke(func(m *mpv) {
 			if t, ok := m.lesen("audio-device-list"); ok {

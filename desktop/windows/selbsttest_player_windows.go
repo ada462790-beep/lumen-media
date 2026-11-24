@@ -333,9 +333,11 @@ func (t *selbsttest) eigenerPlayer(server string) {
 	t.bildschirmWarte("12-mpv-tonausgabe.png")
 	t.skript(`document.querySelector('[data-spuren="qualitaet"]')?.click()`)
 
-	// Weiter abspielen, dann: wem gehört der Ton?
-	t.skript(`document.querySelector('[data-toggle]')?.click()`)
-	t.warte(4*time.Second, func() bool { return !w.stand().Pausiert })
+	// Weiter abspielen — mit der Medientaste (wie RegisterHotKey sie meldet).
+	t.ui(func() { pPostMessageW.Call(t.f.hwnd, wmHotkey, tasteAbspielen, 0) })
+	t.notiz(t.warte(5*time.Second, func() bool { return !w.stand().Pausiert }), "Medientaste Abspielen/Pause setzt fort")
+
+	// Wem gehört der Ton?
 	time.Sleep(1500 * time.Millisecond)
 	t.tonsitzungPruefen()
 

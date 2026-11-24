@@ -8,6 +8,10 @@
 /* „Tonausgabe": über welches Gerät der Player spielt — nur in Lumen für
  * Windows (desktop/windows).
  *
+ * Filme spielt dort inzwischen meist der eigene Player (mpv,
+ * desktopplayer.js) — mit eigener Geräteliste. Diese Wahl gilt für das, was
+ * die Seite selbst abspielt: Trailer, Extras und Filme, wenn libmpv fehlt.
+ *
  * Warum es das gibt: Programme wie Logi MIXLINE verteilen den Ton nach
  * Programm. Den Ton einer WebView2-App spielt aber nicht die App selbst,
  * sondern msedgewebview2.exe — er kommt bei solchen Mischern oft nicht
