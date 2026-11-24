@@ -59,6 +59,7 @@ var (
 	pGetSystemMetrics     = user32.NewProc("GetSystemMetrics")
 	pSetWindowTextW       = user32.NewProc("SetWindowTextW")
 	pGetClientRect        = user32.NewProc("GetClientRect")
+	pSendMessageW         = user32.NewProc("SendMessageW")
 	pRegisterHotKey       = user32.NewProc("RegisterHotKey")
 	pUnregisterHotKey     = user32.NewProc("UnregisterHotKey")
 	pCreateSolidBrush     = gdi32.NewProc("CreateSolidBrush")
@@ -77,8 +78,11 @@ const (
 	wsClipChildren     = 0x02000000
 	wsClipSiblings     = 0x04000000
 	wsChild            = 0x40000000
-	hwndBottom         = 1
-	cwUseDefault       = ^uintptr(0x7FFFFFFF) // 0x80000000 als uintptr
+	wsPopup            = 0x80000000
+
+	wsExNoRedirectionBitmap = 0x00200000
+	hwndBottom              = 1
+	cwUseDefault            = ^uintptr(0x7FFFFFFF) // 0x80000000 als uintptr
 
 	swHide           = 0
 	swShowNormal     = 1
@@ -91,6 +95,7 @@ const (
 	wmMove          = 0x0003
 	wmSize          = 0x0005
 	wmSetFocus      = 0x0007
+	wmEraseBkgnd    = 0x0014
 	wmClose         = 0x0010
 	wmGetMinMaxInfo = 0x0024
 	wmSettingChange = 0x001A

@@ -53,6 +53,10 @@ var (
 	iidBerechtArgs3 = windows.GUID{Data1: 0xe61670bc, Data2: 0x3dce, Data3: 0x4177, Data4: [8]byte{0x86, 0xd2, 0xc6, 0x29, 0xae, 0x3c, 0xb6, 0xac}}
 )
 
+// ICoreWebView2Controller::put_ParentWindow (der eigene Player zieht
+// WebView2 in ein durchsichtiges Fenster über dem Video, player_windows.go).
+const ctrlPutParentWindow = 22
+
 // Methoden von ICoreWebView2Settings2.
 const (
 	settingsGetUserAgent = 21

@@ -254,6 +254,12 @@ func (t *selbsttest) eigenerPlayer(server string) {
 	})
 	t.notiz(kind != 0 && sichtbar != 0, "mpv zeichnet im Lumen-Fenster (Videofenster sichtbar, darin %q)", klasse)
 
+	// Zum Nachsehen im Protokoll: Hintergründe der Seite im Player.
+	log.Printf("Selbsttest: Hintergründe %s", t.frage(`['html','body','#app','.player','#v'].map(s=>{const e=document.querySelector(s);return s+'='+(e?getComputedStyle(e).backgroundColor:'-')}).join(' ')+' mpv-spielt='+document.documentElement.classList.contains('mpv-spielt')`))
+	var ebene uintptr
+	t.ui(func() { ebene, _, _ = pIsWindowVisible.Call(t.f.spieler.ebene) })
+	t.notiz(ebene != 0, "Bedienelemente in der durchsichtigen Ebene über dem Video")
+
 	p1 := w.stand().Pos
 	time.Sleep(2 * time.Second)
 	p2 := w.stand().Pos

@@ -53,7 +53,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-const videoKlasse = "LumenVideo"
+const (
+	videoKlasse = "LumenVideo"
+	ebeneKlasse = "LumenEbene"
+)
 
 // Kennungen der beobachteten Eigenschaften.
 const (
@@ -74,7 +77,9 @@ const (
 type spieler struct {
 	f      *fenster
 	video  uintptr // Videofenster (Kind des Hauptfensters)
-	tasten bool    // Medientasten angemeldet
+	ebene  uintptr // durchsichtiges Fenster über dem Video, darin WebView2
+	ebenAn bool
+	tasten bool // Medientasten angemeldet
 
 	mu    sync.Mutex
 	aktiv *lauf
@@ -189,7 +194,7 @@ func videoProc(hwnd, m, wp, lp uintptr) uintptr {
 }
 
 // groesse: Das Videofenster füllt immer die ganze Fläche des Hauptfensters
-// (auch im Vollbild) und liegt unter WebView2.
+// (auch im Vollbild); die Ebene mit WebView2 liegt genau darüber.
 func (s *spieler) groesse() {
 	if s.video == 0 {
 		return
@@ -197,6 +202,121 @@ func (s *spieler) groesse() {
 	var r rechteck
 	pGetClientRect.Call(s.f.hwnd, uintptr(unsafe.Pointer(&r)))
 	pSetWindowPos.Call(s.video, hwndBottom, 0, 0, uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top), swpNoActivate)
+	s.ebeneLage()
+}
+
+// ---------------------------------------------------------------- Ebene
+//
+// Durchsichtig über einem anderen Kindfenster ist WebView2 nicht: Mit
+// durchsichtigem Hintergrund zeigt es, was das Elternfenster selbst
+// gezeichnet hat, nicht seine Geschwister (im Selbsttest sichtbar: nur die
+// Hintergrundfarbe des Hauptfensters, kein Video). Darum zieht WebView2
+// während der Wiedergabe in ein eigenes Fenster um: ein randloses,
+// vom Hauptfenster besessenes Fenster ohne eigene Bildfläche
+// (WS_EX_NOREDIRECTIONBITMAP) genau über dessen Inhalt. Was die Seite dort
+// nicht zeichnet, setzt Windows (DWM) mit dem darunterliegenden Video
+// zusammen. Besessene Fenster bleiben über ihrem Besitzer, verschwinden mit
+// ihm beim Minimieren und haben keinen eigenen Eintrag in der Taskleiste.
+
+var ebeneKlasseDa bool
+
+func (s *spieler) ebeneFenster() uintptr {
+	if s.ebene != 0 {
+		return s.ebene
+	}
+	inst, _, _ := pGetModuleHandleW.Call(0)
+	if !ebeneKlasseDa {
+		cursor, _, _ := pLoadCursorW.Call(0, idcArrow)
+		wc := wndClassEx{
+			Size:      uint32(unsafe.Sizeof(wndClassEx{})),
+			WndProc:   windows.NewCallback(ebeneProc),
+			Instance:  inst,
+			Cursor:    cursor,
+			ClassName: utf16(ebeneKlasse),
+		}
+		if r, _, err := pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
+			log.Printf("Ebene: RegisterClassEx: %v", err)
+			return 0
+		}
+		ebeneKlasseDa = true
+	}
+	h, _, err := pCreateWindowExW.Call(wsExNoRedirectionBitmap,
+		uintptr(unsafe.Pointer(utf16(ebeneKlasse))), uintptr(unsafe.Pointer(utf16("Lumen"))),
+		wsPopup|wsClipChildren,
+		0, 0, 100, 100, s.f.hwnd, 0, inst, 0)
+	if h == 0 {
+		log.Printf("Ebene: CreateWindowEx: %v", err)
+		return 0
+	}
+	s.ebene = h
+	return h
+}
+
+func ebeneProc(hwnd, m, wp, lp uintptr) uintptr {
+	f := dasFenster
+	switch m {
+	case wmEraseBkgnd:
+		return 1
+	case wmClose:
+		// Alt+F4 auf der Ebene schliesst Lumen wie das Hauptfenster.
+		if f != nil {
+			pPostMessageW.Call(f.hwnd, wmClose, 0, 0)
+		}
+		return 0
+	case wmSysCommand:
+		// Alt+Leertaste & Co. gehören dem Hauptfenster.
+		if f != nil {
+			r, _, _ := pSendMessageW.Call(f.hwnd, m, wp, lp)
+			return r
+		}
+	}
+	r, _, _ := pDefWindowProcW.Call(hwnd, m, wp, lp)
+	return r
+}
+
+// ebeneLage legt die Ebene genau über die Fläche des Hauptfensters.
+func (s *spieler) ebeneLage() {
+	if !s.ebenAn || s.ebene == 0 {
+		return
+	}
+	var r rechteck
+	pGetClientRect.Call(s.f.hwnd, uintptr(unsafe.Pointer(&r)))
+	p := punkt{r.Left, r.Top}
+	pClientToScreen.Call(s.f.hwnd, uintptr(unsafe.Pointer(&p)))
+	pSetWindowPos.Call(s.ebene, 0, uintptr(p.X), uintptr(p.Y), uintptr(r.Right-r.Left), uintptr(r.Bottom-r.Top), swpNoActivate|swpNoZOrder|swpNoOwnerZOrder)
+	if s.f.bereit {
+		s.f.chromium.NotifyParentWindowPositionChanged()
+	}
+}
+
+// ebeneSetzen zieht WebView2 in die Ebene (an) oder zurück ins Hauptfenster.
+func (s *spieler) ebeneSetzen(an bool) {
+	if an == s.ebenAn || !s.f.bereit {
+		return
+	}
+	if an && s.ebeneFenster() == 0 {
+		return
+	}
+	ctrl := com(unsafe.Pointer(s.f.chromium.GetController()))
+	if an {
+		s.ebenAn = true
+		s.ebeneLage()
+		pShowWindow.Call(s.ebene, swShow)
+		if hr := comAufruf(ctrl, ctrlPutParentWindow, s.ebene); hr != 0 {
+			log.Printf("Ebene: put_ParentWindow: %#x", hr)
+		}
+	} else {
+		if hr := comAufruf(ctrl, ctrlPutParentWindow, s.f.hwnd); hr != 0 {
+			log.Printf("Ebene: put_ParentWindow zurück: %#x", hr)
+		}
+		pShowWindow.Call(s.ebene, swHide)
+		s.ebenAn = false
+		pSetForegroundWindow.Call(s.f.hwnd)
+	}
+	// Die Grösse rechnet edge aus dem Hauptfenster — die Ebene ist genau so
+	// gross, die Lage im neuen Elternfenster also dieselbe.
+	s.f.chromium.Resize()
+	s.f.chromium.Focus()
 }
 
 func (s *spieler) videoZeigen(an bool) {
@@ -209,9 +329,11 @@ func (s *spieler) videoZeigen(an bool) {
 		// Die Web-App wird durchsichtig: Was sie nicht selbst zeichnet,
 		// zeigt das Videofenster darunter.
 		s.f.chromium.SetBackgroundColour(0, 0, 0, 0)
+		s.ebeneSetzen(true)
 		s.tastenAnmelden(true)
 		return
 	}
+	s.ebeneSetzen(false)
 	s.f.chromium.SetBackgroundColour(5, 5, 7, 255)
 	if s.video != 0 {
 		pShowWindow.Call(s.video, swHide)

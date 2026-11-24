@@ -303,6 +303,7 @@ func wndProc(hwnd, m, wp, lp uintptr) uintptr {
 		}
 	case wmMove:
 		if f.bereit {
+			f.spieler.ebeneLage()
 			f.chromium.NotifyParentWindowPositionChanged()
 		}
 	case wmSetFocus:
