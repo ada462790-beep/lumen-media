@@ -45,14 +45,19 @@ for f in "$ARB"/rezept/packages/*.cmake; do
       echo "$name $repo (nicht erreichbar)" >> "$ARB/fehlt.txt"; continue
     fi
     if [ "$name" = mpv ]; then
-      commit=$(git -C "$d" rev-parse "$MPV^{commit}")
+      commit=$(git -C "$d" rev-parse --verify -q "$MPV^{commit}" || true)
     elif [ -n "$tag" ]; then
-      commit=$(git -C "$d" rev-parse "$tag^{commit}" 2>/dev/null || true)
+      commit=$(git -C "$d" rev-parse --verify -q "$tag^{commit}" 2>/dev/null || true)
+      # Ein Tag-Name wie „SDL2" kann eine Variable des Rezepts sein, kein
+      # Git-Name — dann wie ohne Tag den Stand des Bautags nehmen.
+      [ -n "$commit" ] || commit=$(git -C "$d" rev-list -1 --before="$BIS" HEAD 2>/dev/null || true)
     else
       commit=$(git -C "$d" rev-list -1 --before="$BIS" HEAD)
     fi
     if [ -z "$commit" ]; then echo "$name $repo (kein Commit)" >> "$ARB/fehlt.txt"; continue; fi
-    git -C "$d" archive --prefix="$name/" -o "$ARB/quellen/$name-$commit.tar.gz" "$commit"
+    if ! git -C "$d" archive --prefix="$name/" -o "$ARB/quellen/$name-$commit.tar.gz" "$commit"; then
+      echo "$name $repo (Archiv fehlgeschlagen)" >> "$ARB/fehlt.txt"; rm -rf "$d"; continue
+    fi
     echo "$name $repo $commit${tag:+ (Tag $tag)}" >> "$ARB/liste.txt"
     rm -rf "$d"
   elif [ -n "$url" ]; then
