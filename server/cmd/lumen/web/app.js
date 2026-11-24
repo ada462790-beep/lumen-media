@@ -3386,6 +3386,7 @@ async function startPlayer(itemId, fromSec, fileId = null, opts = {}) {
     }
     await openStream(start, { anhalten: !!opts.anhalten });
   } catch (e) {
+    if (S.playing?.mpv) mpvBefehl('stopp');
     S.playing = null;
     if (e?.code === 'bildschirmzeit') return bzSchluss(e.message);
     const m = e?.message || '';
@@ -3540,6 +3541,8 @@ function mpvBinden(p, v) {
    im Bild. Sonst wie im Browser: nachfragen und einmal neu ansetzen. */
 function mpvFehler(p, e) {
   if (S.playing !== p) return;
+  // libmpv selbst lässt sich nicht starten: der Browser-Player.
+  if (e.kaputt) return mpvRueckfall(p, p.offset + p.current, p.paused);
   if (e.status) {
     if (e.code === 'bildschirmzeit') { stopPlayer().then(() => bzSchluss(e.text)); return; }
     const t = String(e.text || '');
@@ -3565,6 +3568,7 @@ function mpvTaste(p, art) {
 
 /* mpv liess sich nicht starten: für diese Sitzung der Browser-Player. */
 function mpvRueckfall(p, ab, pausiert) {
+  mpvBefehl('stopp');
   mpvAbschalten();
   if (S.playing !== p) return;
   p.mpvBindung?.loesen();
@@ -4295,6 +4299,7 @@ async function markDoneAndLeave() {
   const liste = S.warteschlange?.zurueck;
   const ziel = zielNachPlayer(p);
   vollbildVerlassen();
+  if (p.mpv) { mpvBefehl('stopp'); p.mpvBindung?.loesen(); }
   S.playing = null;
   S.warteschlange = null;
   // Eine Liste am Stück: danach zurück zur Liste, nicht zum letzten Film.

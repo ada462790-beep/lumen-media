@@ -500,6 +500,8 @@ func (w *lauf) vorpruefen() (string, bool) {
 
 // schleife besitzt mpv: anlegen, laden, Ereignisse, Befehle, beenden.
 func (w *lauf) schleife(l *libmpv, eltern uintptr) {
+	// Sagt der Server nein, bleibt das Fenster stehen, bis die Web-App den
+	// Player schliesst (sie zeigt den Satz des Servers).
 	if _, ok := w.vorpruefen(); !ok {
 		w.aufraeumen()
 		return
@@ -510,8 +512,10 @@ func (w *lauf) schleife(l *libmpv, eltern uintptr) {
 	}
 	m, err := w.mpvAnlegen(l)
 	if err != nil {
+		// libmpv lässt sich nicht starten: Die Web-App nimmt ihren eigenen
+		// Player (kaputt).
 		log.Printf("Player: %v", err)
-		w.melden(map[string]any{"art": "fehler", "text": err.Error()})
+		w.melden(map[string]any{"art": "fehler", "text": err.Error(), "kaputt": true})
 		w.aufraeumen()
 		return
 	}
@@ -542,6 +546,10 @@ func (w *lauf) schleife(l *libmpv, eltern uintptr) {
 			w.mu.Unlock()
 			m.beenden()
 			log.Printf("Player: mpv %d beendet", w.nr)
+			// Ohne „stoppen" ausgestiegen: Die Web-App schliesst den Player.
+			if w.aktuell() {
+				w.melden(map[string]any{"art": "geschlossen"})
+			}
 			w.aufraeumen()
 			return
 		case mpvEreignisLog:
@@ -578,11 +586,6 @@ func (w *lauf) aufraeumen() {
 	w.mu.Lock()
 	w.zu = true
 	w.mu.Unlock()
-	// Lief diese Wiedergabe noch als aktuelle (mpv ist von selbst
-	// ausgestiegen), bekommt die Web-App Bescheid.
-	if w.aktuell() {
-		w.melden(map[string]any{"art": "geschlossen"})
-	}
 }
 
 func (w *lauf) jobsAbarbeiten(m *mpv) {

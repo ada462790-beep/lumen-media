@@ -216,8 +216,10 @@ func (t *selbsttest) eigenerPlayer(server string) {
 	t.notiz(true, "libmpv %s aus %s", dieLibmpv.fassung(), dieLibmpv.pfad)
 
 	t.skript(`localStorage.setItem('lumen.token','selbsttest');localStorage.removeItem('lumen.tonausgabe')`)
-	t.ui(func() { t.f.Navigieren(server + "/#/ich") })
-	if !t.notiz(t.warteGeladen(server+"/#/ich"), "Web-App angemeldet geladen") {
+	// Mit Abfrage: sonst wäre es dieselbe Adresse wie eben (Einstellungen),
+	// und WebView2 lüde nicht neu.
+	t.ui(func() { t.f.Navigieren(server + "/?player#/ich") })
+	if !t.notiz(t.warteGeladen(server+"/?player"), "Web-App angemeldet geladen") {
 		return
 	}
 	time.Sleep(2500 * time.Millisecond)

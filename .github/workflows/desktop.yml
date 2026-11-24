@@ -170,10 +170,11 @@ jobs:
           $zip = "$env:RUNNER_TEMP\scream.zip"; $ordner = "$env:RUNNER_TEMP\scream"
           Invoke-WebRequest -Uri 'https://github.com/duncanthrax/scream/releases/download/3.6/Scream3.6.zip' -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath $ordner -Force
-          $inf = Get-ChildItem -Recurse $ordner -Filter 'Scream.inf' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
-          $sys = Get-ChildItem -Recurse $ordner -Filter 'Scream.sys' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
-          $devcon = Get-ChildItem -Recurse $ordner -Filter 'devcon*.exe' | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
-          if (-not $inf -or -not $sys -or -not $devcon) { Get-ChildItem -Recurse $ordner | Select-Object FullName; throw 'Scream: Dateien nicht gefunden' }
+          # 64 Bit, wo es eigens eines gibt; sonst, was da ist.
+          $finde = { param($muster) $a = @(Get-ChildItem -Recurse $ordner -Filter $muster); ($a | Where-Object { $_.FullName -match 'x64|amd64' } | Select-Object -First 1) ?? ($a | Select-Object -First 1) }
+          $inf = & $finde 'Scream.inf'; $sys = & $finde 'Scream.sys'; $devcon = & $finde 'devcon*.exe'
+          Get-ChildItem -Recurse $ordner -File | ForEach-Object { $_.FullName } | Out-Host
+          if (-not $inf -or -not $sys -or -not $devcon) { throw 'Scream: Dateien nicht gefunden' }
           $cert = (Get-AuthenticodeSignature $sys.FullName).SignerCertificate
           $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'LocalMachine')
           $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
