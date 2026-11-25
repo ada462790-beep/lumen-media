@@ -13,6 +13,7 @@ ar = 'x86_64-w64-mingw32-gcc-ar-posix'
 ranlib = 'x86_64-w64-mingw32-gcc-ranlib-posix'
 strip = 'x86_64-w64-mingw32-strip'
 windres = 'x86_64-w64-mingw32-windres'
+dlltool = 'x86_64-w64-mingw32-dlltool'
 nasm = 'nasm'
 pkg-config = 'pkg-config'
 
