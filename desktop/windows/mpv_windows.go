@@ -40,6 +40,7 @@ const (
 	mpvEreignisDateiStart   = 6
 	mpvEreignisDateiEnde    = 7
 	mpvEreignisDateiGeladen = 8
+	mpvEreignisVideoNeu     = 17 // MPV_EVENT_VIDEO_RECONFIG
 	mpvEreignisSprung       = 20
 	mpvEreignisNeustart     = 21 // MPV_EVENT_PLAYBACK_RESTART
 	mpvEreignisEigenschaft  = 22

@@ -71,6 +71,24 @@ export function mpvTonausgabeWaehlen(name) {
   return g || null;
 }
 
+/* ---------------------------------------------------------------- Hardware-Beschleunigung
+ *
+ * Ob mpv über die Grafikkarte dekodiert (d3d11va, nvdec …). Automatisch
+ * heisst: wo mpv es für sicher hält, sonst Software. „Aus" hilft, wenn ein
+ * Grafiktreiber Filme ruckeln lässt oder Streifen zeigt. Gilt für dieses
+ * Gerät, wie die Tonausgabe. */
+const HW_SCHLUESSEL = 'lumen.mpvHardware';
+export function mpvHardware() {
+  try { return localStorage.getItem(HW_SCHLUESSEL) === 'aus' ? 'aus' : 'auto'; } catch { return 'auto'; }
+}
+export function mpvHardwareWaehlen(wert) {
+  try {
+    if (wert === 'aus') localStorage.setItem(HW_SCHLUESSEL, 'aus');
+    else localStorage.removeItem(HW_SCHLUESSEL);
+  } catch {}
+  return mpvHardware();
+}
+
 /* ---------------------------------------------------------------- Das <video>
 
    Ein Ereignis von mpv geht an genau einen Player: den, der zuletzt

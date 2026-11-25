@@ -64,6 +64,19 @@ type PlayerAuftrag struct {
 	Kapitel   []PlayerMarke  `json:"kapitel,omitempty"`
 	Intro     *PlayerBereich `json:"intro,omitempty"`
 	AbspannMs int64          `json:"abspannMs,omitempty"`
+
+	// Für die Mediensteuerung von Windows (mediensteuerung_windows.go):
+	// Pfad des Posters beim Server (/api/v1/art/<id>/poster?w=500, ohne
+	// Schlüssel — die App holt es mit dem Token im Kopf) und ob es eine
+	// nächste Folge gibt (fehlt die Angabe, bleibt „Weiter" an; die
+	// Web-App entscheidet ohnehin selbst).
+	Bild     string `json:"bild,omitempty"`
+	Naechste *bool  `json:"naechste,omitempty"`
+
+	// Hardware-Beschleunigung: "aus" schaltet die Dekodierung über die
+	// Grafikkarte ab (Einstellung der Web-App, gilt für dieses Gerät);
+	// sonst, leer oder "auto": wo sie sicher ist.
+	Hardware string `json:"hardware,omitempty"`
 }
 
 type PlayerMarke struct {
@@ -128,6 +141,66 @@ func streamAdresse(ursprung, pfad string) (string, error) {
 	return u.String(), nil
 }
 
+// Bilder, die die App für die Mediensteuerung holen darf: Bilder eines
+// Titels beim Server, höchstens mit Breite und Stand in der Abfrage.
+var bildMuster = regexp.MustCompile(`^/api/v1/art/[A-Za-z0-9_-]{1,64}/[a-z0-9]{1,16}$`)
+
+// BildAdresse: das Poster für die Mediensteuerung, gleiche Regeln wie
+// beim Strom (nur dieser Server, kein Schlüssel in der Adresse). Leer,
+// wenn es keins gibt oder der Pfad nicht passt.
+func (a *PlayerAuftrag) BildAdresse(ursprung string) string {
+	if a.Bild == "" || len(a.Bild) > 300 {
+		return ""
+	}
+	o, err := url.Parse(ursprung)
+	if err != nil || (o.Scheme != "http" && o.Scheme != "https") || o.Host == "" || o.Path != "" {
+		return ""
+	}
+	weg, abfrage, _ := strings.Cut(a.Bild, "?")
+	if !bildMuster.MatchString(weg) || strings.ContainsAny(a.Bild, "\\\r\n\t #%") {
+		return ""
+	}
+	q, err := url.ParseQuery(abfrage)
+	if err != nil {
+		return ""
+	}
+	for k, v := range q {
+		if len(v) != 1 || (k != "w" && k != "v") || !standMuster.MatchString(v[0]) {
+			return ""
+		}
+	}
+	u, err := url.Parse(o.Scheme + "://" + o.Host + a.Bild)
+	if err != nil || u.Host != o.Host || u.Path != weg {
+		return ""
+	}
+	return u.String()
+}
+
+var standMuster = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// HardwareAn: ob mpv über die Grafikkarte dekodieren soll.
+func (a *PlayerAuftrag) HardwareAn() bool { return a.Hardware != "aus" }
+
+// mpvBildOptionen: wie mpv das Bild ausgibt. gpu-next über Direct3D 11
+// (gpu als Rückfall); Dekodieren über die Grafikkarte (d3d11va, nvdec …),
+// wo mpv es für sicher hält — schlägt es fehl, dekodiert mpv von selbst
+// in Software weiter. Ist HDR in Windows an, reicht mpv ein HDR-Bild
+// durch (target-colorspace-hint); sonst bildet es HDR selbst auf SDR ab
+// (BT.2446a, gedacht genau dafür).
+func mpvBildOptionen(hardware, hdr bool) [][2]string {
+	o := [][2]string{
+		{"vo", "gpu-next,gpu,"},
+		{"gpu-api", "d3d11"},
+		{"hwdec", map[bool]string{true: "auto-safe", false: "no"}[hardware]},
+	}
+	if hdr {
+		o = append(o, [2]string{"target-colorspace-hint", "yes"})
+	} else {
+		o = append(o, [2]string{"target-colorspace-hint", "no"}, [2]string{"tone-mapping", "bt.2446a"})
+	}
+	return o
+}
+
 // Kopf ist der Wert für mpv --http-header-fields.
 func (a *PlayerAuftrag) Kopf() (string, error) {
 	if !tokenMuster.MatchString(a.Token) {
@@ -152,6 +225,12 @@ func (a *PlayerAuftrag) Bereinigen() {
 	}
 	if !geraetMuster.MatchString(a.Tonausgabe) {
 		a.Tonausgabe = ""
+	}
+	if len(a.Unter) > 300 {
+		a.Unter = a.Unter[:300]
+	}
+	if a.Hardware != "aus" {
+		a.Hardware = "auto"
 	}
 }
 

@@ -188,7 +188,8 @@ jobs:
       # Server hinzufügen, die echte Web-App (von einem Schein-Server, der
       # server/cmd/lumen/web ausliefert) mit „Server wechseln", Brücke,
       # externe Links, F11 und Player-Vollbild, der eigene Player (mpv mit
-      # dem Testfilm: Bild, Zeit, Spuren, Fortschritt, Esc, Audio-Sitzung),
+      # dem Testfilm: Bild, Zeit, Spuren, Fortschritt, Esc, Audio-Sitzung,
+      # Mediensteuerung von Windows, Hardware-Beschleunigung),
       # Serverauswahl. Die Bilder liegen danach am Lauf (selbsttest-windows).
       - name: Selbsttest
         timeout-minutes: 10

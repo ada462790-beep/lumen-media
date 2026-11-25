@@ -36,7 +36,7 @@ import { wunschFeld, wunschFeldEinrichten, wunschBild, wunschZusatz, wunschVerwe
 import { tonausgabeAngeboten, tonausgabeStand, tonausgabeGewaehlt, tonausgabeLaden, tonausgabeWaehlen,
   tonausgabeAnwenden, tonGeraete } from './tonausgabe.js';
 import { mpvDa, mpvAbschalten, mpvFaehigkeiten, mpvBefehl, mpvAnbinden, mpvGeraete, mpvTonausgabe,
-  mpvTonausgabeWaehlen } from './desktopplayer.js';
+  mpvTonausgabeWaehlen, mpvHardware, mpvHardwareWaehlen } from './desktopplayer.js';
 import { tr, texte, sprachName, sprache, datum, datumZeit, uhrzeit as uhrzeitText, zahl,
   SPRACHEN as SPRACH_WAHL, sprachWechseln, beiWechsel, gemerkt, browserSprache } from './sprache.js';
 
@@ -3511,6 +3511,11 @@ async function mpvOeffnen(p, atSec, { abspielen = false, anhalten = false } = {}
     kapitel: (p.kapitel || []).map(k => ({ startMs: k.startMs, titel: k.title || '' })),
     intro: p.intro ? { vonMs: p.intro.vonMs, bisMs: p.intro.bisMs } : null,
     abspannMs: p.creditsMs || 0,
+    // Für die Mediensteuerung von Windows: das Poster ohne Schlüssel (die
+    // App holt es mit dem Token im Kopf) und ob „Weiter" etwas tut.
+    bild: p.bild && p.bild.startsWith('/api/v1/art/') ? `${p.bild}${p.bild.includes('?') ? '&' : '?'}w=500` : '',
+    naechste: p.kind === 'episode' || !!S.warteschlange,
+    hardware: mpvHardware(),
   };
   p.paused = warPausiert;
   p.strom = (p.strom || 0) + 1;
@@ -4976,6 +4981,19 @@ function tonausgabeAuffrischen() {
   });
 }
 
+/* Hardware-Beschleunigung (nur Lumen für Windows mit eigenem Player):
+   automatisch oder aus, für dieses Gerät (desktopplayer.js). */
+function mpvHardwareZeile() {
+  if (!mpvDa()) return '';
+  const w = mpvHardware();
+  return `<div class="row" style="min-height:54px;flex-wrap:wrap"><span class="t-body" style="flex:1">${tr('Hardware-Beschleunigung')}</span>
+    ${segment(tr('Hardware-Beschleunigung'), [['auto', tr('Automatisch')], ['aus', tr('Aus')]].map(([v, n]) =>
+      ({ name: n, an: w === v, attr: `data-mpvhw="${v}"` })))}</div>`;
+}
+function mpvHardwareFuss() {
+  return mpvDa() ? tr('Hardware-Beschleunigung gilt für diesen Computer. Schalt sie aus, wenn Filme ruckeln, Streifen zeigen oder schwarz bleiben.') : '';
+}
+
 function viewSettings() {
   const a = S.me.account, lim = S.me.limits || {}, prefs = S.me.prefs || {};
   const devices = (S.data?.devices || []).map(geraetZeile).join('');
@@ -5018,7 +5036,7 @@ function viewSettings() {
               ({ name: n, an: (prefs.tonWahl === 'original' ? 'original' : 'profil') === v, attr: `data-prefwert="tonWahl:${v}"` })))}
             </div>` +
           swRow(tr('Qualität unterwegs'), null, lim.remoteQuality === 'original' ? tr('Original') : lim.remoteQuality || '1080p') +
-          tonausgabeZeile(), tonausgabeFuss())}
+          tonausgabeZeile() + mpvHardwareZeile(), [tonausgabeFuss(), mpvHardwareFuss()].filter(Boolean).join(' '))}
         ${grp(tr('Profilbild'), `<div class="avatar-wahl">
             ${['av-a', 'av-b', 'av-c', 'av-d', 'av-k'].map(c => `<button class="avatar ${c}${a.avatar === c ? ' gewaehlt' : ''}" style="--av:44px;border:0" data-avatar="${c}" aria-label="${tr('Farbe {nr}', { nr: c.slice(3).toUpperCase() })}">${esc(a.name[0])}</button>`).join('')}
             ${Object.keys(FIGUREN).map(f => `<button class="avatar avatar--figur${a.avatar === 'fig-' + f ? ' gewaehlt' : ''}" style="--av:44px;border:0;background:${FIGUREN[f][0]}" data-avatar="fig-${f}" aria-label="${f}">
@@ -7279,6 +7297,11 @@ app.addEventListener('click', async e => {
   if ((n = hit('data-avatar'))) {
     try { S.me = await api.updateMe({ avatar: n.dataset.avatar }); toast(tr('Profilbild geändert')); return render(); }
     catch (err) { return toast(err.message); }
+  }
+  if ((n = hit('data-mpvhw'))) {
+    const w = mpvHardwareWaehlen(n.dataset.mpvhw);
+    toast(w === 'aus' ? tr('Hardware-Beschleunigung aus – gilt ab dem nächsten Film') : tr('Hardware-Beschleunigung automatisch – gilt ab dem nächsten Film'));
+    return render();
   }
   if ((n = hit('data-prefwert'))) {
     const [key, wert] = n.dataset.prefwert.split(':');

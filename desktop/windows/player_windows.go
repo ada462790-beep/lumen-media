@@ -79,7 +79,10 @@ type spieler struct {
 	video  uintptr // Videofenster (Kind des Hauptfensters)
 	ebene  uintptr // durchsichtiges Fenster über dem Video, darin WebView2
 	ebenAn bool
-	tasten bool // Medientasten angemeldet
+	tasten bool // Medientasten angemeldet (nur ohne Mediensteuerung)
+
+	smtc         *mediensteuerung // Mediensteuerung von Windows, mediensteuerung_windows.go
+	smtcVersucht bool
 
 	mu    sync.Mutex
 	aktiv *lauf
@@ -110,6 +113,9 @@ type lauf struct {
 	ton       bool // Audio-Sitzung schon benannt
 	pausiert  bool
 	letzteLog []string
+	bildText  string    // zuletzt protokollierte Bildausgabe (vo, hwdec, Farbraum)
+	smtcZeit  time.Time // zuletzt an die Mediensteuerung gemeldete Stelle
+	voNochmal bool      // Bildausgabe schon einmal neu versucht
 
 	// Für den Selbsttest lesbar (aus einem anderen Faden).
 	zMu sync.Mutex
@@ -125,6 +131,10 @@ type spielStand struct {
 	Ende       bool
 	Fehler     string
 	Lautstaerk float64
+	Hwdec      string // hwdec-current: d3d11va, nvdec … oder no
+	VO         string // current-vo
+	HwdecWahl  string // was Lumen verlangt hat (auto-safe / no)
+	HDR        bool   // HDR durchgereicht (target-colorspace-hint)
 }
 
 func (w *lauf) stand() spielStand {
@@ -269,6 +279,25 @@ func ebeneProc(hwnd, m, wp, lp uintptr) uintptr {
 			r, _, _ := pSendMessageW.Call(f.hwnd, m, wp, lp)
 			return r
 		}
+	case wmAppCommand:
+		// Eine Medientaste, während die Ebene vorn ist: Sie gehört dem
+		// Player (wndProc), nicht der Sitzung, die Windows gerade für die
+		// aktuelle hält — sonst spielte bei offenem Lumen ein anderes
+		// Programm los.
+		// Was der Player nicht nimmt, reicht DefWindowProc des
+		// Hauptfensters weiter — nicht noch einmal hier.
+		if f != nil {
+			r, _, _ := pSendMessageW.Call(f.hwnd, m, wp, lp)
+			return r
+		}
+	case wmNcActivate:
+		// Während der Wiedergabe hat die Ebene den Fokus (WebView2 liegt
+		// darin), und Windows zeichnete die Titelleiste des Hauptfensters
+		// als inaktiv. Für den Benutzer ist es ein Fenster: Die Titelleiste
+		// folgt der Ebene — aktiv, solange die Ebene es ist.
+		if f != nil && f.hwnd != 0 {
+			pDefWindowProcW.Call(f.hwnd, wmNcActivate, wp, 0)
+		}
 	}
 	r, _, _ := pDefWindowProcW.Call(hwnd, m, wp, lp)
 	return r
@@ -330,7 +359,13 @@ func (s *spieler) videoZeigen(an bool) {
 		// zeigt das Videofenster darunter.
 		s.f.chromium.SetBackgroundColour(0, 0, 0, 0)
 		s.ebeneSetzen(true)
-		s.tastenAnmelden(true)
+		// Medientasten: über die Mediensteuerung von Windows; nur wenn es
+		// die nicht gibt, meldet Lumen die Tasten selbst an. Beides
+		// zugleich hiesse: RegisterHotKey fängt die Tasten ab, bevor
+		// Windows sie der Mediensteuerung gibt.
+		if s.mediensteuerungStarten() == nil {
+			s.tastenAnmelden(true)
+		}
 		return
 	}
 	s.ebeneSetzen(false)
@@ -339,6 +374,60 @@ func (s *spieler) videoZeigen(an bool) {
 		pShowWindow.Call(s.video, swHide)
 	}
 	s.tastenAnmelden(false)
+	s.smtc.aus()
+}
+
+// mediensteuerungStarten meldet Lumen einmal bei der Mediensteuerung von
+// Windows an (Fenster-Thread). nil, wenn es sie nicht gibt.
+func (s *spieler) mediensteuerungStarten() *mediensteuerung {
+	if s.smtcVersucht {
+		return s.smtc
+	}
+	s.smtcVersucht = true
+	m, err := neueMediensteuerung(s.f.hwnd, func(knopf int) {
+		// Ein Faden von Windows: weiter an den Fenster-Thread.
+		s.f.Auftrag(func() { s.smtcKnopf(knopf) })
+	})
+	if err != nil {
+		log.Printf("Mediensteuerung von Windows nicht da (%v) — Medientasten über RegisterHotKey", err)
+		return nil
+	}
+	log.Printf("Mediensteuerung von Windows angemeldet")
+	s.smtc = m
+	return m
+}
+
+// smtcKnopf: ein Knopf im Overlay, auf dem Sperrbildschirm oder eine
+// Medientaste (Fenster-Thread). Abspielen und Pause sind dort getrennte
+// Knöpfe; die Web-App kennt nur „umschalten" — darum hier nach dem Stand
+// von mpv.
+func (s *spieler) smtcKnopf(knopf int) {
+	w := s.laufend()
+	if w == nil {
+		return
+	}
+	pausiert := w.stand().Pausiert
+	art := ""
+	switch knopf {
+	case smtcKnopfPlay:
+		if pausiert {
+			art = "abspielen"
+		}
+	case smtcKnopfPause:
+		if !pausiert {
+			art = "abspielen"
+		}
+	case smtcKnopfStop:
+		art = "stopp"
+	case smtcKnopfNext:
+		art = "naechste"
+	case smtcKnopfPrevious:
+		art = "zurueck"
+	}
+	log.Printf("Mediensteuerung: Knopf %d (%s)", knopf, art)
+	if art != "" {
+		s.medientaste(art)
+	}
 }
 
 // ---------------------------------------------------------------- Medientasten
@@ -346,8 +435,12 @@ func (s *spieler) videoZeigen(an bool) {
 // Im Browser-Player meldet die Web-App ihre Wiedergabe über die Media
 // Session API, und WebView2 leitet die Medientasten dorthin. Spielt mpv,
 // gibt es in der Seite kein klingendes <video> — die Tasten kämen dort
-// nicht an. Darum meldet die App sie selbst an, solange mpv spielt
-// (RegisterHotKey; schlägt fehl, wenn ein anderes Programm sie schon
+// nicht an. Darum meldet sich Lumen.exe selbst bei der Mediensteuerung von
+// Windows an (mediensteuerung_windows.go); Windows schickt die Tasten dann
+// als Knopf dorthin. Ist Lumen vorn, kommt eine Taste stattdessen als
+// WM_APPCOMMAND — wer sie dort beantwortet, schluckt sie, also nie doppelt.
+// Nur ohne Mediensteuerung (sehr altes Windows) meldet die App die Tasten
+// mit RegisterHotKey an (schlägt fehl, wenn ein anderes Programm sie
 // belegt — dann bleibt WM_APPCOMMAND, solange Lumen vorn ist).
 
 const (
@@ -442,10 +535,69 @@ func (s *spieler) abspielen(ursprung string, a PlayerAuftrag) error {
 	s.videoZeigen(true)
 	// Nur, was niemanden verrät: Kennungen und Art, kein Token, keine
 	// Adresse mit Abfrage.
-	log.Printf("Player: Wiedergabe %d startet (Datei %s, %s, ab %.1f s, libmpv %s)", w.nr, a.FileID,
-		map[bool]string{true: "HLS", false: "direkt"}[a.HLS], a.Start, l.fassung())
+	log.Printf("Player: Wiedergabe %d startet (Datei %s, %s, ab %.1f s, libmpv %s, Hardware %s)", w.nr, a.FileID,
+		map[bool]string{true: "HLS", false: "direkt"}[a.HLS], a.Start, l.fassung(), a.Hardware)
+	naechste := a.Naechste == nil || *a.Naechste
+	s.smtc.zeigen(a.Titel, a.Unter, naechste)
+	s.smtc.stand(map[bool]int{true: smtcPausiert, false: smtcSpielt}[a.Pausiert])
+	if s.smtc != nil {
+		if adr := a.BildAdresse(ursprung); adr != "" {
+			go w.posterLaden(adr)
+		}
+	}
 	go w.schleife(l, s.f.hwnd)
 	return nil
+}
+
+// posterLaden holt das Poster für die Mediensteuerung — mit dem Token im
+// Kopf, nie in der Adresse — und gibt es dem Fenster-Thread.
+func (w *lauf) posterLaden(adresse string) {
+	req, err := http.NewRequest("GET", adresse, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+w.auftrag.Token)
+	req.Header.Set("Accept", "image/jpeg,image/png;q=0.9,image/*;q=0.5")
+	req.Header.Set("User-Agent", "Lumen/"+version+" (Windows)")
+	c := http.Client{Timeout: 15 * time.Second}
+	res, err := c.Do(req)
+	if err != nil {
+		log.Printf("Mediensteuerung: Poster nicht geladen: %v", err)
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 || !strings.HasPrefix(res.Header.Get("Content-Type"), "image/") {
+		log.Printf("Mediensteuerung: Poster nicht geladen (%d, %s)", res.StatusCode, res.Header.Get("Content-Type"))
+		return
+	}
+	daten, err := io.ReadAll(io.LimitReader(res.Body, 8<<20+1))
+	if err != nil || len(daten) == 0 || len(daten) > 8<<20 {
+		log.Printf("Mediensteuerung: Poster nicht geladen (%d Bytes, %v)", len(daten), err)
+		return
+	}
+	w.s.f.Auftrag(func() {
+		if !w.aktuell() {
+			return
+		}
+		if err := w.s.smtc.bild(daten); err != nil {
+			log.Printf("Mediensteuerung: Poster: %v", err)
+			return
+		}
+		log.Printf("Mediensteuerung: Poster gesetzt (%d Bytes)", len(daten))
+	})
+}
+
+// mediensteuerung führt fn im Fenster-Thread aus, solange dieser Lauf der
+// aktuelle ist.
+func (w *lauf) mediensteuerung(fn func(m *mediensteuerung)) {
+	if w.s.smtc == nil || !w.aktuell() {
+		return
+	}
+	w.s.f.Auftrag(func() {
+		if w.aktuell() {
+			fn(w.s.smtc)
+		}
+	})
 }
 
 // stoppen beendet die laufende Wiedergabe (Fenster-Thread). Das Fenster
@@ -690,6 +842,11 @@ func (w *lauf) schleife(l *libmpv, eltern uintptr) {
 			if len(w.letzteLog) > 8 {
 				w.letzteLog = w.letzteLog[1:]
 			}
+			if strings.Contains(text, "Error opening/initializing the selected video_out") {
+				w.bildausgabeNochmal(m)
+			}
+		case mpvEreignisVideoNeu:
+			w.bildausgabeMelden(m)
 		case mpvEreignisDateiGeladen:
 			w.dateiGeladen(m)
 		case mpvEreignisNeustart:
@@ -765,8 +922,6 @@ func (w *lauf) mpvAnlegen(l *libmpv) (*mpv, error) {
 		{"user-agent", "Lumen/" + version + " (Windows; mpv)"},
 		{"network-timeout", "30"},
 		{"cache", "yes"},
-		// Bild: Hardware-Dekodierung, wo sie sicher ist (HEVC, 10 Bit, 4K).
-		{"hwdec", "auto-safe"},
 		{"volume", strconv.FormatFloat(a.Lautstaerke*100, 'f', 1, 64)},
 		{"volume-max", "100"},
 		{"mute", map[bool]string{true: "yes", false: "no"}[a.Stumm]},
@@ -776,6 +931,15 @@ func (w *lauf) mpvAnlegen(l *libmpv) (*mpv, error) {
 	if a.Tonausgabe != "" {
 		pflicht = append(pflicht, [2]string{"audio-device", a.Tonausgabe})
 	}
+	// Bild: Direct3D 11, Dekodieren über die Grafikkarte, HDR durchreichen
+	// oder abbilden — je nachdem, ob HDR in Windows an ist (hdr_windows.go).
+	hdr, _, bekannt, hdrText := hdrStand(w.s.f.hwnd)
+	bild := mpvBildOptionen(a.HardwareAn(), hdr && bekannt)
+	pflicht = append(pflicht, bild...)
+	hw := map[bool]string{true: "auto-safe", false: "no"}[a.HardwareAn()]
+	w.standSetzen(func(z *spielStand) { z.HwdecWahl = hw; z.HDR = hdr && bekannt })
+	log.Printf("Player: Bild über gpu-next/Direct3D 11, hwdec=%s, %s — %s", hw,
+		map[bool]string{true: "HDR wird durchgereicht", false: "HDR wird auf SDR abgebildet (bt.2446a)"}[hdr && bekannt], hdrText)
 	for _, o := range pflicht {
 		if err := m.option(o[0], o[1]); err != nil {
 			// Ältere libmpv kennen nicht jede Option — weiter, aber merken.
@@ -847,6 +1011,8 @@ func (w *lauf) dateiGeladen(m *mpv) {
 	}
 	w.geladen = true
 	w.standSetzen(func(z *spielStand) { z.Geladen = true; z.Pausiert = w.pausiert })
+	pausiert := w.pausiert
+	w.mediensteuerung(func(s *mediensteuerung) { s.stand(map[bool]int{true: smtcPausiert, false: smtcSpielt}[pausiert]) })
 	d, _ := m.lesenKomma("duration")
 	w.melden(map[string]any{"art": "geladen", "dauer": d, "pausiert": w.pausiert,
 		"ton": gewaehlteSpur(w.spuren, "audio"), "untertitel": gewaehlteSpur(w.spuren, "sub")})
@@ -928,6 +1094,13 @@ func (w *lauf) eigenschaft(m *mpv, id uint64, e *mpvEigenschaft) {
 				w.gemeldet = time.Now()
 				w.melden(map[string]any{"art": "zeit", "pos": v, "dauer": w.dauer})
 			}
+			// Die Leiste im Overlay von Windows läuft selbst weiter; alle
+			// fünf Sekunden (und nach Pause und Sprung) genügt.
+			if time.Since(w.smtcZeit) >= 5*time.Second {
+				w.smtcZeit = time.Now()
+				dauer := w.dauer
+				w.mediensteuerung(func(s *mediensteuerung) { s.zeit(v, dauer) })
+			}
 		}
 	case eigDauer:
 		if v, ok := komma(); ok {
@@ -939,6 +1112,11 @@ func (w *lauf) eigenschaft(m *mpv, id uint64, e *mpvEigenschaft) {
 			w.pausiert = v
 			w.standSetzen(func(z *spielStand) { z.Pausiert = v })
 			w.melden(map[string]any{"art": "pause", "wert": v, "pos": w.pos})
+			pos, dauer := w.pos, w.dauer
+			w.mediensteuerung(func(s *mediensteuerung) {
+				s.stand(map[bool]int{true: smtcPausiert, false: smtcSpielt}[v])
+				s.zeit(pos, dauer)
+			})
 		}
 	case eigEnde:
 		if v, ok := schalter(); ok && v {
@@ -950,6 +1128,7 @@ func (w *lauf) eigenschaft(m *mpv, id uint64, e *mpvEigenschaft) {
 			w.melden(map[string]any{"art": "laedt", "wert": v})
 			if id == eigSpringt && !v {
 				w.melden(map[string]any{"art": "gesprungen", "pos": w.pos})
+				w.smtcZeit = time.Time{}
 			}
 		}
 	case eigLautstaerke:
@@ -999,4 +1178,41 @@ func (w *lauf) sitzungBenennen() {
 		}
 		log.Printf("Audio-Sitzung: %d Sitzung(en) von Lumen.exe benannt", n)
 	}()
+}
+
+// bildausgabeMelden: Nach jeder neuen Bildausgabe (MPV_EVENT_VIDEO_RECONFIG)
+// ins Protokoll, was mpv wirklich benutzt: Ausgabe, Dekodierung (Grafikkarte
+// oder Software), Pixelformat und Farbraum der Quelle und der Ausgabe.
+func (w *lauf) bildausgabeMelden(m *mpv) {
+	lies := func(n string) string { t, _ := m.lesen(n); return t }
+	vo, hw := lies("current-vo"), lies("hwdec-current")
+	if vo == "" || hw == "" {
+		return // Bildausgabe geht gerade zu (Ende, Stopp)
+	}
+	text := fmt.Sprintf("vo=%s hwdec=%s codec=%s format=%s/%s quelle=%s/%s peak=%s ausgabe=%s/%s",
+		vo, hw, lies("video-codec"), lies("video-params/pixelformat"), lies("video-params/hw-pixelformat"),
+		lies("video-params/primaries"), lies("video-params/gamma"), lies("video-params/sig-peak"),
+		lies("video-target-params/primaries"), lies("video-target-params/gamma"))
+	w.standSetzen(func(z *spielStand) { z.VO, z.Hwdec = vo, hw })
+	if text == w.bildText {
+		return
+	}
+	w.bildText = text
+	log.Printf("Player: Bildausgabe %s", text)
+	if hw == "no" && w.auftrag.HardwareAn() {
+		log.Printf("Player: Grafikkarte dekodiert dieses Video nicht — mpv dekodiert in Software")
+	}
+}
+
+// bildausgabeNochmal: Liess sich die Bildausgabe gar nicht öffnen (etwa
+// kein Direct3D 11), einmal mit allem versuchen, was mpv kennt.
+func (w *lauf) bildausgabeNochmal(m *mpv) {
+	if w.voNochmal {
+		return
+	}
+	w.voNochmal = true
+	log.Printf("Player: Bildausgabe über Direct3D 11 gescheitert — versuche jede andere")
+	_ = m.setzen("gpu-api", "auto")
+	_ = m.setzen("vo", "gpu-next,gpu,")
+	_ = m.setzen("vid", "auto")
 }

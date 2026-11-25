@@ -161,3 +161,61 @@ func TestPlayerNachricht(t *testing.T) {
 		t.Errorf("befehl: %+v %v", an, h.befehle)
 	}
 }
+
+func TestPlayerBildAdresse(t *testing.T) {
+	gut := map[string]string{
+		"/api/v1/art/it1/poster?w=500":        "http://nas:8097/api/v1/art/it1/poster?w=500",
+		"/api/v1/art/col_x/poster":            "http://nas:8097/api/v1/art/col_x/poster",
+		"/api/v1/art/it1/poster?v=a1b2&w=500": "http://nas:8097/api/v1/art/it1/poster?v=a1b2&w=500",
+		"/api/v1/art/it-1/backdrop?w=780":     "http://nas:8097/api/v1/art/it-1/backdrop?w=780",
+	}
+	for pfad, will := range gut {
+		a := PlayerAuftrag{Bild: pfad}
+		if got := a.BildAdresse("http://nas:8097"); got != will {
+			t.Errorf("%s: %q", pfad, got)
+		}
+	}
+	for _, pfad := range []string{
+		"", "/api/v1/stream/f1", "https://image.tmdb.org/t/p/w500/x.jpg", "//anders/api/v1/art/it1/poster",
+		"/api/v1/art/it1/poster?key=geheim", "/api/v1/art/it1/poster?w=500&token=x", "/api/v1/art/../me/poster",
+		"/api/v1/art/it1/poster/x", "/api/v1/art/it1/POSTER", "/api/v1/art/it1/poster?w=5%0a", "/api/v1/art/it1/poster#x",
+		"/api/v1/art/it1/poster?w=1&w=2", "/api/v1/art/it1@anders/poster",
+	} {
+		a := PlayerAuftrag{Bild: pfad}
+		if got := a.BildAdresse("http://nas:8097"); got != "" {
+			t.Errorf("%q ging durch: %s", pfad, got)
+		}
+	}
+	if got := (&PlayerAuftrag{Bild: "/api/v1/art/it1/poster"}).BildAdresse("http://nas:8097/pfad"); got != "" {
+		t.Errorf("Ursprung mit Pfad: %s", got)
+	}
+}
+
+func TestMpvBildOptionen(t *testing.T) {
+	alsKarte := func(o [][2]string) map[string]string {
+		m := map[string]string{}
+		for _, x := range o {
+			m[x[0]] = x[1]
+		}
+		return m
+	}
+	m := alsKarte(mpvBildOptionen(true, false))
+	if m["hwdec"] != "auto-safe" || m["vo"] != "gpu-next,gpu," || m["gpu-api"] != "d3d11" ||
+		m["target-colorspace-hint"] != "no" || m["tone-mapping"] != "bt.2446a" {
+		t.Errorf("SDR mit Hardware: %v", m)
+	}
+	m = alsKarte(mpvBildOptionen(false, true))
+	if m["hwdec"] != "no" || m["target-colorspace-hint"] != "yes" || m["tone-mapping"] != "" {
+		t.Errorf("HDR ohne Hardware: %v", m)
+	}
+	a := PlayerAuftrag{Hardware: "irgendwas"}
+	a.Bereinigen()
+	if a.Hardware != "auto" || !a.HardwareAn() {
+		t.Errorf("Hardware: %q", a.Hardware)
+	}
+	a = PlayerAuftrag{Hardware: "aus"}
+	a.Bereinigen()
+	if a.HardwareAn() {
+		t.Error("aus bleibt nicht aus")
+	}
+}
