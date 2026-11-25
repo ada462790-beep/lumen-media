@@ -229,7 +229,7 @@ bau_shaderc() {
   meld "Bauen: shaderc (mit glslang, SPIRV-Tools, SPIRV-Headers)"
   cmake_bau shaderc "$SRC/shaderc" \
     -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_EXECUTABLES=ON \
-    -DSHADERC_SKIP_COPYRIGHT_CHECK=ON -DSHADERC_SKIP_INSTALL=ON -DSHADERC_ENABLE_WERROR_COMPILE=OFF \
+    -DSHADERC_SKIP_COPYRIGHT_CHECK=ON -DSHADERC_ENABLE_WERROR_COMPILE=OFF \
     -DSHADERC_SPIRV_HEADERS_DIR="$SRC/spirv-headers" -DSHADERC_SPIRV_TOOLS_DIR="$SRC/spirv-tools" \
     -DSHADERC_GLSLANG_DIR="$SRC/glslang" \
     -DSPIRV_SKIP_TESTS=ON -DSPIRV_SKIP_EXECUTABLES=ON -DSPIRV_WERROR=OFF \
@@ -268,6 +268,13 @@ bauen() {
   mkdir -p "$PREFIX/lib/pkgconfig" "$BAU" "$AUS"
   local anfang=$SECONDS
   bau_zlib
+  # Zuerst die C++-Teile für die Shader (dauern am längsten, scheitern am
+  # ehesten), dann libplacebo, dann Dekoder und Untertitel.
+  bau_shaderc
+  bau_spirv_cross
+  meson_bau lcms2 -Dutils=false -Dfastfloat=false -Dthreaded=false -Dtests=disabled -Djpeg=disabled -Dtiff=disabled
+  meson_bau libplacebo -Dvulkan=disabled -Dopengl=enabled -Dd3d11=enabled -Dshaderc=enabled -Dglslang=disabled \
+    -Dlcms=enabled -Ddovi=enabled -Dlibdovi=disabled -Ddemos=false -Dtests=false -Dunwind=disabled -Dxxhash=disabled
   meson_bau dav1d -Denable_tools=false -Denable_examples=false -Denable_tests=false -Denable_docs=false \
     -Dxxhash_muxer=disabled
   bau_ffmpeg
@@ -277,11 +284,6 @@ bauen() {
   meson_bau harfbuzz -Dauto_features=disabled -Dfreetype=enabled
   meson_bau libass -Dauto_features=disabled -Ddirectwrite=enabled -Dasm=enabled \
     -Drequire-system-font-provider=true
-  meson_bau lcms2 -Dutils=false -Dfastfloat=false -Dthreaded=false -Dtests=disabled -Djpeg=disabled -Dtiff=disabled
-  bau_shaderc
-  bau_spirv_cross
-  meson_bau libplacebo -Dvulkan=disabled -Dopengl=enabled -Dd3d11=enabled -Dshaderc=enabled -Dglslang=disabled \
-    -Dlcms=enabled -Ddovi=enabled -Dlibdovi=disabled -Ddemos=false -Dtests=false -Dunwind=disabled -Dxxhash=disabled
 
   meld "Bauen: mpv"
   rm -rf "$BAU/mpv"
