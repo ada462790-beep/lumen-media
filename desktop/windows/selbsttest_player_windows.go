@@ -85,6 +85,7 @@ func (t *selbsttest) playerRouten(mux *http.ServeMux, angemeldet func(*http.Requ
 			},
 		}
 	}
+	t.posterRoute(mux, angemeldet)
 	mux.HandleFunc("/api/v1/items/"+filmID, func(w http.ResponseWriter, r *http.Request) {
 		if !angemeldet(r) {
 			antwort(w, 401, map[string]string{"error": "nicht angemeldet"})
@@ -92,7 +93,8 @@ func (t *selbsttest) playerRouten(mux *http.ServeMux, angemeldet func(*http.Requ
 		}
 		antwort(w, 200, map[string]any{
 			"item": map[string]any{"id": filmID, "kind": "movie", "title": "Testfilm", "year": 2026, "runtimeMs": 60000,
-				"overview": "Ein Film aus Testbild und Sinuston, erzeugt von FFmpeg.", "genres": []string{}},
+				"overview": "Ein Film aus Testbild und Sinuston, erzeugt von FFmpeg.", "genres": []string{},
+				"poster": scheinPosterPfad},
 			"files": []any{datei()},
 		})
 	})
@@ -225,6 +227,20 @@ func (t *selbsttest) eigenerPlayer(server string) {
 	time.Sleep(2500 * time.Millisecond)
 	t.notiz(t.frage(`window.lumenDesktop.faehigkeiten.player`) == "mpv", "Brücke meldet player: mpv")
 
+	// Einstellung „Hardware-Beschleunigung" (nur in der App mit mpv, gilt
+	// für dieses Gerät): da, umschaltbar, gemerkt.
+	t.notiz(t.frage(`document.querySelectorAll('[data-mpvhw]').length`) == "2", "Einstellung Hardware-Beschleunigung in den Einstellungen")
+	t.skript(`document.querySelector('[data-mpvhw="aus"]')?.click()`)
+	time.Sleep(600 * time.Millisecond)
+	t.notiz(t.frage(`localStorage.getItem('lumen.mpvHardware')+' '+document.querySelector('[data-mpvhw="aus"]')?.getAttribute('aria-pressed')`) == "aus true",
+		"Hardware-Beschleunigung aus: gemerkt (%s)", t.frage(`localStorage.getItem('lumen.mpvHardware')`))
+	t.skript(`document.querySelector('[data-mpvhw]')?.closest('.row')?.scrollIntoView({block:'center'})`)
+	time.Sleep(400 * time.Millisecond)
+	t.bildschirmWarte("9-einstellung-hardware.png")
+	t.skript(`document.querySelector('[data-mpvhw="auto"]')?.click()`)
+	time.Sleep(600 * time.Millisecond)
+	t.notiz(t.frage(`String(localStorage.getItem('lumen.mpvHardware'))`) == "null", "Hardware-Beschleunigung wieder automatisch")
+
 	t.abspielenKlicken()
 	var w *lauf
 	ok := t.warte(30*time.Second, func() bool {
@@ -264,6 +280,16 @@ func (t *selbsttest) eigenerPlayer(server string) {
 	time.Sleep(2 * time.Second)
 	p2 := w.stand().Pos
 	t.notiz(p2 > p1+1, "Position läuft (%.1f → %.1f s)", p1, p2)
+
+	// Was mpv fürs Bild benutzt (die Grafik des Rechners von GitHub ist
+	// WARP, eine Software-Grafikkarte: dekodiert wird dort in Software,
+	// HDR ist aus).
+	z0 := w.stand()
+	t.notiz(z0.VO != "" && z0.Hwdec != "" && z0.HwdecWahl == "auto-safe",
+		"Bildausgabe: vo=%s, hwdec=%s (verlangt %s), HDR durchgereicht %v", z0.VO, z0.Hwdec, z0.HwdecWahl, z0.HDR)
+
+	// Die Mediensteuerung von Windows: Titel, Bild, Stand, Knöpfe.
+	t.mediensteuerungPruefen(w)
 	t.notiz(t.frage(`(()=>{const v=document.querySelector('#v');return v&&v.currentTime>1&&v.duration>50?'ja':'nein '+(v&&v.currentTime)+' '+(v&&v.duration)})()`) == "ja",
 		"Web-App kennt Zeit und Länge von mpv")
 
@@ -333,9 +359,11 @@ func (t *selbsttest) eigenerPlayer(server string) {
 	t.bildschirmWarte("12-mpv-tonausgabe.png")
 	t.skript(`document.querySelector('[data-spuren="qualitaet"]')?.click()`)
 
-	// Weiter abspielen — mit der Medientaste (wie RegisterHotKey sie meldet).
-	t.ui(func() { pPostMessageW.Call(t.f.hwnd, wmHotkey, tasteAbspielen, 0) })
+	// Weiter abspielen — mit der Medientaste, wie sie ankommt, wenn Lumen
+	// vorn ist (WM_APPCOMMAND, APPCOMMAND_MEDIA_PLAY_PAUSE).
+	t.ui(func() { pPostMessageW.Call(t.f.hwnd, wmAppCommand, t.f.hwnd, 14<<16) })
 	t.notiz(t.warte(5*time.Second, func() bool { return !w.stand().Pausiert }), "Medientaste Abspielen/Pause setzt fort")
+	t.bildschirmWarte("12b-mpv-titelleiste.png")
 
 	// Wem gehört der Ton?
 	time.Sleep(1500 * time.Millisecond)
@@ -363,8 +391,11 @@ func (t *selbsttest) eigenerPlayer(server string) {
 		return len(t.srv.staende) > vorher
 	}), "Stand beim Schliessen gemeldet (%s)", t.letzterStand())
 	t.bildschirmWarte("13-nach-dem-film.png")
+	t.mediensteuerungNachher()
 
-	// Noch einmal, und ans Ende springen: gesehen, und zurück zur Titelseite.
+	// Noch einmal, ohne Hardware-Beschleunigung, und ans Ende springen:
+	// gesehen, und zurück zur Titelseite.
+	t.skript(`localStorage.setItem('lumen.mpvHardware','aus')`)
 	t.abspielenKlicken()
 	ok = t.warte(25*time.Second, func() bool {
 		w = t.f.spieler.laufend()
@@ -373,6 +404,9 @@ func (t *selbsttest) eigenerPlayer(server string) {
 	if !t.notiz(ok, "zweite Wiedergabe startet (%s)", t.standText(w)) {
 		return
 	}
+	t.warte(5*time.Second, func() bool { return w.stand().Hwdec != "" })
+	t.notiz(w.stand().HwdecWahl == "no" && w.stand().Hwdec == "no", "Hardware-Beschleunigung aus: mpv dekodiert in Software (hwdec=%s, verlangt %s)", w.stand().Hwdec, w.stand().HwdecWahl)
+	t.skript(`localStorage.removeItem('lumen.mpvHardware')`)
 	t.skript(`(()=>{const v=document.querySelector('#v');v.currentTime=v.duration-3})()`)
 	t.notiz(t.warte(25*time.Second, func() bool {
 		t.srv.mu.Lock()

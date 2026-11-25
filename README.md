@@ -483,8 +483,17 @@ eigenen Fenster:
   gehen wie im Browser an den Server.
 - **Vollbild:** F11 (oder Alt+Eingabe) für das ganze Fenster; der
   Vollbild-Knopf im Player füllt den ganzen Bildschirm.
-- **Medientasten:** Abspielen/Pause, Weiter, Zurück und Stopp auf der
-  Tastatur; im Browser-Player auch in der Mediensteuerung von Windows.
+- **Medientasten und Mediensteuerung von Windows:** Abspielen/Pause,
+  Weiter, Zurück und Stopp auf der Tastatur. Titel, Folge, Poster und
+  Abspielstand erscheinen im Medien-Overlay von Windows (Lautstärketasten,
+  Schnelleinstellungen) und auf dem Sperrbildschirm; die Knöpfe dort
+  steuern den Player — im eigenen Player (mpv) wie im Browser-Player.
+- **Hardware-Beschleunigung und HDR (eigener Player):** mpv dekodiert über
+  die Grafikkarte (D3D11VA, NVDEC), wo es sicher geht, sonst in Software.
+  Ist HDR in Windows an, kommt ein HDR-Film als HDR auf den Bildschirm;
+  sonst bildet mpv ihn sauber auf SDR ab. Unter *Ich › Wiedergabe* lässt
+  sich die Hardware-Beschleunigung für diesen Computer ausschalten, falls
+  ein Grafiktreiber Probleme macht.
 - **Tonausgabe (Trailer, Browser-Player):** Unter *Ich › Wiedergabe* wählst
   du, über welches Gerät der Ton kommt — Systemstandard oder ein bestimmter
   Lautsprecher, Kopfhörer oder ein virtuelles Gerät. Das hilft, wenn ein

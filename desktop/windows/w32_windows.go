@@ -98,6 +98,7 @@ const (
 	wmEraseBkgnd    = 0x0014
 	wmClose         = 0x0010
 	wmGetMinMaxInfo = 0x0024
+	wmNcActivate    = 0x0086
 	wmSettingChange = 0x001A
 	wmSysCommand    = 0x0112
 	wmHotkey        = 0x0312
