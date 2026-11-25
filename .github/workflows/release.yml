@@ -262,6 +262,10 @@ jobs:
     name: Windows-App
     needs: pruefen
     uses: ./.github/workflows/desktop.yml
+    # desktop.yml braucht actions: read (libmpv-Artefakt, laden.sh).
+    permissions:
+      contents: read
+      actions: read
     with:
       version: ${{ needs.pruefen.outputs.fassung }}
 

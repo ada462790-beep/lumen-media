@@ -43,7 +43,7 @@ JOBS=$(nproc)
 SNAPSHOT=20261123T000000Z
 WERKZEUGE="gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix binutils-mingw-w64-x86-64
   mingw-w64-x86-64-dev mingw-w64-common meson ninja-build cmake nasm pkgconf python3 git
-  ca-certificates make xz-utils diffutils file"
+  ca-certificates make xz-utils diffutils file gcc libc6-dev"
 
 export PKG_CONFIG_LIBDIR=$PREFIX/lib/pkgconfig
 export PKG_CONFIG_PATH=

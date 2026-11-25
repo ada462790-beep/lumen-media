@@ -19,8 +19,10 @@
 # Damit die DLL nicht nach 90 Tagen weg ist: von Hand auf dem Hauptzweig mit
 # „veroeffentlichen" starten — dann hängen die Dateien an einer eigenen
 # Vorab-Veröffentlichung libmpv-JJJJMMTT (nie „latest", nicht verwechselbar
-# mit einer Lumen-Fassung). Deren Tag und Prüfsummen gehören dann in
-# desktop/windows/mpv/libmpv.txt.
+# mit einer Lumen-Fassung). Mit „lauf" wird nicht neu gebaut, sondern genau
+# das Artefakt jenes Laufs veröffentlicht — also die DLL, die der Selbsttest
+# der Windows-App schon geprüft hat; die Prüfsummen bleiben dieselben. Den
+# Tag dann in desktop/windows/mpv/libmpv.txt eintragen.
 
 name: libmpv
 
@@ -37,6 +39,11 @@ on:
         type: boolean
         required: false
         default: false
+      lauf:
+        description: 'Statt neu zu bauen: Artefakt dieses Laufs von libmpv.yml veröffentlichen (Lauf-Nummer)'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -48,6 +55,7 @@ concurrency:
 jobs:
   bauen:
     name: libmpv bauen (Windows x86-64)
+    if: github.event_name != 'workflow_dispatch' || inputs.lauf == ''
     runs-on: ubuntu-latest
     timeout-minutes: 300
     container:
@@ -98,16 +106,33 @@ jobs:
   veroeffentlichen:
     name: Vorab-Veröffentlichung libmpv-JJJJMMTT
     needs: bauen
-    if: github.event_name == 'workflow_dispatch' && inputs.veroeffentlichen && github.ref == 'refs/heads/main'
+    if: >-
+      ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.veroeffentlichen
+          && github.ref == 'refs/heads/main'
+          && (needs.bauen.result == 'success' || (needs.bauen.result == 'skipped' && inputs.lauf != '')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write   # Veröffentlichung und Tag libmpv-* anlegen
+      actions: read     # Artefakt eines anderen Laufs
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LAUF: ${{ inputs.lauf }}
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with: { name: libmpv, path: aus }
+      - name: Artefakt holen
+        run: |
+          if [ -z "$LAUF" ]; then
+            LAUF=$GITHUB_RUN_ID
+            ziel=$GITHUB_SHA
+          else
+            printf '%s' "$LAUF" | grep -Eq '^[0-9]+$' || { echo "::error::lauf muss eine Zahl sein"; exit 1; }
+            info=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LAUF" --jq '[.path, .conclusion, .head_sha] | @tsv')
+            IFS=$'\t' read -r pfad ergebnis ziel <<< "$info"
+            [ "$pfad" = .github/workflows/libmpv.yml ] || { echo "::error::Lauf $LAUF ist kein libmpv-Lauf ($pfad)"; exit 1; }
+            [ "$ergebnis" = success ] || { echo "::error::Lauf $LAUF ist nicht erfolgreich ($ergebnis)"; exit 1; }
+          fi
+          gh run download "$LAUF" -R "$GITHUB_REPOSITORY" -n libmpv -D aus
+          echo "ZIEL=$ziel" >> "$GITHUB_ENV"
       - name: Anlegen
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           cd aus
           sha256sum -c SHA256SUMS
@@ -116,7 +141,7 @@ jobs:
           while gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; do
             n=$((n + 1)); tag="libmpv-$(date -u +%Y%m%d).$n"
           done
-          gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+          gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$ZIEL" --prerelease --latest=false \
             --title "$tag (libmpv-2.dll für Lumen unter Windows)" --notes-file LIESMICH.txt \
             libmpv-2.dll libmpv-quellen.tar.xz LIESMICH.txt SHA256SUMS
           {
