@@ -583,7 +583,7 @@ func (w *lauf) posterLaden(adresse string) {
 			log.Printf("Mediensteuerung: Poster: %v", err)
 			return
 		}
-		log.Printf("Mediensteuerung: Poster gesetzt (%d KB)", len(daten)/1024)
+		log.Printf("Mediensteuerung: Poster gesetzt (%d Bytes)", len(daten))
 	})
 }
 
@@ -1186,8 +1186,8 @@ func (w *lauf) sitzungBenennen() {
 func (w *lauf) bildausgabeMelden(m *mpv) {
 	lies := func(n string) string { t, _ := m.lesen(n); return t }
 	vo, hw := lies("current-vo"), lies("hwdec-current")
-	if vo == "" && hw == "" {
-		return
+	if vo == "" || hw == "" {
+		return // Bildausgabe geht gerade zu (Ende, Stopp)
 	}
 	text := fmt.Sprintf("vo=%s hwdec=%s codec=%s format=%s/%s quelle=%s/%s peak=%s ausgabe=%s/%s",
 		vo, hw, lies("video-codec"), lies("video-params/pixelformat"), lies("video-params/hw-pixelformat"),
