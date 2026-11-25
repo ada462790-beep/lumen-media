@@ -252,7 +252,10 @@ public final class Playback {
             // Spuren und Vorbelegung nach den gemerkten Sprachen.
             tonspuren = file.tonspuren
             textspuren = file.textspuren
-            var vor = Spuren.vorbelegung(ton: tonspuren, text: textspuren, prefs: prefs, eigen: Sprache.aktuell)
+            // Bei einer Folge gilt, was für die Serie gewählt wurde, vor dem Profil.
+            seriesId = detail.seriesId
+            var vor = Spuren.vorbelegung(ton: tonspuren, text: textspuren, prefs: prefs,
+                                         eigen: Sprache.aktuell, seriesId: serienSchluesselId)
             // Nach einem Fassungswechsel: Ton und Untertitel nach Sprache übernehmen.
             if let alt = uebernommen {
                 vor = Spuren.uebernehmen(alterTon: alt.ton, alterUntertitel: alt.untertitel, untertitelAus: alt.aus,
@@ -268,7 +271,6 @@ public final class Playback {
             let marken = detail.marken(fuer: erste.id)
             intro = stelle.teil == 0 ? marken.intro : nil
             creditsMs = alle.istLetzter(stelle.teil) ? marken.creditsMs : nil
-            seriesId = detail.seriesId
 
             var start = stelle.imTeil
             // Ein Stand hinter dem Ende passt nicht mehr zur Datei — etwa
@@ -660,7 +662,14 @@ public final class Playback {
            !option.hasMediaCharacteristic(.containsOnlyForcedSubtitles) {
             wert = option.extendedLanguageTag.map { String($0.prefix(2)).lowercased() } ?? "und"
         }
-        if prefs["untertitel"] != wert { merken("untertitel", wert) }
+        // Was ohnehin vorbelegt war (beim Start meldet AVPlayer seine
+        // Auswahl auch), ist keine Wahl — sonst stünde bei jeder Folge
+        // gleich etwas unter der Serie, ohne dass jemand gewählt hätte.
+        let vorbelegt = textspuren.first { $0.index == untertitelSpur && !$0.isForced }
+        guard wert != (vorbelegt?.sprache ?? "aus") else { return }
+        untertitelSpur = wert == "aus" ? nil
+            : (textspuren.first { $0.sprache == wert && !$0.isForced } ?? textspuren.first { $0.sprache == wert })?.index
+        merken(Spuren.untertitelSpracheMerken(prefs: prefs, seriesId: serienSchluesselId, wert: wert))
     }
     #else
     private func play(url: URL, from start: Double, lauf meiner: Int) async throws {}
@@ -767,7 +776,9 @@ public final class Playback {
     public func waehleTon(_ index: Int) async {
         guard index != tonspurAktiv else { return }
         tonspur = index == tonspuren.first?.index ? nil : index
-        if let t = tonspuren.first(where: { $0.index == index }) { merken("tonSprache", t.sprache) }
+        if let t = tonspuren.first(where: { $0.index == index }) {
+            merken(Spuren.tonMerken(prefs: prefs, seriesId: serienSchluesselId, spur: t))
+        }
         await neuOeffnen()
     }
 
@@ -776,13 +787,14 @@ public final class Playback {
     public func waehleUntertitel(_ index: Int?) {
         untertitelSpur = index
         untertitelText = nil
-        if let index, let t = textspuren.first(where: { $0.index == index }) {
-            merken("untertitel", t.sprache)
-            ladeUntertitel(index)
-        } else {
-            merken("untertitel", "aus")
-        }
+        let t = index.flatMap { i in textspuren.first(where: { $0.index == i }) }
+        merken(Spuren.untertitelMerken(prefs: prefs, seriesId: serienSchluesselId, spur: t))
+        if let index, t != nil { ladeUntertitel(index) }
     }
+
+    /// Die Serie, unter der Ton und Untertitel gemerkt werden — nur bei
+    /// einer Folge; sonst gilt das Profil (wie im Browser: `p.seriesId`).
+    private var serienSchluesselId: String? { item?.kind == "episode" ? seriesId : nil }
 
     /// Ob Lumen die Untertitel selbst über das Bild legt. Bei HLS auf dem
     /// Fernseher macht das AVPlayer; dann bleibt `untertitelText` leer und
@@ -845,10 +857,11 @@ public final class Playback {
 
     /// Eine Einstellung merken — hier und auf dem Server. Scheitert das
     /// Speichern, bleibt die Wahl für diese Wiedergabe trotzdem gültig.
-    private func merken(_ key: String, _ wert: String) {
-        guard prefs[key] != wert else { return }
-        prefs[key] = wert
-        Task { _ = try? await client.updatePrefs([key: wert]) }
+    private func merken(_ werte: [String: String]) {
+        let neu = werte.filter { prefs[$0.key] != $0.value }
+        guard !neu.isEmpty else { return }
+        for (k, v) in neu { prefs[k] = v }
+        Task { _ = try? await client.updatePrefs(neu) }
     }
 
     // MARK: - Vorspann

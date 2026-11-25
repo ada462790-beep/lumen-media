@@ -24,6 +24,12 @@ struct TVSucheView: View {
     @State private var wunschFehler: String?
     /// Die Rückmeldung des Servers: neu, schon eigen oder angeschlossen.
     @State private var wunschMeldung: String?
+    /// Vorschläge von TMDb, wenn nichts gefunden wurde — der genaue Titel
+    /// zum Wünschen. Leer oder nil (Server ohne TMDb): nur der Text.
+    @State private var vorschlaege: [WunschVorschlag]? = []
+    @FocusState private var fokus: String?
+    /// Der Wunsch stand schon in der Bibliothek (409 „schon_da").
+    @State private var schonDa: (itemId: String, meldung: String)?
 
     private var sauber: String { eingabe.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -53,6 +59,12 @@ struct TVSucheView: View {
             try? await Task.sleep(for: .milliseconds(350))
             if Task.isCancelled { return }
             await suche(sauber)
+        }
+        // Nichts gefunden: Vorschläge zum Wünschen holen.
+        .task(id: ergebnis?.leer == true && geladenFuer == sauber ? sauber : "") {
+            vorschlaege = []
+            guard ergebnis?.leer == true, geladenFuer == sauber, !sauber.isEmpty else { return }
+            vorschlaege = await TVWunschVorschlaege.laden(session, sauber)
         }
         .fullScreenCover(item: $playing) { s in
             TVPlayerView(item: s.item, vonVorn: s.vonVorn).environment(session)
@@ -140,7 +152,9 @@ struct TVSucheView: View {
             Text("Nichts gefunden für „\(sauber)“.").font(.title2)
             Text("Du kannst dir den Titel wünschen — der Besitzer sieht den Wunsch und sonst nichts.")
                 .font(.title3).foregroundStyle(Theme.label2)
-            if gewuenscht == sauber, let wunschMeldung {
+            if gewuenscht == sauber, let schonDa {
+                TVSchonDaHinweis(itemId: schonDa.itemId, meldung: schonDa.meldung)
+            } else if gewuenscht == sauber, let wunschMeldung {
                 Label(wunschMeldung, systemImage: "checkmark.circle.fill")
                     .font(.title3.weight(.medium)).foregroundStyle(Theme.good)
             } else {
@@ -151,6 +165,12 @@ struct TVSucheView: View {
             }
             if let wunschFehler {
                 Text(wunschFehler).foregroundStyle(Theme.bad)
+            }
+            if gewuenscht != sauber, let liste = vorschlaege, !liste.isEmpty {
+                TVWunschVorschlagReihe(vorschlaege: liste, fokus: $fokus) { v in
+                    let titel = sauber
+                    Task { await wunschSchicken(titel) { try await session.client.wish(vorschlag: v) } }
+                }
             }
         }
         .frame(maxWidth: 1200, alignment: .leading)
@@ -170,11 +190,22 @@ struct TVSucheView: View {
     }
 
     private func wuenschen(_ titel: String) async {
+        await wunschSchicken(titel) { try await session.client.wish(title: titel) }
+    }
+
+    /// Wünschen — den Text oder einen Vorschlag. `fuer` ist die Eingabe,
+    /// zu der die Rückmeldung gehört.
+    private func wunschSchicken(_ fuer: String, _ anfrage: () async throws -> Wish) async {
         wunschFehler = nil
+        schonDa = nil
         do {
-            let w = try await session.client.wish(title: titel)
+            let w = try await anfrage()
             wunschMeldung = w.rueckmeldung
-            gewuenscht = titel
+            gewuenscht = fuer
+        } catch let e as LumenError where e.schonDaItemId != nil {
+            // Steht schon in der Bibliothek: „Ansehen" statt eines Fehlers.
+            schonDa = (e.schonDaItemId ?? "", e.errorDescription ?? "")
+            gewuenscht = fuer
         } catch {
             wunschFehler = Session.text(error)
         }

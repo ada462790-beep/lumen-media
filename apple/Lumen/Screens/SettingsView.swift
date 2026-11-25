@@ -476,6 +476,8 @@ struct WishesView: View {
     @State private var weg: Wish?
     /// Vorschläge von TMDb zur Eingabe — wie im Browser.
     @State private var vorschlaege: [WunschVorschlag] = []
+    /// Der Wunsch stand schon in der Bibliothek (409 „schon_da").
+    @State private var schonDa: (itemId: String, meldung: String)?
 
     var body: some View {
         List {
@@ -487,7 +489,16 @@ struct WishesView: View {
                     Button("Wünschen", action: send)
                         .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                if let hinweis {
+                if let schonDa {
+                    NavigationLink { DetailView(itemId: schonDa.itemId) } label: {
+                        HStack {
+                            Label(schonDa.meldung, systemImage: "checkmark.circle.fill")
+                                .font(.callout).foregroundStyle(Theme.good)
+                            Spacer()
+                            Text("Ansehen").font(.callout.weight(.medium)).foregroundStyle(Theme.accent)
+                        }
+                    }
+                } else if let hinweis {
                     Label(hinweis, systemImage: "checkmark.circle.fill")
                         .font(.callout).foregroundStyle(Theme.good)
                 }
@@ -598,11 +609,14 @@ struct WishesView: View {
 
     private func wuenschen(_ v: WunschVorschlag) async {
         hinweis = nil
+        schonDa = nil
         do {
             let w = try await session.client.wish(vorschlag: v)
             hinweis = w.rueckmeldung
             newTitle = ""
             vorschlaege = []
+        } catch let e as LumenError where e.schonDaItemId != nil {
+            schonDa = (e.schonDaItemId ?? "", e.errorDescription ?? "")
         } catch {
             problem = Session.text(error)
         }
@@ -638,10 +652,14 @@ struct WishesView: View {
         guard !title.isEmpty else { return }
         newTitle = ""
         hinweis = nil
+        schonDa = nil
         Task {
             do {
                 let w = try await session.client.wish(title: title)
                 hinweis = w.rueckmeldung
+            } catch let e as LumenError where e.schonDaItemId != nil {
+                // Steht schon in der Bibliothek: „Ansehen" statt eines Fehlers.
+                schonDa = (e.schonDaItemId ?? "", e.errorDescription ?? "")
             } catch {
                 // Sichtbar statt still verschluckt; der Titel bleibt im Feld.
                 newTitle = title

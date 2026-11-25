@@ -151,6 +151,13 @@ struct TVWuenscheView: View {
     @State private var fehler: String?
     /// Löschen oder austreten: erst nach einer Rückfrage.
     @State private var weg: Wish?
+    /// Vorschläge von TMDb zur Eingabe. nil: gibt es auf diesem Server nicht.
+    @State private var vorschlaege: [WunschVorschlag]? = []
+    /// Nach „Fertig" auf der Tastatur: Fokus auf den ersten Vorschlag.
+    @State private var nachEingabe = false
+    @FocusState private var fokus: String?
+    /// Der Wunsch stand schon in der Bibliothek (409 „schon_da").
+    @State private var schonDa: (itemId: String, meldung: String)?
 
     private var sauber: String { titel.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -165,17 +172,37 @@ struct TVWuenscheView: View {
                 HStack(spacing: 30) {
                     TextField("Titel wünschen …", text: $titel)
                         .frame(width: 900)
-                        .onSubmit { Task { await senden() } }
+                        .onSubmit {
+                            // Gibt es Vorschläge, wählt man dort den
+                            // richtigen Titel; sonst geht der Text als Wunsch.
+                            if vorschlaege == nil {
+                                Task { await senden() }
+                            } else if let erster = vorschlaege?.first {
+                                fokus = erster.id
+                            } else {
+                                nachEingabe = true
+                            }
+                        }
                     Button("Wünschen") { Task { await senden() } }
                         .disabled(sauber.isEmpty)
                 }
-                Text("Der Besitzer sieht den Titel und wer ihn gewünscht hat — sonst nichts.")
+                Text(vorschlaege == nil
+                     ? String(localized: "Der Besitzer sieht den Titel und wer ihn gewünscht hat — sonst nichts.", bundle: .lumen, locale: .lumen)
+                     : String(localized: "Wähle unten den passenden Titel — oder wünsche dir den Text, wie er dasteht. Der Besitzer sieht den Titel und wer ihn gewünscht hat, sonst nichts.", bundle: .lumen, locale: .lumen))
                     .font(.callout).foregroundStyle(Theme.label2)
-                if let meldung {
+                    .frame(maxWidth: 1300, alignment: .leading)
+                if let schonDa {
+                    TVSchonDaHinweis(itemId: schonDa.itemId, meldung: schonDa.meldung)
+                } else if let meldung {
                     Label(meldung, systemImage: "checkmark.circle.fill").foregroundStyle(Theme.good)
                 }
                 if let fehler {
                     Text(fehler).foregroundStyle(Theme.bad)
+                }
+                if let liste = vorschlaege, !liste.isEmpty {
+                    TVWunschVorschlagReihe(vorschlaege: liste, fokus: $fokus) { v in
+                        Task { await wuenschen(v) }
+                    }
                 }
 
                 if geladen && wuensche.isEmpty {
@@ -200,6 +227,19 @@ struct TVWuenscheView: View {
             .padding(.bottom, 60)
         }
         .onAppear { Task { await load() } }
+        // Beim Tippen: kurz warten, ältere Anfragen verfallen (task(id:)).
+        .task(id: sauber) {
+            if !sauber.isEmpty { schonDa = nil }
+            guard vorschlaege != nil else { return }
+            guard sauber.count >= 2 else { vorschlaege = []; return }
+            try? await Task.sleep(for: .milliseconds(300))
+            if Task.isCancelled { return }
+            let neu = await TVWunschVorschlaege.laden(session, sauber)
+            if Task.isCancelled { return }
+            vorschlaege = neu
+            if nachEingabe, let erster = neu?.first { fokus = erster.id }
+            nachEingabe = false
+        }
         .confirmationDialog(wegTitel, isPresented: Binding(
             get: { weg != nil },
             set: { if !$0 { weg = nil } }), titleVisibility: .visible, presenting: weg) { w in
@@ -281,13 +321,27 @@ struct TVWuenscheView: View {
     private func senden() async {
         let t = sauber
         guard !t.isEmpty else { return }
+        await wunschSchicken { try await session.client.wish(title: t) }
+    }
+
+    /// Genau diesen Titel wünschen — mit TMDb-Kennung.
+    private func wuenschen(_ v: WunschVorschlag) async {
+        await wunschSchicken { try await session.client.wish(vorschlag: v) }
+    }
+
+    private func wunschSchicken(_ anfrage: () async throws -> Wish) async {
         fehler = nil
         meldung = nil
+        schonDa = nil
         do {
-            let w = try await session.client.wish(title: t)
+            let w = try await anfrage()
             titel = ""
+            if vorschlaege != nil { vorschlaege = [] }
             // Neu, schon eigen oder angeschlossen — wie im Browser.
             meldung = w.rueckmeldung
+        } catch let e as LumenError where e.schonDaItemId != nil {
+            // Steht schon in der Bibliothek: „Ansehen" statt eines Fehlers.
+            schonDa = (e.schonDaItemId ?? "", e.errorDescription ?? "")
         } catch {
             fehler = Session.text(error)
         }

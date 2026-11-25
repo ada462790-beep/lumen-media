@@ -17032,6 +17032,34 @@
         }
       }
     },
+    "Wähle unten den passenden Titel — oder wünsche dir den Text, wie er dasteht. Der Besitzer sieht den Titel und wer ihn gewünscht hat, sonst nichts." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle unten den passenden Titel — oder wünsche dir den Text, wie er dasteht. Der Besitzer sieht den Titel und wer ihn gewünscht hat, sonst nichts."
+          }
+        },
+        "de-AT" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle unten den passenden Titel — oder wünsche dir den Text, wie er dasteht. Der Besitzer sieht den Titel und wer ihn gewünscht hat, sonst nichts."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick the matching title below — or request the text as typed. The owner sees the title and who requested it, nothing else."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick the matching title below — or request the text as typed. The owner sees the title and who requested it, nothing else."
+          }
+        }
+      }
+    },
     "Wähle zuerst im Hauptfenster ein Profil." : {
       "localizations" : {
         "de" : {

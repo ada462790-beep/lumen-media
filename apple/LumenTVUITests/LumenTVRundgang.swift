@@ -100,6 +100,7 @@ final class LumenTVRundgang: Rundgang {
                 zurueck()
                 zurueck()
             }
+            wuensche()
         }
 
         if reiter("startseite-wiedergabe", "^(Startseite|Home)$") {
@@ -115,5 +116,41 @@ final class LumenTVRundgang: Rundgang {
             }
         }
         berichtAnhaengen()
+    }
+
+    /// Wünsche: die Seite, dann „Inception" wünschen. Das steht in der
+    /// Bibliothek, also antwortet der Server mit 409 „schon_da", und die
+    /// Seite zeigt „Ansehen" — das geht ohne Netz. Vorschläge von TMDb
+    /// gibt es im Simulator nicht (kein Schlüssel); dann wünscht „Fertig"
+    /// den Text gleich.
+    private func wuensche() {
+        guard schritt("wuensche", "^(Wünsche|Wishes|Requests)$") else { return }
+        let feld = app.textFields.firstMatch
+        guard feld.waitForExistence(timeout: 5) else {
+            foto("wuensche-feld", "kein Eingabefeld", ok: false)
+            zurueck()
+            return
+        }
+        druecken(feld)
+        Thread.sleep(forTimeInterval: 2)
+        app.typeText("Inception")
+        Thread.sleep(forTimeInterval: 1)
+        foto("wuensche-tastatur")
+        // „\n" schickt ab (onSubmit), die Tastatur bleibt aber offen —
+        // „Fertig" schliesst sie, dann ist die Seite wieder zu sehen.
+        app.typeText("\n")
+        Thread.sleep(forTimeInterval: 2)
+        let fertig = app.buttons.matching(NSPredicate(format: "label MATCHES[c] %@", "^(Fertig|Done)$")).firstMatch
+        if fertig.exists { druecken(fertig) }
+        Thread.sleep(forTimeInterval: 2)
+        let ansehen = warte("^(Ansehen|View|Watch)$", 8)
+        foto("wuensche-schon-da", ansehen == nil ? "kein „Ansehen“ nach dem Wunsch" : "", ok: ansehen != nil)
+        if let ansehen {
+            druecken(ansehen)
+            Thread.sleep(forTimeInterval: 3)
+            foto("wuensche-ansehen")
+            zurueck()
+        }
+        zurueck()
     }
 }
