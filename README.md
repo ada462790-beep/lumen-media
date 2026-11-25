@@ -521,9 +521,9 @@ Serverliste und die Anmeldungen weg sollen (`%APPDATA%\Lumen`,
 
 Gebaut wird die App mit Go und WebView2, dem Chromium, das in Windows
 steckt — kein eigener Browser, kein Electron. Dazu kommt `libmpv-2.dll`
-(mpv mit FFmpeg, GPL-3.0-or-later, fest gepinnt aus
-[shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake),
-siehe [DRITTSOFTWARE.md](DRITTSOFTWARE.md)); damit ist der Installer rund
+(mpv mit FFmpeg, GPL-3.0-or-later, selbst gebaut aus festen Fassungen in
+[`desktop/windows/mpv/bau/`](desktop/windows/mpv/bau/), Quellen an jeder
+Veröffentlichung, siehe [DRITTSOFTWARE.md](DRITTSOFTWARE.md)); damit ist der Installer rund
 38 MB gross. Fehlt die DLL, spielt Lumen im Player der Web-App.
 Der Quelltext liegt in [`desktop/windows/`](desktop/windows/).
 

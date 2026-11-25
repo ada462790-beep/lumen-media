@@ -258,8 +258,11 @@ bau_spirv_cross() {
   local pc=$PREFIX/lib/pkgconfig/spirv-cross-c.pc
   [ -f "$pc" ] || pc=$PREFIX/share/pkgconfig/spirv-cross-c.pc
   [ -f "$pc" ] || fehler "spirv-cross-c.pc fehlt"
-  sed -e 's/^Name:.*/Name: spirv-cross-c-shared/' -e '/^Libs:/ s/$/ -lstdc++ -lpthread/' "$pc" \
-    > "$PREFIX/lib/pkgconfig/spirv-cross-c-shared.pc"
+  # Die statische spirv-cross-c.pc nennt nur die C-Schnittstelle — die
+  # Teile darunter (HLSL, GLSL, Kern) und libstdc++ gehören dazu.
+  sed -e 's/^Name:.*/Name: spirv-cross-c-shared/' \
+    -e '/^Libs:/ c\Libs: -L${libdir} -lspirv-cross-c -lspirv-cross-hlsl -lspirv-cross-glsl -lspirv-cross-core -lstdc++ -lpthread' \
+    "$pc" > "$PREFIX/lib/pkgconfig/spirv-cross-c-shared.pc"
   cat "$PREFIX/lib/pkgconfig/spirv-cross-c-shared.pc"
   ende
 }

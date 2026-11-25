@@ -191,7 +191,7 @@ The scripts in `tools/` are Lumen's own; `tools/symbol_bauen.py` uses Pillow
 | NSIS (installer framework) | 3.x | zlib/libpng (some parts bzip2, CPL) | <https://nsis.sourceforge.io/License> | in the installer (the small stub that runs it) | zlib requires no notice in binaries; listed for completeness |
 | Microsoft Edge WebView2 Runtime | Evergreen | Microsoft license (proprietary) | <https://developer.microsoft.com/microsoft-edge/webview2/> | **separate** – part of Windows or downloaded from Microsoft | Lumen neither ships nor links it; it is a system component |
 | WebView2 bootstrapper (`MicrosoftEdgeWebview2Setup.exe`) | current at build time | Microsoft, redistribution permitted (WebView2 distribution) | <https://developer.microsoft.com/microsoft-edge/webview2/#download> | inside the installer, unmodified; only runs if WebView2 is missing | downloaded from Microsoft at build time and checked for Microsoft's signature; not in the repository |
-| libmpv (`libmpv-2.dll`: mpv with FFmpeg, libass, libplacebo, HarfBuzz, FreeType, dav1d, x264/x265 and others, statically built) | pinned in [`desktop/windows/mpv/libmpv.txt`](desktop/windows/mpv/libmpv.txt) (release, file, SHA-256, build recipe) | **GPL-3.0-or-later** as a whole (mpv GPL-2.0-or-later/LGPL-2.1-or-later; FFmpeg with `--enable-gpl --enable-version3`, without `--enable-nonfree`; the other libraries BSD, MIT, ISC, LGPL, Apache-2.0) | <https://github.com/shinchiro/mpv-winbuild-cmake> (build recipe), <https://github.com/mpv-player/mpv> | in the installer next to `Lumen.exe`, unmodified; `Lumen.exe` loads it into its own process at run time (own player, `player_windows.go`) | see below; downloaded with checksum at build time, not in the repository |
+| libmpv (`libmpv-2.dll`: mpv with FFmpeg, libplacebo, libass, HarfBuzz, FreeType, FriBidi, dav1d, Little CMS, shaderc with glslang and SPIRV-Tools, SPIRV-Cross, zlib; all statically linked into one DLL) | built by Lumen from fixed versions: [`desktop/windows/mpv/bau/pakete.txt`](desktop/windows/mpv/bau/pakete.txt) (tag and commit per package, e.g. mpv v0.42.0, FFmpeg n9.0.2, libplacebo v7.387.0); which DLL goes into the installer: [`desktop/windows/mpv/libmpv.txt`](desktop/windows/mpv/libmpv.txt) (pre-release `libmpv-YYYYMMDD`, SHA-256) | **GPL-3.0-or-later** as a whole (mpv GPL-2.0-or-later; FFmpeg LGPL-2.1-or-later, without `--enable-gpl` and without `--enable-nonfree`; libplacebo and FriBidi LGPL-2.1-or-later; libass ISC; HarfBuzz and Little CMS MIT; FreeType FTL/GPL-2.0-or-later; dav1d BSD-2-Clause; glslang BSD-3-Clause and others; shaderc, SPIRV-Tools, SPIRV-Cross Apache-2.0; zlib zlib license; plus the MinGW-w64 runtime: libgcc and libstdc++ GPL-3.0 with the GCC Runtime Library Exception, winpthreads MIT) | <https://github.com/mpv-player/mpv> and the sources in `pakete.txt` | in the installer next to `Lumen.exe`, unmodified; `Lumen.exe` loads it into its own process at run time (own player, `player_windows.go`) | see below; built in [`libmpv.yml`](.github/workflows/libmpv.yml), downloaded with checksum when the app is built, not in the repository |
 
 The built-in licenses (MIT, ISC, BSD-3-Clause) are compatible with the
 AGPL-3.0. The WebView2 Runtime is an operating system component (a "System
@@ -205,20 +205,31 @@ process and calls its functions — unlike FFmpeg in the Docker image, this
 is a *combined work*. AGPL-3.0 section 13 and GPL-3.0 section 13 expressly
 permit combining an AGPL work with a GPL-3.0 work into a single work; each
 part keeps its own license. A "GPL-2.0-only" library could not be
-combined this way — the pinned libmpv is GPL-3.0-or-later as a whole
-(FFmpeg with `--enable-version3`, mpv GPL-2.0-or-later). Builds with
-`--enable-nonfree` (e.g. libfdk-aac) must not be distributed; shinchiro's
-recipe doesn't set it (`packages/ffmpeg.cmake`). The additional permissions
+combined this way — Lumen's own libmpv build is GPL-3.0-or-later as a
+whole: mpv is GPL-2.0-or-later, and the Apache-2.0 parts (shaderc,
+SPIRV-Tools, SPIRV-Cross) can only be combined with GPL-3.0. FFmpeg is
+built without `--enable-gpl` and without `--enable-nonfree`, with
+`--disable-autodetect`: only what
+[`bauen.sh`](desktop/windows/mpv/bau/bauen.sh) lists goes in. Builds with
+`--enable-nonfree` (e.g. libfdk-aac) could not be distributed.
+The additional permissions
 in `LICENSE-EXCEPTIONS` cover the Lumen part only, not libmpv.
 
 **Source of libmpv.** Whoever distributes `libmpv-2.dll` must offer the
-corresponding source (GPL-3.0 section 6): shinchiro's build recipe at the
-`REZEPT` commit from `libmpv.txt`, mpv at the commit in the file name
-(`…-git-<commit>.7z`), and the sources of the statically linked libraries.
-The recipe fetches most of those as the latest Git state on the build day
-(date = `TAG`). [`tools/mpv_quellen.sh`](tools/mpv_quellen.sh) collects
-recipe, mpv and, for every library, the last commit before the build day
-into one archive — see the open points.
+corresponding source (GPL-3.0 section 6). That is why Lumen builds the DLL
+itself (workflow [`libmpv.yml`](.github/workflows/libmpv.yml)): every
+package is fixed in [`pakete.txt`](desktop/windows/mpv/bau/pakete.txt) by
+tag *and* commit, the build stops if a tag points elsewhere, and the tools
+(MinGW-w64 GCC, binutils, Meson …) come from a fixed Debian state (image
+pinned by digest, `snapshot.debian.org`). The same run packs exactly the
+source trees it builds, the build script and a list of all commits and tool
+versions into `libmpv-quellen.tar.xz` (about 55 MB), and checks after the
+build that the sources are unchanged. DLL and archive are attached together
+to a pre-release `libmpv-YYYYMMDD`; both checksums are in
+[`libmpv.txt`](desktop/windows/mpv/libmpv.txt).
+[`tools/mpv_quellen.sh`](tools/mpv_quellen.sh) fetches exactly this archive
+for every Lumen release and verifies its checksum, and `quellen.yml`
+attaches it as `lumen-media-vX-libmpv-quellen.tar.xz`.
 
 The installer puts `libmpv-2.dll`, `LICENSE.txt`, `LICENSE-EXCEPTIONS.txt`,
 `THIRD_PARTY.md` and `DRITTSOFTWARE.md` next to `Lumen.exe`.
@@ -243,15 +254,10 @@ implemented.
    LGPL package in the image.
 4. **TMDB logo.** Resolved: small and unmodified under Settings › Data
    sources and third-party software, linking to themoviedb.org.
-5. **Source of libmpv (Windows app).** Open. `tools/mpv_quellen.sh`
-   collects recipe, mpv and the libraries (last commit before the build
-   day) into `lumen-media-vX-libmpv-quellen.tar`; `quellen.yml` attaches it
-   to every release. Because shinchiro's recipe builds most libraries from
-   their latest, unpinned state, this is a very close approximation but no
-   proof that exactly these commits are in the DLL. Proposal: build libmpv
-   in a workflow of our own with fixed versions (takes a good hour on
-   GitHub), or additionally include a written offer under GPL-3.0
-   section 6 b.
+5. **Source of libmpv (Windows app).** Resolved on 2026-11-25: libmpv is
+   built from fixed versions by Lumen itself (`libmpv.yml`,
+   `desktop/windows/mpv/bau/`), and every release carries exactly the
+   source archive from that same build (see "Source of libmpv").
 
 ### Granted: additional permission for Google Play services (AGPL section 7)
 
