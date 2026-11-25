@@ -211,9 +211,9 @@ SPIRV-Tools, SPIRV-Cross) can only be combined with GPL-3.0. FFmpeg is
 built without `--enable-gpl` and without `--enable-nonfree`, with
 `--disable-autodetect`: only what
 [`bauen.sh`](desktop/windows/mpv/bau/bauen.sh) lists goes in. Builds with
-`--enable-nonfree` (e.g. libfdk-aac) could not be distributed.
-The additional permissions
-in `LICENSE-EXCEPTIONS` cover the Lumen part only, not libmpv.
+`--enable-nonfree` (e.g. libfdk-aac) could not be distributed. The
+additional permissions in `LICENSE-EXCEPTIONS` cover the Lumen part only,
+not libmpv.
 
 **Source of libmpv.** Whoever distributes `libmpv-2.dll` must offer the
 corresponding source (GPL-3.0 section 6). That is why Lumen builds the DLL

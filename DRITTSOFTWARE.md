@@ -216,8 +216,8 @@ mit GPL-3.0 verbinden. FFmpeg ist ohne `--enable-gpl` und ohne
 `--enable-nonfree` gebaut, mit `--disable-autodetect`: Es kommt nur hinein,
 was in [`bauen.sh`](desktop/windows/mpv/bau/bauen.sh) steht. Bauten mit
 `--enable-nonfree` (etwa mit libfdk-aac) dürften nicht weitergegeben werden.
-Die Zusatzerlaubnisse in
-`LICENSE-EXCEPTIONS` gelten nur für den Lumen-Teil, nicht für libmpv.
+Die Zusatzerlaubnisse in `LICENSE-EXCEPTIONS` gelten nur für den Lumen-Teil,
+nicht für libmpv.
 
 **Quelltext von libmpv.** Wer `libmpv-2.dll` weitergibt, muss den
 zugehörigen Quelltext anbieten (GPL-3.0 Abschnitt 6). Lumen baut die DLL

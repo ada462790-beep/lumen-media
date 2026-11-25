@@ -92,7 +92,8 @@ server list and sign-ins as well. Built with Go and WebView2 (the Chromium
 that comes with Windows) — no bundled browser, no Electron — plus
 `libmpv-2.dll` (mpv with FFmpeg, GPL-3.0-or-later, built by Lumen from
 fixed versions in [`desktop/windows/mpv/bau/`](desktop/windows/mpv/bau/),
-sources attached to every release, see [THIRD_PARTY.md](THIRD_PARTY.md)); the installer is about 38 MB.
+sources attached to every release, see [THIRD_PARTY.md](THIRD_PARTY.md));
+the installer is about 20 MB.
 Without the DLL Lumen falls back to the web app's player. Source:
 [`desktop/windows/`](desktop/windows/).
 
