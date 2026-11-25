@@ -136,8 +136,13 @@ final class LumenTVRundgang: Rundgang {
         app.typeText("Inception")
         Thread.sleep(forTimeInterval: 1)
         foto("wuensche-tastatur")
+        // „\n" schickt ab (onSubmit), die Tastatur bleibt aber offen —
+        // „Fertig" schliesst sie, dann ist die Seite wieder zu sehen.
         app.typeText("\n")
-        Thread.sleep(forTimeInterval: 3)
+        Thread.sleep(forTimeInterval: 2)
+        let fertig = app.buttons.matching(NSPredicate(format: "label MATCHES[c] %@", "^(Fertig|Done)$")).firstMatch
+        if fertig.exists { druecken(fertig) }
+        Thread.sleep(forTimeInterval: 2)
         let ansehen = warte("^(Ansehen|View|Watch)$", 8)
         foto("wuensche-schon-da", ansehen == nil ? "kein „Ansehen“ nach dem Wunsch" : "", ok: ansehen != nil)
         if let ansehen {
