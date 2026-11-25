@@ -77,17 +77,20 @@ func Suchvarianten(titel string) []Variante {
 	titel = strings.TrimSpace(titel)
 	var out []Variante
 	gesehen := map[string]bool{}
+	mindestens := 1 // der Titel selbst darf ein Zeichen sein: „M", „9"
 	dazu := func(s string, gleich bool) {
 		s = strings.TrimSpace(reMehrfachRaum.ReplaceAllString(s, " "))
 		s = strings.Trim(s, " -:,")
 		k := strings.ToLower(s)
-		if len([]rune(s)) < 2 || gesehen[k] {
+		if len([]rune(s)) < mindestens || gesehen[k] {
 			return
 		}
 		gesehen[k] = true
 		out = append(out, Variante{Text: s, Gleichwertig: gleich})
 	}
 	dazu(titel, true)
+	// Abgeleitete Schreibweisen erst ab zwei Zeichen.
+	mindestens = 2
 
 	ohneFassung := titel
 	for i := 0; i < 4; i++ { // „Extended Collector's Edition 3D"
@@ -339,7 +342,7 @@ func (r *Resolver) finden(ctx context.Context, kind, titel string, jahr int, lan
 		}
 	}
 	// 4. Das Jahr eins daneben.
-	if jahr > 0 {
+	if jahr > 0 && len(varianten) > 0 {
 		schritte = append(schritte, suchSchritt{varianten[min(1, len(varianten)-1)].Text, jahr - 1, ""},
 			suchSchritt{varianten[min(1, len(varianten)-1)].Text, jahr + 1, ""})
 	}

@@ -306,7 +306,10 @@ func (r *Resolver) resolveMovie(ctx context.Context, it *store.Item) error {
 		full, quelle = r.vorgemerkteKennung(ctx, it, "movie")
 	}
 	if full == nil {
-		m, gesucht, _, err := r.finden(ctx, "movie", it.Title, it.Year, "")
+		// Schon einmal selbst zugeordnet: zuerst nach dem Dateinamen
+		// (nachpruefen.go), damit sich ein falscher Treffer nicht über
+		// seinen eigenen Titel bestätigt.
+		m, gesucht, err := r.filmFinden(ctx, it)
 		if err != nil {
 			// Kein Netz, TMDb bremst: bleibt „ausstehend" und kommt beim
 			// nächsten Durchgang wieder dran.
@@ -876,7 +879,20 @@ func (r *Resolver) zuweisen(ctx context.Context, it *store.Item, sourceID string
 
 // NeuLaden holt die Metadaten eines Titels noch einmal — bei einer Serie
 // samt Staffeln und Folgen.
+//
+// Ein von Hand zugewiesener (oder aus Emby/Jellyfin übernommener) Titel
+// bleibt bei seinem Eintrag: Neu geholt werden nur dessen Angaben. Sonst
+// suchte Lumen neu und konnte die Wahl des Besitzers umwerfen.
 func (r *Resolver) NeuLaden(ctx context.Context, it *store.Item) error {
+	if it.MatchState == "manual" && (it.Kind == "movie" || it.Kind == "series") {
+		if id, _ := r.st.SourceID(ctx, it.ID, "tmdb"); id != "" {
+			err := r.zuweisen(ctx, it, id, true)
+			if err == nil || errors.Is(err, ErrTMDbSchluessel) || ctx.Err() != nil {
+				return err
+			}
+			// Den Eintrag gibt es bei TMDb nicht mehr: wie bisher suchen.
+		}
+	}
 	if _, err := r.st.MetadatenZuruecksetzen(ctx, "", it.ID); err != nil {
 		return err
 	}
