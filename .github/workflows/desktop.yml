@@ -12,9 +12,11 @@
 #   Lumen-Setup-<fassung>-windows-x64.exe   Installer (NSIS) mit libmpv, Artefakt lumen-windows-app
 #   selbsttest-windows                      Bilder und Protokoll des Selbsttests
 #
-# Der eigene Player braucht libmpv-2.dll (mpv, GPL-3.0-or-later). Sie kommt
-# fest gepinnt mit Prüfsumme von shinchiro/mpv-winbuild-cmake
-# (desktop/windows/mpv/libmpv.txt) und liegt nie im Repository.
+# Der eigene Player braucht libmpv-2.dll (mpv, GPL-3.0-or-later). Sie ist
+# selbst gebaut (libmpv.yml, feste Quellen in desktop/windows/mpv/bau/),
+# kommt fest gepinnt mit Prüfsumme von einer eigenen Vorab-Veröffentlichung
+# oder einem libmpv-Lauf (desktop/windows/mpv/libmpv.txt) und liegt nie im
+# Repository.
 
 name: Windows-App
 
@@ -25,6 +27,7 @@ on:
     branches: ['**']
     paths:
       - 'desktop/windows/**'
+      - '!desktop/windows/mpv/bau/**'
       - 'server/cmd/lumen/web/**'
       - '.github/workflows/desktop.yml'
       - 'DRITTSOFTWARE.md'
@@ -48,9 +51,11 @@ on:
         default: ''
 
 # Nur lesen. Der Installer wandert als Artefakt weiter; an die
-# Veröffentlichung hängt ihn release.yml.
+# Veröffentlichung hängt ihn release.yml. actions: read, damit laden.sh das
+# libmpv-Artefakt eines anderen Laufs holen darf (Arbeitszweige).
 permissions:
   contents: read
+  actions: read
 
 jobs:
   windows:
@@ -116,7 +121,8 @@ jobs:
           ls -l dist
 
       # Der eigene Player (player_windows.go): libmpv-2.dll neben Lumen.exe.
-      # Für eine Veröffentlichung muss sie gepinnt sein (STRENG).
+      # Für eine Veröffentlichung muss sie als eigene Vorab-Veröffentlichung
+      # libmpv-* gepinnt sein (STRENG).
       - name: libmpv
         env:
           GH_TOKEN: ${{ github.token }}

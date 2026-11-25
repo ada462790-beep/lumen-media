@@ -1,0 +1,36 @@
+# Lumen — eigener Streaming-Server fürs Heimnetz.
+# Copyright (C) 2026 Die Lumen-Autoren
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Was in die selbst gebaute libmpv-2.dll kommt (bauen.sh, Ablauf libmpv.yml).
+# Jede Zeile: Name, Git-Quelle, Tag und der Commit, auf den der Tag zeigen
+# muss. holen.sh holt genau diesen Commit und bricht ab, wenn der Tag
+# inzwischen woanders hinzeigt — so steckt in der DLL nie etwas anderes als
+# hier steht, und das Quellenarchiv enthält genau diese Bäume.
+#
+# Steht statt eines Tags ein „-", ist der Commit selbst die Fassung (die drei
+# Bibliotheken unter shaderc: die Commits aus dessen DEPS-Datei).
+# Untermodule (libplacebo: glad, jinja, markupsafe, fast_float,
+# Vulkan-Headers) legt der Commit des Hauptpakets fest; holen.sh schreibt
+# ihre Commits ins Verzeichnis (LIESMICH.txt im Quellenarchiv).
+#
+# Neue Fassung: Tag und Commit hier ändern (git ls-remote --tags URL; bei
+# annotierten Tags die Zeile mit ^{}), auf einem Arbeitszweig pushen —
+# libmpv.yml baut und prüft. Danach die neue DLL pinnen (libmpv.txt).
+#
+# Name         Quelle                                              Tag                    Commit
+zlib           https://github.com/madler/zlib.git                  v1.3.2                 da607da739fa6047df13e66a2af6b8bec7c2a498
+dav1d          https://github.com/videolan/dav1d.git               1.5.5                  6c7bee685677fd997a431302be4fea8ea4017606
+ffmpeg         https://github.com/FFmpeg/FFmpeg.git                n9.0.2                 946fcce07b6dcd0331c8cc609192aeff5e1924f8
+freetype       https://github.com/freetype/freetype.git            VER-2-14-3             0a0221a1347e2f1e07c395263540026e9a0aa7c7
+fribidi        https://github.com/fribidi/fribidi.git              v1.0.18                15393e4937aa95bcf865d92143735746aeb654fa
+harfbuzz       https://github.com/harfbuzz/harfbuzz.git            15.2.0                 ed51d202cfd0c29372d3ee056eb0dc715688a410
+libass         https://github.com/libass/libass.git                0.17.5                 4a05d8127f525943ebf45fdc6497c9e665947f0d
+lcms2          https://github.com/mm2/Little-CMS.git               lcms2.20               7717fce0d85447ef3b2df0cca2e99207c15eeecd
+spirv-headers  https://github.com/KhronosGroup/SPIRV-Headers.git   -                      04fd3caa1e8267e4d95c806cad901181728e1006
+spirv-tools    https://github.com/KhronosGroup/SPIRV-Tools.git     -                      ef96ed763b43b59b33b31b362f09a02b729fa1c9
+glslang        https://github.com/KhronosGroup/glslang.git         -                      e1b562a8bed273a02f30b59b66a5d499793cede5
+shaderc        https://github.com/google/shaderc.git               v2026.4                b64fd42c4a2a9d501c47aca5d3571f7673a5e9cc
+spirv-cross    https://github.com/KhronosGroup/SPIRV-Cross.git     vulkan-sdk-1.4.363.0   f11ba9f0b21ba8fc15153d50a2a1ae31ab1cf8f7
+libplacebo     https://github.com/haasn/libplacebo.git             v7.387.0               275f7dea27924cdd34ab2e6c20e448b6bc4fab65
+mpv            https://github.com/mpv-player/mpv.git               v0.42.0                b0841e8c4d156b8403dc1876c4cbd9011eb583f3

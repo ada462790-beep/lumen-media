@@ -1,0 +1,158 @@
+# libmpv-2.dll für Lumen unter Windows selbst bauen — aus festen Quellen.
+#
+# Warum selbst: Die GPL verlangt, mit der DLL den *entsprechenden*
+# Quelltext anzubieten. Bei einer fertigen DLL von anderswo lässt sich
+# nicht belegen, welcher Stand jeder Bibliothek darin steckt. Hier steht er
+# in desktop/windows/mpv/bau/pakete.txt (Tag und Commit je Paket), und
+# dieselben Bäume landen im Quellenarchiv neben der DLL.
+#
+# Gebaut wird in einem per Digest gepinnten Debian-Abbild mit dem
+# MinGW-w64-GCC aus snapshot.debian.org (fester Stand, bauen.sh). Dauer
+# etwa eine halbe bis eine Stunde.
+#
+# Was entsteht (Artefakt „libmpv", 90 Tage):
+#   libmpv-2.dll            alles statisch, braucht nur Windows selbst
+#   libmpv-quellen.tar.xz   genau die gebauten Quellen und Bau-Dateien
+#   LIESMICH.txt            Pakete, Commits, Werkzeuge, Prüfsummen
+#   SHA256SUMS
+#
+# Damit die DLL nicht nach 90 Tagen weg ist: von Hand auf dem Hauptzweig mit
+# „veroeffentlichen" starten — dann hängen die Dateien an einer eigenen
+# Vorab-Veröffentlichung libmpv-JJJJMMTT (nie „latest", nicht verwechselbar
+# mit einer Lumen-Fassung). Mit „lauf" wird nicht neu gebaut, sondern genau
+# das Artefakt jenes Laufs veröffentlicht — also die DLL, die der Selbsttest
+# der Windows-App schon geprüft hat; die Prüfsummen bleiben dieselben. Den
+# Tag dann in desktop/windows/mpv/libmpv.txt eintragen.
+
+name: libmpv
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'desktop/windows/mpv/bau/**'
+      - '.github/workflows/libmpv.yml'
+  workflow_dispatch:
+    inputs:
+      veroeffentlichen:
+        description: 'DLL und Quellen als Vorab-Veröffentlichung libmpv-JJJJMMTT anhängen (nur auf main)'
+        type: boolean
+        required: false
+        default: false
+      lauf:
+        description: 'Statt neu zu bauen: Artefakt dieses Laufs von libmpv.yml veröffentlichen (Lauf-Nummer)'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: libmpv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bauen:
+    name: libmpv bauen (Windows x86-64)
+    if: github.event_name != 'workflow_dispatch' || inputs.lauf == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    container:
+      # debian:trixie-20261123-slim — fest per Digest; bauen.sh holt die
+      # Werkzeuge vom passenden Stand aus snapshot.debian.org.
+      image: debian:trixie-20261123-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Werkzeuge
+        run: bash desktop/windows/mpv/bau/bauen.sh werkzeug
+      - name: Quellen holen
+        run: bash desktop/windows/mpv/bau/bauen.sh holen
+      - name: Quellenarchiv
+        run: bash desktop/windows/mpv/bau/bauen.sh quellen
+      - name: Bauen
+        run: bash desktop/windows/mpv/bau/bauen.sh bauen
+      - name: Prüfsummen
+        run: |
+          bash desktop/windows/mpv/bau/bauen.sh fertig
+          {
+            echo "### libmpv"
+            echo
+            echo '```'
+            cat /bau/aus/SHA256SUMS
+            ls -l /bau/aus
+            echo '```'
+            echo
+            echo "Zum Pinnen in desktop/windows/mpv/libmpv.txt (Arbeitszweig):"
+            echo
+            echo '```'
+            echo "LAUF=$GITHUB_RUN_ID"
+            echo "SHA256=$(cut -d' ' -f1 < <(grep ' libmpv-2.dll$' /bau/aus/SHA256SUMS))"
+            echo "QUELLEN_SHA256=$(cut -d' ' -f1 < <(grep ' libmpv-quellen.tar.xz$' /bau/aus/SHA256SUMS))"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libmpv
+          path: /bau/aus/
+          if-no-files-found: error
+          retention-days: 90
+          # Die DLL und das xz-Archiv sind schon dicht.
+          compression-level: 0
+
+  veroeffentlichen:
+    name: Vorab-Veröffentlichung libmpv-JJJJMMTT
+    needs: bauen
+    if: >-
+      ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.veroeffentlichen
+          && github.ref == 'refs/heads/main'
+          && (needs.bauen.result == 'success' || (needs.bauen.result == 'skipped' && inputs.lauf != '')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Veröffentlichung und Tag libmpv-* anlegen
+      actions: read     # Artefakt eines anderen Laufs
+    env:
+      GH_TOKEN: ${{ github.token }}
+      LAUF: ${{ inputs.lauf }}
+    steps:
+      - name: Artefakt holen
+        run: |
+          if [ -z "$LAUF" ]; then
+            LAUF=$GITHUB_RUN_ID
+            ziel=$GITHUB_SHA
+          else
+            printf '%s' "$LAUF" | grep -Eq '^[0-9]+$' || { echo "::error::lauf muss eine Zahl sein"; exit 1; }
+            info=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$LAUF" --jq '[.path, .conclusion, .head_sha] | @tsv')
+            IFS=$'\t' read -r pfad ergebnis ziel <<< "$info"
+            [ "$pfad" = .github/workflows/libmpv.yml ] || { echo "::error::Lauf $LAUF ist kein libmpv-Lauf ($pfad)"; exit 1; }
+            [ "$ergebnis" = success ] || { echo "::error::Lauf $LAUF ist nicht erfolgreich ($ergebnis)"; exit 1; }
+          fi
+          gh run download "$LAUF" -R "$GITHUB_REPOSITORY" -n libmpv -D aus
+          echo "ZIEL=$ziel" >> "$GITHUB_ENV"
+      - name: Anlegen
+        run: |
+          cd aus
+          sha256sum -c SHA256SUMS
+          tag="libmpv-$(date -u +%Y%m%d)"
+          n=1
+          while gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; do
+            n=$((n + 1)); tag="libmpv-$(date -u +%Y%m%d).$n"
+          done
+          gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$ZIEL" --prerelease --latest=false \
+            --title "$tag (libmpv-2.dll für Lumen unter Windows)" --notes-file LIESMICH.txt \
+            libmpv-2.dll libmpv-quellen.tar.xz LIESMICH.txt SHA256SUMS
+          {
+            echo "### Veröffentlicht: $tag"
+            echo
+            echo "In desktop/windows/mpv/libmpv.txt eintragen:"
+            echo
+            echo '```'
+            echo "TAG=$tag"
+            echo "LAUF="
+            echo "SHA256=$(grep ' libmpv-2.dll$' SHA256SUMS | cut -d' ' -f1)"
+            echo "QUELLEN_SHA256=$(grep ' libmpv-quellen.tar.xz$' SHA256SUMS | cut -d' ' -f1)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -225,6 +225,7 @@ jobs:
     needs: [pruefen, abbilder]
     permissions:
       contents: write
+      actions: read
     uses: ./.github/workflows/quellen.yml
     with:
       version: ${{ needs.pruefen.outputs.mit }}

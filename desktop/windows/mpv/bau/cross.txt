@@ -1,0 +1,27 @@
+# Lumen — eigener Streaming-Server fürs Heimnetz.
+# Copyright (C) 2026 Die Lumen-Autoren
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Meson-Cross-Datei für den libmpv-Bau (bauen.sh): Windows x86-64 mit dem
+# MinGW-w64-GCC aus Debian (Thread-Modell posix). Der Präfix /bau/prefix
+# ist fest — bauen.sh legt dort alle Bibliotheken ab.
+
+[binaries]
+c = 'x86_64-w64-mingw32-gcc-posix'
+cpp = 'x86_64-w64-mingw32-g++-posix'
+ar = 'x86_64-w64-mingw32-gcc-ar-posix'
+ranlib = 'x86_64-w64-mingw32-gcc-ranlib-posix'
+strip = 'x86_64-w64-mingw32-strip'
+windres = 'x86_64-w64-mingw32-windres'
+dlltool = 'x86_64-w64-mingw32-dlltool'
+nasm = 'nasm'
+pkg-config = 'pkg-config'
+
+[properties]
+pkg_config_libdir = '/bau/prefix/lib/pkgconfig'
+
+[host_machine]
+system = 'windows'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'

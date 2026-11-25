@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write   # Datei an die Veröffentlichung hängen
+      actions: read     # libmpv-Quellen aus einem Lauf (nur solange nicht als Veröffentlichung gepinnt)
     env:
       V: ${{ inputs.version }}
     steps:
@@ -37,10 +38,13 @@ jobs:
         run: |
           tools/gpl_quellen.sh "ghcr.io/${GITHUB_REPOSITORY}:${V}" "$V" "lumen-media-${V}-gpl-quellen.tar"
       # Die libmpv-2.dll im Installer der Windows-App (GPL-3.0-or-later):
-      # Bau-Rezept, mpv und die eingebauten Bibliotheken.
+      # genau die Quellen, aus denen libmpv.yml sie gebaut hat (Archiv aus
+      # demselben Lauf, Prüfsumme in desktop/windows/mpv/libmpv.txt).
       - name: libmpv-Quellen (Windows-App)
-        run: tools/mpv_quellen.sh "$V" "lumen-media-${V}-libmpv-quellen.tar"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/mpv_quellen.sh "$V" "lumen-media-${V}-libmpv-quellen.tar.xz"
       - name: An die Veröffentlichung hängen
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$V" "lumen-media-${V}-gpl-quellen.tar" "lumen-media-${V}-libmpv-quellen.tar" --clobber -R "$GITHUB_REPOSITORY"
+        run: gh release upload "$V" "lumen-media-${V}-gpl-quellen.tar" "lumen-media-${V}-libmpv-quellen.tar.xz" --clobber -R "$GITHUB_REPOSITORY"

@@ -2,23 +2,29 @@
 # Copyright (C) 2026 Die Lumen-Autoren
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# Welche libmpv in den Installer von Lumen für Windows kommt (laden.sh).
-# Fest gepinnt: Veröffentlichung, Datei und SHA-256 von
-# https://github.com/shinchiro/mpv-winbuild-cmake/releases — die Datei
-# selbst liegt nicht im Repository.
+# Welche libmpv in den Installer von Lumen für Windows kommt (laden.sh)
+# und welches Quellenarchiv dazugehört (tools/mpv_quellen.sh).
 #
-# shinchiro behält nur die letzten 30 Veröffentlichungen (etwa ein Monat).
-# Ist die gepinnte weg, bricht der Bau mit einem klaren Hinweis ab. Dann:
-# TAG auf eine neue Veröffentlichung setzen, DATEI und SHA256 leeren und den
-# Ablauf „Windows-App" auf einem Arbeitszweig laufen lassen — laden.sh sucht
-# die Datei, nennt Name und Prüfsumme (Protokoll und Zusammenfassung des
-# Laufs); beides hier eintragen, REZEPT auf den Commit des Tags setzen
-# (git ls-remote --tags https://github.com/shinchiro/mpv-winbuild-cmake).
+# Die DLL ist selbst gebaut: Ablauf libmpv.yml aus den festen Quellen in
+# desktop/windows/mpv/bau/pakete.txt. Die Dateien liegen nie im Repository,
+# sondern
+#   TAG   an der eigenen Vorab-Veröffentlichung libmpv-JJJJMMTT (dauerhaft;
+#         Pflicht für jede Lumen-Veröffentlichung), oder
+#   LAUF  als Artefakt „libmpv" eines Laufs von libmpv.yml (90 Tage; nur
+#         für Arbeitszweige, solange es noch keine Veröffentlichung gibt).
+# Steht TAG, gilt TAG.
 #
-# Gebaut wird für x86-64 ohne AVX2-Pflicht (nicht die „-v3"-Fassung), damit
-# auch ältere Rechner Lumen abspielen.
+# SHA256 ist die Prüfsumme der libmpv-2.dll, QUELLEN_SHA256 die von
+# libmpv-quellen.tar.xz — beides steht in der Zusammenfassung des Laufs.
+#
+# Neue libmpv: pakete.txt ändern, auf einem Arbeitszweig pushen (libmpv.yml
+# baut), hier LAUF und die Prüfsummen eintragen und TAG leeren; die
+# Windows-App prüft sie mit dem Selbsttest. Vor einer Lumen-Veröffentlichung
+# libmpv.yml auf main mit „veroeffentlichen" und „lauf" = diesem LAUF
+# starten: Das veröffentlicht genau die geprüfte DLL. Dann TAG eintragen und
+# LAUF leeren; die Prüfsummen bleiben dieselben.
 
-TAG=20261111
-DATEI=mpv-dev-x86_64-20261111-git-bcde6b93cc.7z
-SHA256=273c079b11ea5575822f972756f4c9a71149a5c10130353abeb8586738938452
-REZEPT=bda10a2816ce9908d419b3f4b564227330457e76
+TAG=
+LAUF=45673501629
+SHA256=a69ec288e7a2d192b09f32622e1905584e25138ad0d0672a531f1e47f6b7a26b
+QUELLEN_SHA256=21757798bcab27db3420f33c47ff8623146a0022a13c14c025df0f7576a875a7
