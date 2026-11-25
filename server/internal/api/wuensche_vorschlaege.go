@@ -544,7 +544,9 @@ func (s *Server) wunschAnlegen(w http.ResponseWriter, r *http.Request) {
 	// später nicht antwortet.
 	if d.PosterPfad != "" {
 		pfad := d.PosterPfad
+		wunschPosterWG.Add(1)
 		go func() {
+			defer wunschPosterWG.Done()
 			bctx, fertig := context.WithTimeout(s.hintergrund(), 20*time.Second)
 			defer fertig()
 			_, _, _ = s.wunschPosterLaden(bctx, "w185", strings.TrimPrefix(pfad, "/"))
@@ -554,6 +556,10 @@ func (s *Server) wunschAnlegen(w http.ResponseWriter, r *http.Request) {
 	s.wuenscheAufbereiten(r, liste)
 	ok(w, liste[0])
 }
+
+// wunschPosterWG: Tests warten damit, bis das Poster eines neuen Wunschs
+// auf der Platte liegt, bevor ihr Ordner aufgeräumt wird.
+var wunschPosterWG sync.WaitGroup
 
 func nurZiffern(s string, max int) bool {
 	if s == "" || len(s) > max {

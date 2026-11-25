@@ -85,6 +85,10 @@ func mitTMDb(t *testing.T) (*harness, *atomic.Int32) {
 	t.Setenv("LUMEN_TMDB_URL", tmdb.URL)
 	t.Setenv("LUMEN_TMDB_IMG_URL", tmdb.URL+"/bilder")
 	h := newHarness(t)
+	// Zuletzt aufgeräumt wird, was zuerst angemeldet ist: Erst warten, bis
+	// Wunsch-Poster im Hintergrund fertig geschrieben sind, dann den Ordner
+	// löschen lassen.
+	t.Cleanup(wunschPosterWG.Wait)
 	if resp, raw := h.do("PUT", "/api/v1/admin/metadata", `{"tmdbKey":"eyJtest"}`, h.tok); resp.StatusCode != 200 {
 		t.Fatalf("schlüssel: %d %s", resp.StatusCode, raw)
 	}
