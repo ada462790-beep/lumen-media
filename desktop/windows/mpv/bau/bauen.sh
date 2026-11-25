@@ -312,7 +312,7 @@ bauen() {
   file "$AUS/libmpv-2.dll"
   # Nur Windows selbst darf fehlen — keine MinGW-Laufzeit-DLLs.
   $HOST-objdump -p "$AUS/libmpv-2.dll" | sed -n 's/^[[:space:]]*DLL Name: //p' | sort -u | tee "$BAU/importe.txt"
-  if grep -Eiq '^(libwinpthread|libstdc\+\+|libgcc|zlib|libdav1d|av|sw|libass|libplacebo|libshaderc|libspirv)' "$BAU/importe.txt"; then
+  if grep -Eq '^(libwinpthread|libstdc\+\+|libgcc|libssp|zlib1|libz|libdav1d|libass|libfreetype|libharfbuzz|libfribidi|liblcms2|libplacebo|libshaderc|libspirv|(av|sw)[a-z]+-[0-9]+\.dll)' "$BAU/importe.txt"; then
     fehler "libmpv-2.dll braucht fremde DLLs (siehe oben)"
   fi
   local exporte
@@ -348,7 +348,7 @@ fertig() {
     fi
     if [ -f "$BAU/mpv-setup.log" ]; then
       echo "mpv-Funktionen:"
-      grep -A1 'List of enabled features' "$BAU/mpv-setup.log" | tail -n1 | fold -s -w 76 | sed 's/^/  /'
+      sed -n 's/.*List of enabled features: *//p' "$BAU/mpv-setup.log" | tail -n1 | fold -s -w 76 | sed 's/^/  /'
       echo
     fi
     echo "FFmpeg: configure ${FFMPEG_OPTIONEN[*]}"
