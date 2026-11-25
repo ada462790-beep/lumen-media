@@ -119,11 +119,16 @@ public enum Spuren {
     ///
     /// Vorher galt die zuletzt gewählte Untertitelsprache überall: wer
     /// einmal englische nahm, bekam sie bei jedem Film.
+    ///
+    /// Was jemand für eine Serie gewählt hat (`seriesId`, siehe
+    /// `serienWahl`), gilt dort vor dem Profil — Untertitel dann genau wie
+    /// gewählt, „aus" bleibt aus.
     public static func vorbelegung(ton: [Track], text: [Track], prefs: [String: String],
-                                   eigen: String) -> (ton: Int?, untertitel: Int?) {
+                                   eigen: String, seriesId: String? = nil) -> (ton: Int?, untertitel: Int?) {
         let profil = String(eigen.prefix(2)).lowercased()
+        let serie = serienWahl(prefs: prefs, seriesId: seriesId)
         var tonIndex: Int?
-        var wunsch = prefs["tonSprache"].flatMap { $0.isEmpty ? nil : $0 }
+        var wunsch = (serie?.ton ?? prefs["tonSprache"]).flatMap { $0.isEmpty ? nil : $0 }
         if wunsch == nil, prefs["tonWahl"] == "original" {
             let original = ton.first(where: istOriginal) ?? ton.first
             tonIndex = original?.index
@@ -141,7 +146,10 @@ public enum Spuren {
         }
         var untertitel: Track?
         let gewaehlt = prefs["untertitel"] ?? ""
-        if gewaehlt != "aus", !profil.isEmpty {
+        if let serienUt = serie?.ut {
+            // Für die Serie gewählt: genau diese Sprache.
+            if !serienUt.isEmpty, serienUt != "aus" { untertitel = finden(serienUt) }
+        } else if gewaehlt != "aus", !profil.isEmpty {
             if !tonSprache.isEmpty, tonSprache != profil {
                 untertitel = finden(profil)
             } else if !gewaehlt.isEmpty, gewaehlt == (tonSprache.isEmpty ? profil : tonSprache) {
@@ -154,6 +162,73 @@ public enum Spuren {
             return (tonIndex, erzwungen.index)
         }
         return (tonIndex, nil)
+    }
+}
+
+// MARK: - Je Serie
+
+/// Ton und Untertitel je Serie — wie im Browser (app.js, serienSpuren) und
+/// auf Android (Spuren.serienWahl): Wer einen Anime auf Japanisch mit
+/// deutschen Untertiteln schaut, will das in der nächsten Folge wieder,
+/// aber nicht im nächsten Film. Liegt in den Prefs des Profils unter
+/// „spuren:<Serie>" als JSON {"ton","ut"}; ein fehlendes Feld heisst: dafür
+/// gilt das Profil.
+public struct SerienWahl: Equatable, Sendable {
+    public var ton: String?
+    public var ut: String?
+
+    public init(ton: String? = nil, ut: String? = nil) {
+        self.ton = ton
+        self.ut = ut
+    }
+}
+
+extension Spuren {
+
+    /// Der Prefs-Schlüssel für die Spuren einer Serie.
+    public static func serienSchluessel(_ seriesId: String) -> String { "spuren:" + seriesId }
+
+    /// Die gemerkte Wahl für diese Serie — oder nil (kein Eintrag, keine
+    /// Serie, unlesbar, beide Felder leer).
+    public static func serienWahl(prefs: [String: String], seriesId: String?) -> SerienWahl? {
+        guard let id = seriesId?.trimmingCharacters(in: .whitespaces), !id.isEmpty,
+              let roh = prefs[serienSchluessel(id)], !roh.isEmpty,
+              let objekt = try? JSONSerialization.jsonObject(with: Data(roh.utf8)) as? [String: Any]
+        else { return nil }
+        let wahl = SerienWahl(ton: objekt["ton"] as? String, ut: objekt["ut"] as? String)
+        return wahl.ton == nil && wahl.ut == nil ? nil : wahl
+    }
+
+    /// Was in die Prefs kommt, wenn jemand die Tonspur `t` wählt: bei einer
+    /// Folge (`seriesId`) unter dem Schlüssel der Serie, sonst
+    /// „tonSprache". Leer, wenn die Spur keine Sprache hat.
+    public static func tonMerken(prefs: [String: String], seriesId: String?, spur t: Track?) -> [String: String] {
+        guard let sprache = t?.language, !sprache.isEmpty, sprache != "und" else { return [:] }
+        return serieMerken(prefs: prefs, seriesId: seriesId, ton: sprache) ?? ["tonSprache": sprache]
+    }
+
+    /// Wie `tonMerken`, für die Untertitel (`t` nil: aus).
+    public static func untertitelMerken(prefs: [String: String], seriesId: String?, spur t: Track?) -> [String: String] {
+        let wert = t.map { $0.sprache } ?? "aus"
+        return untertitelSpracheMerken(prefs: prefs, seriesId: seriesId, wert: wert)
+    }
+
+    /// Wie `untertitelMerken`, wenn nur die Sprache bekannt ist (die
+    /// Auswahl im Menü von AVPlayer): „de", „und" oder „aus".
+    public static func untertitelSpracheMerken(prefs: [String: String], seriesId: String?,
+                                               wert: String) -> [String: String] {
+        serieMerken(prefs: prefs, seriesId: seriesId, ut: wert) ?? ["untertitel": wert]
+    }
+
+    private static func serieMerken(prefs: [String: String], seriesId: String?,
+                                    ton: String? = nil, ut: String? = nil) -> [String: String]? {
+        guard let id = seriesId?.trimmingCharacters(in: .whitespaces), !id.isEmpty else { return nil }
+        let alt = serienWahl(prefs: prefs, seriesId: id) ?? SerienWahl()
+        var felder: [String: String] = [:]
+        if let t = ton ?? alt.ton { felder["ton"] = t }
+        if let u = ut ?? alt.ut { felder["ut"] = u }
+        let daten = (try? JSONSerialization.data(withJSONObject: felder, options: [.sortedKeys])) ?? Data("{}".utf8)
+        return [serienSchluessel(id): String(decoding: daten, as: UTF8.self)]
     }
 }
 

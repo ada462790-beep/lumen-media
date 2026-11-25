@@ -722,6 +722,73 @@ final class SpurenTests: XCTestCase {
         XCTAssertNil(nichts.untertitel)
     }
 
+    /// Je Serie (wie im Browser, serienSpuren): Was für die Serie gewählt
+    /// wurde, gilt vor dem Profil — nur in dieser Serie.
+    func testVorbelegungJeSerie() throws {
+        let ton = [try spur(#"{"index":1,"kind":"audio","language":"de"}"#),
+                   try spur(#"{"index":2,"kind":"audio","language":"ja"}"#)]
+        let text = [try spur(#"{"index":3,"kind":"subtitle","language":"de"}"#),
+                    try spur(#"{"index":4,"kind":"subtitle","language":"en"}"#),
+                    try spur(#"{"index":5,"kind":"subtitle","language":"de","forced":true}"#)]
+        let prefs = ["tonSprache": "de", "untertitel": "aus",
+                     "spuren:s1": #"{"ton":"ja","ut":"en"}"#,
+                     "spuren:s2": #"{"ut":"aus"}"#,
+                     "spuren:kaputt": "{nicht json"]
+
+        // Serie s1: japanischer Ton, englische Untertitel — obwohl das
+        // Profil Deutsch ohne Untertitel will und deutsche da wären.
+        let s1 = Spuren.vorbelegung(ton: ton, text: text, prefs: prefs, eigen: "de-CH", seriesId: "s1")
+        XCTAssertEqual(s1.ton, 2)
+        XCTAssertEqual(s1.untertitel, 4)
+
+        // Ohne Serie (ein Film) und in einer anderen Serie: das Profil.
+        let film = Spuren.vorbelegung(ton: ton, text: text, prefs: prefs, eigen: "de-CH")
+        XCTAssertEqual(film.ton, 1)
+        XCTAssertEqual(film.untertitel, 5, "nur die erzwungenen deutschen")
+        XCTAssertEqual(Spuren.vorbelegung(ton: ton, text: text, prefs: prefs, eigen: "de-CH", seriesId: "anders").ton, 1)
+        // Unlesbar: wie ohne Eintrag.
+        XCTAssertEqual(Spuren.vorbelegung(ton: ton, text: text, prefs: prefs, eigen: "de-CH", seriesId: "kaputt").ton, 1)
+
+        // Nur Untertitel „aus" gemerkt: der Ton kommt aus dem Profil, und
+        // bei fremdem Ton bleiben die Untertitel trotzdem aus.
+        let s2 = Spuren.vorbelegung(ton: ton, text: text, prefs: ["tonSprache": "ja", "spuren:s2": #"{"ut":"aus"}"#],
+                                    eigen: "de-CH", seriesId: "s2")
+        XCTAssertEqual(s2.ton, 2)
+        XCTAssertNil(s2.untertitel)
+
+        XCTAssertEqual(Spuren.serienWahl(prefs: prefs, seriesId: "s1"), SerienWahl(ton: "ja", ut: "en"))
+        XCTAssertNil(Spuren.serienWahl(prefs: prefs, seriesId: nil))
+        XCTAssertNil(Spuren.serienWahl(prefs: prefs, seriesId: ""))
+        XCTAssertNil(Spuren.serienWahl(prefs: ["spuren:x": "{}"], seriesId: "x"))
+    }
+
+    /// Merken: bei einer Folge unter dem Schlüssel der Serie (das andere
+    /// Feld bleibt), sonst ins Profil wie bisher.
+    func testSpurenMerkenJeSerie() throws {
+        let ja = try spur(#"{"index":2,"kind":"audio","language":"ja"}"#)
+        let ohne = try spur(#"{"index":3,"kind":"audio"}"#)
+        let utEn = try spur(#"{"index":4,"kind":"subtitle","language":"en"}"#)
+
+        XCTAssertEqual(Spuren.tonMerken(prefs: [:], seriesId: nil, spur: ja), ["tonSprache": "ja"])
+        XCTAssertEqual(Spuren.tonMerken(prefs: [:], seriesId: nil, spur: ohne), [:], "ohne Sprache nichts zu merken")
+        XCTAssertEqual(Spuren.untertitelMerken(prefs: [:], seriesId: nil, spur: utEn), ["untertitel": "en"])
+        XCTAssertEqual(Spuren.untertitelMerken(prefs: [:], seriesId: nil, spur: nil), ["untertitel": "aus"])
+
+        let ton = Spuren.tonMerken(prefs: [:], seriesId: "s1", spur: ja)
+        XCTAssertEqual(ton, ["spuren:s1": #"{"ton":"ja"}"#])
+        // Untertitel dazu: der Ton bleibt.
+        let beide = Spuren.untertitelMerken(prefs: ton, seriesId: "s1", spur: utEn)
+        XCTAssertEqual(Spuren.serienWahl(prefs: beide, seriesId: "s1"), SerienWahl(ton: "ja", ut: "en"))
+        let aus = Spuren.untertitelMerken(prefs: beide, seriesId: "s1", spur: nil)
+        XCTAssertEqual(Spuren.serienWahl(prefs: aus, seriesId: "s1"), SerienWahl(ton: "ja", ut: "aus"))
+        XCTAssertNil(aus["untertitel"], "das Profil bleibt unberührt")
+        // Das Gemerkte gilt beim nächsten Start der Serie.
+        let tracks = [try spur(#"{"index":1,"kind":"audio","language":"de"}"#), ja]
+        let wahl = Spuren.vorbelegung(ton: tracks, text: [utEn], prefs: beide, eigen: "de-CH", seriesId: "s1")
+        XCTAssertEqual(wahl.ton, 2)
+        XCTAssertEqual(wahl.untertitel, 4)
+    }
+
     /// „Originalton": ohne gemerkte Sprache die als Original markierte Spur.
     func testVorbelegungOriginalton() throws {
         let ton = [try spur(#"{"index":1,"kind":"audio","language":"de","title":"Deutsch"}"#),

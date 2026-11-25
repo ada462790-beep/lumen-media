@@ -76,6 +76,9 @@ final class Aufzeichner: URLProtocol {
         if pfad.hasPrefix("/api/v1/persons/") {
             return (200, #"{"name":"Tom Hanks","bild":"/api/v1/persons/Tom%20Hanks/bild"}"#)
         }
+        if pfad == "/api/v1/wishes", r.httpMethod == "POST" {
+            return (409, #"{"error":"„Alien (1979)“ steht schon in der Bibliothek.","code":"schon_da","itemId":"it_1","titel":"Alien","jahr":1979,"art":"movie"}"#)
+        }
         if pfad.hasSuffix("/teile-zusammenfuehren") {
             return (202, #"{"status":"läuft — das kann ein paar Minuten dauern"}"#)
         }
@@ -400,5 +403,20 @@ final class FassungenTests: XCTestCase {
         let body = try XCTUnwrap(rumpf(anfragen[0]))
         let gelesen = try JSONDecoder().decode([String: String].self, from: body)
         XCTAssertEqual(gelesen, ["fileId": "f_2"])
+    }
+
+    /// Ein Wunsch nach etwas, das schon da ist: 409 „schon_da" mit dem
+    /// Titel — die App bietet „Ansehen" an statt eines Fehlers.
+    func testWunschSchonDa() async throws {
+        let client = Aufzeichner.client()
+        do {
+            _ = try await client.wish(title: "Alien")
+            XCTFail("409 erwartet")
+        } catch let fehler as LumenError {
+            XCTAssertEqual(fehler.schonDaItemId, "it_1")
+            XCTAssertEqual(fehler.code, "schon_da")
+            XCTAssertEqual(fehler.status, 409)
+            XCTAssertEqual(fehler.errorDescription, "„Alien (1979)“ steht schon in der Bibliothek.")
+        }
     }
 }

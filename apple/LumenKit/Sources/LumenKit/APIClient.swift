@@ -379,6 +379,10 @@ public actor APIClient {
             // Nach einem Zurücksetzen: Erst den eigenen Schutz festlegen.
             // Der Server nennt die Art (pin oder password).
             throw LumenError.neuerSchutzNoetig(art: Self.art(from: data), meldung: Self.message(from: data))
+        case 409 where Self.code(from: data) == "schon_da":
+            // Gewünscht wurde, was schon in der Bibliothek steht: die App
+            // zeigt „Schon da" und öffnet auf Wunsch den Titel.
+            throw LumenError.schonDa(itemId: Self.itemId(from: data) ?? "", meldung: Self.message(from: data))
         case 403 where Self.code(from: data) == "unterwegs":
             // Von unterwegs gibt es keine Profilauswahl. Die App zeigt dann
             // die Anmeldung mit Profilname und PIN.
@@ -447,6 +451,12 @@ public actor APIClient {
     private static func art(from data: Data) -> String {
         struct Body: Decodable { let art: String? }
         return (try? JSONDecoder().decode(Body.self, from: data))?.art == "password" ? "password" : "pin"
+    }
+
+    /// Bei „schon_da" steht im Rumpf, welcher Titel es ist: `{"itemId": "…"}`.
+    private static func itemId(from data: Data) -> String? {
+        struct Body: Decodable { let itemId: String? }
+        return (try? JSONDecoder().decode(Body.self, from: data))?.itemId.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// Bei 423 steht im Rumpf `{"error": "…", "sperre": "pin"}`.
@@ -1385,13 +1395,23 @@ public enum LumenError: Error, LocalizedError, Sendable {
     /// wenn die Person ihren eigenen Schutz festlegt — `art`: pin oder
     /// password. Dabei steht die Meldung des Servers.
     case neuerSchutzNoetig(art: String, meldung: String)
+    /// Ein Wunsch nach etwas, das schon in der Bibliothek steht (HTTP 409
+    /// mit `code` „schon_da"): `itemId` ist der Titel, den die App dann
+    /// zum Ansehen öffnet; dabei der Satz des Servers.
+    case schonDa(itemId: String, meldung: String)
+
+    /// Der Titel bei „schon da" — sonst nil.
+    public var schonDaItemId: String? {
+        if case .schonDa(let id, _) = self, !id.isEmpty { return id }
+        return nil
+    }
 
     /// Der HTTP-Status, falls der Server geantwortet hat.
     public var status: Int? {
         switch self {
         case .server(_, let s): s
         case .abgelehnt(_, _, let s): s
-        case .neuerSchutzNoetig: 409
+        case .neuerSchutzNoetig, .schonDa: 409
         case .signedOut: 401
         case .locked: 423
         default: nil
@@ -1402,6 +1422,7 @@ public enum LumenError: Error, LocalizedError, Sendable {
     public var code: String? {
         if case .abgelehnt(let code, _, _) = self { return code }
         if case .neuerSchutzNoetig = self { return "neue_pin_noetig" }
+        if case .schonDa = self { return "schon_da" }
         return nil
     }
 
@@ -1429,7 +1450,7 @@ public enum LumenError: Error, LocalizedError, Sendable {
             String(localized: "Die Verwaltung ist gesperrt.", bundle: .lumenKit, locale: .lumen)
         case .unterwegs(let message):
             message
-        case .neuerSchutzNoetig(_, let meldung):
+        case .neuerSchutzNoetig(_, let meldung), .schonDa(_, let meldung):
             meldung
         case .bestaetigen(let falsch):
             falsch ? String(localized: "Das stimmt nicht.", bundle: .lumenKit, locale: .lumen)
