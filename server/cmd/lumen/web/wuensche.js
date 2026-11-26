@@ -80,6 +80,19 @@ export function wunschVerweise(w, { extern = true } = {}) {
   return v.length ? `<span class="wunsch-verweise">${v.join('')}</span>` : '';
 }
 
+/* Ein Knopf, der den Titel auf IMDb öffnet (sonst TMDb) — für die Liste
+   der Wünsche, damit man vor dem Annehmen nachschauen kann, was es ist. */
+export function wunschImdbKnopf(w) {
+  if (w.imdbId && /^tt\d+$/.test(w.imdbId)) {
+    return `<a class="btn btn-pill btn-pill--fill wunsch-extern" href="https://www.imdb.com/title/${escH(w.imdbId)}/" target="_blank" rel="noopener noreferrer">IMDb ↗</a>`; // sprache: fest – Name
+  }
+  if (w.tmdbId && /^\d+$/.test(w.tmdbId) && w.art) {
+    const pfad = w.art === 'series' ? 'tv' : 'movie';
+    return `<a class="btn btn-pill btn-pill--fill wunsch-extern" href="https://www.themoviedb.org/${pfad}/${escH(w.tmdbId)}" target="_blank" rel="noopener noreferrer">TMDb ↗</a>`; // sprache: fest – Name
+  }
+  return '';
+}
+
 /* ---------------------------------------------------------- Verhalten */
 
 function stand(form) {

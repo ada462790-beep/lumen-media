@@ -31,7 +31,7 @@ import { sammlungKarte } from './sammlungen.js';
 import { tastaturEinrichten } from './tastatur.js';
 // Eigene Bedienelemente (Uhrzeit, Zahl) statt der Systemoptik.
 import { zeitWahl, zahlFeld } from './fenster.js';
-import { wunschFeld, wunschFeldEinrichten, wunschBild, wunschZusatz, wunschVerweise } from './wuensche.js';
+import { wunschFeld, wunschFeldEinrichten, wunschBild, wunschZusatz, wunschVerweise, wunschImdbKnopf } from './wuensche.js';
 // Lautsprecher wählen — nur in Lumen für Windows.
 import { tonausgabeAngeboten, tonausgabeStand, tonausgabeGewaehlt, tonausgabeLaden, tonausgabeWaehlen,
   tonausgabeAnwenden, tonGeraete } from './tonausgabe.js';
@@ -4876,9 +4876,10 @@ function viewWishes() {
       <div class="wunsch-rechts">
       <span class="badge" style="border:0;background:${COL[w.state][0]};color:${COL[w.state][1]};flex:none">${NAME[w.state]}</span>
       ${wunschVerweise(w, { extern: false })}
-      ${owner && w.state !== 'done' ? '' : wunschWegKnopf(w, owner)}
+      ${owner && w.state !== 'done' ? '' : wunschImdbKnopf(w) + wunschWegKnopf(w, owner)}
       </div>
       ${owner && w.state !== 'done' ? `<div class="wunsch-aktionen">
+          ${wunschImdbKnopf(w)}
           <button class="btn btn-pill btn-pill--fill" data-wishstate="${w.id}:working">${tr('Annehmen')}</button>
           <button class="btn btn-pill btn-pill--fill btn-pill--gefahr" data-wishstate="${w.id}:declined">${tr('Ablehnen')}</button>
           ${wunschWegKnopf(w, owner)}
