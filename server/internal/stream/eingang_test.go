@@ -10,7 +10,6 @@ package stream
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,8 +57,21 @@ func TestZweiterMessversuch(t *testing.T) {
 		}
 	}
 	muell := bytes.Repeat([]byte{0x00, 0x13}, 300_000)
+	// Feste Bytes statt echtem Zufall: Zufällige Daten enthielten ab und zu
+	// zufällig etwas, das FFmpeg als Videostrom deutete (z. B. MPEG-TS-
+	// Synchronbytes) — der Test schlug dann ohne Grund fehl.
 	zufall := make([]byte, 200_000)
-	_, _ = rand.Read(zufall)
+	z := uint32(0x9E3779B9)
+	for i := range zufall {
+		z ^= z << 13
+		z ^= z >> 17
+		z ^= z << 5
+		b := byte(z)
+		if b == 0x47 || b == 0x00 || b == 0x01 { // keine TS-/Startcode-Bytes
+			b = 0xA5
+		}
+		zufall[i] = b
+	}
 
 	ff := NewFFmpeg("", "")
 	ctx := context.Background()
