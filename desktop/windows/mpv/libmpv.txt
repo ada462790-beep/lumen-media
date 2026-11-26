@@ -24,7 +24,7 @@
 # starten: Das veröffentlicht genau die geprüfte DLL. Dann TAG eintragen und
 # LAUF leeren; die Prüfsummen bleiben dieselben.
 
-TAG=
-LAUF=45673501629
+TAG=libmpv-20261126
+LAUF=
 SHA256=a69ec288e7a2d192b09f32622e1905584e25138ad0d0672a531f1e47f6b7a26b
 QUELLEN_SHA256=21757798bcab27db3420f33c47ff8623146a0022a13c14c025df0f7576a875a7
