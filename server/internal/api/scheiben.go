@@ -169,8 +169,11 @@ func (s *Server) adminScheibeUmwandeln(w http.ResponseWriter, r *http.Request) {
 	}
 
 	l := &scheibenAuftrag
+	mkvAuftraege.mu.Lock()
+	mkvLaeuft := mkvAuftraege.laeuft
+	mkvAuftraege.mu.Unlock()
 	l.mu.Lock()
-	if l.laeuft {
+	if l.laeuft || mkvLaeuft {
 		l.mu.Unlock()
 		fail(w, http.StatusConflict, "es läuft schon eine umwandlung – warte, bis sie fertig ist, oder brich sie ab")
 		return
@@ -185,7 +188,10 @@ func (s *Server) adminScheibeUmwandeln(w http.ResponseWriter, r *http.Request) {
 
 	s.begleitetMit(ctx, func(ctx context.Context) {
 		defer abbrechen()
+		// Nie neben dem Umpacken in MKV her (mkv_umpacken.go).
+		schwerMu.Lock()
 		info, err := s.scheibeUmwandeln(ctx, q, siebenZip)
+		schwerMu.Unlock()
 		l.setzen(func(l *scheibenLauf) {
 			l.laeuft, l.abbrechen, l.restSek = false, nil, 0
 			switch {
@@ -312,7 +318,7 @@ func ordnerFehler(err error) error {
 // platzPruefen: Reicht der Platz im Ordner für n Bytes und den Rand?
 // text ist der Schlüssel der Meldung (Medien- oder Datenordner).
 func platzPruefen(ordner string, n int64, text string) error {
-	frei := scheibe.FreierPlatz(ordner)
+	frei := freierPlatz(ordner)
 	if frei == 0 { // unbekannt
 		return nil
 	}
@@ -322,6 +328,9 @@ func platzPruefen(ordner string, n int64, text string) error {
 	}
 	return nil
 }
+
+// freierPlatz: freie Bytes im Ordner, 0 = unbekannt (in Tests ersetzbar).
+var freierPlatz = scheibe.FreierPlatz
 
 func gbText(n int64) string { return fmt.Sprintf("%.1f", float64(n)/(1<<30)) }
 

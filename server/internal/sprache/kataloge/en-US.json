@@ -348,5 +348,17 @@
   "die dateien gehören nicht zu filmen derselben bibliothek": "The files don’t belong to movies in the same library.",
   "die einträge liegen in verschiedenen mediatheken": "the entries are in different libraries",
   "es braucht genau zwei einträge": "exactly two entries are needed",
-  "zusammenlegen geht nur bei filmen": "merging only works for films"
+  "zusammenlegen geht nur bei filmen": "merging only works for films",
+  "die datei enthält untertitel im format {codec}, die nicht in eine mkv passen – sie bleibt, wie sie ist": "The file has subtitles in the {codec} format, which don’t fit into an MKV – it stays as it is.",
+  "die datei hat sich in der zwischenzeit verändert": "The file has changed in the meantime.",
+  "die datei hat sich in der zwischenzeit verändert – bitte die liste neu laden": "The file has changed in the meantime – please reload the list.",
+  "die datei lässt sich nicht lesen: {grund}": "Couldn’t read the file: {grund}",
+  "die neue datei hat nicht dieselben spuren wie das original – das original bleibt unverändert": "The new file doesn’t have the same tracks as the original – the original stays unchanged.",
+  "die neue datei ist mit {prozent} % der grösse des originals verdächtig klein – das original bleibt unverändert": "At {prozent} % of the original’s size, the new file is suspiciously small – the original stays unchanged.",
+  "die neue datei ist {neu} s lang, das original {alt} s – das original bleibt unverändert": "The new file runs {neu} s, the original {alt} s – the original stays unchanged.",
+  "die neue datei liess sich nicht prüfen: {grund} – das original bleibt unverändert": "Couldn’t check the new file: {grund} – the original stays unchanged.",
+  "entweder dateien, ein titel oder alle": "Either files, one title or all.",
+  "hier ist nichts mehr umzuwandeln": "There’s nothing left to convert here.",
+  "in der datei ist kein bild zu finden": "There’s no video in the file.",
+  "original: loeschen oder behalten": "original: loeschen or behalten"
 }

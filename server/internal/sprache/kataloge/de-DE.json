@@ -8,5 +8,7 @@
   "das Bild liess sich nicht lesen (höchstens 20 MB)": "das Bild ließ sich nicht lesen (höchstens 20 MB)",
   "das bild ist zu gross (höchstens 16 MB)": "das Bild ist zu groß (höchstens 16 MB)",
   "das bild liess sich nicht lesen (höchstens 16 MB)": "das Bild ließ sich nicht lesen (höchstens 16 MB)",
-  "jemandem ausserhalb deines Bereichs": "jemandem außerhalb deines Bereichs"
+  "jemandem ausserhalb deines Bereichs": "jemandem außerhalb deines Bereichs",
+  "die neue datei ist mit {prozent} % der grösse des originals verdächtig klein – das original bleibt unverändert": "Die neue Datei ist mit {prozent} % der Größe des Originals verdächtig klein – das Original bleibt unverändert",
+  "die neue datei liess sich nicht prüfen: {grund} – das original bleibt unverändert": "Die neue Datei ließ sich nicht prüfen: {grund} – das Original bleibt unverändert"
 }

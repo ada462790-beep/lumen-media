@@ -213,5 +213,17 @@
  "Hier und in den Unterordnern liegen mindestens {n} Videodateien.": {
   "one": "Hier und in den Unterordnern liegt mindestens eine Videodatei.",
   "other": "Hier und in den Unterordnern liegen mindestens {n} Videodateien."
+ },
+ "Alle {n} Dateien in MKV umwandeln?": {
+  "one": "{n} Datei in MKV umwandeln?",
+  "other": "Alle {n} Dateien in MKV umwandeln?"
+ },
+ "Umwandeln beendet – {n} Dateien gescheitert.": {
+  "one": "Umwandeln beendet – {n} Datei gescheitert.",
+  "other": "Umwandeln beendet – {n} Dateien gescheitert."
+ },
+ "{n} Dateien werden nacheinander ohne Qualitätsverlust in MKV umgepackt. Jede MKV ersetzt ihre Original-Datei in der Mediathek. Den Fortschritt zeigt Verwaltung › Aufräumen.": {
+  "one": "{n} Datei wird ohne Qualitätsverlust in MKV umgepackt. Die MKV ersetzt ihre Original-Datei in der Mediathek. Den Fortschritt zeigt Verwaltung › Aufräumen.",
+  "other": "{n} Dateien werden nacheinander ohne Qualitätsverlust in MKV umgepackt. Jede MKV ersetzt ihre Original-Datei in der Mediathek. Den Fortschritt zeigt Verwaltung › Aufräumen."
  }
 }

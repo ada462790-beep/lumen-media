@@ -145,5 +145,16 @@
     "one": "{n} neuer Titel",
     "other": "{n} neue Titel"
   },
-  "die teile liegen in verschiedenen ordnern — erst in einen ordner legen": "die Teile liegen in verschiedenen Ordnern — erst in einen Ordner legen"
+  "die teile liegen in verschiedenen ordnern — erst in einen ordner legen": "die Teile liegen in verschiedenen Ordnern — erst in einen Ordner legen",
+  "die datei enthält untertitel im format {codec}, die nicht in eine mkv passen – sie bleibt, wie sie ist": "Die Datei enthält Untertitel im Format {codec}, die nicht in eine MKV passen – sie bleibt, wie sie ist",
+  "die datei hat sich in der zwischenzeit verändert": "Die Datei hat sich in der Zwischenzeit verändert",
+  "die datei hat sich in der zwischenzeit verändert – bitte die liste neu laden": "Die Datei hat sich in der Zwischenzeit verändert – bitte die Liste neu laden",
+  "die datei lässt sich nicht lesen: {grund}": "Die Datei lässt sich nicht lesen: {grund}",
+  "die neue datei hat nicht dieselben spuren wie das original – das original bleibt unverändert": "Die neue Datei hat nicht dieselben Spuren wie das Original – das Original bleibt unverändert",
+  "die neue datei ist mit {prozent} % der grösse des originals verdächtig klein – das original bleibt unverändert": "Die neue Datei ist mit {prozent} % der Grösse des Originals verdächtig klein – das Original bleibt unverändert",
+  "die neue datei ist {neu} s lang, das original {alt} s – das original bleibt unverändert": "Die neue Datei ist {neu} s lang, das Original {alt} s – das Original bleibt unverändert",
+  "die neue datei liess sich nicht prüfen: {grund} – das original bleibt unverändert": "Die neue Datei liess sich nicht prüfen: {grund} – das Original bleibt unverändert",
+  "entweder dateien, ein titel oder alle": "Entweder Dateien, ein Titel oder alle",
+  "hier ist nichts mehr umzuwandeln": "Hier ist nichts mehr umzuwandeln",
+  "in der datei ist kein bild zu finden": "In der Datei ist kein Bild zu finden"
 }

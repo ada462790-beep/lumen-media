@@ -1736,5 +1736,43 @@
  "Ton über den Systemstandard": "Sound through the system default",
  "{name} (nicht verbunden)": "{name} (not connected)",
  "Die Tonausgabe lässt sich wählen, sobald Lumen neu gestartet ist.": "You can choose the audio output once Lumen has been restarted.",
- "Tonausgabe gilt für diesen Computer. Wähl ein Gerät, wenn ein Audio-Mischprogramm den Ton von Lumen sonst nicht bekommt.": "Audio output applies to this computer. Pick a device if an audio mixing app doesn’t get Lumen’s sound otherwise."
+ "Tonausgabe gilt für diesen Computer. Wähl ein Gerät, wenn ein Audio-Mischprogramm den Ton von Lumen sonst nicht bekommt.": "Audio output applies to this computer. Pick a device if an audio mixing app doesn’t get Lumen’s sound otherwise.",
+ "Alle umwandeln ({n})": "Convert all ({n})",
+ "Alle {n} Dateien in MKV umwandeln?": {
+  "one": "Convert {n} file to MKV?",
+  "other": "Convert all {n} files to MKV?"
+ },
+ "Eine Datei nach der anderen, im Hintergrund und mit niedriger Priorität – das kann Stunden dauern. Jede MKV ersetzt ihre Original-Datei in der Mediathek. MP4 und M4V bleiben, wie sie sind.": "One file after another, in the background and at low priority – this can take hours. Each MKV replaces its original file in the library. MP4 and M4V stay as they are.",
+ "Erst, wenn die MKV geprüft ist.": "Only once the MKV has been checked.",
+ "Es wandert in den Unterordner „.lumen-original“, den Lumen nicht einliest.": "It moves to the “.lumen-original” subfolder, which Lumen doesn’t scan.",
+ "Fertig umgewandelt.": "Conversion finished.",
+ "Fertig – jetzt als MKV in der Mediathek.": "Done – now in the library as MKV.",
+ "Folgen in MKV umwandeln …": "Convert Episodes to MKV …",
+ "Gezeigt werden die ersten {m}; „Alle umwandeln“ nimmt alle.": "Showing the first {m}; “Convert all” takes all of them.",
+ "Hier liegt schon alles als MKV vor.": "Everything here is already MKV.",
+ "In MKV umwandeln …": "Convert to MKV …",
+ "In MKV umwandeln?": "Convert to MKV?",
+ "In der Warteschlange": "Queued",
+ "MP4 und M4V": "MP4 and M4V",
+ "MP4 und M4V laufen in jedem Browser und auf Apple-Geräten direkt – einzeln umwandeln lohnt sich nur, wenn etwas fehlt (etwa Untertitel).": "MP4 and M4V play directly in every browser and on Apple devices – converting them one by one is only worth it if something is missing (such as subtitles).",
+ "Original behalten": "Keep original",
+ "Original löschen": "Delete original",
+ "Packt Bild, Ton, Untertitel und Kapitel ohne Neurechnen in eine MKV – nichts geht an Qualität verloren. Lumen schreibt erst eine vorläufige Datei, prüft sie und ersetzt das Original nur, wenn alles stimmt. Stand, Gesehen und Vorschaubilder bleiben am Titel. Untertitel, NFO und Poster daneben passen weiter.": "Repackages video, audio, subtitles and chapters into an MKV without re-encoding – no quality is lost. Lumen first writes a temporary file, checks it and only replaces the original if everything matches. Progress, watched status and preview images stay with the title. Subtitles, NFO and posters next to it still match.",
+ "Umwandeln beendet – {n} Dateien gescheitert.": {
+  "one": "Conversion finished – {n} file failed.",
+  "other": "Conversion finished – {n} files failed."
+ },
+ "Wartet, bis die andere Umwandlung fertig ist …": "Waiting for the other conversion to finish …",
+ "Was mit dem Original geschieht": "What happens to the original",
+ "Wird eingetragen …": "Updating the library …",
+ "Wird geprüft …": "Checking …",
+ "meist schon gut – nicht bei „Alle umwandeln“": "usually fine already – not part of “Convert all”",
+ "{fertig} fertig, {offen} warten": "{fertig} done, {offen} waiting",
+ "{n} Dateien werden nacheinander ohne Qualitätsverlust in MKV umgepackt. Jede MKV ersetzt ihre Original-Datei in der Mediathek. Den Fortschritt zeigt Verwaltung › Aufräumen.": {
+  "one": "{n} file will be repackaged into MKV without quality loss. The MKV replaces its original file in the library. Progress is shown under Admin › Cleanup.",
+  "other": "{n} files will be repackaged into MKV one after another without quality loss. Each MKV replaces its original file in the library. Progress is shown under Admin › Cleanup."
+ },
+ "{n} gescheitert": "{n} failed",
+ "Ältere Dateiformate · {n}": "Older File Formats · {n}",
+ "„{name}“ wird ohne Qualitätsverlust in eine MKV mit gleichem Namen umgepackt. Die MKV ersetzt die Original-Datei in der Mediathek.": "“{name}” will be repackaged into an MKV with the same name without quality loss. The MKV replaces the original file in the library."
 }

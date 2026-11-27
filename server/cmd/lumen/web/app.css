@@ -753,6 +753,7 @@ p.t-sub[style*="flex-start"] > svg:first-child { margin-top:.2em }
 .badge--gruen { border:0; background:var(--tint-gruen); color:var(--text-gruen) }
 .badge--blau { border:0; background:var(--tint-blau); color:var(--text-blau) }
 .badge--rot { border:0; background:var(--tint-rot); color:var(--text-rot) }
+.badge--grau { border:0; background:var(--fill-2); color:var(--label) }
 .lumen.light .tech--gut { background:var(--tint-gruen); color:var(--text-gruen) }
 .lumen.light .tech--blau { background:var(--tint-blau); color:var(--text-blau) }
 ::placeholder { color:var(--label-3); opacity:1 }

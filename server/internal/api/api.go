@@ -143,6 +143,8 @@ func New(st *store.Store, sc *scan.Scanner, ff *stream.FFmpeg, tr *stream.Transc
 	// Frühere Fassungen legten gewandelte Untertitel als Datei ab — mit
 	// Zeitstempel des ersten Abspielens. Weg damit, samt Resten.
 	if dataDir != "" {
+		// Halbfertige MKV eines unterbrochenen Umpackens (mkv_umpacken.go).
+		srv.mkvVerwaisteAufraeumen()
 		_ = os.RemoveAll(filepath.Join(dataDir, "untertitel"))
 		if alt, _ := filepath.Glob(filepath.Join(dataDir, "vtt-*")); alt != nil {
 			for _, p := range alt {
@@ -345,6 +347,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/admin/cleanup/umwandeln", owner(s.adminScheibeStand))
 	mux.Handle("POST /api/v1/admin/cleanup/umwandeln", owner(s.adminScheibeUmwandeln))
 	mux.Handle("DELETE /api/v1/admin/cleanup/umwandeln", owner(s.adminScheibeAbbrechen))
+	// Ältere Dateiformate (AVI, WMV, MPG …) verlustfrei in MKV umpacken
+	// (mkv_umpacken.go).
+	mux.Handle("GET /api/v1/admin/cleanup/mkv", owner(s.adminMkvListe))
+	mux.Handle("GET /api/v1/admin/cleanup/mkv/stand", owner(s.adminMkvStand))
+	mux.Handle("POST /api/v1/admin/cleanup/mkv", owner(s.adminMkvUmwandeln))
+	mux.Handle("DELETE /api/v1/admin/cleanup/mkv", owner(s.adminMkvAbbrechen))
 	// Sicherung: sehen, jetzt sichern, wiederherstellen — nur der Besitzer.
 	mux.Handle("GET /api/v1/admin/backups", owner(s.adminSicherungen))
 	mux.Handle("POST /api/v1/admin/backups", owner(s.adminSichernJetzt))

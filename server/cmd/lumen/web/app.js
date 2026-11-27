@@ -1061,8 +1061,9 @@ async function fetchFor(view) {
     case 'logs':      return { lines: await api.adminLog(S.logFilter) };
     case 'cleanup': {
       // Beide zugleich, nicht nacheinander.
-      const [c, reihen] = await Promise.all([api.adminCleanup(), api.adminCollections().catch(() => [])]);
-      return { ...c, reihen };
+      const [c, reihen, mkv] = await Promise.all([api.adminCleanup(), api.adminCollections().catch(() => []),
+        voll() ? api.call('/admin/cleanup/mkv').catch(() => null) : null]);
+      return { ...c, reihen, mkv };
     }
     case 'accounts':  { const [accounts, libraries, einladungen] = await Promise.all([api.adminAccounts(), api.adminLibraries().catch(() => []), api.adminInvites().catch(() => [])]); return { accounts, libraries, einladungen }; }
     case 'metadata':  return api.adminMetadata();
@@ -2191,6 +2192,8 @@ function viewDetail() {
           <div class="mehr-menue popover glass" id="titel-mehr" role="menu" aria-label="${tr('Verwaltung')}" hidden>
             <button role="menuitem" tabindex="-1" class="mehr-eintrag" data-titelneu="${esc(it.id)}">${tr('Metadaten neu laden')}</button>
             <button role="menuitem" tabindex="-1" class="mehr-eintrag" data-zuweisen="${esc(it.id)}">${tr('Anderen Titel zuweisen')}</button>
+            ${voll() && (it.kind === 'series' || files.some(f => !f.missing && /\.(avi|divx|xvid|wmv|asf|mpe?g|vob|flv|mov|mp4|m4v|ogm|3gp|ts|m2ts|mts)$/i.test(f.path || '')))
+              ? `<button role="menuitem" tabindex="-1" class="mehr-eintrag" data-mkv-titel="${esc(it.id)}">${it.kind === 'series' ? tr('Folgen in MKV umwandeln …') : tr('In MKV umwandeln …')}</button>` : ''}
             ${detailVerwaltung(it, true)}
           </div></div>
         ${it.matchState === 'manual' ? `<span class="t-caption c-2">${tr('von Hand zugewiesen')}</span>`
@@ -6259,6 +6262,148 @@ async function scheibeBeobachten() {
   else if (vorher && scheibeStand?.ergebnis === 'fertig') toast(tr('Fertig – der Film erscheint nach dem nächsten Durchlauf.'));
 }
 
+// Ältere Dateiformate (AVI, WMV, MPG …) unter Aufräumen: Zählung je
+// Format, Liste, „In MKV umwandeln" je Datei und „Alle umwandeln". Der
+// Server arbeitet eine Warteschlange ab (eine Datei zur Zeit, niedrige
+// Priorität); der Stand wird nachgefragt, solange sie läuft, und nur die
+// betroffenen Zeilen werden neu gezeichnet. MP4/M4V stehen für sich und
+// gehören nicht zu „Alle umwandeln": Sie laufen auf jedem Gerät direkt.
+let mkvStand = null, mkvUhr = 0;
+const mkvFormatName = e => String(e || '').replace(/^\./, '').toUpperCase();
+function mkvZeileTat(id, st) {
+  const lauf = st?.aktuell?.fileId === id ? st : null;
+  if (lauf) {
+    const p = Math.round((lauf.anteil || 0) * 100);
+    const was = lauf.schritt === 'umpacken' ? tr('Wird umgewandelt … {p} %', { p })
+      : lauf.schritt === 'kontrollieren' ? tr('Wird geprüft …')
+      : lauf.schritt === 'eintragen' ? tr('Wird eingetragen …')
+      : lauf.schritt === 'warten' ? tr('Wartet, bis die andere Umwandlung fertig ist …') : tr('Wird vorbereitet …');
+    const rest = lauf.restSek > 0 && lauf.schritt === 'umpacken' ? ' · ' + (lauf.restSek < 90 ? tr('noch knapp eine Minute') : tr('noch etwa {n} Min.', { n: Math.round(lauf.restSek / 60) })) : '';
+    return `<div class="auslass-fortschritt" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}" aria-label="${esc(tr('Umwandeln in MKV'))}"><span style="width:${p}%"></span></div>
+      <div class="auslass-tat-zeile"><span class="t-caption c-2" aria-live="polite">${esc(was + rest)}</span></div>`;
+  }
+  if ((st?.wartend || []).includes(id)) return `<div class="auslass-tat-zeile"><span class="t-caption c-2">${tr('In der Warteschlange')}</span></div>`;
+  const e = (st?.ergebnisse || []).find(x => x.fileId === id);
+  if (e?.ergebnis === 'fertig') return `<p class="t-caption auslass-ok">${tr('Fertig – jetzt als MKV in der Mediathek.')}</p>`;
+  const meldung = e?.ergebnis === 'fehler' ? `<p class="t-caption auslass-fehler">${esc(e.fehler || tr('Das Umwandeln ist gescheitert.'))}</p>`
+    : e?.ergebnis === 'abgebrochen' ? `<p class="t-caption c-2">${tr('Abgebrochen.')}</p>` : '';
+  return `${meldung}<div class="auslass-tat-zeile"><button class="btn btn-pill btn-pill--fill zeilen-knopf" data-mkv-umwandeln="${esc(id)}">${tr('In MKV umwandeln')}</button></div>`;
+}
+function mkvKopf(d, st) {
+  const laeuft = !!st?.laeuft;
+  const zahl = (d?.formate || []).filter(f => f.inAllen).reduce((n, f) => n + f.anzahl, 0);
+  const stand = laeuft ? tr('{fertig} fertig, {offen} warten', { fertig: st.fertig || 0, offen: (st.wartend || []).length + (st.aktuell ? 1 : 0) })
+    + (st.gescheitert ? ' · ' + tr('{n} gescheitert', { n: st.gescheitert }) : '') : '';
+  return `<div class="auslass-tat-zeile">
+    ${laeuft ? `<span class="t-caption c-2" aria-live="polite">${esc(stand)}</span>
+      <button class="btn btn-pill zeilen-knopf" data-mkv-abbrechen>${tr('Abbrechen')}</button>`
+      : zahl ? `<button class="btn btn-pill btn-pill--fill zeilen-knopf" data-mkv-alle>${tr('Alle umwandeln ({n})', { n: zahl })}</button>` : ''}
+  </div>`;
+}
+function mkvAbschnitt(d) {
+  if (!d || !voll() || !(d.dateien || []).length) return '';
+  mkvStand = d.stand || mkvStand;
+  clearTimeout(mkvUhr);
+  if (mkvStand?.laeuft) mkvUhr = setTimeout(mkvBeobachten, 1500);
+  const kurz = p => { const t = String(p || '').split('/').filter(Boolean); return esc((t.length > 3 ? '… / ' : '') + t.slice(-3).join(' / ')); };
+  const titel = f => f.kind === 'episode'
+    ? `${f.serie ? esc(f.serie) + ' · ' : ''}S${String(f.staffel || 0).padStart(2, '0')}E${String(f.folge || 0).padStart(2, '0')} – ${esc(f.titel)}`
+    : `${esc(f.titel)}${f.jahr ? ` (${f.jahr})` : ''}`;
+  const zeile = f => `
+    <div class="orow" style="height:auto;padding:12px 16px;display:block">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="t-body" style="flex:1 1 220px;min-width:0">${titel(f)}</div>
+        <span class="badge badge--grau">${esc(mkvFormatName(f.endung))}</span>
+        <span class="t-caption c-2 tnum">${groesse(f.sizeBytes)}</span>
+      </div>
+      <div class="mono c-2 pfad-kurz" style="margin-top:3px" title="${esc(f.pfad)}">${kurz(f.pfad)}</div>
+      <div class="auslass-tat" data-mkv-zeile="${esc(f.fileId)}">${mkvZeileTat(f.fileId, mkvStand)}</div>
+    </div>`;
+  const alt = d.dateien.filter(f => f.inAllen), mp4 = d.dateien.filter(f => !f.inAllen);
+  const formate = (d.formate || []).map(f => `<span class="badge badge--grau">${esc(mkvFormatName(f.endung))} · ${f.anzahl} · ${esc(groesse(f.bytes))}</span>`).join(' ');
+  const nMp4 = (d.formate || []).filter(f => !f.inAllen).reduce((n, f) => n + f.anzahl, 0);
+  return `<section style="margin-top:22px"><div class="section-h">${tr('Ältere Dateiformate · {n}', { n: d.gesamt || d.dateien.length })}</div>
+    <div class="group group--inset">
+      <div class="orow" style="height:auto;padding:12px 16px;display:block">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${formate}</div>
+        <div style="margin-top:10px" data-mkv-kopf>${mkvKopf(d, mkvStand)}</div>
+      </div>
+      ${alt.map(zeile).join('')}
+      ${mp4.length ? `<details class="auslass">
+        <summary class="auslass-kopf">
+          <span class="auslass-chev" aria-hidden="true">${svg(I.chev, 13, 2.6)}</span>
+          <span class="t-body auslass-titel">${tr('MP4 und M4V')}</span>
+          <span class="t-caption c-2 auslass-ort">${tr('meist schon gut – nicht bei „Alle umwandeln“')}</span>
+          <span class="auslass-zahl">${nMp4}</span>
+        </summary>
+        <div>${mp4.map(zeile).join('')}</div></details>` : ''}
+    </div>
+    <p class="t-caption c-2" style="margin:8px 16px 0;line-height:1.5">${tr('Packt Bild, Ton, Untertitel und Kapitel ohne Neurechnen in eine MKV – nichts geht an Qualität verloren. Lumen schreibt erst eine vorläufige Datei, prüft sie und ersetzt das Original nur, wenn alles stimmt. Stand, Gesehen und Vorschaubilder bleiben am Titel. Untertitel, NFO und Poster daneben passen weiter.')}
+      ${nMp4 ? tr('MP4 und M4V laufen in jedem Browser und auf Apple-Geräten direkt – einzeln umwandeln lohnt sich nur, wenn etwas fehlt (etwa Untertitel).') : ''}
+      ${(d.gesamt || 0) > d.dateien.length ? tr('Gezeigt werden die ersten {m}; „Alle umwandeln“ nimmt alle.', { m: d.dateien.length }) : ''}</p></section>`;
+}
+function mkvMalen() {
+  for (const n of document.querySelectorAll('[data-mkv-zeile]')) n.innerHTML = mkvZeileTat(n.dataset.mkvZeile, mkvStand);
+  const k = document.querySelector('[data-mkv-kopf]');
+  if (k) k.innerHTML = mkvKopf(S.data?.mkv, mkvStand);
+}
+async function mkvBeobachten() {
+  clearTimeout(mkvUhr);
+  if (S.view !== 'cleanup' || !document.querySelector('[data-mkv-zeile]')) return;
+  const vorher = mkvStand?.laeuft;
+  try { mkvStand = await api.call('/admin/cleanup/mkv/stand'); } catch { return; }
+  mkvMalen();
+  if (mkvStand?.laeuft) mkvUhr = setTimeout(mkvBeobachten, 1500);
+  else if (vorher) {
+    toast(mkvStand.gescheitert ? tr('Umwandeln beendet – {n} Dateien gescheitert.', { n: mkvStand.gescheitert }) : tr('Fertig umgewandelt.'));
+    // Fehler bleiben an ihrer Zeile stehen; sonst die Liste neu laden —
+    // die umgewandelten Dateien sind jetzt MKV und fallen heraus.
+    if (!mkvStand.gescheitert) load();
+  }
+}
+// Rückfrage vor dem Umwandeln: was passiert, und was mit dem Original
+// geschehen soll (Standard: löschen, nachdem die MKV geprüft ist).
+function mkvFrage({ titel, text }) {
+  return new Promise(fertig => {
+    const vorher = document.activeElement;
+    const d = document.createElement('dialog');
+    d.className = 'lumen rueckfrage' + (app.classList.contains('light') ? ' light' : '');
+    d.setAttribute('aria-labelledby', 'mkvfrage-t');
+    d.setAttribute('aria-describedby', 'mkvfrage-x');
+    d.innerHTML = `<form method="dialog">
+      <h2 id="mkvfrage-t" class="t-title3" style="margin:0">${esc(titel)}</h2>
+      <p id="mkvfrage-x" class="t-sub c-2" style="margin:8px 0 0">${esc(text)}</p>
+      <fieldset style="border:0;padding:0;margin:14px 0 0;display:flex;flex-direction:column;gap:8px">
+        <legend class="sr-only">${tr('Was mit dem Original geschieht')}</legend>
+        <label class="t-sub" style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="original" value="loeschen" checked>
+          <span>${tr('Original löschen')}<span class="t-caption c-2" style="display:block">${tr('Erst, wenn die MKV geprüft ist.')}</span></span></label>
+        <label class="t-sub" style="display:flex;gap:8px;align-items:flex-start"><input type="radio" name="original" value="behalten">
+          <span>${tr('Original behalten')}<span class="t-caption c-2" style="display:block">${tr('Es wandert in den Unterordner „.lumen-original“, den Lumen nicht einliest.')}</span></span></label>
+      </fieldset>
+      <div class="rueckfrage-knoepfe">
+        <button value="nein" class="btn btn-pill btn-pill--fill">${tr('Abbrechen')}</button>
+        <button value="ja" class="btn btn-pill btn-pill--stark">${tr('Umwandeln')}</button></div></form>`;
+    document.body.appendChild(d);
+    d.addEventListener('close', () => {
+      const wahl = d.returnValue === 'ja' ? (d.querySelector('input[name="original"]:checked')?.value || 'loeschen') : null;
+      d.remove();
+      if (vorher?.isConnected) vorher.focus();
+      fertig(wahl);
+    });
+    d.showModal();
+    d.querySelector('button[value="nein"]').focus();
+  });
+}
+async function mkvStarten(body, titel, text) {
+  const original = await mkvFrage({ titel, text });
+  if (!original) return false;
+  try {
+    const r = await api.call('/admin/cleanup/mkv', { method: 'POST', body: { ...body, original } });
+    toast(r?.status || tr('Läuft …'));
+    return true;
+  } catch (err) { toast(err.message); return false; }
+}
+
 function viewCleanup() {
   const d = S.data || {};
   const aufgeloest = (d.reihen || []).filter(r => r.hidden);
@@ -6523,6 +6668,7 @@ function viewCleanup() {
       <div class="group group--inset">${ausstehend}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${schl === 'ok' ? tr('Diese Titel prüft der nächste Metadaten-Durchgang.')
         : tr('Diese Titel haben keine vollständige NFO-Datei. „ID eingeben“ speichert eine Kennung auch ohne Schlüssel.')}</p></section>` : ''}
+    ${mkvAbschnitt(d.mkv)}
     ${ausgelassen ? `<section style="margin-top:22px"><div class="section-h">${tr('Ausgelassene Dateien')}</div>
       <div class="group group--inset">${ausgelassen}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Was der letzte Durchlauf jeder Bibliothek mit Absicht ausgelassen hat. Die Liste gilt bis zum nächsten Durchlauf oder Neustart.')}</p></section>` : ''}
@@ -6534,7 +6680,7 @@ function viewCleanup() {
           <button class="btn btn-pill btn-pill--fill zeilen-knopf" data-reihe-zurueck="${esc(r.id)}">${tr('Wiederherstellen')}</button>
         </div>`).join('')}</div>
       <p class="t-caption c-2" style="margin:8px 16px 0">${tr('Lumen bildet sie nicht wieder, bis du sie zurückholst.')}</p></section>` : ''}
-    ${!dup && !dupFassungen && !dupKandidaten && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length && !schluesselHinweis ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
+    ${!dup && !dupFassungen && !dupKandidaten && !missing && !unmatched && !ausstehend && !ausgelassen && !aufgeloest.length && !schluesselHinweis && !(d.mkv?.dateien || []).length ? `<p class="hint" style="margin-top:30px">${tr('Hier ist alles in Ordnung.')}</p>` : ''}
     <div style="height:40px"></div></div>`);
 }
 
@@ -7438,6 +7584,33 @@ app.addEventListener('click', async e => {
     try { const r = await api.call('/admin/cleanup/umwandeln', { method: 'POST', body: { pfad: n.dataset.scheibeUmwandeln } }); toast(r?.status || tr('Läuft …')); }
     catch (err) { toast(err.message); n.disabled = false; return; }
     return scheibeBeobachten();
+  }
+  if ((n = hit('data-mkv-umwandeln'))) {
+    const f = (S.data?.mkv?.dateien || []).find(x => x.fileId === n.dataset.mkvUmwandeln);
+    const name = f ? f.pfad.split('/').pop() : '';
+    if (await mkvStarten({ fileIds: [n.dataset.mkvUmwandeln] }, tr('In MKV umwandeln?'),
+      tr('„{name}“ wird ohne Qualitätsverlust in eine MKV mit gleichem Namen umgepackt. Die MKV ersetzt die Original-Datei in der Mediathek.', { name }))) mkvBeobachten();
+    return;
+  }
+  if (hit('data-mkv-alle')) {
+    const n = (S.data?.mkv?.formate || []).filter(f => f.inAllen).reduce((a, f) => a + f.anzahl, 0);
+    if (await mkvStarten({ alle: true }, tr('Alle {n} Dateien in MKV umwandeln?', { n }),
+      tr('Eine Datei nach der anderen, im Hintergrund und mit niedriger Priorität – das kann Stunden dauern. Jede MKV ersetzt ihre Original-Datei in der Mediathek. MP4 und M4V bleiben, wie sie sind.'))) mkvBeobachten();
+    return;
+  }
+  if (hit('data-mkv-abbrechen')) {
+    try { await api.call('/admin/cleanup/mkv', { method: 'DELETE' }); } catch (err) { toast(err.message); }
+    return mkvBeobachten();
+  }
+  if ((n = hit('data-mkv-titel'))) {
+    let d;
+    try { d = await api.call(`/admin/cleanup/mkv?itemId=${encodeURIComponent(n.dataset.mkvTitel)}`); } catch (err) { return toast(err.message); }
+    const anzahl = (d?.dateien || []).length;
+    if (!anzahl) return toast(tr('Hier liegt schon alles als MKV vor.'));
+    await mkvStarten({ itemId: n.dataset.mkvTitel }, tr('In MKV umwandeln?'), anzahl === 1
+      ? tr('„{name}“ wird ohne Qualitätsverlust in eine MKV mit gleichem Namen umgepackt. Die MKV ersetzt die Original-Datei in der Mediathek.', { name: d.dateien[0].pfad.split('/').pop() })
+      : tr('{n} Dateien werden nacheinander ohne Qualitätsverlust in MKV umgepackt. Jede MKV ersetzt ihre Original-Datei in der Mediathek. Den Fortschritt zeigt Verwaltung › Aufräumen.', { n: anzahl }));
+    return;
   }
   if (hit('data-scheibe-abbrechen')) {
     try { await api.call('/admin/cleanup/umwandeln', { method: 'DELETE' }); } catch (err) { toast(err.message); }
